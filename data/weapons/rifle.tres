@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rifle"
+display_name = "AR-7 Rifle"
+recoil_pitch = 0.38
+recoil_yaw = 0.2
+recoil_recovery = 8.0
+placeholder_style = "rifle"
+hip_offset = Vector3(0.19, -0.19, -0.34)
+ads_offset = Vector3(0, -0.1, -0.4)

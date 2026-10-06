@@ -14,7 +14,7 @@ Een first person shooter met de best haalbare graphics die met AI te maken zijn,
 | Fase | Periode | Resultaat | Status |
 |---|---|---|---|
 | 0. Fundament | week 1–2 | Godot-project, git, FPS-controller in een greybox-level, vaste benchmarkscène met automatische screenshots en fps-meting | Klaar |
-| 1. Gunfeel | week 3–6 | Beweging (sprint, crouch, slide), 2–3 wapens met recoil en ADS, hit-feedback, geluid, simpele vijanden met navigatie | Volgende |
+| 1. Gunfeel | week 3–6 | Beweging (sprint, crouch, slide), 2–3 wapens met recoil en ADS, hit-feedback, geluid, simpele vijanden met navigatie | Code klaar, gunfeel nog te tunen door een speler (zie Fase 1) |
 | 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | |
 | 3. AI-assetpipeline | parallel aan fase 2 | Scripts die uit het manifest props, texturen, skyboxes en geluid genereren en importeren | |
 | 4. Moderne shooter-eisen | maand 4–5 | Menu, grafische instellingen, controller-support, FSR-upscaling, checkpoints, meer wapens en vijandtypes, tweede level | |
@@ -44,3 +44,22 @@ Gemeten op 6 oktober 2026 op de M1 Pro, 1920×1080, met SDFGI, SSAO en glow aan,
 | Platform | 155 fps | 115 fps |
 
 De benchmark draai je met `tools/benchmark.sh`; resultaten komen in `benchmark/results/`.
+
+## Fase 1: wat er staat
+
+Alles draait op placeholders (procedurele modellen en geluid) achter vaste namen, zodat de assetpipeline van fase 3 ze later kan vervangen zonder code aan te raken.
+
+- **Beweging:** sprint, crouch, slide (crouch tijdens een sprint), springen met landingsdip, headbob, strafe-roll en zoom-FOV.
+- **Wapens:** geweer (automatisch), pistool (semi) en shotgun (9 korrels), allemaal data-gedreven via `data/weapons/*.tres`. Hitscan met spreiding, bloom, recoil dat terugveert, ADS, herladen, wisselen, afstandsverval en headshots.
+- **Hit-feedback:** hitmarker (hit, headshot, kill), tracers, kogelgaten, vonken, stof, bloed, muzzle flash met kortstondig licht, schadevignet met richtingsindicator.
+- **Vijanden:** navigatie over een navmesh die bij het starten uit de level-geometrie wordt gebakken, zicht, windup-telegraph, korte salvo's met afstandsafhankelijke nauwkeurigheid, dood-animatie en respawn via de arena.
+- **Graphics:** procedurele PBR-greybox (beton met bump en vlekken), reflectieprobe, volumetrische mist met lichtbundels, corridorlamp met emissieve armaturen, AgX-tonemapping, glow op HDR-effecten. Kwaliteitspresets `low`, `balanced` en `ultra` (F2 in het spel), zodat elke dure schakelaar (SSIL, SSR, TAA, extra SDFGI-cascades) met de benchmark te A/B-en is.
+
+Besturing: WASD, spatie springen, shift sprint, C of ctrl crouch, linkermuisknop schieten, rechtermuisknop richten, R herladen, 1-3 of scrollwiel wapens wisselen, F2 kwaliteit, esc muis vrijgeven.
+
+Nog open voor fase 1: de nulmeting van de nieuwe scène op de M1 Pro (de Combat-view is nieuw), en het gunfeel afstellen door te spelen (recoil, spreiding en geluid staan in `data/weapons/` en `scripts/sfx.gd`).
+
+## Testen
+
+- `tools/benchmark.sh [--quality=low|balanced|ultra] [--views=Combat,Corridor]` meet fps en maakt screenshots. De Combat-view vuurt continu effecten af en toont bevroren vijanden, zodat een vuurgevecht binnen het budget moet blijven.
+- `tools/smoke_test.sh` doorloopt headless de hele gameplay-keten (schieten, schade, wisselen, herladen, crouch, slide, navigatie, dood, respawn) en geeft een exitcode terug. Beide scripts gebruiken `GODOT=/pad/naar/godot` als Godot niet in `/Applications` staat.

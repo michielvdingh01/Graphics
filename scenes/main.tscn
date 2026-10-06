@@ -3,33 +3,83 @@
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
 [ext_resource type="Shader" path="res://shaders/grid.gdshader" id="grid"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="hud"]
+[ext_resource type="Script" path="res://scripts/arena.gd" id="arena"]
+
+[sub_resource type="FastNoiseLite" id="noise"]
+noise_type = 3
+frequency = 0.012
+fractal_octaves = 4
+fractal_gain = 0.55
+
+[sub_resource type="NoiseTexture2D" id="noise_tex"]
+width = 512
+height = 512
+generate_mipmaps = true
+seamless = true
+noise = SubResource("noise")
 
 [sub_resource type="ShaderMaterial" id="mat_floor"]
 shader = ExtResource("grid")
-shader_parameter/base_color = Color(0.42, 0.44, 0.46, 1)
-shader_parameter/line_color = Color(0.3, 0.31, 0.33, 1)
+shader_parameter/base_color = Color(0.47, 0.46, 0.44, 1)
+shader_parameter/line_color = Color(0.2, 0.21, 0.23, 1)
+shader_parameter/noise_tex = SubResource("noise_tex")
+shader_parameter/roughness_base = 0.72
+shader_parameter/roughness_variation = 0.3
+shader_parameter/bump_strength = 0.7
+shader_parameter/grime = 0.45
+shader_parameter/line_strength = 0.4
 
 [sub_resource type="ShaderMaterial" id="mat_wall"]
 shader = ExtResource("grid")
 shader_parameter/base_color = Color(0.62, 0.6, 0.56, 1)
-shader_parameter/line_color = Color(0.48, 0.46, 0.43, 1)
+shader_parameter/line_color = Color(0.3, 0.29, 0.27, 1)
+shader_parameter/noise_tex = SubResource("noise_tex")
+shader_parameter/roughness_base = 0.82
+shader_parameter/roughness_variation = 0.25
+shader_parameter/bump_strength = 0.8
+shader_parameter/grime = 0.4
+shader_parameter/line_strength = 0.45
 
 [sub_resource type="ShaderMaterial" id="mat_cover"]
 shader = ExtResource("grid")
-shader_parameter/base_color = Color(0.8, 0.45, 0.2, 1)
-shader_parameter/line_color = Color(0.6, 0.32, 0.14, 1)
+shader_parameter/base_color = Color(0.8, 0.42, 0.16, 1)
+shader_parameter/line_color = Color(0.32, 0.15, 0.05, 1)
+shader_parameter/noise_tex = SubResource("noise_tex")
+shader_parameter/roughness_base = 0.46
+shader_parameter/roughness_variation = 0.35
+shader_parameter/metallic_amount = 0.3
+shader_parameter/bump_strength = 0.7
+shader_parameter/grime = 0.3
+shader_parameter/line_strength = 0.6
 
 [sub_resource type="StandardMaterial3D" id="mat_chrome"]
 albedo_color = Color(0.9, 0.9, 0.92, 1)
 metallic = 1.0
 roughness = 0.15
 
+[sub_resource type="StandardMaterial3D" id="mat_lamp"]
+albedo_color = Color(1, 0.9, 0.7, 1)
+emission_enabled = true
+emission = Color(1, 0.78, 0.5, 1)
+emission_energy_multiplier = 7.0
+
 [sub_resource type="SphereMesh" id="sphere"]
 radius = 0.75
 height = 1.5
 material = SubResource("mat_chrome")
 
+[sub_resource type="SphereShape3D" id="sphere_shape"]
+radius = 0.75
+
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.2, 0.42, 0.78, 1)
+sky_horizon_color = Color(0.64, 0.76, 0.9, 1)
+sky_curve = 0.18
+ground_bottom_color = Color(0.28, 0.29, 0.31, 1)
+ground_horizon_color = Color(0.56, 0.58, 0.6, 1)
+ground_curve = 0.04
+sun_angle_max = 40.0
+sun_curve = 0.08
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
@@ -37,10 +87,50 @@ sky_material = SubResource("sky_mat")
 [sub_resource type="Environment" id="env"]
 background_mode = 2
 sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.8
+reflected_light_source = 2
 tonemap_mode = 4
 ssao_enabled = true
+ssao_radius = 1.5
+ssao_intensity = 2.6
+ssao_power = 1.8
+ssao_detail = 0.6
+ssao_light_affect = 0.2
 sdfgi_enabled = true
+sdfgi_use_occlusion = true
+sdfgi_bounce_feedback = 0.6
 glow_enabled = true
+glow_intensity = 0.8
+glow_bloom = 0.03
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 1.6
+fog_enabled = true
+fog_light_color = Color(0.74, 0.78, 0.84, 1)
+fog_density = 0.002
+fog_sun_scatter = 0.2
+fog_aerial_perspective = 0.35
+fog_sky_affect = 0.3
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.008
+volumetric_fog_albedo = Color(0.9, 0.9, 0.92, 1)
+volumetric_fog_length = 80.0
+volumetric_fog_detail_spread = 2.0
+volumetric_fog_gi_inject = 0.6
+volumetric_fog_ambient_inject = 0.3
+volumetric_fog_anisotropy = 0.5
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.08
+
+[sub_resource type="NavigationMesh" id="navmesh"]
+cell_size = 0.2
+cell_height = 0.15
+agent_height = 1.8
+agent_radius = 0.4
+agent_max_climb = 0.45
+agent_max_slope = 40.0
 
 [node name="Main" type="Node3D"]
 
@@ -49,7 +139,20 @@ environment = SubResource("env")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-50, 30, 0)
+light_color = Color(1, 0.95, 0.86, 1)
+light_energy = 2.4
+light_angular_distance = 0.6
+light_volumetric_fog_energy = 1.5
 shadow_enabled = true
+shadow_normal_bias = 1.5
+shadow_blur = 1.2
+directional_shadow_max_distance = 80.0
+
+[node name="ReflectionProbe" type="ReflectionProbe" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+update_mode = 0
+size = Vector3(62, 10, 62)
+box_projection = true
 
 [node name="HUD" type="CanvasLayer" parent="." groups=["hud"]]
 script = ExtResource("hud")
@@ -57,7 +160,14 @@ script = ExtResource("hud")
 [node name="Player" parent="." instance=ExtResource("player")]
 position = Vector3(0, 0, 20)
 
-[node name="Level" type="Node3D" parent="."]
+[node name="NavRegion" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh")
+
+[node name="Arena" type="Node" parent="." node_paths=PackedStringArray("nav_region")]
+script = ExtResource("arena")
+nav_region = NodePath("../NavRegion")
+
+[node name="Level" type="Node3D" parent="." groups=["navigation_geometry"]]
 
 [node name="Floor" type="CSGBox3D" parent="Level"]
 position = Vector3(0, -0.5, 0)
@@ -169,9 +279,60 @@ use_collision = true
 size = Vector3(1.5, 1.5, 1.5)
 material = SubResource("mat_cover")
 
+[node name="CorridorLamp1" type="CSGBox3D" parent="Level"]
+position = Vector3(12.5, 3.45, -11)
+size = Vector3(0.5, 0.08, 0.5)
+material = SubResource("mat_lamp")
+
+[node name="CorridorLamp2" type="CSGBox3D" parent="Level"]
+position = Vector3(12.5, 3.45, -5)
+size = Vector3(0.5, 0.08, 0.5)
+material = SubResource("mat_lamp")
+
 [node name="ChromeSphere" type="MeshInstance3D" parent="Level"]
 position = Vector3(0, 0.75, 0)
 mesh = SubResource("sphere")
+
+[node name="Body" type="StaticBody3D" parent="Level/ChromeSphere"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Level/ChromeSphere/Body"]
+shape = SubResource("sphere_shape")
+
+[node name="CorridorLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.5, 3.0, -8)
+light_color = Color(1, 0.78, 0.5, 1)
+light_energy = 2.5
+light_volumetric_fog_energy = 2.0
+shadow_enabled = true
+omni_range = 9.0
+
+[node name="Spawn1" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -24)
+rotation_degrees = Vector3(0, -135, 0)
+
+[node name="Spawn2" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0, -24)
+rotation_degrees = Vector3(0, 135, 0)
+
+[node name="Spawn3" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -26, 0, 6)
+rotation_degrees = Vector3(0, -90, 0)
+
+[node name="Spawn4" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 0, -14)
+rotation_degrees = Vector3(0, 90, 0)
+
+[node name="Spawn5" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -27)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="Spawn6" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, 26)
+rotation_degrees = Vector3(0, -45, 0)
+
+[node name="Spawn7" type="Marker3D" parent="." groups=["enemy_spawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, 24)
+rotation_degrees = Vector3(0, 45, 0)
 
 [node name="BenchmarkViews" type="Node3D" parent="."]
 
@@ -185,3 +346,24 @@ position = Vector3(12.5, 1.6, 2)
 [node name="Platform" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
 position = Vector3(-12, 4.1, -10)
 rotation_degrees = Vector3(-8, -100, 0)
+
+[node name="Combat" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+position = Vector3(1, 1.7, 19)
+rotation_degrees = Vector3(-3, 0, 0)
+metadata/fx = true
+
+[node name="Enemy1" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_enemy"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 6.5)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="Enemy2" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_enemy"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0, 3.5)
+rotation_degrees = Vector3(0, 165, 0)
+
+[node name="Enemy3" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_enemy"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 0, 9)
+rotation_degrees = Vector3(0, 190, 0)
+
+[node name="Enemy4" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_enemy"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0, 2)
+rotation_degrees = Vector3(0, 205, 0)

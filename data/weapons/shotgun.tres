@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "shotgun"
+display_name = "SG-12 Shotgun"
+damage = 11.0
+headshot_multiplier = 1.5
+pellets = 9
+max_range = 45.0
+rpm = 75.0
+automatic = false
+mag_size = 6
+reserve_ammo = 36
+reload_time = 2.6
+spread_hip = 3.6
+spread_ads = 2.4
+spread_move = 1.2
+bloom_per_shot = 0.0
+bloom_max = 0.0
+recoil_pitch = 5.5
+recoil_yaw = 0.9
+recoil_recovery = 7.0
+ads_recoil_scale = 0.8
+ads_fov = 66.0
+ads_time = 0.2
+equip_time = 0.38
+hip_offset = Vector3(0.21, -0.22, -0.4)
+ads_offset = Vector3(0, -0.115, -0.36)
+kick_back = 0.11
+kick_rotation = 6.0
+placeholder_style = "shotgun"
+tracer_color = Color(1, 0.7, 0.3, 1)
+shot_pitch = 0.62
+shot_length = 0.5
+muzzle_energy = 6.5

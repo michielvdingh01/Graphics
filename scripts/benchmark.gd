@@ -1,17 +1,44 @@
 extends Node
-## Fixed-camera benchmark. Run with: tools/benchmark.sh
+## Fixed-camera benchmark. Run with: tools/benchmark.sh [--quality=low|balanced|ultra]
 ##
 ## Visits every Marker3D in the "benchmark_view" group, measures frame times and
 ## saves a screenshot per view plus results.json to benchmark/results/<timestamp>/.
+## Views with the meta flag `fx` also fire a steady stream of combat effects (tracers, decals,
+## sparks), so the budget covers a firefight and not just an empty level.
+##
+## Optional arguments, mostly for quick checks on slow machines:
+##   --frames=N  --warmup=N  --resolution=WxH  --views=Overview,Combat
 
-const WARMUP_FRAMES := 120
-const MEASURE_FRAMES := 600
 const RESOLUTION := Vector2i(1920, 1080)
+const FX_INTERVAL_FRAMES := 4
+const FX_PER_BURST := 3
+
+## True when running with --benchmark. Gameplay code uses it to freeze enemies and skip spawning.
+var active := false
+
+var _warmup_frames := 120
+var _measure_frames := 600
+var _resolution := RESOLUTION
+var _only_views: PackedStringArray = []
 
 
 func _ready() -> void:
-	if "--benchmark" in OS.get_cmdline_user_args():
-		_run.call_deferred()
+	var args := OS.get_cmdline_user_args()
+	if not "--benchmark" in args:
+		return
+	active = true
+	for arg in args:
+		if arg.begins_with("--frames="):
+			_measure_frames = int(arg.trim_prefix("--frames="))
+		elif arg.begins_with("--warmup="):
+			_warmup_frames = int(arg.trim_prefix("--warmup="))
+		elif arg.begins_with("--views="):
+			_only_views = arg.trim_prefix("--views=").split(",")
+		elif arg.begins_with("--resolution="):
+			var parts := arg.trim_prefix("--resolution=").split("x")
+			if parts.size() == 2:
+				_resolution = Vector2i(int(parts[0]), int(parts[1]))
+	_run.call_deferred()
 
 
 func _run() -> void:
@@ -22,14 +49,16 @@ func _run() -> void:
 	Engine.max_fps = 0
 	# Render at a fixed resolution regardless of the window size macOS gives us.
 	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-	get_window().content_scale_size = RESOLUTION
+	get_window().content_scale_size = _resolution
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	for player in tree.get_nodes_in_group("player"):
+	for player: Node3D in tree.get_nodes_in_group("player"):
 		player.process_mode = Node.PROCESS_MODE_DISABLED
+		player.visible = false
 	for hud in tree.get_nodes_in_group("hud"):
 		hud.visible = false
 
 	var camera := Camera3D.new()
+	camera.fov = 80.0
 	add_child(camera)
 	camera.make_current()
 
@@ -39,14 +68,19 @@ func _run() -> void:
 
 	var views := []
 	for view: Node3D in tree.get_nodes_in_group("benchmark_view"):
+		if not _only_views.is_empty() and not view.name in _only_views:
+			continue
 		camera.global_transform = view.global_transform
-		for i in WARMUP_FRAMES:
+		var fire_fx := view.get_meta("fx", false) as bool
+		for i in _warmup_frames:
 			await tree.process_frame
+			_maybe_fx(camera, fire_fx, i)
 
 		var frame_ms := PackedFloat64Array()
 		var last := Time.get_ticks_usec()
-		for i in MEASURE_FRAMES:
+		for i in _measure_frames:
 			await tree.process_frame
+			_maybe_fx(camera, fire_fx, i)
 			var now := Time.get_ticks_usec()
 			frame_ms.append((now - last) / 1000.0)
 			last = now
@@ -82,6 +116,7 @@ func _run() -> void:
 		"commit": commit[0].strip_edges() if commit else "",
 		"godot": Engine.get_version_info().string,
 		"gpu": RenderingServer.get_video_adapter_name(),
+		"quality": Graphics.preset_name,
 		"resolution": [get_viewport().size.x, get_viewport().size.y],
 		"views": views,
 	}
@@ -90,3 +125,10 @@ func _run() -> void:
 	file.close()
 	print("Saved to ", out_dir)
 	tree.quit()
+
+
+func _maybe_fx(camera: Camera3D, enabled: bool, frame: int) -> void:
+	if not enabled or frame % FX_INTERVAL_FRAMES != 0:
+		return
+	var space := camera.get_world_3d().direct_space_state
+	Effects.test_burst(space, camera.global_position, -camera.global_basis.z, FX_PER_BURST)
