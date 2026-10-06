@@ -1,0 +1,187 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
+[ext_resource type="Shader" path="res://shaders/grid.gdshader" id="grid"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="hud"]
+
+[sub_resource type="ShaderMaterial" id="mat_floor"]
+shader = ExtResource("grid")
+shader_parameter/base_color = Color(0.42, 0.44, 0.46, 1)
+shader_parameter/line_color = Color(0.3, 0.31, 0.33, 1)
+
+[sub_resource type="ShaderMaterial" id="mat_wall"]
+shader = ExtResource("grid")
+shader_parameter/base_color = Color(0.62, 0.6, 0.56, 1)
+shader_parameter/line_color = Color(0.48, 0.46, 0.43, 1)
+
+[sub_resource type="ShaderMaterial" id="mat_cover"]
+shader = ExtResource("grid")
+shader_parameter/base_color = Color(0.8, 0.45, 0.2, 1)
+shader_parameter/line_color = Color(0.6, 0.32, 0.14, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_chrome"]
+albedo_color = Color(0.9, 0.9, 0.92, 1)
+metallic = 1.0
+roughness = 0.15
+
+[sub_resource type="SphereMesh" id="sphere"]
+radius = 0.75
+height = 1.5
+material = SubResource("mat_chrome")
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+tonemap_mode = 4
+ssao_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-50, 30, 0)
+shadow_enabled = true
+
+[node name="HUD" type="CanvasLayer" parent="." groups=["hud"]]
+script = ExtResource("hud")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+position = Vector3(0, 0, 20)
+
+[node name="Level" type="Node3D" parent="."]
+
+[node name="Floor" type="CSGBox3D" parent="Level"]
+position = Vector3(0, -0.5, 0)
+use_collision = true
+size = Vector3(60, 1, 60)
+material = SubResource("mat_floor")
+
+[node name="WallNorth" type="CSGBox3D" parent="Level"]
+position = Vector3(0, 2, -30.5)
+use_collision = true
+size = Vector3(62, 4, 1)
+material = SubResource("mat_wall")
+
+[node name="WallSouth" type="CSGBox3D" parent="Level"]
+position = Vector3(0, 2, 30.5)
+use_collision = true
+size = Vector3(62, 4, 1)
+material = SubResource("mat_wall")
+
+[node name="WallEast" type="CSGBox3D" parent="Level"]
+position = Vector3(30.5, 2, 0)
+use_collision = true
+size = Vector3(1, 4, 60)
+material = SubResource("mat_wall")
+
+[node name="WallWest" type="CSGBox3D" parent="Level"]
+position = Vector3(-30.5, 2, 0)
+use_collision = true
+size = Vector3(1, 4, 60)
+material = SubResource("mat_wall")
+
+[node name="Platform" type="CSGBox3D" parent="Level"]
+position = Vector3(-12, 1.25, -10)
+use_collision = true
+size = Vector3(8, 2.5, 8)
+material = SubResource("mat_wall")
+
+[node name="Ramp" type="CSGPolygon3D" parent="Level"]
+position = Vector3(-1, 0, -10)
+use_collision = true
+polygon = PackedVector2Array(0, 0, -7, 0, -7, 2.5)
+depth = 4.0
+material = SubResource("mat_wall")
+
+[node name="Tower" type="CSGBox3D" parent="Level"]
+position = Vector3(0, 4, -18)
+use_collision = true
+size = Vector3(3, 8, 3)
+material = SubResource("mat_wall")
+
+[node name="CorridorWallA" type="CSGBox3D" parent="Level"]
+position = Vector3(10, 1.75, -8)
+use_collision = true
+size = Vector3(0.5, 3.5, 14)
+material = SubResource("mat_wall")
+
+[node name="CorridorWallB" type="CSGBox3D" parent="Level"]
+position = Vector3(15, 1.75, -8)
+use_collision = true
+size = Vector3(0.5, 3.5, 14)
+material = SubResource("mat_wall")
+
+[node name="CorridorRoof" type="CSGBox3D" parent="Level"]
+position = Vector3(12.5, 3.7, -8)
+use_collision = true
+size = Vector3(5.5, 0.4, 14)
+material = SubResource("mat_wall")
+
+[node name="Cover1" type="CSGBox3D" parent="Level"]
+position = Vector3(-4, 0.6, 8)
+use_collision = true
+size = Vector3(3, 1.2, 0.5)
+material = SubResource("mat_cover")
+
+[node name="Cover2" type="CSGBox3D" parent="Level"]
+position = Vector3(5, 0.6, 4)
+use_collision = true
+size = Vector3(0.5, 1.2, 3)
+material = SubResource("mat_cover")
+
+[node name="Cover3" type="CSGBox3D" parent="Level"]
+position = Vector3(-14, 0.6, 6)
+use_collision = true
+size = Vector3(3, 1.2, 0.5)
+material = SubResource("mat_cover")
+
+[node name="Crate1" type="CSGBox3D" parent="Level"]
+position = Vector3(3, 0.75, 12)
+use_collision = true
+size = Vector3(1.5, 1.5, 1.5)
+material = SubResource("mat_cover")
+
+[node name="Crate2" type="CSGBox3D" parent="Level"]
+position = Vector3(-8, 0.75, -1)
+use_collision = true
+size = Vector3(1.5, 1.5, 1.5)
+material = SubResource("mat_cover")
+
+[node name="Crate3" type="CSGBox3D" parent="Level"]
+position = Vector3(20, 0.75, 10)
+use_collision = true
+size = Vector3(1.5, 1.5, 1.5)
+material = SubResource("mat_cover")
+
+[node name="Crate4" type="CSGBox3D" parent="Level"]
+position = Vector3(20, 2.25, 10)
+rotation_degrees = Vector3(0, 25, 0)
+use_collision = true
+size = Vector3(1.5, 1.5, 1.5)
+material = SubResource("mat_cover")
+
+[node name="ChromeSphere" type="MeshInstance3D" parent="Level"]
+position = Vector3(0, 0.75, 0)
+mesh = SubResource("sphere")
+
+[node name="BenchmarkViews" type="Node3D" parent="."]
+
+[node name="Overview" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+position = Vector3(22, 10, 24)
+rotation_degrees = Vector3(-22, 40, 0)
+
+[node name="Corridor" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+position = Vector3(12.5, 1.6, 2)
+
+[node name="Platform" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+position = Vector3(-12, 4.1, -10)
+rotation_degrees = Vector3(-8, -100, 0)
