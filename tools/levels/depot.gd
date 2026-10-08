@@ -85,6 +85,7 @@ func _dock() -> void:
 	var lit := [-16.0, 0.0, 8.0]
 	for x in [-16.0, -8.0, 0.0, 8.0, 16.0]:
 		roller_door(Vector3(x, DOCK_Y + 1.7, -YZ + 0.06), Vector3.BACK, Vector2(4.0, 3.4))
+		label(str(roundi(x / 8.0) + 3), Vector3(x - 2.9, DOCK_Y + 2.3, -YZ), Vector3.BACK, 0.7, Color(0.08, 0.12, 0.2))
 		tube(Vector3(x, CANOPY_Y - 0.5, mid_z), true, x in lit, x == 0.0)
 
 	crates(Vector3(-15.0, DOCK_Y, -18.0), 4)

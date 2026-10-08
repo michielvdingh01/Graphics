@@ -252,6 +252,9 @@ func _crane() -> void:
 		for sz: float in [-1.0, 1.0]:
 			_plate(YELLOW, Vector3(x, 0.36, sz * (reach - 0.01)), Vector3(0.52, 0.66, 0.02))
 
+	for sx: float in [-1.0, 1.0]:
+		label("10 t", _m * Vector3(sx * 0.93, 0.35, -5.6), Vector3(sx, 0, 0), 0.34, Color(0.05, 0.05, 0.05))
+
 	# Trolley: a frame on four wheels, the rope drum slung between the girders
 	# and the hoist motor with its gearbox on the deck above.
 	var at := 3.0
@@ -332,6 +335,8 @@ func _hall_props() -> void:
 	# Tanks against the north wall, feeding the header that runs along it.
 	_tank(Vector3(11.5, 0, -9.6), 20, -55, -100)
 	_tank(Vector3(15.0, 0, -9.6), -10, 55)
+	label("T1", Vector3(11.5, 3.0, -9.6) + Basis(Vector3.UP, deg_to_rad(20.0)) * Vector3(0, 0, 1.25), Basis(Vector3.UP, deg_to_rad(20.0)) * Vector3.BACK, 0.5, Color(0.06, 0.06, 0.06), 0.2)
+	label("T2", Vector3(15.0, 3.0, -9.6) + Basis(Vector3.UP, deg_to_rad(-10.0)) * Vector3(0, 0, 1.25), Basis(Vector3.UP, deg_to_rad(-10.0)) * Vector3.BACK, 0.5, Color(0.06, 0.06, 0.06), 0.2)
 	_m = Transform3D()
 	var header := Vector3(0, 5.36, HEADER_Z)
 	_bar(RUST, header + Vector3(-1.0, 0, 0), header + Vector3(HX, 0, 0), 0.14, 16)
@@ -971,6 +976,8 @@ func _floor_paint() -> void:
 		var x := 10.4 + i * 2.35
 		floor_line(Vector2(x, 8.3), Vector2(x, 11.85), PAINT_WHITE, 0.08)
 	floor_line(Vector2(10.4, 11.85), Vector2(19.8, 11.85), PAINT_WHITE, 0.08)
+	for i in 4:
+		floor_text("A%d" % (i + 1), Vector2(11.575 + i * 2.35, 8.75), 0.45)
 
 
 # --- Machine parts, all in the frame of the machine being built ---------------

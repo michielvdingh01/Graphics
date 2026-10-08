@@ -243,6 +243,9 @@ func barrier(at: Vector3, yaw_deg: float) -> void:
 	_collide_box(Transform3D(facing, at + Vector3(0, box.size.y * 0.5, 0)), Vector3(box.size.x * 2.0, box.size.y, box.size.z))
 
 
+## Numbers the containers go by; each takes one according to where it stands.
+const CONTAINER_NUMBERS: Array[String] = ["KLDU 482316 7", "TRNU 207745 2", "MBCU 931580 4", "HSLU 660192 5", "OVZU 318477 0"]
+
 ## Shipping container, 6 m long, of pressed steel panels in a frame of posts
 ## and rails. `along_x` is the direction of its length; the doors are at the
 ## far end of it.
@@ -316,6 +319,17 @@ func container(mat: String, at: Vector3, along_x: bool, flags := 0) -> void:
 			rod("steel", xf * Vector3(face + 0.012, y - 0.06, edge), xf * Vector3(face + 0.012, y + 0.06, edge), 0.014, skin, 6)
 			_local_box("steel", xf, Vector3(face + 0.004, y, edge - sz * 0.06), Vector3(0.008, 0.07, 0.12), skin)
 	_local_box("rubber", xf, Vector3(face - 0.004, 0.02, 0), Vector3(0.012, door_height, 0.012), hole)
+
+	# Its number on both sides, its type on a door. Not for one that only
+	# stands in the distance.
+	if flags & DETAIL:
+		return
+	var light := mat in ["container_grey", "container_orange"]
+	var ink := Color(0.07, 0.07, 0.08) if light else Color(0.86, 0.86, 0.82)
+	var number := CONTAINER_NUMBERS[posmod(roundi(at.x * 7.0 + at.y * 3.0 + at.z * 13.0), CONTAINER_NUMBERS.size())]
+	for sz: float in [-1.0, 1.0]:
+		label(number, xf * Vector3(sz * (half.x - 1.25), half.y - 0.42, sz * (half.z - 0.03)), xf.basis * Vector3(0, 0, sz), 0.17, ink)
+	label("22G1", xf * Vector3(face - 0.02, 0.78, -0.53), xf.basis * Vector3.RIGHT, 0.12, ink)
 
 
 ## Stack of pallets, each one of boards on nine blocks; the boards run along
@@ -692,9 +706,28 @@ func _model(id: String) -> Dictionary:
 
 ## Dirt projected onto a wall whose surface normal is `normal`; `at` is the
 ## centre of the patch on the wall. The top of the texture points up.
-func wall_decal(texture: String, at: Vector3, normal: Vector3, width: float, height: float, tint := Color.WHITE) -> void:
+func wall_decal(texture: String, at: Vector3, normal: Vector3, width: float, height: float, tint := Color.WHITE, depth := 0.5) -> void:
 	var basis := Basis(normal.cross(Vector3.DOWN), normal, Vector3.DOWN)
-	_decal(texture, Transform3D(basis, at), Vector3(width, 0.5, height), tint)
+	_decal(texture, Transform3D(basis, at), Vector3(width, depth, height), tint)
+
+
+## Stencilled lettering `height` high on a surface whose normal is `normal`,
+## centred on `at`. The text has to be in the manifest as a decal of kind
+## "text"; `reach` is how far the paint carries in front of and behind `at`,
+## for a surface that is not flat.
+func label(text: String, at: Vector3, normal: Vector3, height: float, ink := Color(0.86, 0.86, 0.82), reach := 0.08) -> void:
+	var texture := _lettering(text)
+	wall_decal(texture, at, normal, height * _lettering_aspect(texture), height, ink, reach * 2.0)
+
+
+## The decal that holds a text, and how many times wider than high it is.
+func _lettering(text: String) -> String:
+	return "text_" + text.to_lower().replace(" ", "_")
+
+
+func _lettering_aspect(texture: String) -> float:
+	var size: Vector2 = (load("res://assets/decals/%s.png" % texture) as Texture2D).get_size()
+	return size.x / size.y
 
 
 ## Stain projected onto the floor around `at`.
@@ -746,6 +779,26 @@ func floor_frame(area: Rect2, color := PAINT_YELLOW, width := 0.1, striped := Co
 	_fill(Rect2(area.position + Vector2(0, area.size.y - width), across), color, stripe, striped)
 	_fill(Rect2(area.position, down), color, stripe, striped)
 	_fill(Rect2(area.position + Vector2(area.size.x - width, 0), down), color, stripe, striped)
+
+
+## Stencilled lettering `height` high on the floor, centred on `at` (x and z).
+## It reads from the north; every quarter `turns` takes it a quarter round.
+func floor_text(text: String, at: Vector2, height: float, color := PAINT_WHITE, turns := 0) -> void:
+	# Read as a file: the builder runs without a renderer to hand textures back.
+	var stencil := Image.load_from_file(ProjectSettings.globalize_path("res://assets/decals/%s.png" % _lettering(text)))
+	var rows := roundi(height / 0.71 * PAINT_SCALE)
+	stencil.resize(roundi(rows * stencil.get_width() / float(stencil.get_height())), rows, Image.INTERPOLATE_LANCZOS)
+	# The image as it comes reads from the south.
+	stencil.rotate_180()
+	for i in posmod(turns, 4):
+		stencil.rotate_90(CLOCKWISE)
+	var corner := Vector2i(((at - _paint_area.position) * PAINT_SCALE).round()) - stencil.get_size() / 2
+	for y in stencil.get_height():
+		for x in stencil.get_width():
+			var to := corner + Vector2i(x, y)
+			var cover := stencil.get_pixel(x, y).a
+			if Rect2i(Vector2i.ONE, _paint.get_size() - Vector2i(2, 2)).has_point(to) and cover > _paint.get_pixelv(to).a:
+				_paint.set_pixelv(to, Color(color.r, color.g, color.b, cover))
 
 
 ## Diagonal stripes, `stripe` wide and as far apart, over a part of the floor

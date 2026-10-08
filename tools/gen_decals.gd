@@ -3,9 +3,10 @@ extends SceneTree
 ## "procedural"): decals into assets/decals/ and the noise masks that shaders
 ## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh
 ##
-## Each entry names a kind (leak, stain or grime for a decal, wear for a
+## Each entry names a kind (leak, stain, grime or text for a decal, wear for a
 ## mask), a size and a seed, so a texture can be regenerated or varied without
-## touching this script.
+## touching this script. A text has a height only; its width follows from
+## what it says.
 
 const OUT_DIR := {"decal": "res://assets/decals/", "mask": "res://assets/masks/"}
 
@@ -20,6 +21,8 @@ func _init() -> void:
 		var image: Image
 		if asset.type == "mask":
 			image = _mask(asset)
+		elif asset.kind == "text":
+			image = _lettering(asset)
 		else:
 			image = Image.create_empty(asset.size[0], asset.size[1], true, Image.FORMAT_RGBA8)
 			var noise := FastNoiseLite.new()
@@ -54,6 +57,48 @@ func _mask(asset: Dictionary) -> Image:
 	for y in height:
 		for x in width:
 			image.set_pixel(x, y, Color(channels[0].get_pixel(x, y).r, channels[1].get_pixel(x, y).r, channels[2].get_pixel(x, y).r))
+	return image
+
+
+## Stencilled lettering in white, for a decal to tint. Letters with a closed
+## counter get the bridges that hold a stencil together, and the paint has
+## gone thin in patches. Set in the engine's own font, so it needs no asset.
+func _lettering(asset: Dictionary) -> Image:
+	var font := ThemeDB.fallback_font as FontFile
+	var height: int = asset.height
+	var size := Vector2i(height, 0)
+	var text: String = asset.text
+	var glyphs: Array[int] = []
+	var width := height * 0.3
+	for i in text.length():
+		glyphs.append(font.get_glyph_index(height, text.unicode_at(i), 0))
+		font.render_glyph(0, size, glyphs[i])
+		width += font.get_glyph_advance(0, height, glyphs[i]).x
+	var image := Image.create_empty(ceili(width), height, false, Image.FORMAT_RGBA8)
+	image.fill(Color(1, 1, 1, 0))
+	var noise := FastNoiseLite.new()
+	noise.seed = asset.seed
+	noise.fractal_octaves = 4
+	# Capitals are 0.71 of the size high; they stand in the middle.
+	var pen := Vector2(height * 0.15, height * 0.855)
+	for i in glyphs.size():
+		# A space has an advance and nothing to draw.
+		var page := font.get_glyph_texture_idx(0, size, glyphs[i])
+		var rect := font.get_glyph_uv_rect(0, size, glyphs[i]) if page >= 0 else Rect2()
+		var atlas := font.get_texture_image(0, size, page) if page >= 0 else null
+		var corner := pen + font.get_glyph_offset(0, size, glyphs[i])
+		var bridge := "ABDOPQR04689".contains(text[i])
+		for y in int(rect.size.y):
+			for x in int(rect.size.x):
+				var at := Vector2i(corner) + Vector2i(x, y)
+				if at.x < 0 or at.y < 0 or at.x >= image.get_width() or at.y >= height:
+					continue
+				if bridge and absf(x - rect.size.x * 0.5) < height * 0.035:
+					continue
+				var ink := atlas.get_pixel(int(rect.position.x) + x, int(rect.position.y) + y).a
+				var worn := smoothstep(0.28, 0.6, _n(noise, at.x * 450.0 / height, at.y * 450.0 / height)) * (0.88 + 0.12 * _n(noise, at.x * 6000.0 / height, at.y * 6000.0 / height))
+				image.set_pixel(at.x, at.y, Color(1, 1, 1, ink * worn))
+		pen.x += font.get_glyph_advance(0, height, glyphs[i]).x
 	return image
 
 
