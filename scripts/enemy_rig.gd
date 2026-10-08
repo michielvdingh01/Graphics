@@ -9,6 +9,8 @@ const GLOW := preload("res://materials/robot_glow.tres")
 const DEBRIS_TIME := 7.0
 const GLOW_IDLE := 3.0
 const GLOW_CHARGED := 14.0
+## Footsteps are heard from this far.
+const STEP_RANGE := 30.0
 
 var _joints := {}
 var _rest := {}
@@ -19,6 +21,7 @@ var _stride := 0.8
 var _melee := false
 var _bulk := 1.0
 var _phase := 0.0
+var _steps := 0
 var _moving := 0.0
 ## 0 with the weapon lowered, 1 with it on the target.
 var _raised := 0.0
@@ -146,6 +149,13 @@ func _pose(delta: float) -> void:
 	# One step for every stride it covers; backwards the legs run in reverse.
 	_phase += delta * speed / _stride * PI * (-1.0 if along < -0.3 else 1.0)
 	var reach := lerpf(0.28, 0.62, clampf(speed / 6.0, 0.0, 1.0)) * _moving
+	# A foot comes down every half turn of the cycle; the heavier the louder.
+	var steps := floori(_phase / PI)
+	if steps != _steps and _moving > 0.4:
+		var ear := get_viewport().get_camera_3d()
+		if ear and ear.global_position.distance_to(global_position) < STEP_RANGE:
+			Sfx.play_at(&"robot_step", global_position, -16.0 + 6.0 * _bulk)
+	_steps = steps
 
 	_raised = lerpf(_raised, 1.0 if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
 	if _aiming:

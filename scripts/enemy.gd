@@ -231,6 +231,7 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 		else:
 			Fx.impact(end, hit.normal)
 	Fx.tracer(_rig.muzzle(), end, Color(4.0, 0.6, 0.4))
+	Fx.flash(_rig.muzzle(), Color(1.0, 0.5, 0.35))
 	Sfx.play_at(&"enemy_shot", global_position)
 
 

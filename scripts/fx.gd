@@ -92,6 +92,16 @@ func sparks(position: Vector3, direction: Vector3, color := Color(4.0, 2.5, 1.0)
 	_spawn(particles, 0.6)
 
 
+## Brief burst of light, as from the muzzle of an enemy's weapon.
+func flash(position: Vector3, color := Color(1.0, 0.75, 0.4), energy := 2.0) -> void:
+	var light := OmniLight3D.new()
+	light.light_color = color
+	light.light_energy = energy
+	light.omni_range = 5.0
+	light.position = position
+	_spawn(light, 0.05)
+
+
 ## Sparks plus a bullet hole on world geometry.
 func impact(position: Vector3, normal: Vector3) -> void:
 	sparks(position, normal)
