@@ -26,6 +26,8 @@ const FLASH_TIME := 0.04
 const VIEWMODEL_FOV := 58.0
 ## Render layer of the weapon in view; the fill light reaches nothing else.
 const VIEW_LAYER := 2
+## How far ahead of the eye a wall starts to crowd the weapon.
+const REACH := 0.9
 ## Seconds a slide or bolt takes to come back after a shot and to close again,
 ## and how far it travels.
 const CYCLE_BACK := 0.03
@@ -110,6 +112,8 @@ var _bob_time := 0.0
 var _sprint_blend := 0.0
 ## 1 while the slide is held back on an empty magazine.
 var _locked := 0.0
+## 0 with room in front of the weapon, 1 with the player's nose against a wall.
+var _crowded := 0.0
 ## Where the pump is in its stroke: 0 due, 1 on its way back, 2 done.
 var _pump_stage := 2
 var _flash := Node3D.new()
@@ -437,6 +441,16 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	# The weapon dips out of view while it is being switched.
 	var lower := sin(PI * (1.0 - _switch_left / SWITCH_TIME)) if _switch_left > 0.0 else 0.0
 	var handling := _animate_parts(model, data, delta)
+
+	# Up against a wall it is drawn back with the muzzle up, instead of poking
+	# through to the other side.
+	var eye := camera.global_position
+	var query := PhysicsRayQueryParameters3D.create(eye, eye - camera.global_basis.z * REACH, 1, [player.get_rid()])
+	var wall := get_world_3d().direct_space_state.intersect_ray(query)
+	var room := eye.distance_to(wall.position) / REACH if wall else 1.0
+	_crowded = lerpf(_crowded, 1.0 - smoothstep(0.3, 1.0, room), 1.0 - exp(-12.0 * delta))
+	handling[0] += Vector3(-0.02, -0.07, 0.14) * _crowded
+	handling[1] += Vector3(0.95, 0.25, 0.0) * _crowded
 
 	var offset := data.hip_offset.lerp(data.ads_offset, aim)
 	offset += bob + Vector3(_sway.x, -_sway.y, 0.0) * (1.0 - 0.7 * aim)
