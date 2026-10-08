@@ -1,0 +1,22 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://bmukyoqctmngu"]
+
+[sub_resource type="Gradient" id="dirt"]
+colors = PackedColorArray(0.75, 0.82, 0.84, 0.1, 0.5, 0.47, 0.4, 0.55)
+
+[sub_resource type="FastNoiseLite" id="noise"]
+seed = 4
+frequency = 0.012
+fractal_octaves = 4
+
+[sub_resource type="NoiseTexture2D" id="film"]
+noise = SubResource("noise")
+color_ramp = SubResource("dirt")
+seamless = true
+
+[resource]
+transparency = 1
+cull_mode = 2
+albedo_texture = SubResource("film")
+metallic_specular = 0.8
+roughness = 0.06
+uv1_scale = Vector3(0.3, 0.3, 0.3)

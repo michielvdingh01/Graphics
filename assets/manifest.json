@@ -1,5 +1,5 @@
 {
-	"_doc": "Every external or generated asset gets one entry here, so it can be re-fetched or regenerated without touching code. Run tools/fetch_assets.py to download what is missing.",
+	"_doc": "Every external or generated asset gets one entry here, so it can be re-fetched or regenerated without touching code. Run tools/fetch_assets.py to download what is missing and tools/gen_decals.sh to regenerate the procedural ones.",
 	"assets": [
 		{"id": "concrete_floor_worn_001", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "hall floor"},
 		{"id": "red_brick_03", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "outer walls"},
@@ -11,6 +11,17 @@
 		{"id": "corrugated_iron", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "roof"},
 		{"id": "wood_planks", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "crates, pallets"},
 		{"id": "rusty_painted_metal", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "pipes, tanks"},
-		{"id": "industrial_sunset_puresky", "type": "hdri", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "sky and ambient light"}
+		{"id": "industrial_sunset_puresky", "type": "hdri", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "sky and ambient light"},
+		{"id": "Barrel_01", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "barrels"},
+		{"id": "Barrel_02", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "barrels"},
+		{"id": "barrel_03", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "barrels"},
+		{"id": "wooden_crate_01", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "small crates on shelves"},
+		{"id": "wooden_crate_02", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "stacked crates"},
+		{"id": "concrete_road_barrier_02", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "concrete barriers"},
+		{"id": "leak_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "leak", "size": [256, 512], "seed": 3, "use": "water streaks under windows"},
+		{"id": "leak_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "leak", "size": [256, 512], "seed": 19, "use": "water streaks under windows"},
+		{"id": "stain_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "stain", "size": [512, 512], "seed": 5, "use": "oil on floors"},
+		{"id": "stain_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "stain", "size": [512, 512], "seed": 42, "use": "oil on floors"},
+		{"id": "grime", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "grime", "size": [1024, 256], "seed": 8, "use": "dirt along wall bases"}
 	]
 }

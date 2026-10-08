@@ -2,8 +2,11 @@
 """Downloads the Poly Haven assets listed in assets/manifest.json.
 
 Textures land in assets/textures/<id>/ as diff, nor_gl and arm (AO, roughness,
-metallic) JPGs; HDRIs land in assets/hdri/. Files that already exist are skipped.
+metallic) JPGs; HDRIs land in assets/hdri/; models land in assets/models/<id>/
+as a glTF file with its buffer and textures. Files that already exist are
+skipped, and every download is checked against the checksum Poly Haven lists.
 """
+import hashlib
 import json
 import pathlib
 import urllib.request
@@ -19,11 +22,13 @@ def get(url: str) -> bytes:
         return response.read()
 
 
-def download(url: str, target: pathlib.Path) -> None:
+def download(entry: dict, target: pathlib.Path) -> None:
     if target.exists():
         return
     target.parent.mkdir(parents=True, exist_ok=True)
-    data = get(url)
+    data = get(entry["url"])
+    if hashlib.md5(data).hexdigest() != entry["md5"]:
+        raise SystemExit(f"checksum mismatch for {entry['url']}")
     target.write_bytes(data)
     print(f"  {target.relative_to(ROOT)}  {len(data) / 1e6:.1f} MB")
 
@@ -38,11 +43,19 @@ def main() -> None:
         files = json.loads(get(API + name))
         if asset["type"] == "texture":
             for key, suffix in TEXTURE_MAPS.items():
-                url = files[key][res]["jpg"]["url"]
-                download(url, ROOT / "assets/textures" / name / f"{name}_{suffix}.jpg")
+                download(files[key][res]["jpg"], ROOT / "assets/textures" / name / f"{name}_{suffix}.jpg")
         elif asset["type"] == "hdri":
-            url = files["hdri"][res]["hdr"]["url"]
-            download(url, ROOT / "assets/hdri" / f"{name}.hdr")
+            download(files["hdri"][res]["hdr"], ROOT / "assets/hdri" / f"{name}.hdr")
+        elif asset["type"] == "model":
+            # The glTF refers to its buffer and textures by relative path.
+            folder = ROOT / "assets/models" / name
+            gltf = files["gltf"][res]["gltf"]
+            download(gltf, folder / f"{name}_{res}.gltf")
+            for path, entry in gltf["include"].items():
+                target = (folder / path).resolve()
+                if not target.is_relative_to(folder):
+                    raise SystemExit(f"{name}: refusing to write outside its folder: {path}")
+                download(entry, target)
 
 
 if __name__ == "__main__":
