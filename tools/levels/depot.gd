@@ -19,10 +19,13 @@ func _level_name() -> String:
 
 
 func _describe() -> void:
+	_detail_block = Vector3(30, 30, 20)
+	_detail_inside = AABB(Vector3(-YX - 0.5, 0, -YZ - 0.5), Vector3(YX * 2.0 + 1.0, 12.0, YZ * 2.0 + 1.0))
 	_yard()
 	_dock()
 	_containers()
 	_gatehouse()
+	_drains()
 	_masts()
 	_cover()
 	_surroundings()
@@ -38,12 +41,10 @@ func _yard() -> void:
 	wall("concrete", true, -YZ - 0.25, 0.5, -YX - 0.5, YX + 0.5, 0.0, 8.0, [])
 	# East wall with the closed gate the player came in through.
 	wall("brick", false, YX + 0.25, 0.5, -YZ, YZ, 0.0, WALL, [[-3.0, 3.0, 0.0, 4.0]])
-	box("roof", Vector3(YX + 0.3, 2.0, 0.0), Vector3(0.08, 4.0, 6.0))
+	roller_door(Vector3(YX + 0.26, 1.79, 0.0), Vector3.LEFT, Vector2(6.0, 3.58))
 	for z in [-3.1, 3.1]:
 		box("steel", Vector3(YX + 0.05, 2.1, z), Vector3(0.2, 4.2, 0.2))
 	box("steel", Vector3(YX + 0.05, 4.1, 0.0), Vector3(0.2, 0.25, 6.4))
-	for y in [1.0, 2.0, 3.0]:
-		box("steel", Vector3(YX + 0.24, y, 0.0), Vector3(0.04, 0.05, 6.0), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	for z in [-4.4, 4.4]:
 		bulb(Vector3(YX - 0.3, 3.6, z), false)
 	# Coping stones.
@@ -94,6 +95,11 @@ func _dock() -> void:
 	place("hand_truck", Vector3(-12.4, DOCK_Y, -17.0), 200, true)
 	for p in [Vector3(2.5, DOCK_Y, -19.4), Vector3(2.95, DOCK_Y, -19.3)]:
 		gas_bottle(p)
+	place("korean_fire_extinguisher_01", Vector3(4.2, DOCK_Y, -YZ + 0.2), 0)
+	mount("fire_alarm", Vector3(4.6, DOCK_Y + 1.4, -YZ), 0, true)
+	place("metal_jerrycan", Vector3(-13.3, DOCK_Y, -18.9), 60)
+	place("metal_jerrycan", Vector3(-13.75, DOCK_Y, -18.6), -20)
+	drop("plastic_broom", Vector3(-21.5, DOCK_Y, -19.45), 0)
 	for p in [Vector3(-20.5, DOCK_Y, -19.2), Vector3(-19.7, DOCK_Y, -19.3), Vector3(1.5, DOCK_Y, -19.3)]:
 		barrel(p)
 
@@ -137,11 +143,24 @@ func _gatehouse() -> void:
 	wall("plaster", true, YZ - 0.03, 0.06, x0, YX, 0.0, height, [])
 	tube(Vector3(26.5, height - 0.08, 17.0), true, true)
 	place(DESK, Vector3(26.5, 0, 14.55), 0)
-	for i in 4:
-		box("machine", Vector3(29.6, 0.95, 15.2 + i * 0.52), Vector3(0.5, 1.9, 0.5))
+	lockers("machine_blue", Vector3(29.6, 0, 15.9), -90, 5, {1: 25.0})
+	place("plastic_monobloc_chair_01", Vector3(26.4, 0, 15.4), 195)
+	var box: Vector3 = _model("cardboard_box_01").box.size
+	place("cardboard_box_01", Vector3(23.6, 0, 19.3), 10)
+	place("cardboard_box_01", Vector3(23.62, box.y, 19.28), -20)
+	place("korean_fire_extinguisher_01", Vector3(23.3, 0, 14.25), 0)
+	# The bin was full long ago.
+	place("trashbag", Vector3(22.35, 0, 18.4), 0)
+	place("trashbag", Vector3(22.2, 0, 19.1), 100)
 	shelf(Vector3(26.0, 0, 19.55), 180, true)
 	# A lamp over the door.
 	bulb(Vector3(x0 - 0.4, 2.7, 16.6), false)
+
+
+## Drains in the lane between the rows, their frames flush with the ground.
+func _drains() -> void:
+	for x: float in [-3.0, 12.5]:
+		prop("water_manhole_cover", Transform3D(Basis(), Vector3(x, -0.055, 5.9)))
 
 
 func _masts() -> void:

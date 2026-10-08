@@ -28,7 +28,10 @@ void fragment() {
 
 	// Paint lasts where nobody walks, and in the pores of the concrete: those
 	// are the dark specks of the scan.
-	vec4 mark = texture(markings, (UV - markings_rect.xy) * markings_rect.zw);
+	vec2 mark_uv = (UV - markings_rect.xy) * markings_rect.zw;
+	vec4 mark = texture(markings, mark_uv);
+	// Seen from afar, the paint would otherwise smear out past its area.
+	mark.a *= float(mark_uv == clamp(mark_uv, 0.0, 1.0));
 	float pores = 1.0 - dot(albedo, vec3(0.333)) / scan_value;
 	float kept = smoothstep(0.3, 0.6, texture(wet_mask, UV * 0.37).r + pores * 0.6);
 	float painted = mark.a * mix(0.22, 0.95, kept);

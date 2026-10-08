@@ -35,12 +35,14 @@ func _level_name() -> String:
 
 
 func _describe() -> void:
+	_detail_inside = AABB(Vector3(-HX - 0.5, 0, -HZ - 0.5), Vector3(HX * 2.0 + 12.0, RIDGE + 1.0, HZ * 2.0 + 1.0))
 	_shell()
 	_roof()
 	_mezzanine()
 	_crane()
 	_hall_props()
 	_annex()
+	_clutter()
 	_exterior()
 	_probes()
 	_dirt()
@@ -204,7 +206,7 @@ func _mezzanine() -> void:
 
 
 ## Double-girder overhead crane on runway beams along both long walls, parked
-## over the lathe with its hook block at head height above the bed.
+## east of the lathe with its hook block hanging over the aisle.
 func _crane() -> void:
 	# All of it is too thin or hangs too high up for a patch of lightmap.
 	_part = DETAIL | NO_COLLIDE
@@ -786,6 +788,17 @@ func _workbench(at: Vector3) -> void:
 	# The vice is bolted on at the edge, since its handle hangs 9 cm below its foot.
 	prop("bench_vice_01", Transform3D(north, top + Vector3(-0.3, -0.09, -size.z * 0.5 + 0.145)))
 	place("metal_stool_02", at + Vector3(0.45, 0, -0.85), 25)
+	# Whatever was in use when the last shift went home.
+	var flat := Basis(Vector3.RIGHT, -PI * 0.5)
+	drop("screwdrivers_02", top + Vector3(-0.08, 0, 0.14), 90)
+	drop("adjustable_wrench", top + Vector3(0.6, 0, -0.12), 35, flat)
+	drop("cross_pein_hammer", top + Vector3(0.62, 0, 0.12), 80, flat)
+	drop("measuring_tape_01", top + Vector3(1.27, 0, -0.15), 10)
+	drop("oil_tin", top + Vector3(-1.24, 0, -0.12), 200)
+	place("metal_tool_chest", at + Vector3(-1.85, 0, 0.1), 180)
+	drop("plastic_broom", at + Vector3(-2.75, 0, -0.2), 180)
+	drop("sledgehammer_01", Vector3(at.x + 1.7, 0, HZ - 0.13), 0, Basis(Vector3.RIGHT, 0.17) * Basis(Vector3.BACK, PI))
+	drop("crowbar_01", Vector3(at.x + 1.95, 0, HZ - 0.12), 0, Basis(Vector3.RIGHT, 0.2))
 	mount("power_box_01", Vector3(at.x + 2.3, 1.75, HZ), 180)
 	# A fluorescent tube on brackets, so the bench is not lost in the shade
 	# under the windows.
@@ -894,6 +907,47 @@ func _dirt() -> void:
 	wall_decal("grime", Vector3(23.46, 0.5, -5.0), Vector3.LEFT, 13.0, 1.0)
 	floor_decal("stain_2", Vector3(22.0, 0, -8.5), Vector2(2.2, 3.5))
 	floor_decal("stain_1", Vector3(27.5, 0, -8.0), Vector2(3.0, 3.0), 45)
+
+
+## What makes the place look as if people worked here until yesterday: fire
+## points, fuel and oil by the machines, rubbish, boxes and chairs.
+func _clutter() -> void:
+	var fire_points: Array = [
+		[Vector3(-4.75, 0, HZ - 0.2), 180], [Vector3(4.75, 0, -HZ + 0.2), 0], [Vector3(HX - 0.2, 0, 0.7), -90],
+		[Vector3(20.76, 0, -6.5), 90], [Vector3(-4.0, DECK_Y, -HZ + 0.22), 0],
+	]
+	for point: Array in fire_points:
+		place("korean_fire_extinguisher_01", point[0], point[1])
+	mount("fire_alarm", Vector3(-HX, 1.4, 3.1), 90, true)
+	mount("fire_alarm", Vector3(HX, 1.4, 0.4), -90, true)
+	mount("fire_alarm", Vector3(20.56, 1.4, -7.4), 90, true)
+	# The corridor floor is wet, and somebody did put out a sign.
+	prop("WetFloorSign_01", Transform3D(Basis(Vector3.UP, 0.3), Vector3(21.9, 0, -2.6)))
+
+	place("metal_jerrycan", Vector3(11.9, 0, -7.1), 20)
+	place("metal_jerrycan", Vector3(11.7, 0, -7.6), -75)
+	place("metal_jerrycan", Vector3(-9.1, 0, 5.2), 100)
+	drop("oil_tin", Vector3(-0.75, 0, 6.8), 40)
+	drop("oil_tin", Vector3(-7.2, 0, 2.3), 150)
+
+	place("trashbag", Vector3(19.3, 0, 11.3), 20)
+	place("trashbag", Vector3(19.35, 0, 10.55), 140)
+	place("trashbag", Vector3(20.95, 0, -11.4), 0)
+	place("trashbag", Vector3(21.5, 0, -11.5), 60)
+	drop("plastic_broom", Vector3(22.93, 0, -6.7), -90)
+
+	var box: Vector3 = _model("cardboard_box_01").box.size
+	place("cardboard_box_01", Vector3(29.6, 0, -11.5), 5)
+	place("cardboard_box_01", Vector3(29.62, box.y, -11.48), -12)
+	place("cardboard_box_01", Vector3(28.95, 0, -11.6), 80)
+	place("cardboard_box_01", Vector3(25.3, 0, 1.6), 0)
+	place("cardboard_box_01", Vector3(25.32, box.y, 1.58), 15)
+	place("plastic_monobloc_chair_01", Vector3(27.3, 0, 0.55), 15)
+	place("plastic_monobloc_chair_01", Vector3(28.9, 0, -1.9), -70)
+
+	# Drains along the middle of the hall, their frames flush with the floor.
+	for x: float in [-8.5, 4.9]:
+		prop("water_manhole_cover", Transform3D(Basis(), Vector3(x, -0.055, 0)))
 
 
 ## Lines from when the hall was in use: an aisle from the loading door to the

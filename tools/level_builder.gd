@@ -4,7 +4,7 @@ extends SceneTree
 ##
 ## A level is described in code by overriding _describe() and written to
 ## scenes/levels/ as merged meshes (lightmapped "static", probe-lit "detail"
-## and unshadowed "glass"), one static body, the props placed from
+## in blocks and unshadowed "glass"), one static body, the props placed from
 ## assets/models/, and the lights, decals and reflection probes that belong to
 ## the building. The scene that uses it holds everything that is tuned by
 ## hand: environment, sun, lightmap, spawns and benchmark views.
@@ -40,6 +40,12 @@ const PAINT_WHITE := Color(0.76, 0.76, 0.72)
 const PAINT_BLACK := Color(0.035, 0.035, 0.035)
 
 var _tools := {}
+## Size of the blocks that probe-lit detail is cut into, see _tool(). A level
+## under an open sky can do with larger ones. Whatever lies outside
+## `_detail_inside`, if a level sets that, goes into one mesh: for the skyline
+## beyond the walls, one sample of the probes will do.
+var _detail_block := Vector3(14, 6, 12)
+var _detail_inside := AABB()
 var _shapes := {}
 var _root: Node3D
 var _body: StaticBody3D
@@ -87,9 +93,18 @@ func _init() -> void:
 
 	_describe()
 
-	_commit("static")
-	_commit("detail")
-	_commit("glass")
+	var kinds := {}
+	for key: String in _tools:
+		kinds[key.get_slice("/", 0)] = true
+	# Detail comes in as many meshes as it has blocks; clear out last time's.
+	var folder := DirAccess.open(OUT_DIR)
+	for file in folder.get_files():
+		if file.begins_with(_level_name() + "_detail"):
+			folder.remove(file)
+	var names := kinds.keys()
+	names.sort()
+	for kind: String in names:
+		_commit(kind, kind.replace(" ", "_"))
 	var scene := PackedScene.new()
 	scene.pack(_root)
 	var err := ResourceSaver.save(scene, OUT_DIR + _level_name() + "_level.tscn")
@@ -526,10 +541,17 @@ func place(model: String, at: Vector3, yaw_deg: float, dynamic := false, scale :
 
 ## A model hung on a wall or a machine: `at` is the middle of its back and
 ## `yaw_deg` the way its front faces (0 looks along +Z).
-func mount(model: String, at: Vector3, yaw_deg: float) -> void:
+func mount(model: String, at: Vector3, yaw_deg: float, dynamic := false) -> void:
 	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
 	var size: Vector3 = _model(model).box.size
-	prop(model, Transform3D(facing, at + facing * Vector3(0, -size.y * 0.5, size.z * 0.5)))
+	prop(model, Transform3D(facing, at + facing * Vector3(0, -size.y * 0.5, size.z * 0.5)), 1.0, dynamic)
+
+
+## Something small put down at `at` or left leaning there: no collider, and
+## lit by the probes instead of a patch of lightmap. `pose` turns the model
+## first, for a tool that was scanned upright and has to lie flat or lean.
+func drop(model: String, at: Vector3, yaw_deg: float, pose := Basis()) -> void:
+	prop(model, Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at), 1.0, true, pose)
 
 
 ## Hanging hall lamp; its rim sits just under `at` and a rod runs up to `hang_y`.
@@ -737,8 +759,9 @@ func floor_hatch(area: Rect2, color := PAINT_YELLOW, stripe := 0.15) -> void:
 func _fill(area: Rect2, color: Color, stripe := 0.0, between := Color(0, 0, 0, 0)) -> void:
 	var from := (area.position - _paint_area.position) * PAINT_SCALE
 	var to := (area.end - _paint_area.position) * PAINT_SCALE
-	for y in range(maxi(floori(from.y), 0), mini(ceili(to.y), _paint.get_height())):
-		for x in range(maxi(floori(from.x), 0), mini(ceili(to.x), _paint.get_width())):
+	# The outermost pixels stay clear: the shader repeats them beyond the area.
+	for y in range(maxi(floori(from.y), 1), mini(ceili(to.y), _paint.get_height() - 1)):
+		for x in range(maxi(floori(from.x), 1), mini(ceili(to.x), _paint.get_width() - 1)):
 			# How much of this pixel the rectangle covers.
 			var cover := clampf(minf(x + 1.0, to.x) - maxf(x, from.x), 0.0, 1.0) * clampf(minf(y + 1.0, to.y) - maxf(y, from.y), 0.0, 1.0)
 			var paint := color
@@ -773,7 +796,7 @@ func beam(mat: String, from: Vector3, to: Vector3, width: float, flags := 0, hei
 
 
 func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, xf.origin)
 	var half := size * 0.5
 	for n: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]:
 		var up := Vector3.FORWARD if absf(n.y) > 0.5 else Vector3.UP
@@ -800,7 +823,7 @@ func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
 ## Box whose edges and corners are rounded off over `radius`, for anything
 ## cast or machined: the shading runs smoothly around every edge.
 func rounded_box(mat: String, xf: Transform3D, size: Vector3, radius: float, flags := 0) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, xf.origin)
 	var half := size * 0.5
 	var r := minf(radius, minf(half.x, minf(half.y, half.z)))
 	var core := half - Vector3.ONE * r
@@ -839,7 +862,7 @@ func rounded_box(mat: String, xf: Transform3D, size: Vector3, radius: float, fla
 ## slopes. The waves follow one another along X, `pitch` apart, and the panel
 ## starts and ends in a trough, so its edges tuck in behind a frame.
 func corrugated(mat: String, xf: Transform3D, size: Vector2, pitch: float, depth: float, flags := 0) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, xf.origin)
 	var waves := maxi(1, roundi(size.x / pitch))
 	var step := size.x / waves
 	# One wave: half a trough, the slope up, the crest, the slope down, half a trough.
@@ -878,7 +901,7 @@ func rod(mat: String, from: Vector3, to: Vector3, radius: float, flags := 0, seg
 
 
 func _cylinder(mat: String, xf: Transform3D, radius: float, height: float, flags: int, top_radius: float, segments: int) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, xf * Vector3(0, height * 0.5, 0))
 	var r_top := radius if top_radius < 0.0 else top_radius
 	var top := Vector3(0, height, 0)
 	for i in segments:
@@ -914,7 +937,7 @@ func _cylinder(mat: String, xf: Transform3D, radius: float, height: float, flags
 ## height) pairs from the bottom up; starting or ending at radius 0 closes that
 ## end. `smooth` rounds the profile off as well, for a torus or a dome.
 func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags := 0, segments := 24, smooth := false) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, xf.origin)
 	var last := profile.size() - 2
 	# Outward normal of every stretch of the profile, as (radial, height).
 	var facets: Array[Vector2] = []
@@ -986,7 +1009,7 @@ func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags :=
 ## Hose, cable or bent pipe through `points`, curving smoothly from one to the
 ## next. It has no collider and no end caps, so both ends belong inside something.
 func hose(mat: String, points: PackedVector3Array, radius: float, flags := 0, segments := 8) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, points[points.size() / 2])
 	var steps := 6
 	var path := PackedVector3Array()
 	for i in points.size() - 1:
@@ -1027,7 +1050,7 @@ func hose(mat: String, points: PackedVector3Array, radius: float, flags := 0, se
 
 ## Convex polygon (counter-clockwise in local XY) extruded along local Z.
 func extrude(mat: String, polygon: PackedVector2Array, depth: float, xf: Transform3D, flags := 0) -> void:
-	var st := _tool(mat, flags)
+	var st := _tool(mat, flags, xf.origin)
 	var front := Vector3(0, 0, depth * 0.5)
 	var count := polygon.size()
 	var hull := PackedVector3Array()
@@ -1119,9 +1142,26 @@ func _up_along(direction: Vector3) -> Basis:
 	return Basis(x, y, x.cross(y))
 
 
-func _tool(mat: String, flags: int) -> SurfaceTool:
-	var kind := "glass/" if flags & GLASS else ("detail/" if flags & DETAIL else "static/")
-	var key := kind + mat
+## The surface a piece of geometry at `at` goes into.
+func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	var kind := "glass" if flags & GLASS else ("detail" if flags & DETAIL else "static")
+	if kind == "detail":
+		# A mesh without a lightmap takes its indirect light from the probes at
+		# one point, its middle. Detail is therefore cut into blocks, so that
+		# what hangs under the roof is not lit like what stands by a window.
+		if not _detail_inside.has_volume():
+			pass
+		elif _detail_inside.has_point(at):
+			# What sits in or on a wall belongs to the block on the inside of it.
+			at = at.clamp(_detail_inside.position + Vector3.ONE, _detail_inside.end - Vector3.ONE)
+		else:
+			return _tool_named("detail far/" + mat)
+		var block := Vector3i((at / _detail_block + Vector3(0.5, 0, 0)).floor())
+		kind = "detail %d %d %d" % [block.x, block.y, block.z]
+	return _tool_named(kind + "/" + mat)
+
+
+func _tool_named(key: String) -> SurfaceTool:
 	if not _tools.has(key):
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -1178,11 +1218,10 @@ func _add(node: Node, parent: Node) -> void:
 		node.owner = _root
 
 
-## Merges every surface of one kind into a single mesh instance.
-func _commit(kind: String) -> void:
+## Merges every surface of one kind into a single mesh instance, saved under
+## `stem`.
+func _commit(kind: String, stem: String) -> void:
 	var keys := _tools.keys().filter(func(key: String) -> bool: return key.begins_with(kind + "/"))
-	if keys.is_empty():
-		return
 	keys.sort()
 	var mesh := ArrayMesh.new()
 	var triangles := 0
@@ -1196,20 +1235,20 @@ func _commit(kind: String) -> void:
 	if kind == "static":
 		var err := mesh.lightmap_unwrap(Transform3D(), TEXEL)
 		print("Lightmap unwrap: ", error_string(err), ", size hint ", mesh.lightmap_size_hint)
-	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), kind]
+	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), stem]
 	ResourceSaver.save(mesh, path, ResourceSaver.FLAG_COMPRESS)
 	mesh.take_over_path(path)
 	var instance := MeshInstance3D.new()
-	instance.name = kind.capitalize()
+	instance.name = stem.capitalize().replace(" ", "")
 	instance.mesh = mesh
 	match kind:
 		"static":
 			instance.gi_mode = GeometryInstance3D.GI_MODE_STATIC
-		"detail":
-			instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 		"glass":
 			instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_:
+			instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	_add(instance, _root)
 	_root.move_child(instance, 0)
 	print("%s: %d surfaces, %d triangles" % [kind, mesh.get_surface_count(), triangles])
