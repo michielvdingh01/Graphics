@@ -15,7 +15,7 @@ Een first person shooter met de best haalbare graphics die met AI te maken zijn,
 |---|---|---|---|
 | 0. Fundament | week 1–2 | Godot-project, git, FPS-controller in een greybox-level, vaste benchmarkscène met automatische screenshots en fps-meting | Klaar |
 | 1. Gunfeel | week 3–6 | Beweging (sprint, crouch, slide), 2–3 wapens met recoil en ADS, hit-feedback, geluid, simpele vijanden met navigatie | Klaar |
-| 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | Klaar; de meeste props zijn echte modellen. Machines, containers, tanks, pallets en kluisjes nog niet. Zie hieronder |
+| 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | Klaar; de meeste props zijn echte modellen en de pers en de draaibank zijn uitgewerkt. Containers, tanks, pallets en kluisjes nog niet. Zie hieronder |
 | 3. AI-assetpipeline | parallel aan fase 2 | Scripts die uit het manifest props, texturen, skyboxes en geluid genereren en importeren | Begin gemaakt: decals komen procedureel uit het manifest en modellen van Poly Haven worden via het manifest opgehaald. Zelf genereren van props, wapens, vijanden en geluid wacht op een generatiedienst |
 | 4. Moderne shooter-eisen | maand 4–5 | Menu, grafische instellingen, controller-support, FSR-upscaling, checkpoints, meer wapens en vijandtypes, tweede level | Klaar, zie hieronder |
 | 5. Upgrade-loop | doorlopend | Bij elk nieuw model één assetcategorie opnieuw genereren en A/B vergelijken in de benchmarkscène | |
@@ -57,7 +57,8 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 - Een natte-vloer-shader met plassen en een lenspass met vignette, filmkorrel en lichte chromatische aberratie.
 - Vuil glas in alle ramen en dakramen, met hier en daar een ontbrekende ruit.
 - Decals: lekstrepen onder de ramen, vuil langs de plinten en olievlekken op de vloer.
-- Gescande CC0-modellen van Poly Haven (1K), 21 in totaal: vaten, houten kisten, betonnen wegbarrières, stellingen, hallampen, schakelkasten, een bureau, banden, gasflessen, cementzakken op pallets, een compressor, een lasset, gereedschapswagens, een ladder en een steekwagen. Ze staan in het manifest, krijgen bij import lightmap-UV's (importstandaard in `project.godot`) en worden door de levelbouwer geplaatst, die er zelf een eenvoudige botsvorm bij zet.
+- Gescande CC0-modellen van Poly Haven (1K), 28 in totaal: vaten, houten kisten, betonnen wegbarrières, stellingen, hallampen, schakelkasten, een bureau, banden, gasflessen, cementzakken op pallets, een compressor, een lasset, gereedschapswagens, een ladder, een steekwagen, werkbanken met twee kolomboren, een bankschroef en een gereedschapskist, een kruk en groepenkasten. Ze staan in het manifest, krijgen bij import lightmap-UV's (importstandaard in `project.godot`) en worden door de levelbouwer geplaatst, die er zelf een eenvoudige botsvorm bij zet.
+- Een excenterpers en een draaibank van zes meter, in code opgebouwd (`_press` en `_lathe` in `tools/levels/factory.gd`), omdat er van grote machines geen gescande modellen zijn. De levelbouwer heeft daarvoor afgeronde blokken, omwentelingslichamen en slangen gekregen (`rounded_box`, `revolve`, `hose`). Samen zijn ze circa 26 duizend driehoeken; ze horen bij de gewone levelgeometrie en krijgen dus een lightmap. De groene lak is de bestaande machinetextuur en de blauwe lak van de draaibank een nieuwe van Poly Haven; blank staal, donker staal, rubber, messing en rode lak zijn materialen zonder eigen kleurtextuur. De werklamp van de draaibank brandt en boven de werkbank hangt een tl-buis, anders stond die hoek in het donker.
 - Massieve props krijgen een eigen stukje lightmap. Props van dunne staven (stellingen, lampen, ladder, steekwagen) lost een lightmap niet op; die krijgen hun licht van de lightmap-probes. Het probe-raster staat daarvoor op de fijnste stand: met het grove standaardraster lichtten zulke props in een donkere hoek spookachtig op.
 
 **Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
@@ -72,7 +73,7 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 | Nieuw opgehaalde bestanden importeren | `godot --headless --path . --import` |
 | Procedurele decals opnieuw genereren volgens het manifest | `tools/gen_decals.sh` |
 | Levelgeometrie opnieuw genereren uit `tools/levels/<naam>.gd` | `tools/build_level.sh factory` of `depot` |
-| Lightmaps bakken (nodig na elke geometrie- of lichtwijziging, 1 tot 1,5 minuut) | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
+| Lightmaps bakken (nodig na elke geometrie- of lichtwijziging, 1,5 tot 2 minuten) | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
 | Snel screenshots van de benchmarkstandpunten | `tools/shots.sh` |
 | Meten wat elk effect per standpunt kost (schaduwen, SSAO, SSIL, SSR, mist, glow, props, decals, glas, lenspass) | `tools/benchmark.sh --profile` |
 | Een run zonder bepaalde effecten, om screenshots te vergelijken | `tools/benchmark.sh --off=ssil,glow` |
@@ -82,20 +83,24 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 
 **Alles draait zonder venster.** De benchmark en de bake starten Godot via `tools/godot.sh` in de modus waarmee de editor een draaiend spel inbedt (`--embedded`). Die rendert gewoon op de GPU, maar opent geen venster, toont geen Dock-icoon en maakt geen geluid, zodat een run nooit de focus afpakt van waar je mee bezig bent. Een gewoon venster doet dat altijd: Godot activeert zichzelf zodra het hoofdvenster verschijnt, en daar is geen schakelaar voor. Zonder venster zijn de screenshots gelijk, is een bake byte voor byte gelijk en komen de gemiddelden overeen met die in een venster (1080p: 90–104 tegen 91–101 fps, 1440p met FSR 2: 75–79 tegen 75–79 fps). De 1% low is alleen vergeleken terwijl de laptop in gebruik was (62–95 fps over twee runs, tegen 80–90 in een venster op een rustige machine); die vergelijking moet nog een keer op een rustige machine. In `results.json` staat bij zo'n run `"display": "embedded"`.
 
-**Meting** op 8 oktober 2026, M1 Pro, 1920×1080, kwaliteit High (zonder SSIL), met glas, decals en modellen:
+**Meting** op 8 oktober 2026, M1 Pro, 1920×1080, kwaliteit High (zonder SSIL), met glas, decals, modellen en machines, zonder venster gemeten terwijl de laptop in gebruik was:
 
 | Camerastandpunt | Gemiddeld | 1% low |
 |---|---|---|
-| Overview | 95 fps | 81 fps |
-| Corridor | 98 fps | 82 fps |
-| Platform | 91 fps | 80 fps |
-| Hall | 101 fps | 90 fps |
+| Overview | 90 fps | 86 fps |
+| Corridor | 96 fps | 91 fps |
+| Platform | 86 fps | 83 fps |
+| Hall | 94 fps | 90 fps |
 
-De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,7 tot 1,7 miljoen. Dat is goedkoop: de eerste zes modellen kostten op 1440p met FSR 2 hooguit 0,4 ms per frame, de vijftien daarna samen ongeveer 1 fps. De lightmap van de fabriek groeide van 25 naar 42 MB, omdat elke massieve prop een eigen stukje lightmap krijgt.
+Vóór de machines was dit gemiddeld 95, 98, 91 en 101 fps. In het standpunt Hall kostten de twee nieuwe lampen samen 4 fps; met een korter bereik is dat 2 fps. De werkbank met zijn modellen kost circa 2 fps en de twee machines samen 1 à 2.
+
+De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 1,0 tot 2,0 miljoen. Dat is goedkoop: de eerste zes modellen kostten op 1440p met FSR 2 hooguit 0,4 ms per frame, de vijftien daarna samen ongeveer 1 fps. De lightmap van de fabriek groeide van 25 naar 47 MB, omdat elke massieve prop een eigen stukje lightmap krijgt.
 
 **Nog open in deze fase**
 
-- De grote machines (pers, machinebed), containers, tanks, pallets en kluisjes zijn nog samengesteld uit dozen en cilinders, en het wapen en de vijanden ook. Poly Haven heeft daar geen modellen voor, en ook geen kubusvormige krat; de kratstapels bestaan daarom uit langwerpige kisten.
+- De containers, tanks, pallets en kluisjes zijn nog samengesteld uit dozen en cilinders, net als de kast op de tussenvloer en die in de gang, en het wapen en de vijanden ook. Poly Haven heeft daar geen modellen voor, en ook geen kubusvormige krat; de kratstapels bestaan daarom uit langwerpige kisten.
+- De pers en de draaibank zijn gebouwd en niet gescand. Van dichtbij missen ze slijtage langs de randen en hun lak is een tegelende textuur. Zodra er een generatiedienst is, zijn zij de eerste om te vervangen.
+- Poly Haven heeft sinds juli 2026 een bovenloopkraan met een overspanning van 12,5 m. De kraan in de hal overspant 23 m en is daarom nog van balken.
 - De schakelkasten zijn straatkasten die 1,45 keer vergroot zijn; van dichtbij zijn de waarschuwingsstickers daardoor te groot.
 
 ## Moderne shooter-eisen (fase 4)
@@ -111,16 +116,16 @@ De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,
 - **Vijanden.** Naast de grunt een rusher (snel, zwak, slaat van dichtbij) en een heavy (traag, veel health, lange salvo's). Rushers komen vanaf wave 2, heavies vanaf wave 4. Elke vijand gaat 1,5 tot 4 seconden na het spawnen op zoek naar de speler.
 - **Tweede level: Depot.** Een ommuurd containerterrein in de schemering met een overdekt laadperron en een portiersloge, verlicht door schijnwerpers. Hoofdscène `scenes/depot.tscn`, beschrijving in `tools/levels/depot.gd`. De gedeelde bouwstenen staan in `tools/level_builder.gd`.
 
-**Meting op 1440p** op 8 oktober 2026, M1 Pro, 2560×1440, kwaliteit High (zonder SSIL), met alle 21 modellen. Het budget van 60 fps wordt met upscaling gehaald, met 15 fps over.
+**Meting op 1440p** op 8 oktober 2026, M1 Pro, 2560×1440, kwaliteit High (zonder SSIL), met alle 28 modellen en de machines. Het budget van 60 fps wordt met upscaling gehaald, met 10 fps over. De fabriek is na het plaatsen van de machines opnieuw gemeten (zonder venster, laptop in gebruik) en haalde daarvoor 75–79 fps met FSR 2; het depot is niet veranderd en niet opnieuw gemeten.
 
 | Level | Instelling | Gemiddeld (laagste en hoogste standpunt) | 1% low |
 |---|---|---|---|
-| Fabriek | FSR 2 op 67% | 75–79 fps | 66–69 fps |
-| Fabriek | MetalFX Temporal op 67% | 77–78 fps | 68–70 fps |
-| Fabriek | Geen upscaling | 58–64 fps | 54–57 fps |
+| Fabriek | FSR 2 op 67% | 70–74 fps | 67–71 fps |
+| Fabriek | MetalFX Temporal op 67% | 73–77 fps | 68–73 fps |
+| Fabriek | Geen upscaling | 55–60 fps | 46–50 fps |
 | Depot | FSR 2 op 67% | 75–81 fps | 68–70 fps |
 
-Met SSIL erbij haalde de fabriek met FSR 2 gemiddeld 66–72 fps en een 1% low die per run tussen 52 en 66 fps lag, afhankelijk van wat de machine verder deed. Dat was te krap om er nog iets bij te zetten.
+Met SSIL erbij haalde de fabriek met FSR 2 gemiddeld 66–72 fps en een 1% low die per run tussen 52 en 66 fps lag, afhankelijk van wat de machine verder deed. Dat was te krap om er nog iets bij te zetten. Na de machines is de marge 10 fps: wat er in de fabriek nog bij komt, moet elders worden terugverdiend.
 
 Het depot haalt op 1920×1080 zonder upscaling 94–107 fps gemiddeld en 80–86 fps 1% low.
 

@@ -366,6 +366,14 @@ func place(model: String, at: Vector3, yaw_deg: float, dynamic := false, scale :
 	_collide_box(Transform3D(facing, at + Vector3(0, size.y * 0.5, 0)), size)
 
 
+## A model hung on a wall or a machine: `at` is the middle of its back and
+## `yaw_deg` the way its front faces (0 looks along +Z).
+func mount(model: String, at: Vector3, yaw_deg: float) -> void:
+	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
+	var size: Vector3 = _model(model).box.size
+	prop(model, Transform3D(facing, at + facing * Vector3(0, -size.y * 0.5, size.z * 0.5)))
+
+
 ## Hanging hall lamp; its rim sits just under `at` and a rod runs up to `hang_y`.
 func lamp(at: Vector3, hang_y: float, on: bool, shadows: bool) -> void:
 	var height: float = _model(LAMP).box.size.y
@@ -420,8 +428,8 @@ func bulb(at: Vector3, shadows: bool) -> void:
 	_add(light, _lights)
 
 
-## Fluorescent ceiling fixture.
-func tube(at: Vector3, along_x: bool, on: bool, shadows := true) -> void:
+## Fluorescent ceiling fixture; `reach` is how far its light carries.
+func tube(at: Vector3, along_x: bool, on: bool, shadows := true, reach := 7.5) -> void:
 	var long := Vector3(1.3, 0, 0) if along_x else Vector3(0, 0, 1.3)
 	var cross := Vector3(0, 0, 0.16) if along_x else Vector3(0.16, 0, 0)
 	box("steel", at + Vector3(0, 0.03, 0), long + cross + Vector3(0, 0.06, 0), Vector3.ZERO, NO_COLLIDE)
@@ -433,7 +441,7 @@ func tube(at: Vector3, along_x: bool, on: bool, shadows := true) -> void:
 	light.position = at + Vector3(0, -0.25, 0)
 	light.light_color = Color(0.82, 0.93, 1.0)
 	light.light_energy = 3.0
-	light.omni_range = 7.5
+	light.omni_range = reach
 	light.omni_attenuation = 1.4
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
@@ -574,10 +582,52 @@ func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
 		_collide_box(xf, size)
 
 
+## Box whose edges and corners are rounded off over `radius`, for anything
+## cast or machined: the shading runs smoothly around every edge.
+func rounded_box(mat: String, xf: Transform3D, size: Vector3, radius: float, flags := 0) -> void:
+	var st := _tool(mat, flags)
+	var half := size * 0.5
+	var r := minf(radius, minf(half.x, minf(half.y, half.z)))
+	var core := half - Vector3.ONE * r
+	for n: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]:
+		var up := Vector3.FORWARD if absf(n.y) > 0.5 else Vector3.UP
+		var right := up.cross(n)
+		var hr := absf(right.dot(half))
+		var hu := absf(up.dot(half))
+		# Three strips each way: the flat middle and half a rounded edge on
+		# either side. The other half belongs to the neighbouring face.
+		var across: Array[float] = [-hr, -hr + r, hr - r, hr]
+		var along: Array[float] = [-hu, -hu + r, hu - r, hu]
+		for i in 3:
+			for j in 3:
+				var points: Array[Vector3] = []
+				var normals: Array[Vector3] = []
+				var uvs: Array[Vector2] = []
+				for corner: Vector2i in [Vector2i(i, j), Vector2i(i + 1, j), Vector2i(i + 1, j + 1), Vector2i(i, j + 1)]:
+					var flat := n * absf(n.dot(half)) + right * across[corner.x] + up * along[corner.y]
+					var inner := flat.clamp(-core, core)
+					var normal := (flat - inner).normalized()
+					var q := flat + xf.origin
+					points.append(xf * (inner + normal * r))
+					normals.append(xf.basis * normal)
+					uvs.append(Vector2(q.dot(right), -q.dot(up)))
+				_quad(st, points, normals, uvs)
+	if not flags & NO_COLLIDE:
+		_collide_box(xf, size)
+
+
 ## Cylinder or cone standing on `base`; rot_deg tilts its axis.
 func cylinder(mat: String, base: Vector3, radius: float, height: float, flags := 0, rot_deg := Vector3.ZERO, top_radius := -1.0, segments := 20) -> void:
+	_cylinder(mat, Transform3D(Basis.from_euler(rot_deg * PI / 180.0), base), radius, height, flags, top_radius, segments)
+
+
+## Round bar between two points.
+func rod(mat: String, from: Vector3, to: Vector3, radius: float, flags := 0, segments := 12) -> void:
+	_cylinder(mat, Transform3D(_up_along(to - from), from), radius, from.distance_to(to), flags, -1.0, segments)
+
+
+func _cylinder(mat: String, xf: Transform3D, radius: float, height: float, flags: int, top_radius: float, segments: int) -> void:
 	var st := _tool(mat, flags)
-	var xf := Transform3D(Basis.from_euler(rot_deg * PI / 180.0), base)
 	var r_top := radius if top_radius < 0.0 else top_radius
 	var top := Vector3(0, height, 0)
 	for i in segments:
@@ -601,6 +651,108 @@ func cylinder(mat: String, base: Vector3, radius: float, height: float, flags :=
 			[Vector2.ZERO, Vector2(d1.x, d1.z) * radius, Vector2(d0.x, d0.z) * radius])
 	if not flags & NO_COLLIDE:
 		_collide_cylinder(xf * Transform3D(Basis(), top * 0.5), maxf(radius, r_top), height)
+
+
+## Surface of revolution around the Y axis of `xf`. `profile` lists (radius,
+## height) pairs from the bottom up; starting or ending at radius 0 closes that
+## end. `smooth` rounds the profile off as well, for a torus or a dome.
+func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags := 0, segments := 24, smooth := false) -> void:
+	var st := _tool(mat, flags)
+	var last := profile.size() - 2
+	# Outward normal of every stretch of the profile, as (radial, height).
+	var facets: Array[Vector2] = []
+	for i in last + 1:
+		var d := profile[i + 1] - profile[i]
+		facets.append(Vector2(d.y, -d.x).normalized())
+	var run := 0.0
+	var widest := 0.0
+	for i in last + 1:
+		var p0 := profile[i]
+		var p1 := profile[i + 1]
+		var n0 := facets[i]
+		var n1 := facets[i]
+		if smooth:
+			# A profile that ends where it began, like a ring, is smooth there too.
+			var closed := profile[0].is_equal_approx(profile[last + 1])
+			var before := (i + last) % (last + 1) if closed else maxi(i - 1, 0)
+			var after := (i + 1) % (last + 1) if closed else mini(i + 1, last)
+			n0 = (facets[before] + facets[i]).normalized()
+			n1 = (facets[i] + facets[after]).normalized()
+		var length := p0.distance_to(p1)
+		var girth := maxf(p0.x, p1.x)
+		widest = maxf(widest, girth)
+		for s in segments:
+			var a0 := TAU * s / segments
+			var a1 := TAU * (s + 1) / segments
+			# Same winding as the wall of a cylinder.
+			var d0 := Vector3(cos(a1), 0, sin(a1))
+			var d1 := Vector3(cos(a0), 0, sin(a0))
+			var points := [
+				xf * (d0 * p0.x + Vector3.UP * p0.y), xf * (d1 * p0.x + Vector3.UP * p0.y),
+				xf * (d1 * p1.x + Vector3.UP * p1.y), xf * (d0 * p1.x + Vector3.UP * p1.y),
+			]
+			var normals := [
+				xf.basis * (d0 * n0.x + Vector3.UP * n0.y), xf.basis * (d1 * n0.x + Vector3.UP * n0.y),
+				xf.basis * (d1 * n1.x + Vector3.UP * n1.y), xf.basis * (d0 * n1.x + Vector3.UP * n1.y),
+			]
+			var uvs := [
+				Vector2(-a1 * girth, -run), Vector2(-a0 * girth, -run),
+				Vector2(-a0 * girth, -run - length), Vector2(-a1 * girth, -run - length),
+			]
+			# A stretch that starts or ends on the axis is a fan of triangles.
+			if p0.x < 0.0001:
+				_tri(st, [points[0], points[2], points[3]], [normals[0], normals[2], normals[3]], [uvs[0], uvs[2], uvs[3]])
+			elif p1.x < 0.0001:
+				_tri(st, [points[0], points[1], points[2]], [normals[0], normals[1], normals[2]], [uvs[0], uvs[1], uvs[2]])
+			else:
+				_quad(st, points, normals, uvs)
+		run += length
+	if not flags & NO_COLLIDE:
+		var bottom := profile[0].y
+		var height := profile[last + 1].y - bottom
+		_collide_cylinder(xf * Transform3D(Basis(), Vector3(0, bottom + height * 0.5, 0)), widest, height)
+
+
+## Hose, cable or bent pipe through `points`, curving smoothly from one to the
+## next. It has no collider and no end caps, so both ends belong inside something.
+func hose(mat: String, points: PackedVector3Array, radius: float, flags := 0, segments := 8) -> void:
+	var st := _tool(mat, flags)
+	var steps := 6
+	var path := PackedVector3Array()
+	for i in points.size() - 1:
+		var before := points[maxi(i - 1, 0)]
+		var after := points[mini(i + 2, points.size() - 1)]
+		for step in steps:
+			path.append(points[i].cubic_interpolate(points[i + 1], before, after, float(step) / steps))
+	path.append(points[points.size() - 1])
+	# Carry one sideways direction along the path, turning it only as much as
+	# the path itself turns, so the rings do not twist against each other.
+	var heading := (path[1] - path[0]).normalized()
+	var side := _up_along(heading).x
+	var ring: Array[Vector3] = []
+	var run := 0.0
+	for i in path.size():
+		var next := (path[mini(i + 1, path.size() - 1)] - path[maxi(i - 1, 0)]).normalized()
+		if not next.is_equal_approx(heading):
+			side = Quaternion(heading, next) * side
+			heading = next
+		var around: Array[Vector3] = []
+		for s in segments + 1:
+			around.append(Basis(heading, TAU * s / segments) * side)
+		if i > 0:
+			var length := path[i].distance_to(path[i - 1])
+			for s in segments:
+				# Seen from outside with the path running upwards, s + 1 lies to the right of s.
+				var u0 := s * TAU * radius / segments
+				var u1 := (s + 1) * TAU * radius / segments
+				_quad(
+					st,
+					[path[i - 1] + ring[s] * radius, path[i - 1] + ring[s + 1] * radius, path[i] + around[s + 1] * radius, path[i] + around[s] * radius],
+					[ring[s], ring[s + 1], around[s + 1], around[s]],
+					[Vector2(u0, -run), Vector2(u1, -run), Vector2(u1, -run - length), Vector2(u0, -run - length)]
+				)
+			run += length
+		ring = around
 
 
 ## Convex polygon (counter-clockwise in local XY) extruded along local Z.
@@ -653,6 +805,13 @@ func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array) -> void:
 func _along(direction: Vector3) -> Basis:
 	var up := Vector3.RIGHT if absf(direction.normalized().y) > 0.99 else Vector3.UP
 	return Basis.looking_at(direction, up)
+
+
+## Basis whose Y axis points along `direction`.
+func _up_along(direction: Vector3) -> Basis:
+	var y := direction.normalized()
+	var x := (Vector3.FORWARD if absf(y.y) > 0.99 else Vector3.UP).cross(y).normalized()
+	return Basis(x, y, x.cross(y))
 
 
 func _tool(mat: String, flags: int) -> SurfaceTool:
