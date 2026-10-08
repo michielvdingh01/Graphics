@@ -173,9 +173,9 @@ func _mezzanine() -> void:
 	railing(Vector3(x1, DECK_Y, -9.82), Vector3(foot.x, 0.0, -9.82))
 
 	# Storage underneath.
-	shelf(Vector3(-17.5, 0, -11.4), 3.0, false)
-	shelf(Vector3(-13.5, 0, -11.4), 3.0, false)
-	shelf(Vector3(-9.5, 0, -11.4), 3.0, false)
+	shelf(Vector3(-17.5, 0, -11.4), 0, false)
+	shelf(Vector3(-13.5, 0, -11.4), 0, true)
+	shelf(Vector3(-9.5, 0, -11.4), 0, true)
 	crates(Vector3(-16.5, 0, -8.6), 4)
 	crates(Vector3(-6.0, 0, -10.6), 3)
 	bulb(Vector3(-15.0, DECK_Y - 0.5, -9.2), true)
@@ -217,9 +217,7 @@ func _hall_props() -> void:
 	cylinder("steel", Vector3(0.5, 1.55, 7.8), 0.3, 3.2, 0, Vector3(0, 0, -90))
 	box("machine", Vector3(4.6, 1.5, 7.8), Vector3(0.6, 0.8, 0.9))
 
-	# Control cabinets.
-	for i in 3:
-		box("machine", Vector3(-13.0 + i * 0.95, 1.0, 3.0), Vector3(0.9, 2.0, 0.6))
+	cabinets(Vector3(-12.05, 0, 3.0), 0)
 
 	# Tanks and pipework against the north wall.
 	for x in [11.5, 15.0]:
@@ -248,9 +246,22 @@ func _hall_props() -> void:
 	crates(Vector3(5.0, 0, 2.0), 2)
 	pallet(Vector3(12.5, 0, 9.0), 20.0, 3)
 	pallet(Vector3(-3.0, 0, 10.5), -8.0, 5)
-	pallet(Vector3(17.5, 0, -3.5), 4.0, 1)
+	bags(Vector3(17.5, 0, -3.5), 4.0, 5)
 	for p in [Vector3(18.6, 0, -5.4), Vector3(17.9, 0, -5.9), Vector3(18.8, 0, -6.3), Vector3(-19.2, 0, 3.6), Vector3(-19.1, 0, 4.4)]:
 		barrel(p)
+
+	# What the last shift left standing around.
+	place("old_military_compressor", Vector3(13.2, 0, -7.6), 90)
+	place("portable_welding_cart", Vector3(-8.4, 0, 4.3), 25)
+	place("tool_cart", Vector3(3.0, 0, 6.3), 5)
+	place("industrial_storage_cart", Vector3(-9.3, 0, 3.3), 90)
+	place("wooden_ladder", Vector3(6.3, 0, 8.4), -70, true)
+	place("hand_truck", Vector3(14.6, 0, 10.9), 160, true)
+	tyres(Vector3(19.3, 0, -6.9), 4)
+	tyres(Vector3(18.6, 0, -7.3), 2)
+	tyres(Vector3(-7.8, 0, 11.1), 3)
+	for p in [Vector3(17.0, 0, -11.2), Vector3(17.45, 0, -11.25), Vector3(17.2, 0, -10.8)]:
+		gas_bottle(p)
 
 
 func _annex() -> void:
@@ -284,17 +295,15 @@ func _annex() -> void:
 	box("machine", Vector3(23.3, 0.9, -5.5), Vector3(0.35, 1.8, 1.2))
 
 	# Room A: storage.
-	shelf(Vector3(27.0, 0, -11.6), 3.0, false)
-	shelf(Vector3(30.1, 0, -8.5), 3.0, true)
+	shelf(Vector3(27.0, 0, -11.6), 0, true)
+	shelf(Vector3(30.1, 0, -8.5), -90, false)
 	crates(Vector3(25.5, 0, -6.6), 4)
 	pallet(Vector3(28.6, 0, -6.4), 10.0, 2)
 
 	# Room B: lockers, desk and the window.
 	for i in 5:
 		box("machine", Vector3(30.2, 0.95, -4.6 + i * 0.52), Vector3(0.5, 1.9, 0.5))
-	box("wood", Vector3(27.2, 0.76, 1.4), Vector3(2.2, 0.06, 0.9))
-	for dx in [-1.0, 1.0]:
-		box("steel", Vector3(27.2 + dx, 0.365, 1.4), Vector3(0.06, 0.73, 0.8))
+	place(DESK, Vector3(27.2, 0, 1.45), 180)
 	crates(Vector3(24.6, 0, -4.2), 2)
 
 

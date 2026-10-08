@@ -92,8 +92,11 @@ func _dock() -> void:
 	crates(Vector3(-15.0, DOCK_Y, -18.0), 4)
 	crates(Vector3(7.0, DOCK_Y, -17.6), 3)
 	pallet(Vector3(-4.0, DOCK_Y, -18.6), 6.0, 4)
-	pallet(Vector3(19.0, DOCK_Y, -16.0), -12.0, 2)
-	shelf(Vector3(14.0, DOCK_Y, -19.6), 3.0, false)
+	bags(Vector3(19.0, DOCK_Y, -16.0), -12.0, 4, 2)
+	shelf(Vector3(14.0, DOCK_Y, -19.6), 0, true)
+	place("hand_truck", Vector3(-12.4, DOCK_Y, -17.0), 200, true)
+	for p in [Vector3(2.5, DOCK_Y, -19.4), Vector3(2.95, DOCK_Y, -19.3)]:
+		gas_bottle(p)
 	for p in [Vector3(-20.5, DOCK_Y, -19.2), Vector3(-19.7, DOCK_Y, -19.3), Vector3(1.5, DOCK_Y, -19.3)]:
 		barrel(p)
 
@@ -136,12 +139,10 @@ func _gatehouse() -> void:
 	wall("plaster", false, YX - 0.03, 0.06, z0, YZ, 0.0, height, [])
 	wall("plaster", true, YZ - 0.03, 0.06, x0, YX, 0.0, height, [])
 	tube(Vector3(26.5, height - 0.08, 17.0), true, true)
-	box("wood", Vector3(26.5, 0.76, 14.6), Vector3(2.2, 0.06, 0.9))
-	for dx in [-1.0, 1.0]:
-		box("steel", Vector3(26.5 + dx, 0.365, 14.6), Vector3(0.06, 0.73, 0.8))
+	place(DESK, Vector3(26.5, 0, 14.55), 0)
 	for i in 4:
 		box("machine", Vector3(29.6, 0.95, 15.2 + i * 0.52), Vector3(0.5, 1.9, 0.5))
-	shelf(Vector3(26.0, 0, 19.55), 3.0, false)
+	shelf(Vector3(26.0, 0, 19.55), 180, true)
 	# A lamp over the door.
 	bulb(Vector3(x0 - 0.4, 2.7, 16.6), false)
 
@@ -191,7 +192,10 @@ func _cover() -> void:
 	crates(Vector3(-3.5, 0, 16.5), 3)
 	pallet(Vector3(18.0, 0, 12.0), 15.0, 4)
 	pallet(Vector3(-27.5, 0, 2.0), -5.0, 3)
-	pallet(Vector3(10.0, 0, 16.5), 40.0, 2)
+	bags(Vector3(10.0, 0, 16.5), 40.0, 5, 2)
+	tyres(Vector3(28.9, 0, -7.0), 4)
+	tyres(Vector3(28.2, 0, -7.4), 2)
+	tyres(Vector3(-28.9, 0, 17.2), 3)
 	for p in [Vector3(28.8, 0, -5.0), Vector3(28.9, 0, -5.8), Vector3(28.2, 0, -5.5), Vector3(-28.8, 0, 18.6), Vector3(-28.0, 0, 18.9), Vector3(5.5, 0, 18.9)]:
 		barrel(p)
 

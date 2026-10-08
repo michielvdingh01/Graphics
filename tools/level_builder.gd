@@ -18,6 +18,14 @@ const BARRELS: Array[String] = ["Barrel_01", "Barrel_02", "barrel_03"]
 const CRATE := "wooden_crate_02"
 const SMALL_CRATE := "wooden_crate_01"
 const BARRIER := "concrete_road_barrier_02"
+const RACK := "worn_metal_rack"
+const WIDE_RACK := "steel_frame_shelves_03"
+const DESK := "metal_office_desk"
+const LAMP := "hanging_industrial_lamp"
+const CABINETS: Array[String] = ["utility_box_02", "utility_box_01", "utility_box_01"]
+const TYRE := "old_tyre"
+const GAS_BOTTLE := "propane_tank"
+const BAG := "cement_bag"
 
 ## Box/cylinder flags.
 const DETAIL := 1  # thin or far geometry: no lightmap, lit by probes instead
@@ -33,12 +41,15 @@ var _decals: Node3D
 var _props: Node3D
 ## Model id -> {path, scene, box}; scene and box are filled in on first use.
 var _models := {}
+## Glowing material -> its copy for a lamp that is off.
+var _dark := {}
 var _rng := RandomNumberGenerator.new()
 ## Separate streams, so adding glass, decals or model variation never
 ## reshuffles where the props stand.
 var _glass_rng := RandomNumberGenerator.new()
 var _decal_rng := RandomNumberGenerator.new()
 var _prop_rng := RandomNumberGenerator.new()
+var _clutter_rng := RandomNumberGenerator.new()
 
 
 func _init() -> void:
@@ -46,6 +57,7 @@ func _init() -> void:
 	_glass_rng.seed = 11
 	_decal_rng.seed = 23
 	_prop_rng.seed = 31
+	_clutter_rng.seed = 43
 	_root = Node3D.new()
 	_root.name = _level_name().capitalize() + "Level"
 	_body = StaticBody3D.new()
@@ -241,43 +253,144 @@ func barrel(at: Vector3) -> void:
 	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), maxf(box.size.x, box.size.z) * 0.5, box.size.y)
 
 
-## Steel rack with wooden boards, against a wall along X (or Z when turned).
-func shelf(at: Vector3, width: float, turned: bool) -> void:
-	var across := Vector3.BACK if turned else Vector3.RIGHT
-	var depth_axis := Vector3.RIGHT if turned else Vector3.BACK
-	for side in [-1.0, 1.0]:
-		for d in [-0.25, 0.25]:
-			var p: Vector3 = at + across * side * width * 0.5 + depth_axis * d
-			box("steel", p + Vector3(0, 1.1, 0), Vector3(0.05, 2.2, 0.05), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	for y in [0.4, 1.1, 1.8]:
-		var size := Vector3(0.6, 0.04, width) if turned else Vector3(width, 0.04, 0.6)
-		box("wood", at + Vector3(0, y, 0), size, Vector3.ZERO, NO_COLLIDE)
+## Storage racks against a wall, just under 3 m wide in all and facing
+## `yaw_deg` (0 looks along +Z): one wide rack or three narrow ones.
+func shelf(at: Vector3, yaw_deg: float, wide: bool) -> void:
+	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
+	# Where things can stand: [x along the rack, height of the board, room above it].
+	var slots: Array = []
+	if wide:
+		prop(WIDE_RACK, Transform3D(facing, at), 1.0, true)
+		slots = [[-0.63, 0.67, 0.6], [0.5, 0.67, 0.38], [0.5, 1.09, 0.62], [-0.63, 1.33, 0.9], [0.5, 1.77, 0.5], [0.5, 0.02, 0.6], [-0.6, 2.31, 0.5], [0.55, 2.31, 0.5]]
+	else:
 		for i in 3:
-			if _rng.randf() < 0.7:
-				var s := _rng.randf_range(0.3, 0.55)
-				var p: Vector3 = at + across * (i - 1) * width * 0.3 + Vector3(0, y + 0.02 + s * 0.5, 0)
-				var wooden := _rng.randf() < 0.6
-				var yaw := _rng.randf_range(-10, 10)
-				if wooden:
-					# Crates lie along the shelf, scaled to leave room above.
-					var facing := Basis(Vector3.UP, deg_to_rad(yaw) + (PI * 0.5 if turned else 0.0))
-					prop(SMALL_CRATE, Transform3D(facing, p - Vector3(0, s * 0.5, 0)), remap(s, 0.3, 0.55, 0.7, 1.0))
-				else:
-					box("machine", p, Vector3(s, s, s), Vector3(0, yaw, 0), NO_COLLIDE)
-	var size := Vector3(0.6, 2.2, width) if turned else Vector3(width, 2.2, 0.6)
-	_collide_box(Transform3D(Basis(), at + Vector3(0, 1.1, 0)), size)
+			var x := (i - 1) * 0.96
+			prop(RACK, Transform3D(facing, at + facing * Vector3(x, 0, 0)), 1.0, true)
+			for y: float in [0.45, 0.93, 1.43]:
+				slots.append([x, y, 0.44])
+	# Nine draws from the main stream whatever the rack holds, so the props
+	# placed after a shelf stay put.
+	for k in 9:
+		if _rng.randf() >= 0.7:
+			continue
+		var s := _rng.randf_range(0.3, 0.55)
+		var wooden := _rng.randf() < 0.6
+		var turn := facing * Basis(Vector3.UP, deg_to_rad(_rng.randf_range(-10, 10)))
+		if k >= slots.size():
+			continue
+		var slot: Array = slots[k]
+		var base: Vector3 = at + facing * Vector3(slot[0], slot[1], 0.0)
+		var kind := _clutter_rng.randi_range(0, 2)
+		if wooden:
+			# Crates lie along the shelf, scaled to leave room above.
+			prop(SMALL_CRATE, Transform3D(turn, base), remap(s, 0.3, 0.55, 0.7, 1.0))
+		elif kind == 0 and slot[2] > 0.58:
+			prop(GAS_BOTTLE, Transform3D(turn, base))
+		elif kind == 1:
+			_stack(TYRE, base, turn, _clutter_rng.randi_range(1, 2), Basis(Vector3.RIGHT, PI * 0.5))
+		else:
+			_stack(BAG, base, turn * Basis(Vector3.UP, PI * 0.5), _clutter_rng.randi_range(1, 2))
+	var height: float = _model(WIDE_RACK if wide else RACK).box.size.y
+	_collide_box(Transform3D(facing, at + Vector3(0, height * 0.5, 0)), Vector3(2.9, height, 0.72 if wide else 0.6))
 
 
-## Hanging hall lamp; the bulb sits at `at` and the rod runs up to `hang_y`.
+## The same model `count` times on top of itself, each turned a little.
+func _stack(model: String, base: Vector3, facing: Basis, count: int, pose := Basis()) -> void:
+	var step: float = (Transform3D(pose, Vector3.ZERO) * (_model(model).box as AABB)).size.y
+	for i in count:
+		var skew := Basis(Vector3.UP, deg_to_rad(_clutter_rng.randf_range(-6.0, 6.0)))
+		prop(model, Transform3D(facing * skew, base + Vector3(0, i * step * 0.97, 0)), 1.0, false, pose)
+
+
+## Stack of old tyres lying flat.
+func tyres(at: Vector3, count: int) -> void:
+	var box: AABB = _model(TYRE).box
+	var facing := Basis(Vector3.UP, _clutter_rng.randf() * TAU)
+	_stack(TYRE, at, facing, count, Basis(Vector3.RIGHT, PI * 0.5))
+	var height := count * box.size.z
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, height * 0.5, 0)), box.size.x * 0.5, height)
+
+
+func gas_bottle(at: Vector3) -> void:
+	var box: AABB = _model(GAS_BOTTLE).box
+	prop(GAS_BOTTLE, Transform3D(Basis(Vector3.UP, _clutter_rng.randf() * TAU), at))
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), box.size.x * 0.5, box.size.y)
+
+
+## Pallets with `layers` of cement bags on top: two bags to a layer, every
+## other layer turned a quarter.
+func bags(at: Vector3, yaw: float, layers: int, pallets := 1) -> void:
+	pallet(at, yaw, pallets)
+	var box: AABB = _model(BAG).box
+	var facing := Basis(Vector3.UP, deg_to_rad(yaw))
+	var top := at + Vector3(0, pallets * 0.15, 0)
+	for layer in layers:
+		var quarter := layer % 2 == 1
+		for i in 2:
+			# The top layer is sometimes one bag short.
+			if layer == layers - 1 and i == 1 and _clutter_rng.randf() < 0.5:
+				continue
+			var side := (i - 0.5) * (box.size.x + 0.03)
+			var offset := Vector3(0, layer * box.size.y * 0.97, side) if quarter else Vector3(side, layer * box.size.y * 0.97, 0)
+			var skew := deg_to_rad(_clutter_rng.randf_range(-5.0, 5.0)) + (PI * 0.5 if quarter else 0.0)
+			prop(BAG, Transform3D(facing * Basis(Vector3.UP, skew), top + facing * offset))
+	var height := layers * box.size.y
+	_collide_box(Transform3D(facing, top + Vector3(0, height * 0.5, 0)), Vector3(1.0, height, 0.8))
+
+
+## Row of switchgear cabinets on a concrete plinth, centred on `at`.
+func cabinets(at: Vector3, yaw_deg: float) -> void:
+	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
+	# The models are street cabinets; scaled up they pass for factory switchgear.
+	var scale := 1.45
+	var plinth := 0.3
+	var gap := 0.03
+	var total := -gap
+	for id in CABINETS:
+		total += _model(id).box.size.x * scale + gap
+	_box("concrete", Transform3D(facing, at + Vector3(0, plinth * 0.5, 0)), Vector3(total + 0.2, plinth, 0.85), 0)
+	var x := -total * 0.5
+	for id in CABINETS:
+		var width: float = _model(id).box.size.x * scale
+		prop(id, Transform3D(facing, at + facing * Vector3(x + width * 0.5, plinth, 0)), scale)
+		x += width + gap
+	var size: Vector3 = _model(CABINETS[0]).box.size * scale
+	_collide_box(Transform3D(facing, at + Vector3(0, plinth + size.y * 0.5, 0)), Vector3(total, size.y, size.z))
+
+
+## A model standing on the ground at `at`, with a box collider around it.
+func place(model: String, at: Vector3, yaw_deg: float, dynamic := false, scale := 1.0) -> void:
+	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
+	var size: Vector3 = _model(model).box.size * scale
+	prop(model, Transform3D(facing, at), scale, dynamic)
+	_collide_box(Transform3D(facing, at + Vector3(0, size.y * 0.5, 0)), size)
+
+
+## Hanging hall lamp; its rim sits just under `at` and a rod runs up to `hang_y`.
 func lamp(at: Vector3, hang_y: float, on: bool, shadows: bool) -> void:
-	beam("steel", at + Vector3(0, 0.3, 0), Vector3(at.x, hang_y, at.z), 0.02, DETAIL | NO_COLLIDE)
-	cylinder("machine", at, 0.42, 0.3, DETAIL | NO_COLLIDE, Vector3.ZERO, 0.08, 16)
-	cylinder("emissive_warm" if on else "steel", at + Vector3(0, -0.02, 0), 0.16, 0.04, DETAIL | NO_COLLIDE, Vector3.ZERO, -1.0, 12)
+	var height: float = _model(LAMP).box.size.y
+	var rim := at + Vector3(0, -0.05, 0)
+	var node := prop(LAMP, Transform3D(Basis(), rim), 1.0, true)
+	beam("steel", rim + Vector3(0, height - 0.05, 0), Vector3(at.x, hang_y, at.z), 0.02, DETAIL | NO_COLLIDE)
+	for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh.mesh.get_surface_count():
+			var material := mesh.mesh.surface_get_material(i) as BaseMaterial3D
+			if material == null:
+				continue
+			# The glass is imported opaque and hides the bulb, so a lamp that
+			# is on gets a glowing lens; one that is off loses the bulb's glow.
+			if on and material.resource_name.ends_with("_glass"):
+				mesh.set_surface_override_material(i, load("res://materials/emissive_warm.tres"))
+			elif not on and material.emission_enabled:
+				if not _dark.has(material):
+					_dark[material] = material.duplicate()
+					_dark[material].emission_enabled = false
+				mesh.set_surface_override_material(i, _dark[material])
 	if not on:
 		return
 	var light := SpotLight3D.new()
 	light.name = "HallLamp"
-	light.position = at + Vector3(0, -0.05, 0)
+	light.position = at + Vector3(0, -0.15, 0)
 	light.rotation_degrees = Vector3(-90, 0, 0)
 	light.light_color = Color(1.0, 0.74, 0.46)
 	light.light_energy = 26.0
@@ -341,16 +454,27 @@ func probe(probe_name: String, center: Vector3, size: Vector3, origin: Vector3) 
 
 
 ## Places a model from assets/models/ with the centre of its base at the
-## origin of `xf`, wherever the model's own origin is. Colliders are up to the
+## origin of `xf`, wherever the model's own origin is; `pose` turns the model
+## first, for one that has to lie down. A `dynamic` prop is lit by the lightmap
+## probes instead of getting a patch of lightmap. That suits things made of
+## thin bars, which a lightmap texel cannot resolve; anything solid looks out
+## of place in a dark corner without its own patch. Colliders are up to the
 ## caller, since a simple shape is all the gameplay needs.
-func prop(model: String, xf: Transform3D, scale := 1.0) -> void:
+func prop(model: String, xf: Transform3D, scale := 1.0, dynamic := false, pose := Basis()) -> Node3D:
 	var info := _model(model)
-	var box: AABB = info.box
+	var box: AABB = Transform3D(pose, Vector3.ZERO) * (info.box as AABB)
 	var base := Vector3(box.get_center().x, box.position.y, box.get_center().z)
 	var node: Node3D = info.scene.instantiate()
 	node.name = model.to_pascal_case()
-	node.transform = xf * Transform3D(Basis.from_scale(Vector3.ONE * scale), -base * scale)
+	node.transform = xf * Transform3D(Basis.from_scale(Vector3.ONE * scale) * pose, -base * scale)
 	_add(node, _props)
+	if dynamic:
+		# Overrides on the nodes inside an instanced scene are only saved for
+		# an editable instance.
+		_root.set_editable_instance(node, true)
+		for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+			mesh.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+	return node
 
 
 ## The imported scene of a model in the manifest and its bounding box.

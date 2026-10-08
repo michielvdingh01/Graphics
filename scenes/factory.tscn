@@ -75,6 +75,7 @@ directional_shadow_max_distance = 70.0
 quality = 2
 bounces = 4
 directional = true
+generate_probes_subdiv = 4
 light_data = ExtResource("3_ayg0a")
 
 [node name="Level" parent="." unique_id=266776367 groups=["navigation_source"] instance=ExtResource("level")]

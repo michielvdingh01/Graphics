@@ -9,6 +9,8 @@ extends Node
 ## --profile also switches each effect off in turn and reports what it costs;
 ## --off=ssil,glow leaves those effects off for the whole run, to compare
 ## screenshots with and without them. _profile_targets() lists the names.
+## --at=x,y,z,yaw,pitch looks from that point instead of the fixed views, to
+## inspect one corner of a level; several poses are separated by semicolons.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -23,6 +25,7 @@ var _resolution := DEFAULT_RESOLUTION
 var _scene := ""
 var _profile := false
 var _off := PackedStringArray()
+var _at := PackedStringArray()
 var _warmup_frames := 120
 var _measure_frames := 600
 
@@ -43,6 +46,8 @@ func _ready() -> void:
 			_scene = arg.get_slice("=", 1)
 		elif arg.begins_with("--off="):
 			_off = arg.get_slice("=", 1).split(",")
+		elif arg.begins_with("--at="):
+			_at = arg.get_slice("=", 1).split(";")
 	if active:
 		_run.call_deferred()
 
@@ -85,8 +90,20 @@ func _run() -> void:
 	var out_dir := ProjectSettings.globalize_path("res://benchmark/results/" + stamp)
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
+	var markers := tree.get_nodes_in_group("benchmark_view")
+	if not _at.is_empty():
+		markers.clear()
+		for pose in _at:
+			var numbers := pose.split_floats(",")
+			var marker := Marker3D.new()
+			marker.name = "Shot%d" % (markers.size() + 1)
+			add_child(marker)
+			marker.position = Vector3(numbers[0], numbers[1], numbers[2])
+			marker.rotation_degrees = Vector3(numbers[4], numbers[3], 0.0)
+			markers.append(marker)
+
 	var views := []
-	for view: Node3D in tree.get_nodes_in_group("benchmark_view"):
+	for view: Node3D in markers:
 		camera.global_transform = view.global_transform
 		for i in _warmup_frames:
 			await tree.process_frame

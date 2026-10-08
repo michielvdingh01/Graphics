@@ -15,7 +15,7 @@ Een first person shooter met de best haalbare graphics die met AI te maken zijn,
 |---|---|---|---|
 | 0. Fundament | week 1–2 | Godot-project, git, FPS-controller in een greybox-level, vaste benchmarkscène met automatische screenshots en fps-meting | Klaar |
 | 1. Gunfeel | week 3–6 | Beweging (sprint, crouch, slide), 2–3 wapens met recoil en ADS, hit-feedback, geluid, simpele vijanden met navigatie | Klaar |
-| 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | Klaar; vaten, kratten en barrières zijn echte modellen, de overige props nog niet. Zie hieronder |
+| 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | Klaar; de meeste props zijn echte modellen. Machines, containers, tanks, pallets en kluisjes nog niet. Zie hieronder |
 | 3. AI-assetpipeline | parallel aan fase 2 | Scripts die uit het manifest props, texturen, skyboxes en geluid genereren en importeren | Begin gemaakt: decals komen procedureel uit het manifest en modellen van Poly Haven worden via het manifest opgehaald. Zelf genereren van props, wapens, vijanden en geluid wacht op een generatiedienst |
 | 4. Moderne shooter-eisen | maand 4–5 | Menu, grafische instellingen, controller-support, FSR-upscaling, checkpoints, meer wapens en vijandtypes, tweede level | Klaar, zie hieronder |
 | 5. Upgrade-loop | doorlopend | Bij elk nieuw model één assetcategorie opnieuw genereren en A/B vergelijken in de benchmarkscène | |
@@ -57,7 +57,8 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 - Een natte-vloer-shader met plassen en een lenspass met vignette, filmkorrel en lichte chromatische aberratie.
 - Vuil glas in alle ramen en dakramen, met hier en daar een ontbrekende ruit.
 - Decals: lekstrepen onder de ramen, vuil langs de plinten en olievlekken op de vloer.
-- Gescande CC0-modellen van Poly Haven (1K) voor vaten (drie varianten), houten kisten (twee) en betonnen wegbarrières. Ze staan in het manifest, krijgen bij import lightmap-UV's (importstandaard in `project.godot`) en worden door de levelbouwer geplaatst, die er zelf een eenvoudige botsvorm bij zet.
+- Gescande CC0-modellen van Poly Haven (1K), 21 in totaal: vaten, houten kisten, betonnen wegbarrières, stellingen, hallampen, schakelkasten, een bureau, banden, gasflessen, cementzakken op pallets, een compressor, een lasset, gereedschapswagens, een ladder en een steekwagen. Ze staan in het manifest, krijgen bij import lightmap-UV's (importstandaard in `project.godot`) en worden door de levelbouwer geplaatst, die er zelf een eenvoudige botsvorm bij zet.
+- Massieve props krijgen een eigen stukje lightmap. Props van dunne staven (stellingen, lampen, ladder, steekwagen) lost een lightmap niet op; die krijgen hun licht van de lightmap-probes. Het probe-raster staat daarvoor op de fijnste stand: met het grove standaardraster lichtten zulke props in een donkere hoek spookachtig op.
 
 **Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
 
@@ -75,22 +76,24 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 | Snel screenshots van de benchmarkstandpunten | `tools/shots.sh` |
 | Meten wat elk effect per standpunt kost (schaduwen, SSAO, SSIL, SSR, mist, glow, props, decals, glas, lenspass) | `tools/benchmark.sh --profile` |
 | Een run zonder bepaalde effecten, om screenshots te vergelijken | `tools/benchmark.sh --off=ssil,glow` |
+| Screenshots vanaf een eigen standpunt (x,y,z,draaiing,helling; meerdere gescheiden door `;`) | `tools/benchmark.sh --quick --at="-11,1.7,-6,20,-5"` |
 | Gameplay en beide levels testen (headless) | `tools/selftest.sh` |
 
 **Meting** op 8 oktober 2026, M1 Pro, 1920×1080, kwaliteit High (zonder SSIL), met glas, decals en modellen:
 
 | Camerastandpunt | Gemiddeld | 1% low |
 |---|---|---|
-| Overview | 97 fps | 67 fps |
-| Corridor | 101 fps | 82 fps |
-| Platform | 94 fps | 76 fps |
-| Hall | 103 fps | 84 fps |
+| Overview | 95 fps | 81 fps |
+| Corridor | 98 fps | 82 fps |
+| Platform | 91 fps | 80 fps |
+| Hall | 101 fps | 90 fps |
 
-De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,4 tot 1 miljoen en kosten op 1440p met FSR 2 hooguit 0,4 ms per frame. De lightmap van de fabriek groeide van 25 naar 37 MB, omdat elke prop een eigen stukje lightmap krijgt.
+De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,7 tot 1,7 miljoen. Dat is goedkoop: de eerste zes modellen kostten op 1440p met FSR 2 hooguit 0,4 ms per frame, de vijftien daarna samen ongeveer 1 fps. De lightmap van de fabriek groeide van 25 naar 42 MB, omdat elke massieve prop een eigen stukje lightmap krijgt.
 
 **Nog open in deze fase**
 
-- Machines, containers, tanks, stellingen en pallets zijn nog samengesteld uit dozen en cilinders, en het wapen en de vijanden ook. Poly Haven heeft geen pallet en geen kubusvormige krat; de kratstapels bestaan daarom uit langwerpige kisten.
+- De grote machines (pers, machinebed), containers, tanks, pallets en kluisjes zijn nog samengesteld uit dozen en cilinders, en het wapen en de vijanden ook. Poly Haven heeft daar geen modellen voor, en ook geen kubusvormige krat; de kratstapels bestaan daarom uit langwerpige kisten.
+- De schakelkasten zijn straatkasten die 1,45 keer vergroot zijn; van dichtbij zijn de waarschuwingsstickers daardoor te groot.
 
 ## Moderne shooter-eisen (fase 4)
 
@@ -105,18 +108,18 @@ De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,
 - **Vijanden.** Naast de grunt een rusher (snel, zwak, slaat van dichtbij) en een heavy (traag, veel health, lange salvo's). Rushers komen vanaf wave 2, heavies vanaf wave 4. Elke vijand gaat 1,5 tot 4 seconden na het spawnen op zoek naar de speler.
 - **Tweede level: Depot.** Een ommuurd containerterrein in de schemering met een overdekt laadperron en een portiersloge, verlicht door schijnwerpers. Hoofdscène `scenes/depot.tscn`, beschrijving in `tools/levels/depot.gd`. De gedeelde bouwstenen staan in `tools/level_builder.gd`.
 
-**Meting op 1440p** op 8 oktober 2026, M1 Pro, 2560×1440, kwaliteit High (zonder SSIL), met de modellen. Het budget van 60 fps wordt met upscaling gehaald, met 15 fps over.
+**Meting op 1440p** op 8 oktober 2026, M1 Pro, 2560×1440, kwaliteit High (zonder SSIL), met alle 21 modellen. Het budget van 60 fps wordt met upscaling gehaald, met 15 fps over.
 
 | Level | Instelling | Gemiddeld (laagste en hoogste standpunt) | 1% low |
 |---|---|---|---|
-| Fabriek | FSR 2 op 67% | 76–80 fps | 67–71 fps |
-| Fabriek | MetalFX Temporal op 67% | 77–84 fps | 68–74 fps |
-| Fabriek | Geen upscaling | 60–66 fps | 55–60 fps |
-| Depot | FSR 2 op 67% | 75–81 fps | 67–73 fps |
+| Fabriek | FSR 2 op 67% | 75–79 fps | 66–69 fps |
+| Fabriek | MetalFX Temporal op 67% | 77–78 fps | 68–70 fps |
+| Fabriek | Geen upscaling | 58–64 fps | 54–57 fps |
+| Depot | FSR 2 op 67% | 75–81 fps | 68–70 fps |
 
 Met SSIL erbij haalde de fabriek met FSR 2 gemiddeld 66–72 fps en een 1% low die per run tussen 52 en 66 fps lag, afhankelijk van wat de machine verder deed. Dat was te krap om er nog iets bij te zetten.
 
-Het depot haalt op 1920×1080 zonder upscaling 94–108 fps gemiddeld en 75–87 fps 1% low.
+Het depot haalt op 1920×1080 zonder upscaling 94–107 fps gemiddeld en 80–86 fps 1% low.
 
 De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --upscaler=fsr2 --scale=0.67 --scene=res://scenes/depot.tscn`. macOS tekent een bedekt venster niet; de benchmark mat dan steeds circa 145 fps, wat op een uitstekende meting lijkt. Hij telt daarom nu alleen een ononderbroken reeks getekende frames en begint een standpunt opnieuw zodra het venster weer zichtbaar is. Dat werkt: na een korte onderbreking ging een run vanzelf verder, en een run waarvan het venster tien minuten lang niet getekend werd, bleef al die tijd wachten. Een run met de melding `window is not being drawn` gooi je wel weg, want de frames eromheen zijn onbetrouwbaar (één zo'n run gaf een 1% low van 21 fps). Na een minuut zonder getekend frame hoort de benchmark met een fout te stoppen; dat is nog niet in het echt gebeurd. Een onbekende upscaler of een onbekend effect bij `--off` geeft een fout in plaats van een meting onder de verkeerde naam. Meet met niets anders op de GPU: een tweede Godot ernaast halveert de cijfers.
 
