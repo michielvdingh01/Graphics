@@ -92,10 +92,10 @@ func apply() -> void:
 		# Remember what the level was authored with, so a preset only ever
 		# switches off effects and never adds one the level did not ask for.
 		if not environment.has_meta(&"authored"):
-			var authored := {}
+			var toggles := {}
 			for toggle in ENV_TOGGLES:
-				authored[toggle] = environment.get(toggle)
-			environment.set_meta(&"authored", authored)
+				toggles[toggle] = environment.get(toggle)
+			environment.set_meta(&"authored", toggles)
 		var authored: Dictionary = environment.get_meta(&"authored")
 		for i in ENV_TOGGLES.size():
 			environment.set(ENV_TOGGLES[i], authored[ENV_TOGGLES[i]] and preset[i])
@@ -120,7 +120,7 @@ func _load() -> void:
 		if typeof(value) == typeof(get(key)):
 			set(key, value)
 	quality = clampi(quality, 0, QUALITY.size() - 1)
-	upscaler = clampi(upscaler, 0, UPSCALER_NAMES.size() - 1)
+	upscaler = clampi(upscaler, 0, UPSCALER_NAMES.size() - 1) as Viewport.Scaling3DMode
 	render_scale = clampf(render_scale, 0.5, 1.0)
 
 
@@ -137,7 +137,7 @@ func _read_args() -> void:
 		if arg.begins_with("--quality="):
 			quality = clampi(value.to_int(), 0, QUALITY.size() - 1)
 		elif arg.begins_with("--upscaler="):
-			upscaler = UPSCALER_ARGS.find(value)
+			upscaler = UPSCALER_ARGS.find(value) as Viewport.Scaling3DMode
 			if upscaler < 0:
 				# Falling back to bilinear would file a native-resolution run
 				# under the name of an upscaler.

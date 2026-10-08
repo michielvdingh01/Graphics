@@ -47,7 +47,9 @@ func _ready() -> void:
 ## as the waves go up.
 func roster(for_wave: int) -> Array[PackedScene]:
 	var count := mini(2 + for_wave, MAX_ENEMIES)
+	@warning_ignore("integer_division")
 	var heavies := (for_wave - 1) / 3
+	@warning_ignore("integer_division")
 	var rushers := mini(for_wave / 2, MAX_RUSHERS)
 	var scenes: Array[PackedScene] = []
 	for i in count:
@@ -74,6 +76,7 @@ func _start_wave() -> void:
 		var enemy := scenes[i].instantiate()
 		var spawn: Node3D = spawns[i % spawns.size()]
 		# Doubled-up spawn points get a small offset so enemies do not overlap.
+		@warning_ignore("integer_division")
 		enemy.position = spawn.global_position + Vector3(i / spawns.size() * 1.2, 0.0, 0.0)
 		enemy.died.connect(_on_enemy_died)
 		add_child(enemy)

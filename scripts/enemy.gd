@@ -185,9 +185,9 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 					_end_attack(randf_range(cooldown.x, cooldown.y))
 
 
-func _end_attack(cooldown: float) -> void:
+func _end_attack(pause: float) -> void:
 	_attack = Attack.COOLDOWN
-	_attack_timer = cooldown
+	_attack_timer = pause
 	_visor_mat.emission_energy_multiplier = 3.0
 
 

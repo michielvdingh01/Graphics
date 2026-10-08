@@ -146,6 +146,8 @@ func _run() -> void:
 		"commit": commit[0].strip_edges() if commit else "",
 		"godot": Engine.get_version_info().string,
 		"gpu": RenderingServer.get_video_adapter_name(),
+		# "embedded" for a run without a window, see tools/godot.sh.
+		"display": DisplayServer.get_name(),
 		"scene": tree.current_scene.scene_file_path,
 		"resolution": [_resolution.x, _resolution.y],
 		"settings": Settings.summary(),
