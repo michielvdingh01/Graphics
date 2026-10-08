@@ -23,6 +23,9 @@ extends Resource
 @export var mag_size := 30
 @export var reserve_ammo := 120
 @export var reload_time := 1.8
+## Loaded one round at a time, each taking `reload_time / mag_size`, instead
+## of by the magazine; a shot interrupts it.
+@export var loads_singly := false
 
 @export_group("Accuracy")
 @export var hip_spread_deg := 1.5
@@ -45,7 +48,12 @@ extends Resource
 @export var ads_fov := 55.0
 @export var ads_time := 0.18
 @export var ads_move_scale := 0.6
+## Aimed through a telescopic sight: the HUD shows the picture through it and
+## the weapon itself goes out of view.
+@export var scoped := false
 
 @export_group("Viewmodel")
 @export var hip_offset := Vector3(0.2, -0.2, -0.4)
 @export var ads_offset := Vector3(0.0, -0.06, -0.3)
+## How the weapon is turned at the hip, in degrees: muzzle up, to the left, and rolled.
+@export var hip_rotation_deg := Vector3.ZERO

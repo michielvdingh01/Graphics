@@ -41,6 +41,8 @@ var _crosshair := Crosshair.new()
 var _hitmarker := Hitmarker.new()
 var _vignette := ColorRect.new()
 var _vignette_mat := ShaderMaterial.new()
+var _scope := ColorRect.new()
+var _scope_mat := ShaderMaterial.new()
 var _hurt := 0.0
 var _health_ratio := 1.0
 var _wave := 0
@@ -51,6 +53,13 @@ func _ready() -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
+
+	# Under everything else: what is seen through a telescopic sight.
+	_scope_mat.shader = preload("res://shaders/scope.gdshader")
+	_scope.material = _scope_mat
+	_scope.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_scope.visible = false
+	_place(_scope, Control.PRESET_FULL_RECT, 0)
 
 	_vignette_mat.shader = preload("res://shaders/damage_vignette.gdshader")
 	_vignette.material = _vignette_mat
@@ -124,6 +133,15 @@ func _process(delta: float) -> void:
 	_crosshair.opacity = 1.0 - weapons.ads_blend
 	_crosshair.visible = not _player.dead
 	_crosshair.queue_redraw()
+
+	# Aiming a scoped weapon, the view goes black and opens again as a circle.
+	var scope: float = weapons.scope_blend()
+	_scope.visible = scope > 0.0
+	if scope > 0.0:
+		var view := get_viewport().get_visible_rect().size
+		_scope_mat.set_shader_parameter("cover", smoothstep(0.0, 0.5, scope))
+		_scope_mat.set_shader_parameter("open", smoothstep(0.5, 1.0, scope))
+		_scope_mat.set_shader_parameter("aspect", view.x / view.y)
 
 	if _hitmarker.strength > 0.0:
 		_hitmarker.strength = maxf(_hitmarker.strength - delta * 4.0, 0.0)

@@ -68,6 +68,11 @@ var _glass_rng := RandomNumberGenerator.new()
 var _decal_rng := RandomNumberGenerator.new()
 var _prop_rng := RandomNumberGenerator.new()
 var _clutter_rng := RandomNumberGenerator.new()
+## Frame of the machine or model being built; the part helpers work in it.
+var _m: Transform3D
+## Flags those helpers build with: lightmapped, or DETAIL for whatever is too
+## thin or hangs too high for a patch of lightmap.
+var _part := NO_COLLIDE
 
 
 func _init() -> void:
@@ -76,6 +81,13 @@ func _init() -> void:
 	_decal_rng.seed = 23
 	_prop_rng.seed = 31
 	_clutter_rng.seed = 43
+	_build()
+	quit()
+
+
+## Builds what _describe() describes and writes it out. This one makes a
+## level; tools/model_builder.gd overrides it to make models.
+func _build() -> void:
 	_root = Node3D.new()
 	_root.name = _level_name().capitalize() + "Level"
 	_body = StaticBody3D.new()
@@ -109,7 +121,6 @@ func _init() -> void:
 	scene.pack(_root)
 	var err := ResourceSaver.save(scene, OUT_DIR + _level_name() + "_level.tscn")
 	print("Saved level: ", error_string(err))
-	quit()
 
 
 ## File name stem of the level, e.g. "factory".
@@ -1134,6 +1145,132 @@ func extrude(mat: String, polygon: PackedVector2Array, depth: float, xf: Transfo
 		var shape := ConvexPolygonShape3D.new()
 		shape.points = hull
 		_collide(shape, Transform3D())
+
+
+## Plate cut to `outline` (counter-clockwise in the local XY of `xf`, hollows
+## allowed) and `thickness` thick along local Z, with both rims rounded off
+## over `bevel`. A corner of the outline of more than 40 degrees stays a
+## corner; anything gentler shades as a curve.
+func slab(mat: String, xf: Transform3D, outline: PackedVector2Array, thickness: float, bevel := 0.0, flags := 0) -> void:
+	var st := _tool(mat, flags, xf.origin)
+	var count := outline.size()
+	var half := thickness * 0.5
+	var b := minf(bevel, half)
+	# Outward normal of every side, and of every corner: one for the side that
+	# arrives there and one for the side that leaves, the same if it is gentle.
+	var sides: Array[Vector2] = []
+	for i in count:
+		var d := outline[(i + 1) % count] - outline[i]
+		sides.append(Vector2(d.y, -d.x).normalized())
+	var arriving: Array[Vector2] = []
+	var leaving: Array[Vector2] = []
+	var sharp: Array[bool] = []
+	var inset := PackedVector2Array()
+	for i in count:
+		var before := sides[(i + count - 1) % count]
+		var after := sides[i]
+		var gentle := before.dot(after) > 0.766
+		var mean := (before + after).normalized()
+		arriving.append(mean if gentle else before)
+		leaving.append(mean if gentle else after)
+		# Only a corner that sticks out is an edge to wear.
+		sharp.append(not gentle and before.cross(after) > 0.0)
+		# The rim of the faces lies `bevel` inside both sides that meet here.
+		var miter := (before + after) / maxf(1.0 + before.dot(after), 0.35)
+		inset.append(outline[i] - miter * b)
+	var across := _stretch(thickness - b * 2.0, true, true, b * 0.5)
+	var rim := _edge(Vector2(0.5, across.x), Vector2(256.0, across.z))
+	var front := Vector3(0, 0, half)
+	var wall := Vector3(0, 0, half - b)
+	var run := 0.0
+	for i in count:
+		var j := (i + 1) % count
+		var a := Vector3(outline[i].x, outline[i].y, 0)
+		var c := Vector3(outline[j].x, outline[j].y, 0)
+		var na := xf.basis * Vector3(leaving[i].x, leaving[i].y, 0)
+		var nc := xf.basis * Vector3(arriving[j].x, arriving[j].y, 0)
+		var length := outline[i].distance_to(outline[j])
+		var along := _stretch(length, sharp[i], sharp[j])
+		var size := Vector2(along.z, across.z)
+		_quad(st, [xf * (a - wall), xf * (c - wall), xf * (c + wall), xf * (a + wall)], [na, nc, nc, na],
+			[Vector2(run, half), Vector2(run + length, half), Vector2(run + length, -half), Vector2(run, -half)],
+			[_edge(Vector2(along.x, across.x), size), _edge(Vector2(along.y, across.x), size), _edge(Vector2(along.y, across.y), size), _edge(Vector2(along.x, across.y), size)])
+		if b > 0.0:
+			var ai := Vector3(inset[i].x, inset[i].y, 0)
+			var ci := Vector3(inset[j].x, inset[j].y, 0)
+			var out := xf.basis * Vector3.BACK
+			_quad(st, [xf * (a + wall), xf * (c + wall), xf * (ci + front), xf * (ai + front)], [na, nc, out, out],
+				[Vector2(run, -half), Vector2(run + length, -half), Vector2(run + length, -half - b), Vector2(run, -half - b)], [rim, rim, rim, rim])
+			_quad(st, [xf * (c - wall), xf * (a - wall), xf * (ai - front), xf * (ci - front)], [nc, na, -out, -out],
+				[Vector2(run + length, half), Vector2(run, half), Vector2(run, half + b), Vector2(run + length, half + b)], [rim, rim, rim, rim])
+		run += length
+	var face := inset if b > 0.0 else outline
+	var corners := Geometry2D.triangulate_polygon(face)
+	if corners.is_empty():
+		push_error("slab: outline cannot be triangulated (does it cross itself?)")
+	var shift := Vector2(xf.origin.x + xf.origin.z, -xf.origin.y)
+	for t in range(0, corners.size(), 3):
+		var p: Array[Vector2] = [face[corners[t]], face[corners[t + 1]], face[corners[t + 2]]]
+		if (p[1] - p[0]).cross(p[2] - p[0]) < 0.0:
+			p.reverse()
+		var n := xf.basis * Vector3.BACK
+		_tri(st, [xf * (Vector3(p[0].x, p[0].y, half)), xf * (Vector3(p[1].x, p[1].y, half)), xf * (Vector3(p[2].x, p[2].y, half))], [n, n, n],
+			[Vector2(p[0].x, -p[0].y) + shift, Vector2(p[1].x, -p[1].y) + shift, Vector2(p[2].x, -p[2].y) + shift])
+		_tri(st, [xf * (Vector3(p[0].x, p[0].y, -half)), xf * (Vector3(p[2].x, p[2].y, -half)), xf * (Vector3(p[1].x, p[1].y, -half))], [-n, -n, -n],
+			[Vector2(-p[0].x, -p[0].y) + shift, Vector2(-p[2].x, -p[2].y) + shift, Vector2(-p[1].x, -p[1].y) + shift])
+	if not flags & NO_COLLIDE:
+		var hull := PackedVector3Array()
+		for corner in outline:
+			hull.append(xf * Vector3(corner.x, corner.y, half))
+			hull.append(xf * Vector3(corner.x, corner.y, -half))
+		var shape := ConvexPolygonShape3D.new()
+		shape.points = hull
+		_collide(shape, Transform3D())
+
+
+# --- Part helpers --------------------------------------------------------------
+# Shorthands for building a machine or a model out of many small parts: they
+# work in the frame `_m` and build with the flags in `_part`.
+
+
+## Cast or machined block with rounded edges.
+func _block(mat: String, center: Vector3, size: Vector3, radius := 0.02, rot_deg := Vector3.ZERO) -> void:
+	rounded_box(mat, _m * Transform3D(Basis.from_euler(rot_deg * PI / 180.0), center), size, radius, _part)
+
+
+## Plate or section with square edges.
+func _plate(mat: String, center: Vector3, size: Vector3) -> void:
+	_local_box(mat, _m, center, size, _part)
+
+
+func _bar(mat: String, from: Vector3, to: Vector3, radius: float, segments := 12) -> void:
+	rod(mat, _m * from, _m * to, radius, _part, segments)
+
+
+## Turned part: `profile` revolved around the line that leaves `from` along `axis`.
+func _turned(mat: String, from: Vector3, axis: Vector3, profile: PackedVector2Array, segments := 24, smooth := false) -> void:
+	revolve(mat, _m * Transform3D(_up_along(axis), from), profile, _part, segments, smooth)
+
+
+## Pipe, conduit or cable.
+func _line(mat: String, points: Array, radius: float, segments := 8) -> void:
+	hose(mat, _m * PackedVector3Array(points), radius, _part, segments)
+
+
+func _ring(mat: String, center: Vector3, axis: Vector3, radius: float, thickness: float) -> void:
+	var profile := PackedVector2Array()
+	for i in 9:
+		var angle := TAU * i / 8
+		profile.append(Vector2(radius + cos(angle) * thickness, sin(angle) * thickness))
+	_turned(mat, center, axis, profile, 20, true)
+
+
+func _ball(mat: String, center: Vector3, radius: float) -> void:
+	var profile := PackedVector2Array()
+	for i in 7:
+		var angle := PI * (i / 6.0 - 0.5)
+		profile.append(Vector2(cos(angle), sin(angle)) * radius)
+	_turned(mat, center, Vector3.UP, profile, 12, true)
 
 
 ## Corners are bottom-left, bottom-right, top-right, top-left seen from outside.

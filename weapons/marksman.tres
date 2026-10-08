@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
 [ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" path="res://scenes/viewmodels/marksman.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/models/marksman.scn" id="2"]
 
 [resource]
 script = ExtResource("1")
@@ -32,5 +32,7 @@ kick_rotation = 0.1
 ads_fov = 28.0
 ads_time = 0.3
 ads_move_scale = 0.45
-hip_offset = Vector3(0.19, -0.19, -0.3)
-ads_offset = Vector3(0, -0.072, -0.2)
+scoped = true
+hip_offset = Vector3(0.1, -0.12, -0.28)
+ads_offset = Vector3(0, -0.067, -0.19)
+hip_rotation_deg = Vector3(1, 2, -2)

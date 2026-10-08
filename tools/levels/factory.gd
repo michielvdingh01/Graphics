@@ -23,12 +23,6 @@ const RUBBER := "rubber"
 const BRASS := "brass"
 const RED := "enamel_red"
 
-## Frame of the machine being built; the part helpers at the end work in it.
-var _m: Transform3D
-## Flags those helpers build with: lightmapped, or DETAIL for whatever is too
-## thin or hangs too high for a patch of lightmap.
-var _part := NO_COLLIDE
-
 
 func _level_name() -> String:
 	return "factory"
@@ -983,20 +977,6 @@ func _floor_paint() -> void:
 # --- Machine parts, all in the frame of the machine being built ---------------
 
 
-## Cast or machined block with rounded edges.
-func _block(mat: String, center: Vector3, size: Vector3, radius := 0.02, rot_deg := Vector3.ZERO) -> void:
-	rounded_box(mat, _m * Transform3D(Basis.from_euler(rot_deg * PI / 180.0), center), size, radius, _part)
-
-
-## Plate or section with square edges.
-func _plate(mat: String, center: Vector3, size: Vector3) -> void:
-	_local_box(mat, _m, center, size, _part)
-
-
-func _bar(mat: String, from: Vector3, to: Vector3, radius: float, segments := 12) -> void:
-	rod(mat, _m * from, _m * to, radius, _part, segments)
-
-
 ## Rolled I-section lying between two points, standing on them.
 func _i_beam(mat: String, from: Vector3, to: Vector3, width: float, height: float) -> void:
 	var flange := height * 0.08
@@ -1020,16 +1000,6 @@ func _round(deg: float) -> Vector3:
 	return Basis(Vector3.UP, deg_to_rad(deg)) * Vector3.BACK
 
 
-## Turned part: `profile` revolved around the line that leaves `from` along `axis`.
-func _turned(mat: String, from: Vector3, axis: Vector3, profile: PackedVector2Array, segments := 24, smooth := false) -> void:
-	revolve(mat, _m * Transform3D(_up_along(axis), from), profile, _part, segments, smooth)
-
-
-## Pipe, conduit or cable.
-func _line(mat: String, points: Array, radius: float, segments := 8) -> void:
-	hose(mat, _m * PackedVector3Array(points), radius, _part, segments)
-
-
 ## Hexagonal bolt head sitting on `at`.
 func _bolt(at: Vector3, out: Vector3, size := 0.022) -> void:
 	_bar(IRON, at, at + out * size * 0.7, size, 6)
@@ -1040,22 +1010,6 @@ func _bolt_circle(center: Vector3, out: Vector3, radius: float, count: int) -> v
 	for i in count:
 		var angle := TAU * i / count
 		_bolt(center + (plane.x * cos(angle) + plane.z * sin(angle)) * radius, out)
-
-
-func _ring(mat: String, center: Vector3, axis: Vector3, radius: float, thickness: float) -> void:
-	var profile := PackedVector2Array()
-	for i in 9:
-		var angle := TAU * i / 8
-		profile.append(Vector2(radius + cos(angle) * thickness, sin(angle) * thickness))
-	_turned(mat, center, axis, profile, 20, true)
-
-
-func _ball(mat: String, center: Vector3, radius: float) -> void:
-	var profile := PackedVector2Array()
-	for i in 7:
-		var angle := PI * (i / 6.0 - 0.5)
-		profile.append(Vector2(cos(angle), sin(angle)) * radius)
-	_turned(mat, center, Vector3.UP, profile, 12, true)
 
 
 ## Handwheel with three spokes and a crank handle; `center` is the middle of

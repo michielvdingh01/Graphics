@@ -1,0 +1,16 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/cloth.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+[ext_resource type="Texture2D" path="res://assets/masks/grain_knurl.png" id="grain"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/color = Color(0.085, 0.085, 0.09, 1)
+shader_parameter/roughness = 0.6
+shader_parameter/fuzz = 0.1
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/mask_scale = 3.0
+shader_parameter/grain = ExtResource("grain")
+shader_parameter/grain_scale = 50.0
+shader_parameter/grain_depth = 0.9

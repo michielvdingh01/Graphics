@@ -117,6 +117,18 @@ func _run() -> void:
 	Input.parse_input_event(key)
 	await _wait(0.5)
 	_check("switches to shotgun", weapons.current().display_name == "Shotgun")
+	# One shot, then a reload: the shell goes in before the reload is over.
+	Input.action_press("fire")
+	await _wait(0.05)
+	Input.action_release("fire")
+	await _wait(0.8)
+	var after_shot: int = weapons._mags[2]
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	await _wait(0.75)
+	_check("shotgun loads shell by shell", after_shot == 5 and weapons._mags[2] == 6 and weapons.reload_fraction() > 0.0)
+	await _wait(0.5)
 	Input.action_press("ads")
 	await _wait(0.4)
 	_check("aiming zooms the camera", weapons.ads_blend == 1.0 and player.camera.fov < 70.0)
@@ -126,6 +138,10 @@ func _run() -> void:
 	Input.parse_input_event(key)
 	await _wait(0.5)
 	_check("switches to marksman", weapons.current().display_name == "Marksman")
+	Input.action_press("ads")
+	await _wait(0.6)
+	_check("scope takes over from the weapon in view", weapons.scope_blend() == 1.0 and not weapons._models[4].root.visible)
+	Input.action_release("ads")
 
 	# Enemy types and wave make-up.
 	_check("first wave is all grunts", game.roster(1).all(func(s: PackedScene) -> bool: return s == game.GRUNT))

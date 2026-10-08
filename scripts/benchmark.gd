@@ -11,6 +11,12 @@ extends Node
 ## screenshots with and without them. _profile_targets() lists the names.
 ## --at=x,y,z,yaw,pitch looks from that point instead of the fixed views, to
 ## inspect one corner of a level; several poses are separated by semicolons.
+## --weapon=3 puts that weapon of the loadout in view as the player holds it,
+## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
+## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
+## stands a scene in the level at that spot, a model or an enemy, without
+## letting it run; several are separated by semicolons and a fifth number
+## scales it. Both are for looking at a model, not for measuring.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -26,6 +32,8 @@ var _scene := ""
 var _profile := false
 var _off := PackedStringArray()
 var _at := PackedStringArray()
+var _spawn := PackedStringArray()
+var _weapon := PackedFloat64Array()
 var _warmup_frames := 120
 var _measure_frames := 600
 
@@ -48,6 +56,10 @@ func _ready() -> void:
 			_off = arg.get_slice("=", 1).split(",")
 		elif arg.begins_with("--at="):
 			_at = arg.get_slice("=", 1).split(";")
+		elif arg.begins_with("--spawn="):
+			_spawn = arg.get_slice("=", 1).split(";")
+		elif arg.begins_with("--weapon="):
+			_weapon = arg.get_slice("=", 1).split_floats(",")
 	if active:
 		_run.call_deferred()
 
@@ -67,11 +79,23 @@ func _run() -> void:
 	# macOS stops presenting frames to a covered window, which stalls the run.
 	get_window().always_on_top = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	for player in tree.get_nodes_in_group("player"):
+	var player: Node3D = tree.get_first_node_in_group("player")
+	if player:
 		player.process_mode = Node.PROCESS_MODE_DISABLED
-		player.visible = false
+		player.visible = not _weapon.is_empty()
+	for entry in _spawn:
+		var numbers := entry.get_slice("@", 1).split_floats(",")
+		var node: Node3D = (load(entry.get_slice("@", 0)) as PackedScene).instantiate()
+		node.process_mode = Node.PROCESS_MODE_DISABLED
+		tree.current_scene.add_child(node)
+		node.position = Vector3(numbers[0], numbers[1], numbers[2])
+		node.rotation_degrees.y = numbers[3]
+		if numbers.size() > 4:
+			node.scale = Vector3.ONE * numbers[4]
+	# What is seen through a telescopic sight is drawn by the HUD.
+	var aimed := _weapon.size() > 1 and _weapon[1] >= 1.0
 	for hud in tree.get_nodes_in_group("hud"):
-		hud.visible = false
+		hud.visible = aimed
 
 	var targets := _profile_targets()
 	for effect in _off:
@@ -105,6 +129,13 @@ func _run() -> void:
 	var views := []
 	for view: Node3D in markers:
 		camera.global_transform = view.global_transform
+		if player and not _weapon.is_empty():
+			# Look through the player's own eyes, so the weapon sits where it would.
+			player.rotation = Vector3(0, view.global_rotation.y, 0)
+			player.head.rotation.x = view.global_rotation.x
+			player.global_position += view.global_position - player.camera.global_position
+			player.camera.make_current()
+			player.weapons.preview(int(_weapon[0]), _weapon[1] if _weapon.size() > 1 else 0.0, _weapon[2] if _weapon.size() > 2 else 0.0)
 		for i in _warmup_frames:
 			await tree.process_frame
 

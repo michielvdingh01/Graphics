@@ -3,10 +3,10 @@ extends SceneTree
 ## "procedural"): decals into assets/decals/ and the noise masks that shaders
 ## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh
 ##
-## Each entry names a kind (leak, stain, grime or text for a decal, wear for a
-## mask), a size and a seed, so a texture can be regenerated or varied without
-## touching this script. A text has a height only; its width follows from
-## what it says.
+## Each entry names a kind (leak, stain, grime or text for a decal, wear or
+## grain for a mask), a size and a seed, so a texture can be regenerated or
+## varied without touching this script. A text has a height only; its width
+## follows from what it says. A grain names the pattern it is made of.
 
 const OUT_DIR := {"decal": "res://assets/decals/", "mask": "res://assets/masks/"}
 
@@ -20,7 +20,7 @@ func _init() -> void:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
 		var image: Image
 		if asset.type == "mask":
-			image = _mask(asset)
+			image = _grain(asset) if asset.kind == "grain" else _mask(asset)
 		elif asset.kind == "text":
 			image = _lettering(asset)
 		else:
@@ -57,6 +57,53 @@ func _mask(asset: Dictionary) -> Image:
 	for y in height:
 		for x in width:
 			image.set_pixel(x, y, Color(channels[0].get_pixel(x, y).r, channels[1].get_pixel(x, y).r, channels[2].get_pixel(x, y).r))
+	return image
+
+
+## Tiling normal map of a surface seen from a hand's breadth away, which is
+## how close the weapon in view is: the weave of cloth, the stipple of moulded
+## plastic, the tooth of a blasted finish, the diamonds of a knurled grip.
+## `count` is how many threads, bumps or diamonds fit across the texture.
+func _grain(asset: Dictionary) -> Image:
+	var size: int = asset.size[0]
+	var count: float = asset.get("count", 32)
+	var noise := FastNoiseLite.new()
+	noise.seed = asset.seed
+	noise.noise_type = FastNoiseLite.TYPE_CELLULAR if asset.pattern == "stipple" else FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = count / size * (1.0 if asset.pattern == "stipple" else 2.0)
+	noise.fractal_octaves = 3
+	var field := noise.get_seamless_image(size, size, false, false, 0.25)
+	var height := PackedFloat32Array()
+	height.resize(size * size)
+	for y in size:
+		for x in size:
+			var random := field.get_pixel(x, y).r
+			var u := float(x) / size * count
+			var v := float(y) / size * count
+			var fu := fposmod(u, 1.0) - 0.5
+			var fv := fposmod(v, 1.0) - 0.5
+			var h := random
+			match asset.pattern:
+				"weave":
+					# Plain weave: every thread goes over one and under the next.
+					var over := (int(u) + int(v)) % 2 == 0
+					var across := fu if over else fv
+					var along := fv if over else fu
+					h = sqrt(maxf(0.0, 1.0 - across * across * 4.0)) * (0.55 + 0.45 * cos(along * PI)) + random * 0.25
+				"knurl":
+					h = minf(1.0 - absf(fposmod(u + v, 1.0) * 2.0 - 1.0), 1.0 - absf(fposmod(u - v, 1.0) * 2.0 - 1.0))
+				"stipple":
+					h = smoothstep(0.25, 0.8, random)
+			height[y * size + x] = h
+	var image := Image.create_empty(size, size, false, Image.FORMAT_RGB8)
+	var steep: float = asset.get("depth", 1.0) * size / 64.0
+	for y in size:
+		for x in size:
+			var dx := height[y * size + (x + 1) % size] - height[y * size + (x + size - 1) % size]
+			var dy := height[((y + 1) % size) * size + x] - height[((y + size - 1) % size) * size + x]
+			# Green points up the texture, which is down the image.
+			var n := Vector3(-dx * steep, dy * steep, 1.0).normalized() * 0.5 + Vector3(0.5, 0.5, 0.5)
+			image.set_pixel(x, y, Color(n.x, n.y, n.z))
 	return image
 
 
