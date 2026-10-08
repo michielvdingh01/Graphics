@@ -15,7 +15,7 @@ Een first person shooter met de best haalbare graphics die met AI te maken zijn,
 |---|---|---|---|
 | 0. Fundament | week 1–2 | Godot-project, git, FPS-controller in een greybox-level, vaste benchmarkscène met automatische screenshots en fps-meting | Klaar |
 | 1. Gunfeel | week 3–6 | Beweging (sprint, crouch, slide), 2–3 wapens met recoil en ADS, hit-feedback, geluid, simpele vijanden met navigatie | Klaar |
-| 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | Volgende |
+| 2. Vertical slice | maand 2–3 | Eén klein level op maximale kwaliteit: PBR-materialen, gebakken lightmaps plus SDFGI, volumetrische mist, post-processing | Eerste versie staat, zie hieronder |
 | 3. AI-assetpipeline | parallel aan fase 2 | Scripts die uit het manifest props, texturen, skyboxes en geluid genereren en importeren | |
 | 4. Moderne shooter-eisen | maand 4–5 | Menu, grafische instellingen, controller-support, FSR-upscaling, checkpoints, meer wapens en vijandtypes, tweede level | |
 | 5. Upgrade-loop | doorlopend | Bij elk nieuw model één assetcategorie opnieuw genereren en A/B vergelijken in de benchmarkscène | |
@@ -44,3 +44,40 @@ Gemeten op 6 oktober 2026 op de M1 Pro, 1920×1080, met SDFGI, SSAO en glow aan,
 | Platform | 155 fps | 115 fps |
 
 De benchmark draai je met `tools/benchmark.sh`; resultaten komen in `benchmark/results/`.
+
+## Vertical slice (fase 2)
+
+Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tussenvloer, plus een aanbouw met gang en twee kamers. De hoofdscène is `scenes/factory.tscn`; de greybox uit fase 0 en 1 staat nog in `scenes/main.tscn`.
+
+**Wat er staat**
+
+- Gescande PBR-materialen van Poly Haven (2K, CC0) en een HDRI als lucht, vastgelegd in `assets/manifest.json`.
+- Gebakken lightmaps voor al het indirecte licht; zon en lampen zijn realtime met schaduwen.
+- Volumetrische mist met lichtbundels, reflectieprobes per ruimte, screen-space reflecties, SSAO, SSIL, glow en AgX-tonemapping.
+- Een natte-vloer-shader met plassen en een lenspass met vignette, filmkorrel en lichte chromatische aberratie.
+
+**Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| Assets ophalen volgens het manifest | `tools/fetch_assets.py` |
+| Levelgeometrie opnieuw genereren uit `tools/build_level.gd` | `tools/build_level.sh` |
+| Lightmaps bakken (nodig na elke geometrie- of lichtwijziging, circa 1 minuut) | `tools/bake_lightmaps.sh` |
+| Snel screenshots van de benchmarkstandpunten | `tools/shots.sh` |
+
+**Meting** op 8 oktober 2026, M1 Pro, 1920×1080:
+
+| Camerastandpunt | Gemiddeld | 1% low |
+|---|---|---|
+| Overview | 93 fps | 83 fps |
+| Corridor | 94 fps | 89 fps |
+| Platform | 83 fps | 71 fps |
+| Hall | 94 fps | 59 fps |
+
+**Nog open in deze fase**
+
+- Props zijn nog samengesteld uit dozen en cilinders. Echte modellen (machines, kratten, wapen, vijanden) komen uit de assetpipeline van fase 3.
+- Geen decals, vuil of slijtage op overgangen, en geen glas in de ramen.
+- Meten op 1440p met upscaling volgt met FSR in fase 4.

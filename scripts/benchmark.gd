@@ -4,16 +4,22 @@ extends Node
 ## Visits every Marker3D in the "benchmark_view" group, measures frame times and
 ## saves a screenshot per view plus results.json to benchmark/results/<timestamp>/.
 
-const WARMUP_FRAMES := 120
-const MEASURE_FRAMES := 600
 const RESOLUTION := Vector2i(1920, 1080)
 
 ## True for a benchmark run; gameplay systems check this and stay out of the way.
 var active := false
 
+var _warmup_frames := 120
+var _measure_frames := 600
+
 
 func _ready() -> void:
-	active = "--benchmark" in OS.get_cmdline_user_args()
+	var args := OS.get_cmdline_user_args()
+	active = "--benchmark" in args
+	# --quick only needs the screenshots, for iterating on the look of a scene.
+	if "--quick" in args:
+		_warmup_frames = 90
+		_measure_frames = 30
 	if active:
 		_run.call_deferred()
 
@@ -27,6 +33,8 @@ func _run() -> void:
 	# Render at a fixed resolution regardless of the window size macOS gives us.
 	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
 	get_window().content_scale_size = RESOLUTION
+	# macOS stops presenting frames to a covered window, which stalls the run.
+	get_window().always_on_top = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	for player in tree.get_nodes_in_group("player"):
 		player.process_mode = Node.PROCESS_MODE_DISABLED
@@ -45,12 +53,12 @@ func _run() -> void:
 	var views := []
 	for view: Node3D in tree.get_nodes_in_group("benchmark_view"):
 		camera.global_transform = view.global_transform
-		for i in WARMUP_FRAMES:
+		for i in _warmup_frames:
 			await tree.process_frame
 
 		var frame_ms := PackedFloat64Array()
 		var last := Time.get_ticks_usec()
-		for i in MEASURE_FRAMES:
+		for i in _measure_frames:
 			await tree.process_frame
 			var now := Time.get_ticks_usec()
 			frame_ms.append((now - last) / 1000.0)

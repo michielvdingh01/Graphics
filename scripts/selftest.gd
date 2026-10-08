@@ -4,6 +4,11 @@ extends Node
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI and weapon switching.
 
+## Spots in the factory level: on the mezzanine deck, and an open lane with
+## 6 m of clear floor to the east of it.
+const MEZZANINE := Vector3(-10, 3.2, -9.5)
+const RANGE_TARGET := Vector3(1, 0, -7.5)
+
 var _failures := 0
 
 
@@ -34,8 +39,8 @@ func _run() -> void:
 	var map := player.get_world_3d().navigation_map
 	var path := NavigationServer3D.map_get_path(map, enemies[0].global_position, player.global_position, true)
 	_check("enemy can path to player", path.size() > 1)
-	var top := NavigationServer3D.map_get_path(map, Vector3(-12, 2.5, -10), player.global_position, true)
-	_check("platform connects via ramp", top.size() > 1 and top[0].y > 2.0)
+	var top := NavigationServer3D.map_get_path(map, MEZZANINE, player.global_position, true)
+	_check("mezzanine connects via stairs", top.size() > 1 and top[0].y > 2.5 and top[-1].y < 0.5)
 
 	var start_distances := {}
 	for e in enemies:
@@ -69,7 +74,9 @@ func _run() -> void:
 	# Shooting: face the enemy from close range and hold the trigger.
 	for other in enemies:
 		other.set_physics_process(false)
-	player.global_position = enemy.global_position + Vector3(0, 0, 6)
+	enemy.global_position = RANGE_TARGET
+	enemy.velocity = Vector3.ZERO
+	player.global_position = RANGE_TARGET + Vector3(6, 0, 0)
 	player.velocity = Vector3.ZERO
 	player.look_at(Vector3(enemy.global_position.x, player.global_position.y, enemy.global_position.z))
 	player.head.rotation.x = 0.0

@@ -1,0 +1,16 @@
+{
+	"_doc": "Every external or generated asset gets one entry here, so it can be re-fetched or regenerated without touching code. Run tools/fetch_assets.py to download what is missing.",
+	"assets": [
+		{"id": "concrete_floor_worn_001", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "hall floor"},
+		{"id": "red_brick_03", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "outer walls"},
+		{"id": "painted_plaster_wall", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "annex walls"},
+		{"id": "concrete_wall_008", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "columns, plinths, annex ceiling"},
+		{"id": "rusty_metal_02", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "steel structure, trusses, railings"},
+		{"id": "metal_plate", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "mezzanine deck, ramp"},
+		{"id": "green_metal_rust", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "machines, containers"},
+		{"id": "corrugated_iron", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "roof"},
+		{"id": "wood_planks", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "crates, pallets"},
+		{"id": "rusty_painted_metal", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "pipes, tanks"},
+		{"id": "industrial_sunset_puresky", "type": "hdri", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "sky and ambient light"}
+	]
+}
