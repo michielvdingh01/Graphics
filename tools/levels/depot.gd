@@ -31,6 +31,7 @@ func _describe() -> void:
 	_surroundings()
 	_probes()
 	_dirt()
+	_floor_paint()
 
 
 func _yard() -> void:
@@ -162,6 +163,19 @@ func _gatehouse() -> void:
 func _drains() -> void:
 	for x: float in [-3.0, 12.5]:
 		prop("water_manhole_cover", Transform3D(Basis(), Vector3(x, -0.055, 5.9)))
+
+
+## What is left of the yard's markings: a slot around every container on the
+## ground, a line the lorries kept behind along the dock, and hatching that
+## kept the gate clear.
+func _floor_paint() -> void:
+	floor_paint_area(Rect2(-YX, -YZ, YX * 2.0, YZ * 2.0))
+	for x: float in [-23.5, -17.0, -10.5, -4.0, 2.5, 9.0, 15.5]:
+		for z: float in [-7.0, 1.5, 10.0]:
+			floor_frame(Rect2(x - 3.15, z - 1.4, 6.3, 2.8), PAINT_WHITE, 0.08)
+	floor_line(Vector2(-DOCK_X, DOCK_Z + 1.2), Vector2(DOCK_X, DOCK_Z + 1.2))
+	floor_hatch(Rect2(YX - 5.0, -3.0, 4.9, 6.0))
+	floor_frame(Rect2(YX - 5.0, -3.0, 4.9, 6.0))
 
 
 func _masts() -> void:

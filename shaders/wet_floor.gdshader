@@ -33,12 +33,15 @@ void fragment() {
 	// Seen from afar, the paint would otherwise smear out past its area.
 	mark.a *= float(mark_uv == clamp(mark_uv, 0.0, 1.0));
 	float pores = 1.0 - dot(albedo, vec3(0.333)) / scan_value;
-	float kept = smoothstep(0.3, 0.6, texture(wet_mask, UV * 0.37).r + pores * 0.6);
+	float patchy = texture(wet_mask, UV * 0.37).r;
+	float kept = smoothstep(0.3, 0.6, patchy + pores * 0.6);
 	float painted = mark.a * mix(0.22, 0.95, kept);
 	albedo = mix(albedo, mark.rgb * mix(0.75, 1.05, kept), painted);
 	rough = mix(rough, 0.55, painted * 0.6);
 
-	float mask = texture(wet_mask, UV * mask_scale).r;
+	// The same noise finer gives the puddles a ragged shore and a few
+	// strays, instead of one smooth outline.
+	float mask = texture(wet_mask, UV * mask_scale).r + (patchy - 0.5) * 0.09;
 	float level = 1.0 - puddle_amount;
 	float puddle = smoothstep(level, level + 0.035, mask);
 	float damp = smoothstep(level - 0.14, level, mask);
