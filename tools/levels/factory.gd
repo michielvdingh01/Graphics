@@ -10,6 +10,8 @@ const RIDGE := 10.6
 const BAYS: Array[float] = [-16.0, -8.0, 0.0, 8.0, 16.0]
 const TRUSSES: Array[float] = [-12.0, -4.0, 4.0, 12.0]
 const DECK_Y := 3.2
+## Where the pipe header runs along the north wall.
+const HEADER_Z := -11.75
 # Materials of the machines.
 const GREEN := "machine"
 const BLUE := "machine_blue"
@@ -23,6 +25,9 @@ const RED := "enamel_red"
 
 ## Frame of the machine being built; the part helpers at the end work in it.
 var _m: Transform3D
+## Flags those helpers build with: lightmapped, or DETAIL for whatever is too
+## thin or hangs too high for a patch of lightmap.
+var _part := NO_COLLIDE
 
 
 func _level_name() -> String:
@@ -39,6 +44,7 @@ func _describe() -> void:
 	_exterior()
 	_probes()
 	_dirt()
+	_floor_paint()
 
 
 func _shell() -> void:
@@ -61,12 +67,10 @@ func _shell() -> void:
 
 	# West wall with the closed loading door.
 	wall("brick", false, -HX - 0.25, 0.5, -HZ, HZ, 0.0, EAVES, [[-2.5, 2.5, 0.0, 5.0]])
-	box("roof", Vector3(-HX - 0.3, 2.5, 0.0), Vector3(0.08, 5.0, 5.0))
+	roller_door(Vector3(-HX - 0.26, 2.29, 0.0), Vector3.RIGHT, Vector2(5.0, 4.58))
 	for z in [-2.6, 2.6]:
 		box("steel", Vector3(-HX - 0.05, 2.6, z), Vector3(0.2, 5.2, 0.2))
 	box("steel", Vector3(-HX - 0.05, 5.1, 0.0), Vector3(0.2, 0.25, 5.4))
-	for y in [0.9, 1.8, 2.7, 3.6, 4.5]:
-		box("steel", Vector3(-HX - 0.24, y, 0.0), Vector3(0.04, 0.05, 5.0), Vector3.ZERO, DETAIL | NO_COLLIDE)
 
 	# East wall: two doorways into the annex and windows above its roof.
 	var east: Array = [[-10.0, -8.0, 0.0, 2.6], [-3.0, 0.0, 0.0, 3.0], [-9.5, -4.5, 5.2, 7.0], [4.5, 9.5, 3.0, 7.0]]
@@ -195,24 +199,125 @@ func _mezzanine() -> void:
 	bulb(Vector3(-7.0, DECK_Y - 0.5, -9.2), false)
 	# And a few things on top.
 	crates(Vector3(-17.0, DECK_Y, -10.0), 3)
-	box("machine", Vector3(-11.0, DECK_Y + 0.95, -11.6), Vector3(3.0, 1.9, 0.6))
+	for x: float in [-12.0, -11.0, -10.0]:
+		cupboard("machine", Vector3(x, DECK_Y, -11.6), 0, Vector3(0.98, 1.9, 0.6))
 
 
+## Double-girder overhead crane on runway beams along both long walls, parked
+## over the lathe with its hook block at head height above the bed.
 func _crane() -> void:
-	var rail_y := 6.4
-	for z in [-HZ + 0.6, HZ - 0.6]:
-		box("steel", Vector3(0, rail_y, z), Vector3(HX * 2.0, 0.3, 0.25), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	var x := 6.0
-	for dx in [-0.6, 0.6]:
-		box("steel_yellow", Vector3(x + dx, rail_y + 0.55, 0), Vector3(0.35, 0.8, HZ * 2.0 - 0.9), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	for z in [-HZ + 0.6, HZ - 0.6]:
-		box("steel_yellow", Vector3(x, rail_y + 0.4, z), Vector3(2.2, 0.5, 0.4), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	var trolley := Vector3(x, rail_y + 1.05, 3.0)
-	box("machine", trolley, Vector3(1.5, 0.5, 1.2), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	for dz in [-0.12, 0.12]:
-		beam("steel", trolley + Vector3(0, 0, dz), Vector3(x, 3.9, 3.0 + dz), 0.02, DETAIL | NO_COLLIDE)
-	box("steel_yellow", Vector3(x, 3.65, 3.0), Vector3(0.35, 0.5, 0.45), Vector3.ZERO, DETAIL)
-	box("steel", Vector3(x, 3.3, 3.0), Vector3(0.08, 0.3, 0.08), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	# All of it is too thin or hangs too high up for a patch of lightmap.
+	_part = DETAIL | NO_COLLIDE
+	var span := HZ - 0.6
+	var seat := 6.3
+
+	# Runway beams on the corbels, a rail on each.
+	_m = Transform3D()
+	for z: float in [-span, span]:
+		_i_beam(RUST, Vector3(-HX, seat, z), Vector3(HX, seat, z), 0.25, 0.36)
+		_plate(BARE, Vector3(0, seat + 0.38, z), Vector3(HX * 2.0, 0.04, 0.05))
+
+	# Everything that travels is built from the top of the rails up.
+	_m = Transform3D(Basis(), Vector3(6.0, seat + 0.4, 0))
+	var wheel := PackedVector2Array([
+		Vector2(0, 0), Vector2(1.18, 0), Vector2(1.18, 0.14), Vector2(1, 0.18),
+		Vector2(1, 0.82), Vector2(1.18, 0.86), Vector2(1.18, 1), Vector2(0, 1),
+	])
+
+	# End carriages: a box section over two flanged wheels, a buffer at either
+	# end and a travel drive on the inside.
+	for sz: float in [-1.0, 1.0]:
+		var z := sz * span
+		_plate(YELLOW, Vector3(0, 0.25, z), Vector3(3.2, 0.34, 0.3))
+		for sx: float in [-1.0, 1.0]:
+			var axle := Vector3(sx * 1.25, 0.14, z)
+			_turned(IRON, axle - Vector3(0, 0, 0.07), Vector3.BACK, Transform2D(0.0, Vector2(0.14, 0.14), 0.0, Vector2.ZERO) * wheel, 20)
+			_turned(IRON, axle + Vector3(0, 0, sz * 0.15), Vector3(0, 0, sz), PackedVector2Array([Vector2(0.1, 0), Vector2(0.1, 0.03), Vector2(0, 0.04)]), 12)
+			_bar(RUBBER, Vector3(sx * 1.6, 0.25, z), Vector3(sx * 1.72, 0.25, z), 0.06)
+		_block(IRON, Vector3(1.25, 0.2, z - sz * 0.2), Vector3(0.22, 0.26, 0.1), 0.02)
+		_motor(BLUE, Vector3(1.25, 0.2, z - sz * 0.56), Vector3(0, 0, sz), 0.09, 0.3, false)
+
+	# Two box girders, stiffened down the outside, with a rail for the trolley.
+	var reach := span - 0.15
+	for sx: float in [-1.0, 1.0]:
+		var x := sx * 0.75
+		_plate(YELLOW, Vector3(x, 0.35, 0), Vector3(0.36, 0.56, reach * 2.0))
+		for y: float in [0.06, 0.64]:
+			_plate(YELLOW, Vector3(x, y, 0), Vector3(0.44, 0.02, reach * 2.0))
+		_plate(BARE, Vector3(x, 0.665, 0), Vector3(0.045, 0.03, reach * 2.0))
+		for i in 12:
+			_plate(YELLOW, Vector3(x + sx * 0.2, 0.35, (i - 5.5) * 1.9), Vector3(0.04, 0.56, 0.012))
+		for sz: float in [-1.0, 1.0]:
+			_plate(YELLOW, Vector3(x, 0.36, sz * (reach - 0.01)), Vector3(0.52, 0.66, 0.02))
+
+	# Trolley: a frame on four wheels, the rope drum slung between the girders
+	# and the hoist motor with its gearbox on the deck above.
+	var at := 3.0
+	for sx: float in [-1.0, 1.0]:
+		_plate(GREEN, Vector3(sx * 0.75, 0.84, at), Vector3(0.16, 0.14, 1.4))
+		_plate(GREEN, Vector3(sx * 0.5, 0.66, at), Vector3(0.03, 0.44, 0.3))
+		for sz: float in [-1.0, 1.0]:
+			_turned(IRON, Vector3(sx * 0.75 - 0.045, 0.76, at + sz * 0.5), Vector3.RIGHT, Transform2D(0.0, Vector2(0.08, 0.09), 0.0, Vector2.ZERO) * wheel, 16)
+	for sz: float in [-1.0, 1.0]:
+		_plate(GREEN, Vector3(0, 0.84, at + sz * 0.45), Vector3(1.34, 0.14, 0.12))
+		_plate("deck", Vector3(0, 0.916, at + sz * 0.46), Vector3(1.66, 0.012, 0.44))
+	_bar(IRON, Vector3(-0.42, 0.6, at), Vector3(0.42, 0.6, at), 0.17, 24)
+	for sx: float in [-1.0, 1.0]:
+		_bar(IRON, Vector3(sx * 0.42, 0.6, at), Vector3(sx * 0.45, 0.6, at), 0.21, 24)
+	_bar(BARE, Vector3(-0.56, 0.6, at), Vector3(0.56, 0.6, at), 0.04)
+	_motor(BLUE, Vector3(-0.66, 1.03, at + 0.46), Vector3.RIGHT, 0.1, 0.42)
+	_block(IRON, Vector3(0.02, 1.03, at + 0.46), Vector3(0.36, 0.2, 0.36), 0.03)
+	_bar(IRON, Vector3(0.2, 1.03, at + 0.46), Vector3(0.34, 1.03, at + 0.46), 0.09, 16)
+	_block(BLUE, Vector3(0.4, 1.06, at - 0.46), Vector3(0.5, 0.28, 0.26), 0.015)
+	_block(IRON, Vector3(-0.35, 0.98, at - 0.46), Vector3(0.4, 0.12, 0.3), 0.01)
+
+	# Four falls of rope down to the hook block.
+	var block := Vector3(0, 3.7 - _m.origin.y, at)
+	for i in 4:
+		var side := i - 1.5
+		_bar(IRON, block + Vector3(side * 0.07, 0.14, 0), Vector3(side * 0.16, 0.5, at), 0.007, 6)
+	for sx: float in [-1.0, 1.0]:
+		_bar(IRON, block + Vector3(sx * 0.07 - 0.025, 0, 0), block + Vector3(sx * 0.07 + 0.025, 0, 0), 0.16, 24)
+	for x: float in [-0.14, 0.0, 0.14]:
+		_block(YELLOW, block + Vector3(x, -0.06, 0), Vector3(0.02, 0.5, 0.38), 0.008)
+	_bar(BARE, block + Vector3(-0.18, 0, 0), block + Vector3(0.18, 0, 0), 0.035)
+	_block(IRON, block + Vector3(0, -0.3, 0), Vector3(0.34, 0.1, 0.14), 0.02)
+	_bar(BARE, block + Vector3(0, -0.4, 0), block + Vector3(0, -0.24, 0), 0.05, 8)
+	var tip := block + Vector3(0, -0.58, 0.13)
+	_line(IRON, [
+		block + Vector3(0, -0.3, 0), block + Vector3(0, -0.46, 0), block + Vector3(0, -0.56, -0.05), block + Vector3(0, -0.66, -0.06),
+		block + Vector3(0, -0.75, 0), block + Vector3(0, -0.74, 0.09), block + Vector3(0, -0.66, 0.14), tip,
+	], 0.035, 10)
+	_ball(IRON, tip, 0.035)
+	_collide_box(_m * Transform3D(Basis(), block + Vector3(0, -0.3, 0)), Vector3(0.34, 1.0, 0.4))
+
+	# Festoon: the trolley's cable hangs in loops from runners on a track, and
+	# the pendant hangs from a runner of its own down to hand height.
+	var track := Vector3(1.22, 0.72, 0)
+	_plate(IRON, track, Vector3(0.04, 0.04, reach * 2.0))
+	for i in 12:
+		_plate(IRON, Vector3(1.08, 0.7, (i - 5.5) * 1.9), Vector3(0.28, 0.03, 0.03))
+	var runners := 9
+	var from := -reach + 0.4
+	var loop := (at - from) / runners
+	for i in runners + 1:
+		var runner := track + Vector3(0, -0.06, from + i * loop)
+		_plate(IRON, runner, Vector3(0.03, 0.08, 0.1))
+		if i < runners:
+			var low := Vector3(0, -0.55, 0)
+			var along := Vector3(0, 0, loop)
+			_line(RUBBER, [runner, runner + along * 0.2 + low * 0.75, runner + along * 0.5 + low, runner + along * 0.8 + low * 0.75, runner + along], 0.014)
+	_line(RUBBER, [track + Vector3(0, -0.06, at), Vector3(1.1, 0.86, at - 0.15), Vector3(0.62, 1.0, at - 0.46)], 0.014)
+	var hang := track + Vector3(0, -0.06, at + 0.8)
+	var pendant := Vector3(hang.x, 1.3 - _m.origin.y, hang.z)
+	_plate(IRON, hang, Vector3(0.03, 0.08, 0.1))
+	_line(RUBBER, [hang, hang.lerp(pendant, 0.5) + Vector3(0.02, 0, 0.03), pendant + Vector3(0, 0.15, 0)], 0.011)
+	_block(YELLOW, pendant, Vector3(0.08, 0.34, 0.09), 0.02)
+	var buttons: Array[String] = [RED, GREEN, RUBBER, RUBBER, RUBBER, RUBBER]
+	for i in buttons.size():
+		var button := pendant + Vector3(-0.04, 0.12 - i * 0.048, 0)
+		_bar(buttons[i], button, button - Vector3(0.012, 0, 0), 0.015, 8)
+	_part = NO_COLLIDE
 
 
 func _hall_props() -> void:
@@ -222,20 +327,35 @@ func _hall_props() -> void:
 
 	cabinets(Vector3(-12.05, 0, 3.0), 0)
 
-	# Tanks and pipework against the north wall.
-	for x in [11.5, 15.0]:
-		cylinder("pipe", Vector3(x, 0.0, -9.6), 1.25, 4.6, 0, Vector3.ZERO, -1.0, 28)
-		cylinder("concrete", Vector3(x, 0.0, -9.6), 1.4, 0.25)
-		cylinder("steel", Vector3(x, 4.6, -9.6), 0.14, 0.9, NO_COLLIDE)
-		cylinder("steel", Vector3(x, 5.36, -9.6), 0.14, 2.3, NO_COLLIDE, Vector3(-90, 0, 0))
-	cylinder("steel", Vector3(-1.0, 5.36, -11.75), 0.14, 21.0, NO_COLLIDE, Vector3(0, 0, -90))
-	cylinder("pipe", Vector3(-1.0, 4.9, -11.8), 0.08, 21.0, NO_COLLIDE, Vector3(0, 0, -90))
-	for x in [0.0, 4.0, 8.0, 18.0]:
+	# Tanks against the north wall, feeding the header that runs along it.
+	_tank(Vector3(11.5, 0, -9.6), 20, -55, -100)
+	_tank(Vector3(15.0, 0, -9.6), -10, 55)
+	_m = Transform3D()
+	var header := Vector3(0, 5.36, HEADER_Z)
+	_bar(RUST, header + Vector3(-1.0, 0, 0), header + Vector3(HX, 0, 0), 0.14, 16)
+	_bar(RUST, header + Vector3(-1.04, 0, 0), header + Vector3(-1.0, 0, 0), 0.25, 20)
+	_bolt_circle(header + Vector3(-1.04, 0, 0), Vector3.LEFT, 0.2, 8)
+	for x: float in [2.0, 6.0, 9.8, 13.25, 17.5]:
+		_flange(RUST, header + Vector3(x, 0, 0), Vector3.RIGHT, 0.14)
+	_bar("pipe", Vector3(-1.0, 4.9, -11.8), Vector3(HX, 4.9, -11.8), 0.08)
+	for x: float in [0.0, 4.0, 8.0, 18.0]:
 		box("steel", Vector3(x, 5.1, -11.85), Vector3(0.06, 0.7, 0.3), Vector3.ZERO, DETAIL | NO_COLLIDE)
+		box("steel", Vector3(x, 5.2, -11.72), Vector3(0.06, 0.04, 0.4), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	# A gate valve in the header, its wheel within reach of nobody.
+	var valve := header + Vector3(7.9, 0, 0)
+	_flange(RUST, valve - Vector3(0.22, 0, 0), Vector3.RIGHT, 0.14)
+	_flange(RUST, valve + Vector3(0.22, 0, 0), Vector3.RIGHT, 0.14)
+	_block(IRON, valve, Vector3(0.36, 0.4, 0.36), 0.06)
+	_turned(IRON, valve, Vector3.BACK, PackedVector2Array([
+		Vector2(0.13, 0.17), Vector2(0.13, 0.3), Vector2(0.17, 0.3), Vector2(0.17, 0.33), Vector2(0.05, 0.33), Vector2(0.05, 0.52), Vector2(0, 0.52),
+	]), 16)
+	_bolt_circle(valve + Vector3(0, 0, 0.33), Vector3.BACK, 0.13, 6)
+	_bar(BARE, valve + Vector3(0, 0, 0.5), valve + Vector3(0, 0, 0.66), 0.018)
+	_handwheel(valve + Vector3(0, 0, 0.62), Vector3.BACK, 0.2)
 
 	# Containers.
-	container("pipe", Vector3(-11.5, 0, 9.6), true)
-	container("machine", Vector3(9.5, 0, -2.5), false)
+	container("container_red", Vector3(-11.5, 0, 9.6), true)
+	container("container_green", Vector3(9.5, 0, -2.5), false)
 
 	# Concrete road barriers.
 	barrier(Vector3(-2.0, 0, -1.5), 12)
@@ -265,6 +385,110 @@ func _hall_props() -> void:
 	tyres(Vector3(-7.8, 0, 11.1), 3)
 	for p in [Vector3(17.0, 0, -11.2), Vector3(17.45, 0, -11.25), Vector3(17.2, 0, -10.8)]:
 		gas_bottle(p)
+
+
+## Storage tank of three welded courses under a dished head, on a concrete
+## plinth. Seen from above, the manhole faces `yaw_deg` (0 looks along +Z) and
+## the outlet and the caged ladder sit that many degrees round from it.
+func _tank(at: Vector3, yaw_deg: float, outlet_deg: float, ladder_deg := NAN) -> void:
+	var shell := "tank"
+	var r := 1.25
+	var facing := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	_m = facing
+	cylinder("concrete", at, r + 0.2, 0.25, 0, Vector3.ZERO, -1.0, 32)
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, 2.57, 0)), r + 0.02, 4.64)
+
+	# Base ring bolted to the plinth, the courses lapped in and out, the head.
+	_turned(shell, Vector3(0, 0.25, 0), Vector3.UP, PackedVector2Array([
+		Vector2(r + 0.11, 0), Vector2(r + 0.11, 0.02), Vector2(r + 0.02, 0.02), Vector2(r + 0.02, 0.1), Vector2(r, 0.1),
+	]), 48)
+	_bolt_circle(Vector3(0, 0.27, 0), Vector3.UP, r + 0.065, 16)
+	_turned(shell, Vector3(0, 0.25, 0), Vector3.UP, PackedVector2Array([
+		Vector2(r, 0), Vector2(r, 1.4), Vector2(r + 0.012, 1.4), Vector2(r + 0.012, 2.8), Vector2(r, 2.8), Vector2(r, 4.2),
+	]), 48)
+	_turned(shell, Vector3(0, 4.45, 0), Vector3.UP, PackedVector2Array([
+		Vector2(r, 0), Vector2(r, 0.04), Vector2(r - 0.03, 0.12), Vector2(r - 0.12, 0.21),
+		Vector2(r - 0.3, 0.3), Vector2(0.6, 0.39), Vector2(0.3, 0.435), Vector2(0, 0.45),
+	]), 48, true)
+	_ring(shell, Vector3(0, 4.45, 0), Vector3.UP, r + 0.003, 0.012)
+	# Every course is a plate rolled round and welded shut; the seams are staggered.
+	for course in 3:
+		for k in 2:
+			var turn := 35.0 + course * 70.0 + k * 180.0
+			var seam := _round(turn) * (r + (0.014 if course == 1 else 0.002))
+			_block(shell, seam + Vector3(0, 0.95 + course * 1.4, 0), Vector3(0.035, 1.4, 0.012), 0.004, Vector3(0, turn, 0))
+
+	# Manhole with a bolted cover.
+	var hatch := Vector3(0, 1.25, r - 0.06)
+	_turned(shell, hatch, Vector3.BACK, PackedVector2Array([
+		Vector2(0.29, 0), Vector2(0.29, 0.2), Vector2(0.36, 0.2), Vector2(0.36, 0.25), Vector2(0, 0.25),
+	]), 32)
+	_bolt_circle(hatch + Vector3(0, 0, 0.25), Vector3.BACK, 0.325, 16)
+	_line(BARE, [hatch + Vector3(-0.1, 0, 0.24), hatch + Vector3(-0.08, 0, 0.31), hatch + Vector3(0.08, 0, 0.31), hatch + Vector3(0.1, 0, 0.24)], 0.012)
+	# Nameplate, standing off the shell on two strips.
+	var plate := _round(-32.0) * (r + 0.03) + Vector3(0, 1.45, 0)
+	_block(BRASS, plate, Vector3(0.3, 0.2, 0.006), 0.003, Vector3(0, -32, 0))
+	for y: float in [-0.07, 0.07]:
+		_block(shell, plate - _round(-32.0) * 0.012 + Vector3(0, y, 0), Vector3(0.36, 0.03, 0.02), 0.004, Vector3(0, -32, 0))
+
+	# Sight glass between two cocks.
+	var gauge := _round(38.0)
+	for y: float in [0.9, 3.7]:
+		_bar(BARE, gauge * (r - 0.02) + Vector3(0, y, 0), gauge * (r + 0.13) + Vector3(0, y, 0), 0.018, 8)
+		_block(BRASS, gauge * (r + 0.13) + Vector3(0, y, 0), Vector3(0.05, 0.08, 0.05), 0.012)
+	_bar(BARE, gauge * (r + 0.13) + Vector3(0, 0.9, 0), gauge * (r + 0.13) + Vector3(0, 3.7, 0), 0.012, 8)
+
+	# Outlet through a gate valve and down into the floor.
+	var out := _round(outlet_deg)
+	var low := Vector3(0, 0.62, 0)
+	_bar(RUST, out * (r - 0.03) + low, out * (r + 0.24) + low, 0.07)
+	_flange(RUST, out * (r + 0.15) + low, out, 0.07)
+	_m = facing * Transform3D(Basis(Vector3.UP, deg_to_rad(outlet_deg)), Vector3.ZERO)
+	var valve := Vector3(0, low.y, r + 0.33)
+	_block(IRON, valve, Vector3(0.22, 0.22, 0.2), 0.04)
+	_turned(IRON, valve, Vector3.UP, PackedVector2Array([
+		Vector2(0.07, 0.1), Vector2(0.07, 0.18), Vector2(0.1, 0.18), Vector2(0.1, 0.2), Vector2(0.03, 0.2), Vector2(0.03, 0.34), Vector2(0, 0.34),
+	]), 12)
+	_bar(BARE, valve + Vector3(0, 0.3, 0), valve + Vector3(0, 0.44, 0), 0.012, 8)
+	_handwheel(valve + Vector3(0, 0.42, 0), Vector3.UP, 0.12)
+	_flange(RUST, valve + Vector3(0, 0, 0.13), Vector3.BACK, 0.07)
+	_line(RUST, [valve + Vector3(0, 0, 0.1), valve + Vector3(0, 0, 0.36), valve + Vector3(0, -0.14, 0.52), valve + Vector3(0, -0.4, 0.56), Vector3(0, -0.05, r + 0.89)], 0.07, 12)
+	_turned(IRON, Vector3(0, 0, r + 0.89), Vector3.UP, PackedVector2Array([Vector2(0.13, 0), Vector2(0.13, 0.015), Vector2(0.07, 0.015)]), 16)
+
+	if not is_nan(ladder_deg):
+		# Ladder up to the head, caged from above head height.
+		_m = facing * Transform3D(Basis(Vector3.UP, deg_to_rad(ladder_deg)), Vector3.ZERO)
+		_part = DETAIL | NO_COLLIDE
+		var off := r + 0.2
+		for sx: float in [-1.0, 1.0]:
+			_plate(YELLOW, Vector3(sx * 0.21, 2.95, off), Vector3(0.012, 5.3, 0.05))
+			for y: float in [0.8, 2.4, 4.0]:
+				_plate(YELLOW, Vector3(sx * 0.21, y, r + 0.09), Vector3(0.012, 0.04, 0.22))
+		for i in 17:
+			var y := 0.55 + i * 0.3
+			_bar(YELLOW, Vector3(-0.21, y, off), Vector3(0.21, y, off), 0.012, 6)
+		for i in 5:
+			_ring(YELLOW, Vector3(0, 2.4 + i * 0.78, off + 0.34), Vector3.UP, 0.36, 0.011)
+		for i in 5:
+			var strap := _round((i - 2) * 32.0) * 0.36 + Vector3(0, 0, off + 0.34)
+			_bar(YELLOW, strap + Vector3(0, 2.4, 0), strap + Vector3(0, 5.52, 0), 0.008, 6)
+		_part = NO_COLLIDE
+
+	# Flanged nozzle on the head and the line over to the header on the wall.
+	_m = Transform3D(Basis(), at)
+	_turned(RUST, Vector3(0, 4.84, 0), Vector3.UP, PackedVector2Array([
+		Vector2(0.15, 0), Vector2(0.15, 0.2), Vector2(0.25, 0.2), Vector2(0.25, 0.23), Vector2(0, 0.23),
+	]), 20)
+	var run := HEADER_Z - at.z
+	_line(RUST, [
+		Vector3(0, 4.95, 0), Vector3(0, 5.06, 0), Vector3(0, 5.21, -0.04), Vector3(0, 5.32, -0.15),
+		Vector3(0, 5.36, -0.3), Vector3(0, 5.36, -0.7), Vector3(0, 5.36, run),
+	], 0.14, 14)
+	_flange(RUST, Vector3(0, 5.36, run * 0.5), Vector3.BACK, 0.14)
+	_flange(RUST, Vector3(0, 5.36, run + 0.22), Vector3.BACK, 0.14)
+	# A vent with a gooseneck, so rain stays out.
+	_line(RUST, [Vector3(0.55, 4.7, 0.3), Vector3(0.55, 5.1, 0.3), Vector3(0.6, 5.22, 0.36), Vector3(0.7, 5.2, 0.48), Vector3(0.72, 5.08, 0.5)], 0.04, 10)
+	_turned(RUST, Vector3(0.72, 5.09, 0.5), Vector3.DOWN, PackedVector2Array([Vector2(0.06, 0), Vector2(0.06, 0.02), Vector2(0, 0.02)]), 12)
 
 
 ## Eccentric press with an open front: the bed below, the slide and its drive
@@ -599,7 +823,7 @@ func _annex() -> void:
 	cylinder("steel", Vector3(21.15, 3.1, z0), 0.05, z1 - z0, NO_COLLIDE, Vector3(90, 0, 0))
 	barrel(Vector3(23.1, 0, -11.4))
 	barrel(Vector3(22.4, 0, -11.5))
-	box("machine", Vector3(23.3, 0.9, -5.5), Vector3(0.35, 1.8, 1.2))
+	cupboard("machine", Vector3(23.3, 0, -5.5), -90, Vector3(1.2, 1.8, 0.35))
 
 	# Room A: storage.
 	shelf(Vector3(27.0, 0, -11.6), 0, true)
@@ -608,8 +832,7 @@ func _annex() -> void:
 	pallet(Vector3(28.6, 0, -6.4), 10.0, 2)
 
 	# Room B: lockers, desk and the window.
-	for i in 5:
-		box("machine", Vector3(30.2, 0.95, -4.6 + i * 0.52), Vector3(0.5, 1.9, 0.5))
+	lockers("machine_blue", Vector3(30.2, 0, -3.56), -90, 7, {2: 70.0, 5: 12.0})
 	place(DESK, Vector3(27.2, 0, 1.45), 180)
 	crates(Vector3(24.6, 0, -4.2), 2)
 
@@ -625,7 +848,7 @@ func _exterior() -> void:
 	box("roof", Vector3(-30, 4, 56), Vector3(30, 8, 18), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	box("concrete", Vector3(52, 7, 14), Vector3(14, 14, 20), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	cylinder("brick", Vector3(42, 0, 50), 2.2, 38.0, DETAIL | NO_COLLIDE, Vector3.ZERO, 1.4, 20)
-	container("pipe", Vector3(38, 0, 9), false, DETAIL)
+	container("container_blue", Vector3(38, 0, 9), false, DETAIL)
 
 
 func _probes() -> void:
@@ -673,26 +896,77 @@ func _dirt() -> void:
 	floor_decal("stain_1", Vector3(27.5, 0, -8.0), Vector2(3.0, 3.0), 45)
 
 
+## Lines from when the hall was in use: an aisle from the loading door to the
+## annex with a branch to the stairs, borders around the machines, bays along
+## the south wall and hatching where nothing was to be put down.
+func _floor_paint() -> void:
+	floor_paint_area(Rect2(-HX, -HZ, HX * 2.0, HZ * 2.0))
+	floor_line(Vector2(-16.2, 2.2), Vector2(19.95, 2.2))
+	floor_line(Vector2(-16.2, -2.2), Vector2(3.3, -2.2))
+	floor_line(Vector2(6.7, -2.2), Vector2(19.95, -2.2))
+	for x: float in [3.3, 6.7]:
+		floor_line(Vector2(x, -2.2), Vector2(x, -9.4))
+	floor_hatch(Rect2(-19.7, -2.5, 3.5, 5.0))
+	floor_frame(Rect2(-19.7, -2.5, 3.5, 5.0))
+	floor_frame(Rect2(-8.4, 1.6, 5.2, 4.0), PAINT_YELLOW, 0.16, PAINT_BLACK)
+	floor_frame(Rect2(-1.7, 5.9, 7.4, 3.6), PAINT_YELLOW, 0.16, PAINT_BLACK)
+	floor_hatch(Rect2(-13.5, 3.5, 2.9, 1.3))
+	floor_frame(Rect2(-13.5, 3.5, 2.9, 1.3))
+	# Storage bays, open towards the aisle.
+	for i in 5:
+		var x := 10.4 + i * 2.35
+		floor_line(Vector2(x, 8.3), Vector2(x, 11.85), PAINT_WHITE, 0.08)
+	floor_line(Vector2(10.4, 11.85), Vector2(19.8, 11.85), PAINT_WHITE, 0.08)
+
+
 # --- Machine parts, all in the frame of the machine being built ---------------
 
 
 ## Cast or machined block with rounded edges.
 func _block(mat: String, center: Vector3, size: Vector3, radius := 0.02, rot_deg := Vector3.ZERO) -> void:
-	rounded_box(mat, _m * Transform3D(Basis.from_euler(rot_deg * PI / 180.0), center), size, radius, NO_COLLIDE)
+	rounded_box(mat, _m * Transform3D(Basis.from_euler(rot_deg * PI / 180.0), center), size, radius, _part)
+
+
+## Plate or section with square edges.
+func _plate(mat: String, center: Vector3, size: Vector3) -> void:
+	_local_box(mat, _m, center, size, _part)
 
 
 func _bar(mat: String, from: Vector3, to: Vector3, radius: float, segments := 12) -> void:
-	rod(mat, _m * from, _m * to, radius, NO_COLLIDE, segments)
+	rod(mat, _m * from, _m * to, radius, _part, segments)
+
+
+## Rolled I-section lying between two points, standing on them.
+func _i_beam(mat: String, from: Vector3, to: Vector3, width: float, height: float) -> void:
+	var flange := height * 0.08
+	for y: float in [flange * 0.5, height - flange * 0.5]:
+		beam(mat, _m * (from + Vector3(0, y, 0)), _m * (to + Vector3(0, y, 0)), width, _part, flange)
+	var middle := Vector3(0, height * 0.5, 0)
+	beam(mat, _m * (from + middle), _m * (to + middle), width * 0.08, _part, height - flange * 2.0)
+
+
+## Bolted pair of flanges on a pipe of `radius` that runs along `axis` through `at`.
+func _flange(mat: String, at: Vector3, axis: Vector3, radius: float) -> void:
+	var along := axis.normalized()
+	var rim := radius * 1.5 + 0.03
+	_bar(mat, at - along * 0.03, at + along * 0.03, rim, 20)
+	for side: float in [-1.0, 1.0]:
+		_bolt_circle(at + along * side * 0.03, along * side, (radius + rim) * 0.5, 8)
+
+
+## Unit vector `deg` degrees round from +Z towards +X.
+func _round(deg: float) -> Vector3:
+	return Basis(Vector3.UP, deg_to_rad(deg)) * Vector3.BACK
 
 
 ## Turned part: `profile` revolved around the line that leaves `from` along `axis`.
 func _turned(mat: String, from: Vector3, axis: Vector3, profile: PackedVector2Array, segments := 24, smooth := false) -> void:
-	revolve(mat, _m * Transform3D(_up_along(axis), from), profile, NO_COLLIDE, segments, smooth)
+	revolve(mat, _m * Transform3D(_up_along(axis), from), profile, _part, segments, smooth)
 
 
 ## Pipe, conduit or cable.
-func _line(mat: String, points: Array, radius: float) -> void:
-	hose(mat, _m * PackedVector3Array(points), radius, NO_COLLIDE)
+func _line(mat: String, points: Array, radius: float, segments := 8) -> void:
+	hose(mat, _m * PackedVector3Array(points), radius, _part, segments)
 
 
 ## Hexagonal bolt head sitting on `at`.
@@ -783,9 +1057,9 @@ func _motor(mat: String, start: Vector3, axis: Vector3, radius: float, length: f
 	# The terminal box sits on top of a motor that lies down.
 	var plane := _up_along(axis)
 	var middle := start + axis * length * 0.5
-	rounded_box(mat, _m * Transform3D(plane, middle - plane.z * (radius + 0.03)), Vector3(radius * 0.6, radius * 0.7, 0.08), 0.015, NO_COLLIDE)
+	rounded_box(mat, _m * Transform3D(plane, middle - plane.z * (radius + 0.03)), Vector3(radius * 0.6, radius * 0.7, 0.08), 0.015, _part)
 	if feet:
-		rounded_box(mat, _m * Transform3D(plane, middle + plane.z * (radius + 0.01)), Vector3(radius * 1.8, length * 0.6, 0.04), 0.008, NO_COLLIDE)
+		rounded_box(mat, _m * Transform3D(plane, middle + plane.z * (radius + 0.01)), Vector3(radius * 1.8, length * 0.6, 0.04), 0.008, _part)
 
 
 ## Sheet-metal door with ventilation slots; `at` is its middle on the surface

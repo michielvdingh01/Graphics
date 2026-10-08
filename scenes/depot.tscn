@@ -51,7 +51,6 @@ adjustment_saturation = 1.05
 
 [sub_resource type="ShaderMaterial" id="post_mat"]
 shader = ExtResource("post")
-shader_parameter/aberration = 0.004
 shader_parameter/vignette = 0.32
 shader_parameter/grain = 0.03
 
@@ -86,7 +85,7 @@ light_data = ExtResource("3_x32sl")
 [node name="Post" type="CanvasLayer" parent="." unique_id=246151093]
 layer = 0
 
-[node name="Lens" type="ColorRect" parent="Post" unique_id=882807120]
+[node name="Lens" type="ColorRect" parent="Post" unique_id=882807120 groups=["lens"]]
 material = SubResource("post_mat")
 anchors_preset = 15
 anchor_right = 1.0

@@ -1,0 +1,43 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://assets/hdri/industrial_sunset_puresky.hdr" id="hdri"]
+[ext_resource type="PackedScene" path="res://scenes/levels/showroom_level.tscn" id="level"]
+
+[sub_resource type="PanoramaSkyMaterial" id="sky_mat"]
+panorama = ExtResource("hdri")
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+sky_rotation = Vector3(0, 3.245, 0)
+ambient_light_energy = 1.6
+tonemap_mode = 4
+tonemap_exposure = 0.62
+ssao_enabled = true
+ssao_radius = 1.2
+ssao_intensity = 2.5
+glow_enabled = true
+glow_intensity = 0.6
+glow_bloom = 0.05
+glow_hdr_threshold = 1.2
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.05
+
+[node name="Showroom" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.81803, -0.35724, 0.45079, 0, 0.78374, 0.62109, -0.57518, -0.50807, 0.64112, 0, 0, 0)
+light_color = Color(1, 0.93, 0.84, 1)
+light_energy = 3.5
+shadow_enabled = true
+shadow_blur = 1.5
+directional_shadow_max_distance = 70.0
+
+[node name="Level" parent="." instance=ExtResource("level")]

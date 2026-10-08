@@ -1,0 +1,24 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/worn_paint.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/green_metal_rust/green_metal_rust_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/green_metal_rust/green_metal_rust_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/rust_coarse_01/rust_coarse_01_diff.jpg" id="rust"]
+[ext_resource type="Texture2D" path="res://assets/textures/rust_coarse_01/rust_coarse_01_nor_gl.jpg" id="rust_nor"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/paint = Color(0.78, 0.3, 0.05, 1)
+shader_parameter/repaint = 1.0
+shader_parameter/scan_value = 0.066
+shader_parameter/paint_tex = ExtResource("diff")
+shader_parameter/paint_normal = ExtResource("nor")
+shader_parameter/rust_tex = ExtResource("rust")
+shader_parameter/rust_normal = ExtResource("rust_nor")
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/uv_scale = 0.5
+shader_parameter/paint_roughness = 0.42
+shader_parameter/rust = 0.36
+shader_parameter/chipping = 0.6
+shader_parameter/dust = 0.5

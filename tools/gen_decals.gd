@@ -1,32 +1,60 @@
 extends SceneTree
-## Generates the procedural decal textures listed in assets/manifest.json
-## (source "procedural") into assets/decals/. Run with: tools/gen_decals.sh
+## Generates the procedural textures listed in assets/manifest.json (source
+## "procedural"): decals into assets/decals/ and the noise masks that shaders
+## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh
 ##
-## Each entry names a kind (leak, stain or grime), a size and a seed, so a
-## decal can be regenerated or varied without touching this script.
+## Each entry names a kind (leak, stain or grime for a decal, wear for a
+## mask), a size and a seed, so a texture can be regenerated or varied without
+## touching this script.
 
-const OUT_DIR := "res://assets/decals/"
+const OUT_DIR := {"decal": "res://assets/decals/", "mask": "res://assets/masks/"}
 
 
 func _init() -> void:
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/manifest.json"))
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	for asset: Dictionary in manifest.assets:
-		if asset.source != "procedural" or asset.type != "decal":
+		if asset.source != "procedural":
 			continue
-		var image := Image.create_empty(asset.size[0], asset.size[1], true, Image.FORMAT_RGBA8)
-		var noise := FastNoiseLite.new()
-		noise.seed = asset.seed
-		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-		noise.fractal_octaves = 4
-		for y in image.get_height():
-			for x in image.get_width():
-				var uv := Vector2(x + 0.5, y + 0.5) / Vector2(image.get_size())
-				image.set_pixel(x, y, call("_" + asset.kind, uv, noise))
-		image.generate_mipmaps()
-		image.save_png(OUT_DIR + asset.id + ".png")
+		var folder: String = OUT_DIR[asset.type]
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
+		var image: Image
+		if asset.type == "mask":
+			image = _mask(asset)
+		else:
+			image = Image.create_empty(asset.size[0], asset.size[1], true, Image.FORMAT_RGBA8)
+			var noise := FastNoiseLite.new()
+			noise.seed = asset.seed
+			noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+			noise.fractal_octaves = 4
+			for y in image.get_height():
+				for x in image.get_width():
+					var uv := Vector2(x + 0.5, y + 0.5) / Vector2(image.get_size())
+					image.set_pixel(x, y, call("_" + asset.kind, uv, noise))
+			image.generate_mipmaps()
+		image.save_png(folder + asset.id + ".png")
 		print(asset.id)
 	quit()
+
+
+## Three unrelated noises that tile, one per channel: soft blotches in red and
+## blue, and in green the finer cells that break up an outline.
+func _mask(asset: Dictionary) -> Image:
+	var width: int = asset.size[0]
+	var height: int = asset.size[1]
+	var channels: Array[Image] = []
+	for i in 3:
+		var noise := FastNoiseLite.new()
+		noise.seed = asset.seed + i * 17
+		noise.noise_type = FastNoiseLite.TYPE_CELLULAR if i == 1 else FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.frequency = 0.035 if i == 1 else 0.011
+		noise.fractal_octaves = 5
+		noise.fractal_gain = 0.55
+		channels.append(noise.get_seamless_image(width, height, false, false, 0.25))
+	var image := Image.create_empty(width, height, false, Image.FORMAT_RGB8)
+	for y in height:
+		for x in width:
+			image.set_pixel(x, y, Color(channels[0].get_pixel(x, y).r, channels[1].get_pixel(x, y).r, channels[2].get_pixel(x, y).r))
+	return image
 
 
 ## Noise in 0..1.

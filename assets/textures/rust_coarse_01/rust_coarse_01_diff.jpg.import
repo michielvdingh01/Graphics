@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://k4ma74412ufh"
-path.bptc="res://.godot/imported/rusty_painted_metal_diff.jpg-703ba72de86574eec4eb9a7f561c19c0.bptc.ctex"
+uid="uid://bfspmu4f31jrh"
+path.s3tc="res://.godot/imported/rust_coarse_01_diff.jpg-5722cccbb6107407209c4cfe9ff6ad5c.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,13 +11,13 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/rusty_painted_metal/rusty_painted_metal_diff.jpg"
-dest_files=["res://.godot/imported/rusty_painted_metal_diff.jpg-703ba72de86574eec4eb9a7f561c19c0.bptc.ctex"]
+source_file="res://assets/textures/rust_coarse_01/rust_coarse_01_diff.jpg"
+dest_files=["res://.godot/imported/rust_coarse_01_diff.jpg-5722cccbb6107407209c4cfe9ff6ad5c.s3tc.ctex"]
 
 [params]
 
 compress/mode=2
-compress/high_quality=true
+compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

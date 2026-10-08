@@ -21,6 +21,7 @@ shader_parameter/albedo_tex = ExtResource("diff")
 shader_parameter/normal_tex = ExtResource("nor")
 shader_parameter/orm_tex = ExtResource("arm")
 shader_parameter/wet_mask = SubResource("mask")
+shader_parameter/markings_rect = Vector4(0, 0, 0, 0)
 shader_parameter/uv_scale = 0.333
 shader_parameter/mask_scale = 0.045
 shader_parameter/puddle_amount = 0.42

@@ -18,15 +18,19 @@ const KEYS: Array[String] = [
 	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume",
 ]
 
-# Per quality level: [SSAO, SSIL, SSR, volumetric fog, MSAA, sun shadow atlas, soft shadow quality]
+# Per quality level: [SSAO, SSIL, SSR, volumetric fog, MSAA, sun shadow atlas,
+# soft shadow quality, chromatic aberration]
 # SSIL is left to Ultra: next to baked lightmaps it is all but invisible, and
-# it takes 1.25 ms of a 14 ms frame.
+# it takes 1.25 ms of a 14 ms frame. So is the chromatic aberration of the
+# lens pass, the one part of it that has to read the frame back.
 const QUALITY := [
-	[false, false, false, false, Viewport.MSAA_DISABLED, 2048, RenderingServer.SHADOW_QUALITY_SOFT_LOW],
-	[true, false, false, true, Viewport.MSAA_DISABLED, 4096, RenderingServer.SHADOW_QUALITY_SOFT_LOW],
-	[true, false, true, true, Viewport.MSAA_2X, 4096, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM],
-	[true, true, true, true, Viewport.MSAA_4X, 8192, RenderingServer.SHADOW_QUALITY_SOFT_HIGH],
+	[false, false, false, false, Viewport.MSAA_DISABLED, 2048, RenderingServer.SHADOW_QUALITY_SOFT_LOW, false],
+	[true, false, false, true, Viewport.MSAA_DISABLED, 4096, RenderingServer.SHADOW_QUALITY_SOFT_LOW, false],
+	[true, false, true, true, Viewport.MSAA_2X, 4096, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, false],
+	[true, true, true, true, Viewport.MSAA_4X, 8192, RenderingServer.SHADOW_QUALITY_SOFT_HIGH, true],
 ]
+const LENS := preload("res://shaders/post.gdshader")
+const LENS_ABERRATION := preload("res://shaders/post_aberration.gdshader")
 const ENV_TOGGLES: Array[String] = ["ssao_enabled", "ssil_enabled", "ssr_enabled", "volumetric_fog_enabled"]
 
 ## Index into QUALITY_NAMES.
@@ -99,6 +103,9 @@ func apply() -> void:
 		var authored: Dictionary = environment.get_meta(&"authored")
 		for i in ENV_TOGGLES.size():
 			environment.set(ENV_TOGGLES[i], authored[ENV_TOGGLES[i]] and preset[i])
+
+	for lens: CanvasItem in get_tree().get_nodes_in_group(&"lens"):
+		(lens.material as ShaderMaterial).shader = LENS_ABERRATION if preset[7] else LENS
 
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
 	if not Benchmark.active and DisplayServer.get_name() != "headless":

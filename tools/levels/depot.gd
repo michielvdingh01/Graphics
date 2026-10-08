@@ -83,10 +83,7 @@ func _dock() -> void:
 	# Roller doors in the warehouse wall, each with a number plate of light above.
 	var lit := [-16.0, 0.0, 8.0]
 	for x in [-16.0, -8.0, 0.0, 8.0, 16.0]:
-		box("roof", Vector3(x, DOCK_Y + 1.7, -YZ + 0.04), Vector3(4.0, 3.4, 0.08), Vector3.ZERO, NO_COLLIDE)
-		for dx in [-2.1, 2.1]:
-			box("steel", Vector3(x + dx, DOCK_Y + 1.75, -YZ + 0.06), Vector3(0.2, 3.5, 0.12), Vector3.ZERO, NO_COLLIDE)
-		box("steel", Vector3(x, DOCK_Y + 3.5, -YZ + 0.06), Vector3(4.4, 0.2, 0.12), Vector3.ZERO, NO_COLLIDE)
+		roller_door(Vector3(x, DOCK_Y + 1.7, -YZ + 0.06), Vector3.BACK, Vector2(4.0, 3.4))
 		tube(Vector3(x, CANOPY_Y - 0.5, mid_z), true, x in lit, x == 0.0)
 
 	crates(Vector3(-15.0, DOCK_Y, -18.0), 4)
@@ -104,19 +101,19 @@ func _dock() -> void:
 func _containers() -> void:
 	# [x, z, along x, material, material of the one stacked on top or ""]
 	var layout: Array = [
-		[-17.0, -7.0, true, "pipe", ""],
-		[-10.5, -7.0, true, "machine", "roof"],
-		[4.0, -7.0, true, "steel_yellow", ""],
-		[11.0, -7.0, true, "pipe", "machine"],
-		[-22.0, 1.5, true, "machine", ""],
-		[-7.0, 1.5, true, "pipe", "steel_yellow"],
-		[-0.5, 1.5, true, "roof", ""],
-		[14.0, 1.5, true, "machine", "pipe"],
-		[-16.0, 10.0, true, "roof", "pipe"],
-		[-9.5, 10.0, true, "steel_yellow", ""],
-		[9.0, 10.0, true, "pipe", ""],
-		[1.5, 11.5, false, "machine", ""],
-		[20.0, -3.5, false, "roof", ""],
+		[-17.0, -7.0, true, "container_red", ""],
+		[-10.5, -7.0, true, "container_green", "container_grey"],
+		[4.0, -7.0, true, "container_orange", ""],
+		[11.0, -7.0, true, "container_blue", "container_green"],
+		[-22.0, 1.5, true, "container_green", ""],
+		[-7.0, 1.5, true, "container_red", "container_orange"],
+		[-0.5, 1.5, true, "container_grey", ""],
+		[14.0, 1.5, true, "container_blue", "container_red"],
+		[-16.0, 10.0, true, "container_grey", "container_blue"],
+		[-9.5, 10.0, true, "container_orange", ""],
+		[9.0, 10.0, true, "container_red", ""],
+		[1.5, 11.5, false, "container_green", ""],
+		[20.0, -3.5, false, "container_blue", ""],
 	]
 	for c: Array in layout:
 		var at := Vector3(c[0], 0, c[1])
@@ -211,7 +208,7 @@ func _surroundings() -> void:
 	box("concrete", Vector3(50, 7, 14), Vector3(20, 14, 26), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	cylinder("brick", Vector3(-40, 0, 30), 2.2, 40.0, DETAIL | NO_COLLIDE, Vector3.ZERO, 1.4, 20)
 	for i in 3:
-		container(["pipe", "machine", "roof"][i], Vector3(44, i * 2.6, -14), false, DETAIL | NO_COLLIDE)
+		container(["container_red", "container_green", "container_grey"][i], Vector3(44, i * 2.6, -14), false, DETAIL | NO_COLLIDE)
 
 
 func _probes() -> void:

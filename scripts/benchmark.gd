@@ -203,8 +203,8 @@ func _profile_targets() -> Dictionary:
 	for light: Light3D in scene.find_children("*", "Light3D", true, false):
 		var label := "sun_shadow" if light is DirectionalLight3D else "lamp_shadows"
 		targets[label].append([light, "shadow_enabled"])
-	# The parts of a level the builder keeps apart, and the lens pass.
-	for part: String in ["Props", "Decals", "Glass", "Post"]:
+	# The parts of a level the builder keeps apart, the dust in the air and the lens pass.
+	for part: String in ["Props", "Decals", "Glass", "Dust", "Post"]:
 		var node := scene.find_child(part, true, false)
 		if node:
 			targets[part.to_lower()] = [[node, "visible"]]

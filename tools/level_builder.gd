@@ -31,6 +31,13 @@ const BAG := "cement_bag"
 const DETAIL := 1  # thin or far geometry: no lightmap, lit by probes instead
 const NO_COLLIDE := 2
 const GLASS := 4  # transparent: no lightmap, no shadow
+## Vertex colour of a point that is nowhere near an edge, see _edge().
+const NO_EDGE := Color(0.5, 0.5, 1.0, 1.0)
+## Floor paint: its resolution in pixels per metre, and the colours in use.
+const PAINT_SCALE := 40.0
+const PAINT_YELLOW := Color(0.8, 0.57, 0.06)
+const PAINT_WHITE := Color(0.76, 0.76, 0.72)
+const PAINT_BLACK := Color(0.035, 0.035, 0.035)
 
 var _tools := {}
 var _shapes := {}
@@ -43,6 +50,11 @@ var _props: Node3D
 var _models := {}
 ## Glowing material -> its copy for a lamp that is off.
 var _dark := {}
+## What is painted on the floor, the part of the floor (x and z) it covers and
+## the copy of the floor material that shows it.
+var _paint: Image
+var _paint_area: Rect2
+var _painted_floor: ShaderMaterial
 var _rng := RandomNumberGenerator.new()
 ## Separate streams, so adding glass, decals or model variation never
 ## reshuffles where the props stand.
@@ -146,18 +158,23 @@ func _mullions(center: Vector3, width: float, height: float, along_x: bool, spac
 
 
 ## Yellow tube railing between two points, with one collider for the whole run.
+## A level run gets a toe board; one that follows a stair does not.
 func railing(from: Vector3, to: Vector3) -> void:
 	var flags := DETAIL | NO_COLLIDE
 	var up := Vector3(0, 1.05, 0)
-	beam("steel_yellow", from + up, to + up, 0.05, flags)
-	beam("steel_yellow", from + up * 0.5, to + up * 0.5, 0.035, flags)
+	rod("steel_yellow", from + up, to + up, 0.022, flags, 8)
+	rod("steel_yellow", from + up * 0.52, to + up * 0.52, 0.017, flags, 8)
 	var posts := maxi(1, roundi(Vector2(to.x - from.x, to.z - from.z).length() / 1.5))
 	for i in posts + 1:
 		var p := from.lerp(to, float(i) / posts)
-		box("steel_yellow", p + up * 0.5, Vector3(0.05, 1.05, 0.05), Vector3.ZERO, flags)
+		rod("steel_yellow", p, p + up, 0.022, flags, 8)
+		box("steel_yellow", p + Vector3(0, 0.006, 0), Vector3(0.13, 0.012, 0.13), Vector3.ZERO, flags)
+	if absf(to.y - from.y) < 0.01:
+		var toe := Vector3(0, 0.062, 0)
+		beam("steel_yellow", from + toe, to + toe, 0.006, flags, 0.1)
 	var mid := (from + to) * 0.5 + up * 0.5
 	var length := from.distance_to(to)
-	_collide_box(Transform3D(_along(to - from), mid), Vector3(0.06, 1.05 + absf(to.y - from.y) * 0.0, length))
+	_collide_box(Transform3D(_along(to - from), mid), Vector3(0.06, 1.05, length))
 
 
 func crates(at: Vector3, count: int) -> void:
@@ -211,36 +228,177 @@ func barrier(at: Vector3, yaw_deg: float) -> void:
 	_collide_box(Transform3D(facing, at + Vector3(0, box.size.y * 0.5, 0)), Vector3(box.size.x * 2.0, box.size.y, box.size.z))
 
 
-## Shipping container with ribbed sides; `along_x` is the direction of its length.
+## Shipping container, 6 m long, of pressed steel panels in a frame of posts
+## and rails. `along_x` is the direction of its length; the doors are at the
+## far end of it.
 func container(mat: String, at: Vector3, along_x: bool, flags := 0) -> void:
-	var xf := Transform3D(Basis() if along_x else Basis(Vector3.UP, PI * 0.5), at + Vector3(0, 1.3, 0))
-	var length := 6.0
-	var width := 2.4
-	var height := 2.6
-	_box(mat, xf, Vector3(length - 0.1, height - 0.2, width - 0.1), flags)
-	var trim := flags | NO_COLLIDE
-	for y: float in [-height * 0.5 + 0.08, height * 0.5 - 0.08]:
-		_local_box(mat, xf, Vector3(0, y, 0), Vector3(length, 0.16, width), trim)
-	for x: float in [-length * 0.5 + 0.06, length * 0.5 - 0.06]:
-		for z: float in [-width * 0.5 + 0.06, width * 0.5 - 0.06]:
-			_local_box(mat, xf, Vector3(x, 0, z), Vector3(0.12, height, 0.12), trim)
-	var ribs := 19
-	for i in ribs:
-		var x := -length * 0.5 + length * (i + 1) / (ribs + 1)
-		_local_box(mat, xf, Vector3(x, 0, 0), Vector3(0.1, height - 0.3, width - 0.02), trim)
-	# Door bars on one end.
-	for z: float in [-0.75, -0.25, 0.25, 0.75]:
-		_local_box("steel", xf, Vector3(length * 0.5 - 0.03, 0, z), Vector3(0.05, height - 0.3, 0.04), trim)
-	_local_box(mat, xf, Vector3(length * 0.5 - 0.04, 0, 0), Vector3(0.04, height - 0.3, 0.04), trim)
+	var size := Vector3(6.0, 2.6, 2.4)
+	var half := size * 0.5
+	var xf := Transform3D(Basis() if along_x else Basis(Vector3.UP, PI * 0.5), at + Vector3(0, half.y, 0))
+	if not flags & NO_COLLIDE:
+		_collide_box(xf, size)
+	var skin := flags | NO_COLLIDE
+	# Openings and other dark slivers are not worth a patch of lightmap.
+	var hole := skin | DETAIL
+
+	# Corner posts with a casting at either end.
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			_local_box(mat, xf, Vector3(sx * (half.x - 0.08), 0, sz * (half.z - 0.08)), Vector3(0.14, size.y - 0.2, 0.14), skin)
+			for sy: float in [-1.0, 1.0]:
+				var corner := Vector3(sx * (half.x - 0.09), sy * (half.y - 0.06), sz * (half.z - 0.085))
+				_local_box(mat, xf, corner, Vector3(0.18, 0.12, 0.17), skin)
+				# Where a twistlock or a crane hook goes in.
+				_local_box("rubber", xf, corner + Vector3(sx * 0.09, 0, 0), Vector3(0.004, 0.06, 0.08), hole)
+				_local_box("rubber", xf, corner + Vector3(0, 0, sz * 0.085), Vector3(0.09, 0.06, 0.004), hole)
+				_local_box("rubber", xf, corner + Vector3(0, sy * 0.06, 0), Vector3(0.11, 0.004, 0.065), hole)
+
+	# Side rails with forklift pockets, and the side panels between them.
+	for sz: float in [-1.0, 1.0]:
+		var z := sz * (half.z - 0.04)
+		_local_box(mat, xf, Vector3(0, half.y - 0.04, z), Vector3(size.x - 0.36, 0.08, 0.06), skin)
+		_local_box(mat, xf, Vector3(0, -half.y + 0.08, z), Vector3(size.x - 0.36, 0.16, 0.06), skin)
+		for x: float in [-1.02, 1.02]:
+			_local_box("rubber", xf, Vector3(x, -half.y + 0.07, sz * (half.z - 0.01)), Vector3(0.36, 0.09, 0.004), hole)
+		var side := Basis(Vector3.UP, 0.0 if sz > 0.0 else PI)
+		corrugated(mat, xf * Transform3D(side, Vector3(0, 0.04, sz * (half.z - 0.014))), Vector2(size.x - 0.3, size.y - 0.24), 0.28, 0.036, skin)
+
+	# Rails across both ends, the closed end wall, the roof and the underside.
+	for sx: float in [-1.0, 1.0]:
+		var x := sx * (half.x - 0.04)
+		_local_box(mat, xf, Vector3(x, half.y - 0.06, 0), Vector3(0.06, 0.12, size.z - 0.34), skin)
+		_local_box(mat, xf, Vector3(x, -half.y + 0.08, 0), Vector3(0.06, 0.16, size.z - 0.34), skin)
+	var door_height := size.y - 0.28
+	corrugated(mat, xf * Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(-half.x + 0.014, 0.02, 0)), Vector2(size.z - 0.3, door_height), 0.26, 0.036, skin)
+	corrugated(mat, xf * Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, half.y - 0.02, 0)), Vector2(size.x - 0.14, size.z - 0.14), 0.21, 0.018, skin)
+	_local_box(mat, xf, Vector3(0, -half.y + 0.14, 0), Vector3(size.x - 0.14, 0.02, size.z - 0.14), skin)
+
+	# Two doors, each a frame around a panel with horizontal pressings, shut
+	# by two locking rods.
+	var face := half.x - 0.06
+	var leaf := 1.045
+	var pressed := Basis(Vector3.UP, PI * 0.5) * Basis(Vector3.BACK, PI * 0.5)
+	for sz: float in [-1.0, 1.0]:
+		var mid := sz * (0.005 + leaf * 0.5)
+		for end: float in [-1.0, 1.0]:
+			_local_box(mat, xf, Vector3(face - 0.02, 0.02 + end * (door_height * 0.5 - 0.03), mid), Vector3(0.04, 0.06, leaf), skin)
+			_local_box(mat, xf, Vector3(face - 0.02, 0.02, mid + end * (leaf * 0.5 - 0.03)), Vector3(0.04, door_height - 0.12, 0.06), skin)
+		corrugated(mat, xf * Transform3D(pressed, Vector3(face - 0.012, 0.02, mid)), Vector2(door_height - 0.12, leaf - 0.12), 0.44, 0.02, skin)
+		for offset: float in [-0.27, 0.27]:
+			var z := mid + offset
+			var reach := door_height * 0.5 + 0.02
+			rod("steel", xf * Vector3(face + 0.025, 0.02 - reach, z), xf * Vector3(face + 0.025, 0.02 + reach, z), 0.017, skin, 8)
+			for end: float in [-1.0, 1.0]:
+				_local_box("steel", xf, Vector3(face + 0.02, 0.02 + end * (door_height * 0.5 + 0.04), z), Vector3(0.05, 0.07, 0.08), skin)
+			for y: float in [-0.75, 0.15, 0.85]:
+				_local_box("steel", xf, Vector3(face + 0.012, y, z), Vector3(0.03, 0.05, 0.07), skin)
+			# The handle lies towards the hinges, held down by a catch at its tip.
+			_local_box("steel", xf, Vector3(face + 0.025, -0.3, z), Vector3(0.05, 0.07, 0.05), skin)
+			_local_box("steel", xf, Vector3(face + 0.04, -0.3, z + sz * 0.12), Vector3(0.012, 0.035, 0.24), skin)
+			_local_box("steel", xf, Vector3(face + 0.02, -0.3, z + sz * 0.22), Vector3(0.04, 0.09, 0.04), skin)
+		var edge := sz * (half.z - 0.15)
+		for y: float in [-0.9, -0.3, 0.3, 0.9]:
+			rod("steel", xf * Vector3(face + 0.012, y - 0.06, edge), xf * Vector3(face + 0.012, y + 0.06, edge), 0.014, skin, 6)
+			_local_box("steel", xf, Vector3(face + 0.004, y, edge - sz * 0.06), Vector3(0.008, 0.07, 0.12), skin)
+	_local_box("rubber", xf, Vector3(face - 0.004, 0.02, 0), Vector3(0.012, door_height, 0.012), hole)
 
 
+## Stack of pallets, each one of boards on nine blocks; the boards run along
+## the local X of `yaw`.
 func pallet(at: Vector3, yaw: float, stack: int) -> void:
+	var wide: Array[float] = [0.145, 0.1, 0.145, 0.1, 0.145]
 	for i in stack:
-		var rot := Vector3(0, yaw + _rng.randf_range(-4, 4), 0)
-		var base := at + Vector3(0, i * 0.15, 0)
-		box("wood", base + Vector3(0, 0.125, 0), Vector3(1.2, 0.03, 1.0), rot, NO_COLLIDE if i > 0 else 0)
-		box("wood", base + Vector3(0, 0.055, 0), Vector3(1.2, 0.11, 0.8), rot, NO_COLLIDE)
-	_collide_box(Transform3D(Basis(), at + Vector3(0, stack * 0.075, 0)), Vector3(1.2, stack * 0.15, 1.0))
+		var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw + _rng.randf_range(-4, 4))), at + Vector3(0, i * 0.15, 0))
+		for j in 3:
+			var x := (j - 1) * 0.5275
+			var z := (j - 1) * 0.35
+			var board: float = wide[j + 1]
+			_local_box("wood", xf, Vector3(0, 0.011, z), Vector3(1.2, 0.022, board), NO_COLLIDE)
+			_local_box("wood", xf, Vector3(x, 0.117, 0), Vector3(0.145, 0.022, 0.8), NO_COLLIDE)
+			for k in 3:
+				_local_box("wood", xf, Vector3(x, 0.064, (k - 1) * 0.35), Vector3(0.145, 0.084, wide[k + 1]), NO_COLLIDE)
+		for j in 5:
+			_local_box("wood", xf, Vector3(0, 0.139, (j - 2) * 0.16375), Vector3(1.2, 0.022, wide[j]), NO_COLLIDE)
+	_collide_box(Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), at + Vector3(0, stack * 0.075, 0)), Vector3(1.2, stack * 0.15, 0.8))
+
+
+## Roller shutter `size.x` wide and `size.y` high, seen from the side `normal`
+## points to. `center` is the middle of its curtain; the roll sits in a hood
+## above that.
+func roller_door(center: Vector3, normal: Vector3, size: Vector2) -> void:
+	var xf := Transform3D(Basis(Vector3.UP.cross(normal), Vector3.UP, normal), center)
+	var half := size * 0.5
+	# The slats only face the room, so a plate behind them keeps the daylight out.
+	_local_box("steel", xf, Vector3(0, 0, -0.04), Vector3(size.x, size.y, 0.03))
+	corrugated("roof", xf * Transform3D(Basis(Vector3.BACK, PI * 0.5), Vector3.ZERO), Vector2(size.y - 0.1, size.x), 0.095, 0.014, NO_COLLIDE)
+	for side: float in [-1.0, 1.0]:
+		_local_box("dark_steel", xf, Vector3(side * (half.x - 0.03), 0, 0.03), Vector3(0.1, size.y, 0.1), NO_COLLIDE)
+	_local_box("dark_steel", xf, Vector3(0, -half.y + 0.06, 0.02), Vector3(size.x - 0.16, 0.1, 0.05), NO_COLLIDE)
+	_local_box("rubber", xf, Vector3(0, -half.y + 0.008, 0.02), Vector3(size.x - 0.16, 0.016, 0.03), DETAIL | NO_COLLIDE)
+	_local_box("bare_steel", xf, Vector3(0, -half.y + 0.07, 0.055), Vector3(0.22, 0.03, 0.02), NO_COLLIDE)
+	rounded_box("steel", xf * Transform3D(Basis(), Vector3(0, half.y + 0.21, 0.17)), Vector3(size.x + 0.3, 0.42, 0.42), 0.05, NO_COLLIDE)
+	# Hand chain, hanging in a loop from the end of the hood.
+	var chain := half.x - 0.18
+	_local_box("dark_steel", xf, Vector3(chain, half.y + 0.21, 0.4), Vector3(0.2, 0.26, 0.06), NO_COLLIDE)
+	for dx: float in [-0.06, 0.06]:
+		rod("dark_steel", xf * Vector3(chain + dx, half.y + 0.1, 0.4), xf * Vector3(chain + dx, -half.y + 1.1, 0.4), 0.006, DETAIL | NO_COLLIDE, 6)
+
+
+## Steel cupboard with double doors, standing on the ground at `at` and
+## facing `yaw_deg` (0 looks along +Z).
+func cupboard(mat: String, at: Vector3, yaw_deg: float, size: Vector3) -> void:
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, size.y * 0.5, 0)), size)
+	var front := size.z * 0.5
+	var middle := 0.08 + (size.y - 0.08) * 0.5
+	_local_box("dark_steel", xf, Vector3(0, 0.04, -0.02), Vector3(size.x - 0.04, 0.08, size.z - 0.08), NO_COLLIDE)
+	_local_box(mat, xf, Vector3(0, middle, -0.01), Vector3(size.x, size.y - 0.08, size.z - 0.02), NO_COLLIDE)
+	var door := Vector3(size.x * 0.5 - 0.012, size.y - 0.12, 0.02)
+	for side: float in [-1.0, 1.0]:
+		var mid := Vector3(side * (door.x * 0.5 + 0.003), middle, front)
+		rounded_box(mat, xf * Transform3D(Basis(), mid), door, 0.006, NO_COLLIDE)
+		for i in 4:
+			_local_box("rubber", xf, mid + Vector3(0, door.y * 0.5 - 0.14 - i * 0.035, 0.0105), Vector3(door.x * 0.55, 0.012, 0.002), DETAIL | NO_COLLIDE)
+		for y: float in [-0.38, 0.0, 0.38]:
+			var pin := mid + Vector3(side * door.x * 0.5, y * door.y, 0.012)
+			rod("dark_steel", xf * (pin - Vector3(0, 0.035, 0)), xf * (pin + Vector3(0, 0.035, 0)), 0.008, NO_COLLIDE, 6)
+	_local_box("bare_steel", xf, Vector3(0.04, size.y * 0.55, front + 0.014), Vector3(0.045, 0.045, 0.012), NO_COLLIDE)
+	_local_box("bare_steel", xf, Vector3(0.04, size.y * 0.55, front + 0.026), Vector3(0.022, 0.12, 0.014), NO_COLLIDE)
+
+
+## Row of `count` changing-room lockers, centred on `at` and facing `yaw_deg`
+## (0 looks along +Z). The ones listed in `open` have their door ajar by that
+## many degrees.
+func lockers(mat: String, at: Vector3, yaw_deg: float, count: int, open := {}) -> void:
+	var width := 0.37
+	var height := 1.85
+	var depth := 0.5
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, height * 0.5, 0)), Vector3(count * width, height, depth))
+	_local_box("dark_steel", xf, Vector3(0, 0.05, -0.02), Vector3(count * width - 0.04, 0.1, depth - 0.08), NO_COLLIDE)
+	var middle := 0.1 + (height - 0.1) * 0.5
+	var inside := Vector3(width, height - 0.1, depth - 0.02)
+	for i in count:
+		var body := Vector3((i - (count - 1) * 0.5) * width, middle, -0.01)
+		if open.has(i):
+			# Walls instead of a block, and a shelf, so there is something to look into.
+			for side: float in [-1.0, 1.0]:
+				_local_box(mat, xf, body + Vector3(side * (inside.x * 0.5 - 0.006), 0, 0), Vector3(0.012, inside.y, inside.z), NO_COLLIDE)
+				_local_box(mat, xf, body + Vector3(0, side * (inside.y * 0.5 - 0.006), 0), Vector3(inside.x, 0.012, inside.z), NO_COLLIDE)
+			_local_box(mat, xf, body + Vector3(0, 0, -inside.z * 0.5 + 0.006), Vector3(inside.x, inside.y, 0.012), NO_COLLIDE)
+			_local_box(mat, xf, body + Vector3(0, inside.y * 0.5 - 0.3, 0), Vector3(inside.x, 0.012, inside.z - 0.02), NO_COLLIDE)
+		else:
+			_local_box(mat, xf, body, inside, NO_COLLIDE)
+		var door := Vector3(width - 0.016, height - 0.13, 0.018)
+		var hinge := Vector3(body.x - door.x * 0.5, middle, depth * 0.5)
+		var swing := Basis(Vector3.UP, -deg_to_rad(open.get(i, 0.0)))
+		var leaf := xf * Transform3D(swing, hinge) * Transform3D(Basis(), Vector3(door.x * 0.5, 0, 0))
+		rounded_box(mat, leaf, door, 0.005, NO_COLLIDE)
+		for end: float in [-1.0, 1.0]:
+			for k in 3:
+				_local_box("rubber", leaf, Vector3(0, end * (door.y * 0.5 - 0.1 - k * 0.03), 0.0095), Vector3(door.x * 0.6, 0.011, 0.002), DETAIL | NO_COLLIDE)
+		_local_box("brass", leaf, Vector3(0, door.y * 0.5 - 0.24, 0.0095), Vector3(0.07, 0.03, 0.002), NO_COLLIDE)
+		_local_box("bare_steel", leaf, Vector3(door.x * 0.5 - 0.045, 0.02, 0.014), Vector3(0.024, 0.1, 0.012), NO_COLLIDE)
 
 
 func barrel(at: Vector3) -> void:
@@ -542,6 +700,61 @@ func _decal(texture: String, xf: Transform3D, size: Vector3, tint: Color) -> voi
 	_add(node, _decals)
 
 
+## Sets aside the part of the floor (x and z) that floor_line() and the others
+## paint on. The level then gets a copy of the floor material that carries the
+## paint, in scenes/levels/<name>_floor.res.
+func floor_paint_area(area: Rect2) -> void:
+	_paint_area = area
+	_paint = Image.create_empty(ceili(area.size.x * PAINT_SCALE), ceili(area.size.y * PAINT_SCALE), false, Image.FORMAT_RGBA8)
+
+
+## Painted line between two points on the floor (x and z), along X or along Z.
+func floor_line(from: Vector2, to: Vector2, color := PAINT_YELLOW, width := 0.1) -> void:
+	var half := Vector2(width, width) * 0.5
+	_fill(Rect2(from.min(to) - half, (to - from).abs() + half * 2.0), color)
+
+
+## Outline of a rectangle on the floor. With a second colour it becomes a
+## border of diagonal stripes, as around a machine.
+func floor_frame(area: Rect2, color := PAINT_YELLOW, width := 0.1, striped := Color(0, 0, 0, 0)) -> void:
+	var stripe := width if striped.a > 0.0 else 0.0
+	var across := Vector2(area.size.x, width)
+	var down := Vector2(width, area.size.y)
+	_fill(Rect2(area.position, across), color, stripe, striped)
+	_fill(Rect2(area.position + Vector2(0, area.size.y - width), across), color, stripe, striped)
+	_fill(Rect2(area.position, down), color, stripe, striped)
+	_fill(Rect2(area.position + Vector2(area.size.x - width, 0), down), color, stripe, striped)
+
+
+## Diagonal stripes, `stripe` wide and as far apart, over a part of the floor
+## that has to stay clear.
+func floor_hatch(area: Rect2, color := PAINT_YELLOW, stripe := 0.15) -> void:
+	_fill(area, color, stripe)
+
+
+## Paints a rectangle of floor, solid or in diagonal stripes of `color` with
+## `between` in the gaps.
+func _fill(area: Rect2, color: Color, stripe := 0.0, between := Color(0, 0, 0, 0)) -> void:
+	var from := (area.position - _paint_area.position) * PAINT_SCALE
+	var to := (area.end - _paint_area.position) * PAINT_SCALE
+	for y in range(maxi(floori(from.y), 0), mini(ceili(to.y), _paint.get_height())):
+		for x in range(maxi(floori(from.x), 0), mini(ceili(to.x), _paint.get_width())):
+			# How much of this pixel the rectangle covers.
+			var cover := clampf(minf(x + 1.0, to.x) - maxf(x, from.x), 0.0, 1.0) * clampf(minf(y + 1.0, to.y) - maxf(y, from.y), 0.0, 1.0)
+			var paint := color
+			if stripe > 0.0:
+				# How far this pixel lies inside a stripe, measured across them.
+				var band := stripe * PAINT_SCALE
+				var along := fposmod((x + y + 1.0) * 0.7071, band * 2.0)
+				var inside := clampf(minf(along, band - along) + 0.5, 0.0, 1.0)
+				if between.a > 0.0:
+					paint = between.lerp(color, inside)
+				else:
+					cover *= inside
+			if cover > _paint.get_pixel(x, y).a:
+				_paint.set_pixel(x, y, Color(paint.r, paint.g, paint.b, cover))
+
+
 # --- Geometry builders -------------------------------------------------------
 
 
@@ -577,7 +790,9 @@ func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
 			var q := p + xf.origin
 			points.append(xf * p)
 			uvs.append(Vector2(q.dot(right), -q.dot(up)))
-		_quad(st, points, [normal, normal, normal, normal], uvs)
+		var face := Vector2(r.length(), u.length()) * 2.0
+		_quad(st, points, [normal, normal, normal, normal], uvs,
+			[_edge(Vector2(0, 0), face), _edge(Vector2(1, 0), face), _edge(Vector2(1, 1), face), _edge(Vector2(0, 1), face)])
 	if not flags & NO_COLLIDE:
 		_collide_box(xf, size)
 
@@ -603,6 +818,7 @@ func rounded_box(mat: String, xf: Transform3D, size: Vector3, radius: float, fla
 				var points: Array[Vector3] = []
 				var normals: Array[Vector3] = []
 				var uvs: Array[Vector2] = []
+				var edges: Array[Color] = []
 				for corner: Vector2i in [Vector2i(i, j), Vector2i(i + 1, j), Vector2i(i + 1, j + 1), Vector2i(i, j + 1)]:
 					var flat := n * absf(n.dot(half)) + right * across[corner.x] + up * along[corner.y]
 					var inner := flat.clamp(-core, core)
@@ -611,9 +827,44 @@ func rounded_box(mat: String, xf: Transform3D, size: Vector3, radius: float, fla
 					points.append(xf * (inner + normal * r))
 					normals.append(xf.basis * normal)
 					uvs.append(Vector2(q.dot(right), -q.dot(up)))
-				_quad(st, points, normals, uvs)
+					# The middle of the rounding is where the edge of the box is.
+					edges.append(_edge(Vector2(across[corner.x] / hr, along[corner.y] / hu) * 0.5 + Vector2(0.5, 0.5), Vector2(hr, hu) * 2.0))
+				_quad(st, points, normals, uvs, edges)
 	if not flags & NO_COLLIDE:
 		_collide_box(xf, size)
+
+
+## Pressed-steel panel standing in the XY plane of `xf` and facing its +Z:
+## flat crests in that plane and flat troughs `depth` behind it, joined by
+## slopes. The waves follow one another along X, `pitch` apart, and the panel
+## starts and ends in a trough, so its edges tuck in behind a frame.
+func corrugated(mat: String, xf: Transform3D, size: Vector2, pitch: float, depth: float, flags := 0) -> void:
+	var st := _tool(mat, flags)
+	var waves := maxi(1, roundi(size.x / pitch))
+	var step := size.x / waves
+	# One wave: half a trough, the slope up, the crest, the slope down, half a trough.
+	var wave: Array[Vector2] = [Vector2(0, -depth), Vector2(0.15, -depth), Vector2(0.36, 0), Vector2(0.64, 0), Vector2(0.85, -depth), Vector2(1, -depth)]
+	var half := size * 0.5
+	var shift := xf.origin.x + xf.origin.z
+	for w in waves:
+		for i in wave.size() - 1:
+			var a := Vector3(-half.x + (w + wave[i].x) * step, 0, wave[i].y)
+			var b := Vector3(-half.x + (w + wave[i + 1].x) * step, 0, wave[i + 1].y)
+			var normal := xf.basis * Vector3(a.z - b.z, 0, b.x - a.x).normalized()
+			var up := Vector3(0, half.y, 0)
+			# Only the two bends at the crest stick out, and those are rounded.
+			var across := _stretch(a.distance_to(b), i == 2 or i == 3, i == 1 or i == 2, 0.01)
+			var left := _edge(Vector2(across.x, 0.5), Vector2(across.z, 256.0))
+			var right := _edge(Vector2(across.y, 0.5), Vector2(across.z, 256.0))
+			_quad(
+				st,
+				[xf * (a - up), xf * (b - up), xf * (b + up), xf * (a + up)],
+				[normal, normal, normal, normal],
+				[Vector2(a.x + shift, half.y - xf.origin.y), Vector2(b.x + shift, half.y - xf.origin.y), Vector2(b.x + shift, -half.y - xf.origin.y), Vector2(a.x + shift, -half.y - xf.origin.y)],
+				[left, right, right, left]
+			)
+	if not flags & NO_COLLIDE:
+		_collide_box(xf * Transform3D(Basis(), Vector3(0, 0, -depth * 0.5)), Vector3(size.x, size.y, depth))
 
 
 ## Cylinder or cone standing on `base`; rot_deg tilts its axis.
@@ -638,17 +889,23 @@ func _cylinder(mat: String, xf: Transform3D, radius: float, height: float, flags
 		var d1 := Vector3(cos(a0), 0, sin(a0))
 		var u0 := -a1 * radius
 		var u1 := -a0 * radius
+		# The rims are the only edges: across the wall, and around either end.
+		var foot := _edge(Vector2(0.5, 0), Vector2(256.0, height))
+		var head := _edge(Vector2(0.5, 1), Vector2(256.0, height))
 		_quad(
 			st,
 			[xf * (d0 * radius), xf * (d1 * radius), xf * (d1 * r_top + top), xf * (d0 * r_top + top)],
 			[xf.basis * d0, xf.basis * d1, xf.basis * d1, xf.basis * d0],
-			[Vector2(u0, 0), Vector2(u1, 0), Vector2(u1, -height), Vector2(u0, -height)]
+			[Vector2(u0, 0), Vector2(u1, 0), Vector2(u1, -height), Vector2(u0, -height)],
+			[foot, foot, head, head]
 		)
 		var up := xf.basis * Vector3.UP
+		var rim := _edge(Vector2(0.5, 1), Vector2(256.0, r_top * 2.0))
 		_tri(st, [xf * top, xf * (d0 * r_top + top), xf * (d1 * r_top + top)], [up, up, up],
-			[Vector2.ZERO, Vector2(d0.x, d0.z) * r_top, Vector2(d1.x, d1.z) * r_top])
+			[Vector2.ZERO, Vector2(d0.x, d0.z) * r_top, Vector2(d1.x, d1.z) * r_top], [NO_EDGE, rim, rim])
+		rim = _edge(Vector2(0.5, 1), Vector2(256.0, radius * 2.0))
 		_tri(st, [xf * Vector3.ZERO, xf * (d1 * radius), xf * (d0 * radius)], [-up, -up, -up],
-			[Vector2.ZERO, Vector2(d1.x, d1.z) * radius, Vector2(d0.x, d0.z) * radius])
+			[Vector2.ZERO, Vector2(d1.x, d1.z) * radius, Vector2(d0.x, d0.z) * radius], [NO_EDGE, rim, rim])
 	if not flags & NO_COLLIDE:
 		_collide_cylinder(xf * Transform3D(Basis(), top * 0.5), maxf(radius, r_top), height)
 
@@ -664,6 +921,13 @@ func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags :=
 	for i in last + 1:
 		var d := profile[i + 1] - profile[i]
 		facets.append(Vector2(d.y, -d.x).normalized())
+	# A corner of the profile that sticks out is an edge; one that goes in is not.
+	var sharp: Array[bool] = [false]
+	for i in range(1, last + 1):
+		var before := profile[i] - profile[i - 1]
+		var after := profile[i + 1] - profile[i]
+		sharp.append(not smooth and before.cross(after) > 0.0001 * before.length() * after.length())
+	sharp.append(false)
 	var run := 0.0
 	var widest := 0.0
 	for i in last + 1:
@@ -699,13 +963,19 @@ func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags :=
 				Vector2(-a1 * girth, -run), Vector2(-a0 * girth, -run),
 				Vector2(-a0 * girth, -run - length), Vector2(-a1 * girth, -run - length),
 			]
+			if absf(p1.y - p0.y) < 0.0001:
+				# A flat ring or lid is mapped straight on, not wound round the axis.
+				uvs = [Vector2(d0.x, d0.z) * p0.x, Vector2(d1.x, d1.z) * p0.x, Vector2(d1.x, d1.z) * p1.x, Vector2(d0.x, d0.z) * p1.x]
+			var along := _stretch(length, sharp[i], sharp[i + 1])
+			var start := _edge(Vector2(0.5, along.x), Vector2(256.0, along.z))
+			var end := _edge(Vector2(0.5, along.y), Vector2(256.0, along.z))
 			# A stretch that starts or ends on the axis is a fan of triangles.
 			if p0.x < 0.0001:
-				_tri(st, [points[0], points[2], points[3]], [normals[0], normals[2], normals[3]], [uvs[0], uvs[2], uvs[3]])
+				_tri(st, [points[0], points[2], points[3]], [normals[0], normals[2], normals[3]], [uvs[0], uvs[2], uvs[3]], [start, end, end])
 			elif p1.x < 0.0001:
-				_tri(st, [points[0], points[1], points[2]], [normals[0], normals[1], normals[2]], [uvs[0], uvs[1], uvs[2]])
+				_tri(st, [points[0], points[1], points[2]], [normals[0], normals[1], normals[2]], [uvs[0], uvs[1], uvs[2]], [start, start, end])
 			else:
-				_quad(st, points, normals, uvs)
+				_quad(st, points, normals, uvs, [start, start, end, end])
 		run += length
 	if not flags & NO_COLLIDE:
 		var bottom := profile[0].y
@@ -770,8 +1040,10 @@ func extrude(mat: String, polygon: PackedVector2Array, depth: float, xf: Transfo
 		hull.append(xf * (a3 - front))
 		var n := xf.basis * Vector3(b.y - a.y, a.x - b.x, 0).normalized()
 		var run := a.distance_to(b)
+		var side := Vector2(run, depth)
 		_quad(st, [xf * (a3 - front), xf * (b3 - front), xf * (b3 + front), xf * (a3 + front)], [n, n, n, n],
-			[Vector2(0, depth), Vector2(run, depth), Vector2(run, 0), Vector2(0, 0)])
+			[Vector2(0, depth), Vector2(run, depth), Vector2(run, 0), Vector2(0, 0)],
+			[_edge(Vector2(0, 0), side), _edge(Vector2(1, 0), side), _edge(Vector2(1, 1), side), _edge(Vector2(0, 1), side)])
 		if i >= 2:
 			var o := polygon[0]
 			var o3 := Vector3(o.x, o.y, 0)
@@ -789,17 +1061,50 @@ func extrude(mat: String, polygon: PackedVector2Array, depth: float, xf: Transfo
 
 
 ## Corners are bottom-left, bottom-right, top-right, top-left seen from outside.
-func _quad(st: SurfaceTool, p: Array, n: Array, uv: Array) -> void:
-	_tri(st, [p[0], p[1], p[2]], [n[0], n[1], n[2]], [uv[0], uv[1], uv[2]])
-	_tri(st, [p[0], p[2], p[3]], [n[0], n[2], n[3]], [uv[0], uv[2], uv[3]])
+## `edge` holds what _edge() gives for each corner, if the face has edges.
+func _quad(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> void:
+	if edge.is_empty():
+		_tri(st, [p[0], p[1], p[2]], [n[0], n[1], n[2]], [uv[0], uv[1], uv[2]])
+		_tri(st, [p[0], p[2], p[3]], [n[0], n[2], n[3]], [uv[0], uv[2], uv[3]])
+	else:
+		_tri(st, [p[0], p[1], p[2]], [n[0], n[1], n[2]], [uv[0], uv[1], uv[2]], [edge[0], edge[1], edge[2]])
+		_tri(st, [p[0], p[2], p[3]], [n[0], n[2], n[3]], [uv[0], uv[2], uv[3]], [edge[0], edge[2], edge[3]])
 
 
 ## Takes counter-clockwise corners and emits Godot's clockwise winding.
-func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array) -> void:
+func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> void:
 	for i: int in [0, 2, 1]:
+		st.set_color(NO_EDGE if edge.is_empty() else edge[i])
 		st.set_normal(n[i])
 		st.set_uv(uv[i])
 		st.add_vertex(p[i])
+
+
+## Vertex colour that tells a shader where a point lies between the edges of
+## its face, so that it can wear a surface along them: `at` runs from 0 to 1
+## across a face that measures `size` metres. The distance to the nearest edge
+## is then min(at, 1 - at) * size, whichever axis gives least. _stretch() says
+## what to pass for a side of which only one end is an edge, or neither.
+func _edge(at: Vector2, size: Vector2) -> Color:
+	return Color(at.x, at.y, _span(size.x), _span(size.y))
+
+
+## A length between 4 mm and 256 m on a logarithmic scale from 0 to 1: a
+## vertex colour has eight bits per channel, and this keeps the error at 2%.
+func _span(length: float) -> float:
+	return clampf((log(maxf(length, 0.001)) / log(2.0) + 8.0) / 16.0, 0.0, 1.0)
+
+
+## One side of a face for _edge(): where it starts and ends between 0 and 1
+## (x and y) and the size to go with that (z), given which of its two ends is
+## an edge. A rounded edge is `blunt`: it counts as lying that many metres
+## further away, so it wears less than a sharp one.
+func _stretch(length: float, from_edge: bool, to_edge: bool, blunt := 0.0) -> Vector3:
+	if not from_edge and not to_edge:
+		return Vector3(0.5, 0.5, 256.0)
+	var size := (length if from_edge and to_edge else length * 2.0) + blunt * 2.0
+	var near := blunt / size
+	return Vector3(near if from_edge else 0.5, 1.0 - near if to_edge else 0.5, size)
 
 
 func _along(direction: Vector3) -> Basis:
@@ -822,6 +1127,23 @@ func _tool(mat: String, flags: int) -> SurfaceTool:
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		_tools[key] = st
 	return _tools[key]
+
+
+## The material of that name. A level with paint on its floor gets its own
+## copy of the floor material, which shows the paint.
+func _material(mat: String) -> Material:
+	var material: Material = load("res://materials/%s.tres" % mat)
+	if mat != "floor" or _paint == null:
+		return material
+	if _painted_floor == null:
+		_paint.generate_mipmaps()
+		_painted_floor = material.duplicate_deep(Resource.DEEP_DUPLICATE_INTERNAL)
+		_painted_floor.set_shader_parameter("markings", ImageTexture.create_from_image(_paint))
+		_painted_floor.set_shader_parameter("markings_rect", Vector4(_paint_area.position.x, _paint_area.position.y, 1.0 / _paint_area.size.x, 1.0 / _paint_area.size.y))
+		var path := "%s%s_floor.res" % [OUT_DIR, _level_name()]
+		ResourceSaver.save(_painted_floor, path, ResourceSaver.FLAG_COMPRESS)
+		_painted_floor.take_over_path(path)
+	return _painted_floor
 
 
 func _collide_box(xf: Transform3D, size: Vector3) -> void:
@@ -868,7 +1190,7 @@ func _commit(kind: String) -> void:
 		var st: SurfaceTool = _tools[key]
 		st.index()
 		st.generate_tangents()
-		st.set_material(load("res://materials/%s.tres" % key.get_slice("/", 1)))
+		st.set_material(_material(key.get_slice("/", 1)))
 		st.commit(mesh)
 		triangles += mesh.surface_get_array_index_len(mesh.get_surface_count() - 1) / 3
 	if kind == "static":

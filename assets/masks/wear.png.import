@@ -2,21 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://7buohlewoxtc"
-path.s3tc="res://.godot/imported/rusty_painted_metal_arm.jpg-bc692d7edb80b3fd48a7337874ffe123.s3tc.ctex"
+uid="uid://dr0d6e1bekfn6"
+path="res://.godot/imported/wear.png-4abab5d1c5d7139b22feb680288f8424.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/rusty_painted_metal/rusty_painted_metal_arm.jpg"
-dest_files=["res://.godot/imported/rusty_painted_metal_arm.jpg-bc692d7edb80b3fd48a7337874ffe123.s3tc.ctex"]
+source_file="res://assets/masks/wear.png"
+dest_files=["res://.godot/imported/wear.png-4abab5d1c5d7139b22feb680288f8424.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
