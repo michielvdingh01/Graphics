@@ -148,7 +148,8 @@ func _roof() -> void:
 	for x in BAYS:
 		for z in [-5.0, 5.0]:
 			var key := Vector2(x, z)
-			lamp(Vector3(x, 6.0, z), _roof_underside(z) - 0.2, lit.has(key), lit.get(key, false))
+			# Up between the trusses, where the crane passes underneath.
+			lamp(Vector3(x, 8.3, z), _roof_underside(z) - 0.2, lit.has(key), lit.get(key, false))
 
 
 func _roof_underside(z: float) -> float:

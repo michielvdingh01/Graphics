@@ -605,11 +605,14 @@ func lamp(at: Vector3, hang_y: float, on: bool, shadows: bool) -> void:
 	light.name = "HallLamp"
 	light.position = at + Vector3(0, -0.15, 0)
 	light.rotation_degrees = Vector3(-90, 0, 0)
+	# Tuned for a lamp 6 m up; one that hangs higher shines harder through a
+	# narrower cone, so that the pool of light on the floor stays as it was.
+	var drop := (at.y - 0.15) / 5.85
 	light.light_color = Color(1.0, 0.74, 0.46)
-	light.light_energy = 26.0
-	light.light_volumetric_fog_energy = 1.6
-	light.spot_range = 11.0
-	light.spot_angle = 52.0
+	light.light_energy = 26.0 * drop * drop
+	light.light_volumetric_fog_energy = 1.6 / drop
+	light.spot_range = 11.0 + (drop - 1.0) * 5.85
+	light.spot_angle = rad_to_deg(atan(tan(deg_to_rad(52.0)) / drop))
 	light.spot_angle_attenuation = 0.6
 	light.spot_attenuation = 1.2
 	light.shadow_enabled = shadows
