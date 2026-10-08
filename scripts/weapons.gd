@@ -9,6 +9,8 @@ const LOADOUT: Array[WeaponData] = [
 	preload("res://weapons/rifle.tres"),
 	preload("res://weapons/pistol.tres"),
 	preload("res://weapons/shotgun.tres"),
+	preload("res://weapons/smg.tres"),
+	preload("res://weapons/marksman.tres"),
 ]
 const HIT_MASK := 0b101  # world + enemy
 const SWITCH_TIME := 0.3

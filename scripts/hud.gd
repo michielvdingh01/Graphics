@@ -111,6 +111,7 @@ func _bind() -> void:
 
 
 func _process(delta: float) -> void:
+	_fps_label.visible = Settings.show_fps
 	_fps_label.text = "%d fps" % Engine.get_frames_per_second()
 	if _player == null:
 		return

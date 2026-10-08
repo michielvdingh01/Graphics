@@ -1,29 +1,38 @@
 extends CharacterBody3D
-## Simple ranged enemy: paths to the player over the navmesh, strafes once it
-## has a clear shot and fires telegraphed bursts.
+## Enemy AI: paths to the player over the navmesh, strafes once it has a clear
+## shot and attacks in telegraphed bursts. The grunt, rusher and heavy are this
+## same script with different exported tuning.
 
 signal died(enemy: Node3D)
 
-const SPEED := 4.2
 const ACCEL := 22.0
 const TURN_SPEED := 8.0
-const EYE_HEIGHT := 1.5
-const HEAD_START := 1.36
 const SIGHT_RANGE := 45.0
-const ATTACK_RANGE := 26.0
-const PREFERRED_RANGE := 11.0
 const ALERT_RADIUS := 14.0
-
-const TELEGRAPH_TIME := 0.45
-const BURST_SHOTS := 3
-const SHOT_INTERVAL := 0.14
-const DAMAGE := 7.0
-const SPREAD_DEG := 2.5
 const LOS_MASK := 0b011  # world + player
 
 enum Attack { COOLDOWN, TELEGRAPH, BURST }
 
+## Tuning for one enemy type; the variants in scenes/ override these.
 @export var max_health := 100.0
+@export var speed := 4.2
+## Strafes inside this distance, closes in outside it.
+@export var preferred_range := 11.0
+@export var attack_range := 26.0
+## Strikes at arm's length instead of shooting.
+@export var melee := false
+@export var damage := 7.0
+@export var burst_shots := 3
+@export var shot_interval := 0.14
+@export var spread_deg := 2.5
+@export var telegraph_time := 0.45
+## Shortest and longest pause between attacks.
+@export var cooldown := Vector2(1.2, 2.2)
+## Height above the feet of the eyes, and of where headshots start.
+@export var eye_height := 1.5
+@export var head_start := 1.36
+@export var tint := Color(0.16, 0.17, 0.2)
+@export var visor_color := Color(1.0, 0.15, 0.1)
 
 var health := 0.0
 var dead := false
@@ -42,23 +51,25 @@ var _body_mat: StandardMaterial3D
 var _visor_mat: StandardMaterial3D
 
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
-@onready var visor: MeshInstance3D = $Visor
-@onready var gun: Node3D = $Gun
+@onready var visor: MeshInstance3D = $Model/Visor
+@onready var gun: Node3D = $Model/Gun
 
 
 func _ready() -> void:
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
-	_body_mat = $Body.mesh.surface_get_material(0).duplicate()
-	$Body.material_override = _body_mat
-	$Head.material_override = _body_mat
+	_body_mat = $Model/Body.mesh.surface_get_material(0).duplicate()
+	$Model/Body.material_override = _body_mat
+	$Model/Head.material_override = _body_mat
+	_body_mat.albedo_color = tint
 	_visor_mat = visor.mesh.surface_get_material(0).duplicate()
 	visor.material_override = _visor_mat
+	_visor_mat.emission = visor_color
 	_los_timer = randf() * 0.15
 
 
 func is_headshot(hit_position: Vector3) -> bool:
-	return hit_position.y - global_position.y > HEAD_START
+	return hit_position.y - global_position.y > head_start
 
 
 func alert() -> void:
@@ -93,7 +104,7 @@ func _physics_process(delta: float) -> void:
 	var desired := Vector3.ZERO
 
 	if not dead and is_instance_valid(_player) and not _player.dead:
-		var eye := global_position + Vector3.UP * EYE_HEIGHT
+		var eye := global_position + Vector3.UP * eye_height
 		var target: Vector3 = _player.head.global_position - Vector3.UP * 0.25
 		var distance := eye.distance_to(target)
 
@@ -106,7 +117,7 @@ func _physics_process(delta: float) -> void:
 
 		if _alerted:
 			var face := target - eye
-			if not _has_los or distance > PREFERRED_RANGE:
+			if not _has_los or distance > preferred_range:
 				desired = _chase(delta)
 				if not _has_los and desired.length_squared() > 0.01:
 					face = desired
@@ -132,7 +143,7 @@ func _chase(delta: float) -> Vector3:
 		return Vector3.ZERO
 	var step := agent.get_next_path_position() - global_position
 	step.y = 0.0
-	return step.normalized() * SPEED
+	return step.normalized() * speed
 
 
 func _strafe(delta: float) -> Vector3:
@@ -140,7 +151,7 @@ func _strafe(delta: float) -> Vector3:
 	if _strafe_timer <= 0.0 or is_on_wall():
 		_strafe_timer = randf_range(0.8, 2.2)
 		_strafe_dir = -_strafe_dir if is_on_wall() else [-1.0, 0.0, 1.0].pick_random()
-	return global_basis.x * _strafe_dir * SPEED * 0.5
+	return global_basis.x * _strafe_dir * speed * 0.5
 
 
 func _turn_towards(direction: Vector3, delta: float) -> void:
@@ -155,23 +166,23 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 	_attack_timer -= delta
 	match _attack:
 		Attack.COOLDOWN:
-			if _attack_timer <= 0.0 and _has_los and distance < ATTACK_RANGE:
+			if _attack_timer <= 0.0 and _has_los and distance < attack_range:
 				_attack = Attack.TELEGRAPH
-				_attack_timer = TELEGRAPH_TIME
+				_attack_timer = telegraph_time
 				_visor_mat.emission_energy_multiplier = 12.0
 		Attack.TELEGRAPH:
 			if not _has_los:
 				_end_attack(0.5)
 			elif _attack_timer <= 0.0:
 				_attack = Attack.BURST
-				_shots_left = BURST_SHOTS
+				_shots_left = burst_shots
 		Attack.BURST:
 			if _attack_timer <= 0.0:
 				_shoot(eye, target)
 				_shots_left -= 1
-				_attack_timer = SHOT_INTERVAL
+				_attack_timer = shot_interval
 				if _shots_left <= 0:
-					_end_attack(randf_range(1.2, 2.2))
+					_end_attack(randf_range(cooldown.x, cooldown.y))
 
 
 func _end_attack(cooldown: float) -> void:
@@ -181,8 +192,13 @@ func _end_attack(cooldown: float) -> void:
 
 
 func _shoot(eye: Vector3, target: Vector3) -> void:
+	if melee:
+		if eye.distance_to(target) < attack_range + 0.6:
+			_player.take_damage(damage, target, (target - eye).normalized())
+		Sfx.play_at(&"melee", global_position)
+		return
 	# A fast-moving player is harder to hit, which rewards sprinting and sliding.
-	var spread := tan(deg_to_rad(SPREAD_DEG + _player.velocity.length() * 0.45))
+	var spread := tan(deg_to_rad(spread_deg + _player.velocity.length() * 0.45))
 	var aim := Basis.looking_at(target - eye)
 	var angle := randf() * TAU
 	var radius := sqrt(randf()) * spread
@@ -193,7 +209,7 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 	if hit:
 		end = hit.position
 		if hit.collider == _player:
-			_player.take_damage(DAMAGE, end, direction)
+			_player.take_damage(damage, end, direction)
 		else:
 			Fx.impact(end, hit.normal)
 	Fx.tracer(gun.global_position - global_basis.z * 0.3, end, Color(4.0, 0.6, 0.4))

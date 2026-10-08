@@ -43,19 +43,21 @@ script = ExtResource("1")
 position = Vector3(0, 0.9, 0)
 shape = SubResource("shape")
 
-[node name="Body" type="MeshInstance3D" parent="."]
+[node name="Model" type="Node3D" parent="."]
+
+[node name="Body" type="MeshInstance3D" parent="Model"]
 position = Vector3(0, 0.67, 0)
 mesh = SubResource("mesh_body")
 
-[node name="Head" type="MeshInstance3D" parent="."]
+[node name="Head" type="MeshInstance3D" parent="Model"]
 position = Vector3(0, 1.55, 0)
 mesh = SubResource("mesh_head")
 
-[node name="Visor" type="MeshInstance3D" parent="."]
+[node name="Visor" type="MeshInstance3D" parent="Model"]
 position = Vector3(0, 1.57, -0.16)
 mesh = SubResource("mesh_visor")
 
-[node name="Gun" type="MeshInstance3D" parent="."]
+[node name="Gun" type="MeshInstance3D" parent="Model"]
 position = Vector3(0.36, 1.15, -0.2)
 mesh = SubResource("mesh_gun")
 

@@ -24,10 +24,11 @@ const STAND_EYE := 1.6
 const CROUCH_EYE := 0.95
 const SLIDE_EYE := 0.8
 
-const BASE_FOV := 80.0
 const SPRINT_FOV_KICK := 5.0
 const SLIDE_FOV_KICK := 9.0
 const MOUSE_SENSITIVITY := 0.002
+## Radians per second at full stick deflection.
+const STICK_SPEED := 3.6
 const MAX_PITCH := deg_to_rad(89.0)
 const RECOIL_SNAP := 30.0
 const RECOIL_RETURN := 7.0
@@ -54,6 +55,8 @@ var _step_distance := 0.0
 var _since_damage := 0.0
 var _recoil_target := Vector3.ZERO
 var _recoil := Vector3.ZERO
+## A click of the left stick keeps sprinting until the stick is let go.
+var _sprint_latched := false
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -63,7 +66,8 @@ var _recoil := Vector3.ZERO
 
 
 func _ready() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not Menu.is_open():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func has_control() -> bool:
@@ -80,7 +84,7 @@ func is_crouched() -> bool:
 
 func is_sprinting() -> bool:
 	return (
-		Input.is_action_pressed("sprint")
+		(Input.is_action_pressed("sprint") or _sprint_latched)
 		and Input.get_axis("move_forward", "move_back") < 0.0
 		and not _crouched
 		and not weapons.blocks_sprint()
@@ -109,18 +113,20 @@ func take_damage(amount: float, _position := Vector3.ZERO, _direction := Vector3
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	if event is InputEventMouseMotion and captured and not dead:
-		# Scale with zoom so aiming down sights keeps the same on-screen feel.
-		var sensitivity := MOUSE_SENSITIVITY * camera.fov / BASE_FOV
-		rotate_y(-event.relative.x * sensitivity)
-		head.rotation.x = clampf(
-			head.rotation.x - event.relative.y * sensitivity, -MAX_PITCH, MAX_PITCH
-		)
-	elif event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event is InputEventMouseButton and event.pressed and not captured:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if event is InputEventMouseMotion and has_control():
+		_look(event.relative * MOUSE_SENSITIVITY * Settings.mouse_sensitivity)
+	elif event is InputEventJoypadButton and event.is_action_pressed("sprint"):
+		_sprint_latched = true
+
+
+## Turns the view by the given yaw and pitch in radians at the base field of view.
+func _look(amount: Vector2) -> void:
+	# Scale with zoom so aiming down sights keeps the same on-screen feel.
+	amount *= camera.fov / Settings.fov
+	if Settings.invert_y:
+		amount.y = -amount.y
+	rotate_y(-amount.x)
+	head.rotation.x = clampf(head.rotation.x - amount.y, -MAX_PITCH, MAX_PITCH)
 
 
 func _physics_process(delta: float) -> void:
@@ -137,7 +143,10 @@ func _physics_process(delta: float) -> void:
 	var input := Vector2.ZERO
 	if control:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var direction := (transform.basis * Vector3(input.x, 0.0, input.y)).normalized()
+	if input.y > -0.5:
+		_sprint_latched = false
+	# Keeps analogue stick input analogue; keys still give a unit vector.
+	var direction := transform.basis * Vector3(input.x, 0.0, input.y)
 	var wants_crouch := control and Input.is_action_pressed("crouch")
 	var wants_jump := control and Input.is_action_just_pressed("jump")
 	var speed := Vector2(velocity.x, velocity.z).length()
@@ -203,6 +212,12 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if has_control():
+		var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+		# Squared response: fine aim near the centre, full speed at the edge.
+		stick *= stick.length() * STICK_SPEED * Settings.stick_sensitivity * delta
+		_look(Vector2(stick.x, stick.y * 0.65))
+
 	var eye := STAND_EYE
 	if dead:
 		eye = 0.4
@@ -222,7 +237,7 @@ func _process(delta: float) -> void:
 	_tilt = lerpf(_tilt, tilt, 1.0 - exp(-10.0 * delta))
 	camera.rotation = _recoil + Vector3(0.0, 0.0, _tilt)
 
-	var fov := BASE_FOV
+	var fov: float = Settings.fov
 	if _sliding:
 		fov += SLIDE_FOV_KICK
 	elif is_sprinting() and velocity.length() > WALK_SPEED + 0.5:

@@ -3,12 +3,17 @@ extends Node
 ##
 ## Visits every Marker3D in the "benchmark_view" group, measures frame times and
 ## saves a screenshot per view plus results.json to benchmark/results/<timestamp>/.
+##
+## Options: --quick, --res=2560x1440, --scene=res://scenes/depot.tscn, and the
+## --quality=, --upscaler= and --scale= switches documented in settings.gd.
 
-const RESOLUTION := Vector2i(1920, 1080)
+const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 
 ## True for a benchmark run; gameplay systems check this and stay out of the way.
 var active := false
 
+var _resolution := DEFAULT_RESOLUTION
+var _scene := ""
 var _warmup_frames := 120
 var _measure_frames := 600
 
@@ -20,6 +25,12 @@ func _ready() -> void:
 	if "--quick" in args:
 		_warmup_frames = 90
 		_measure_frames = 30
+	for arg in args:
+		if arg.begins_with("--res="):
+			var parts := arg.get_slice("=", 1).split("x")
+			_resolution = Vector2i(parts[0].to_int(), parts[1].to_int())
+		elif arg.begins_with("--scene="):
+			_scene = arg.get_slice("=", 1)
 	if active:
 		_run.call_deferred()
 
@@ -27,12 +38,15 @@ func _ready() -> void:
 func _run() -> void:
 	var tree := get_tree()
 	await tree.process_frame
+	if _scene:
+		tree.change_scene_to_file(_scene)
+		await tree.scene_changed
 
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	# Render at a fixed resolution regardless of the window size macOS gives us.
 	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-	get_window().content_scale_size = RESOLUTION
+	get_window().content_scale_size = _resolution
 	# macOS stops presenting frames to a covered window, which stalls the run.
 	get_window().always_on_top = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -58,10 +72,23 @@ func _run() -> void:
 
 		var frame_ms := PackedFloat64Array()
 		var last := Time.get_ticks_usec()
-		for i in _measure_frames:
+		var drawn := Engine.get_frames_drawn()
+		var covered := false
+		while frame_ms.size() < _measure_frames:
 			await tree.process_frame
 			var now := Time.get_ticks_usec()
-			frame_ms.append((now - last) / 1000.0)
+			# macOS does not draw a covered window. The main loop then idles at
+			# a fixed rate that would pass for an excellent frame time, so only
+			# an unbroken run of drawn frames counts.
+			if Engine.get_frames_drawn() == drawn:
+				if not covered:
+					print("%s: window is not being drawn, waiting to start over" % view.name)
+				covered = true
+				frame_ms.clear()
+			else:
+				covered = false
+				frame_ms.append((now - last) / 1000.0)
+			drawn = Engine.get_frames_drawn()
 			last = now
 
 		await RenderingServer.frame_post_draw
@@ -95,7 +122,9 @@ func _run() -> void:
 		"commit": commit[0].strip_edges() if commit else "",
 		"godot": Engine.get_version_info().string,
 		"gpu": RenderingServer.get_video_adapter_name(),
-		"resolution": [get_viewport().size.x, get_viewport().size.y],
+		"scene": tree.current_scene.scene_file_path,
+		"resolution": [_resolution.x, _resolution.y],
+		"settings": Settings.summary(),
 		"views": views,
 	}
 	var file := FileAccess.open(out_dir.path_join("results.json"), FileAccess.WRITE)

@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/viewmodels/smg.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "SMG"
+viewmodel = ExtResource("2")
+shot_sound = &"smg_shot"
+damage = 17.0
+headshot_multiplier = 1.8
+rounds_per_minute = 900.0
+automatic = true
+falloff_start = 12.0
+falloff_end = 35.0
+min_damage_scale = 0.4
+mag_size = 32
+reserve_ammo = 192
+reload_time = 1.5
+hip_spread_deg = 1.2
+ads_spread_deg = 0.4
+move_spread_deg = 0.8
+bloom_per_shot_deg = 0.22
+bloom_max_deg = 2.6
+recoil_pitch_deg = 0.7
+recoil_yaw_deg = 0.6
+kick_back = 0.025
+kick_rotation = 0.04
+ads_fov = 62.0
+ads_time = 0.13
+ads_move_scale = 0.85
+hip_offset = Vector3(0.18, -0.18, -0.36)
+ads_offset = Vector3(0, -0.0555, -0.28)
