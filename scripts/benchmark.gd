@@ -8,9 +8,13 @@ const WARMUP_FRAMES := 120
 const MEASURE_FRAMES := 600
 const RESOLUTION := Vector2i(1920, 1080)
 
+## True for a benchmark run; gameplay systems check this and stay out of the way.
+var active := false
+
 
 func _ready() -> void:
-	if "--benchmark" in OS.get_cmdline_user_args():
+	active = "--benchmark" in OS.get_cmdline_user_args()
+	if active:
 		_run.call_deferred()
 
 
@@ -26,6 +30,7 @@ func _run() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	for player in tree.get_nodes_in_group("player"):
 		player.process_mode = Node.PROCESS_MODE_DISABLED
+		player.visible = false
 	for hud in tree.get_nodes_in_group("hud"):
 		hud.visible = false
 

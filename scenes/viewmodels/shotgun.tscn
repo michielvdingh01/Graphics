@@ -1,0 +1,103 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="metal"]
+albedo_color = Color(0.09, 0.095, 0.1, 1)
+metallic = 0.85
+roughness = 0.38
+
+[sub_resource type="StandardMaterial3D" id="accent"]
+albedo_color = Color(0.3, 0.17, 0.08, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="sight"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+emission_enabled = true
+emission = Color(0.2, 1, 0.4, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="BoxMesh" id="m0"]
+material = SubResource("metal")
+size = Vector3(0.05, 0.07, 0.35)
+
+[sub_resource type="CylinderMesh" id="m1"]
+material = SubResource("metal")
+top_radius = 0.016
+bottom_radius = 0.016
+height = 0.5
+radial_segments = 16
+rings = 1
+
+[sub_resource type="CylinderMesh" id="m2"]
+material = SubResource("metal")
+top_radius = 0.014
+bottom_radius = 0.014
+height = 0.4
+radial_segments = 16
+rings = 1
+
+[sub_resource type="BoxMesh" id="m3"]
+material = SubResource("accent")
+size = Vector3(0.046, 0.045, 0.14)
+
+[sub_resource type="BoxMesh" id="m4"]
+material = SubResource("accent")
+size = Vector3(0.035, 0.09, 0.04)
+
+[sub_resource type="BoxMesh" id="m5"]
+material = SubResource("accent")
+size = Vector3(0.04, 0.08, 0.24)
+
+[sub_resource type="BoxMesh" id="m6"]
+material = SubResource("metal")
+size = Vector3(0.006, 0.022, 0.01)
+
+[sub_resource type="BoxMesh" id="m7"]
+material = SubResource("metal")
+size = Vector3(0.006, 0.022, 0.01)
+
+[sub_resource type="BoxMesh" id="m8"]
+material = SubResource("sight")
+size = Vector3(0.006, 0.028, 0.006)
+
+[node name="Viewmodel" type="Node3D"]
+
+[node name="Body" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, -0.1)
+mesh = SubResource("m0")
+
+[node name="Barrel" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.015, -0.5)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("m1")
+
+[node name="Tube" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.02, -0.45)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("m2")
+
+[node name="Pump" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.025, -0.42)
+mesh = SubResource("m3")
+
+[node name="Grip" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.075, 0.06)
+mesh = SubResource("m4")
+
+[node name="Stock" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.02, 0.19)
+mesh = SubResource("m5")
+
+[node name="RearSightL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.013, 0.045, 0.02)
+mesh = SubResource("m6")
+
+[node name="RearSightR" type="MeshInstance3D" parent="."]
+position = Vector3(0.013, 0.045, 0.02)
+mesh = SubResource("m7")
+
+[node name="FrontSight" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.045, -0.72)
+mesh = SubResource("m8")
+
+[node name="Muzzle" type="Marker3D" parent="."]
+position = Vector3(0, 0.015, -0.76)

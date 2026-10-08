@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/viewmodels/pistol.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Pistol"
+viewmodel = ExtResource("2")
+shot_sound = &"pistol_shot"
+damage = 34.0
+headshot_multiplier = 3.0
+rounds_per_minute = 400.0
+automatic = false
+falloff_start = 20.0
+falloff_end = 45.0
+mag_size = 12
+reserve_ammo = 72
+reload_time = 1.3
+hip_spread_deg = 1.0
+ads_spread_deg = 0.1
+move_spread_deg = 1.2
+bloom_per_shot_deg = 0.8
+recoil_pitch_deg = 2.2
+recoil_yaw_deg = 0.6
+kick_back = 0.05
+kick_rotation = 0.16
+ads_fov = 62.0
+ads_time = 0.12
+ads_move_scale = 0.85
+hip_offset = Vector3(0.17, -0.15, -0.4)
+ads_offset = Vector3(0, -0.037, -0.32)
