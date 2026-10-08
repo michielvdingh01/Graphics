@@ -19,10 +19,12 @@ const KEYS: Array[String] = [
 ]
 
 # Per quality level: [SSAO, SSIL, SSR, volumetric fog, MSAA, sun shadow atlas, soft shadow quality]
+# SSIL is left to Ultra: next to baked lightmaps it is all but invisible, and
+# it takes 1.25 ms of a 14 ms frame.
 const QUALITY := [
 	[false, false, false, false, Viewport.MSAA_DISABLED, 2048, RenderingServer.SHADOW_QUALITY_SOFT_LOW],
 	[true, false, false, true, Viewport.MSAA_DISABLED, 4096, RenderingServer.SHADOW_QUALITY_SOFT_LOW],
-	[true, true, true, true, Viewport.MSAA_2X, 4096, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM],
+	[true, false, true, true, Viewport.MSAA_2X, 4096, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM],
 	[true, true, true, true, Viewport.MSAA_4X, 8192, RenderingServer.SHADOW_QUALITY_SOFT_HIGH],
 ]
 const ENV_TOGGLES: Array[String] = ["ssao_enabled", "ssil_enabled", "ssr_enabled", "volumetric_fog_enabled"]
@@ -135,6 +137,12 @@ func _read_args() -> void:
 		if arg.begins_with("--quality="):
 			quality = clampi(value.to_int(), 0, QUALITY.size() - 1)
 		elif arg.begins_with("--upscaler="):
-			upscaler = maxi(UPSCALER_ARGS.find(value), 0)
+			upscaler = UPSCALER_ARGS.find(value)
+			if upscaler < 0:
+				# Falling back to bilinear would file a native-resolution run
+				# under the name of an upscaler.
+				push_error("Unknown upscaler '%s'; choose from %s" % [value, ", ".join(UPSCALER_ARGS)])
+				upscaler = Viewport.SCALING_3D_MODE_BILINEAR
+				get_tree().quit(1)
 		elif arg.begins_with("--scale="):
 			render_scale = clampf(value.to_float(), 0.25, 1.0)

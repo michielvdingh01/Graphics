@@ -61,6 +61,8 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 
 **Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
 
+**SSIL staat alleen nog op Ultra aan.** Het kostte 1,25 ms van een frame van 14 ms (op 1440p met FSR 2), terwijl het naast de lightmaps alleen zonbeschenen objecten een fractie lichter maakt; in een vergelijking naast elkaar is het verschil niet te zien. Op High levert het weglaten 7 fps op.
+
 **Werkwijze**
 
 | Stap | Commando |
@@ -71,18 +73,20 @@ Het level is een verlaten fabriekshal bij zonsondergang: hal met kraanbaan en tu
 | Levelgeometrie opnieuw genereren uit `tools/levels/<naam>.gd` | `tools/build_level.sh factory` of `depot` |
 | Lightmaps bakken (nodig na elke geometrie- of lichtwijziging, 1 tot 1,5 minuut) | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
 | Snel screenshots van de benchmarkstandpunten | `tools/shots.sh` |
+| Meten wat elk effect per standpunt kost (schaduwen, SSAO, SSIL, SSR, mist, glow, props, decals, glas, lenspass) | `tools/benchmark.sh --profile` |
+| Een run zonder bepaalde effecten, om screenshots te vergelijken | `tools/benchmark.sh --off=ssil,glow` |
 | Gameplay en beide levels testen (headless) | `tools/selftest.sh` |
 
-**Meting** op 8 oktober 2026, M1 Pro, 1920×1080, kwaliteit High, met glas, decals en modellen:
+**Meting** op 8 oktober 2026, M1 Pro, 1920×1080, kwaliteit High (zonder SSIL), met glas, decals en modellen:
 
 | Camerastandpunt | Gemiddeld | 1% low |
 |---|---|---|
-| Overview | 84 fps | 71 fps |
-| Corridor | 87 fps | 76 fps |
-| Platform | 82 fps | 71 fps |
-| Hall | 87 fps | 61 fps |
+| Overview | 97 fps | 67 fps |
+| Corridor | 101 fps | 82 fps |
+| Platform | 94 fps | 76 fps |
+| Hall | 103 fps | 84 fps |
 
-De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,4 tot 1 miljoen en kosten op 1080p 2 tot 6 fps. De lightmap van de fabriek groeide van 25 naar 37 MB, omdat elke prop een eigen stukje lightmap krijgt.
+De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,4 tot 1 miljoen en kosten op 1440p met FSR 2 hooguit 0,4 ms per frame. De lightmap van de fabriek groeide van 25 naar 37 MB, omdat elke prop een eigen stukje lightmap krijgt.
 
 **Nog open in deze fase**
 
@@ -101,20 +105,20 @@ De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 0,
 - **Vijanden.** Naast de grunt een rusher (snel, zwak, slaat van dichtbij) en een heavy (traag, veel health, lange salvo's). Rushers komen vanaf wave 2, heavies vanaf wave 4. Elke vijand gaat 1,5 tot 4 seconden na het spawnen op zoek naar de speler.
 - **Tweede level: Depot.** Een ommuurd containerterrein in de schemering met een overdekt laadperron en een portiersloge, verlicht door schijnwerpers. Hoofdscène `scenes/depot.tscn`, beschrijving in `tools/levels/depot.gd`. De gedeelde bouwstenen staan in `tools/level_builder.gd`.
 
-**Meting op 1440p** op 8 oktober 2026, M1 Pro, 2560×1440, kwaliteit High, met de modellen. Elke regel is het bereik over twee of drie runs.
+**Meting op 1440p** op 8 oktober 2026, M1 Pro, 2560×1440, kwaliteit High (zonder SSIL), met de modellen. Het budget van 60 fps wordt met upscaling gehaald, met 15 fps over.
 
 | Level | Instelling | Gemiddeld (laagste en hoogste standpunt) | 1% low |
 |---|---|---|---|
-| Fabriek | FSR 2 op 67% | 66–72 fps | 52–66 fps |
-| Fabriek | MetalFX Temporal op 67% | 71–72 fps | 56–61 fps |
-| Fabriek | Geen upscaling | 51–57 fps | 47–56 fps |
-| Depot | FSR 2 op 67% | 68–75 fps | 61–70 fps |
+| Fabriek | FSR 2 op 67% | 76–80 fps | 67–71 fps |
+| Fabriek | MetalFX Temporal op 67% | 77–84 fps | 68–74 fps |
+| Fabriek | Geen upscaling | 60–66 fps | 55–60 fps |
+| Depot | FSR 2 op 67% | 75–81 fps | 67–73 fps |
 
-Het budget van 60 fps wordt met upscaling gemiddeld gehaald, maar in de fabriek krap. De 1% low van de fabriek haalde in één run 62–66 fps en in twee latere runs 52–58 fps; bij die latere runs deed de machine ook ander werk. Zwaardere graphics passen er in de fabriek dus niet bij zonder eerst ruimte te maken.
+Met SSIL erbij haalde de fabriek met FSR 2 gemiddeld 66–72 fps en een 1% low die per run tussen 52 en 66 fps lag, afhankelijk van wat de machine verder deed. Dat was te krap om er nog iets bij te zetten.
 
-Het depot haalt op 1920×1080 zonder upscaling 82–94 fps gemiddeld en 74–84 fps 1% low.
+Het depot haalt op 1920×1080 zonder upscaling 94–108 fps gemiddeld en 75–87 fps 1% low.
 
-De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --upscaler=fsr2 --scale=0.67 --scene=res://scenes/depot.tscn`. macOS tekent een bedekt venster niet; de benchmark mat dan steeds circa 145 fps, wat op een uitstekende meting lijkt. Hij telt daarom nu alleen een ononderbroken reeks getekende frames en begint een standpunt opnieuw zodra het venster weer zichtbaar is. Bij één run sloeg dat aan (de melding `window is not being drawn`); die run gaf daarna alsnog een 1% low van 21 fps, dus een run met die melding gooi je weg. Meet met niets anders op de GPU: een tweede Godot ernaast halveert de cijfers. Controleer na afloop in `results.json` onder `settings` dat de upscaler en de schaal zijn aangekomen: een onbekende waarde valt stil terug op Bilinear.
+De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --upscaler=fsr2 --scale=0.67 --scene=res://scenes/depot.tscn`. macOS tekent een bedekt venster niet; de benchmark mat dan steeds circa 145 fps, wat op een uitstekende meting lijkt. Hij telt daarom nu alleen een ononderbroken reeks getekende frames en begint een standpunt opnieuw zodra het venster weer zichtbaar is. Dat werkt: na een korte onderbreking ging een run vanzelf verder, en een run waarvan het venster tien minuten lang niet getekend werd, bleef al die tijd wachten. Een run met de melding `window is not being drawn` gooi je wel weg, want de frames eromheen zijn onbetrouwbaar (één zo'n run gaf een 1% low van 21 fps). Na een minuut zonder getekend frame hoort de benchmark met een fout te stoppen; dat is nog niet in het echt gebeurd. Een onbekende upscaler of een onbekend effect bij `--off` geeft een fout in plaats van een meting onder de verkeerde naam. Meet met niets anders op de GPU: een tweede Godot ernaast halveert de cijfers.
 
 **In deze fase opgelost**
 

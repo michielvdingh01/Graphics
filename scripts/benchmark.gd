@@ -6,14 +6,23 @@ extends Node
 ##
 ## Options: --quick, --res=2560x1440, --scene=res://scenes/depot.tscn, and the
 ## --quality=, --upscaler= and --scale= switches documented in settings.gd.
+## --profile also switches each effect off in turn and reports what it costs;
+## --off=ssil,glow leaves those effects off for the whole run, to compare
+## screenshots with and without them. _profile_targets() lists the names.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
+const PROFILE_FRAMES := 150
+const SETTLE_FRAMES := 20
+## Seconds to wait for a window that is not being drawn before giving up.
+const COVERED_TIMEOUT := 60.0
 
 ## True for a benchmark run; gameplay systems check this and stay out of the way.
 var active := false
 
 var _resolution := DEFAULT_RESOLUTION
 var _scene := ""
+var _profile := false
+var _off := PackedStringArray()
 var _warmup_frames := 120
 var _measure_frames := 600
 
@@ -25,12 +34,15 @@ func _ready() -> void:
 	if "--quick" in args:
 		_warmup_frames = 90
 		_measure_frames = 30
+	_profile = "--profile" in args
 	for arg in args:
 		if arg.begins_with("--res="):
 			var parts := arg.get_slice("=", 1).split("x")
 			_resolution = Vector2i(parts[0].to_int(), parts[1].to_int())
 		elif arg.begins_with("--scene="):
 			_scene = arg.get_slice("=", 1)
+		elif arg.begins_with("--off="):
+			_off = arg.get_slice("=", 1).split(",")
 	if active:
 		_run.call_deferred()
 
@@ -56,6 +68,15 @@ func _run() -> void:
 	for hud in tree.get_nodes_in_group("hud"):
 		hud.visible = false
 
+	var targets := _profile_targets()
+	for effect in _off:
+		if not targets.has(effect):
+			push_error("Unknown effect '%s'; choose from %s" % [effect, ", ".join(targets.keys())])
+			tree.quit(1)
+			return
+		for target: Array in targets[effect]:
+			target[0].set(target[1], false)
+
 	var camera := Camera3D.new()
 	add_child(camera)
 	camera.make_current()
@@ -70,26 +91,7 @@ func _run() -> void:
 		for i in _warmup_frames:
 			await tree.process_frame
 
-		var frame_ms := PackedFloat64Array()
-		var last := Time.get_ticks_usec()
-		var drawn := Engine.get_frames_drawn()
-		var covered := false
-		while frame_ms.size() < _measure_frames:
-			await tree.process_frame
-			var now := Time.get_ticks_usec()
-			# macOS does not draw a covered window. The main loop then idles at
-			# a fixed rate that would pass for an excellent frame time, so only
-			# an unbroken run of drawn frames counts.
-			if Engine.get_frames_drawn() == drawn:
-				if not covered:
-					print("%s: window is not being drawn, waiting to start over" % view.name)
-				covered = true
-				frame_ms.clear()
-			else:
-				covered = false
-				frame_ms.append((now - last) / 1000.0)
-			drawn = Engine.get_frames_drawn()
-			last = now
+		var frame_ms: PackedFloat64Array = await _measure(_measure_frames, view.name)
 
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(out_dir.path_join(view.name + ".png"))
@@ -112,8 +114,13 @@ func _run() -> void:
 				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
 			),
 		}
-		views.append(result)
 		print("%-12s %7.1f fps avg  %7.1f fps 1%% low" % [view.name, result.avg_fps, result.low_1pct_fps])
+		if _profile:
+			result["cost_ms"] = await _profile_view(view.name)
+		views.append(result)
+
+	if _profile:
+		_print_profile(views)
 
 	var commit := []
 	OS.execute("git", ["rev-parse", "--short", "HEAD"], commit)
@@ -125,6 +132,7 @@ func _run() -> void:
 		"scene": tree.current_scene.scene_file_path,
 		"resolution": [_resolution.x, _resolution.y],
 		"settings": Settings.summary(),
+		"off": _off,
 		"views": views,
 	}
 	var file := FileAccess.open(out_dir.path_join("results.json"), FileAccess.WRITE)
@@ -132,3 +140,100 @@ func _run() -> void:
 	file.close()
 	print("Saved to ", out_dir)
 	tree.quit()
+
+
+## Frame times in milliseconds of an unbroken run of drawn frames.
+func _measure(frames: int, label: String) -> PackedFloat64Array:
+	var frame_ms := PackedFloat64Array()
+	var last := Time.get_ticks_usec()
+	var drawn := Engine.get_frames_drawn()
+	var covered := false
+	var covered_since := 0
+	while frame_ms.size() < frames:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		# macOS does not draw a covered window. The main loop then idles at
+		# a fixed rate that would pass for an excellent frame time, so only
+		# an unbroken run of drawn frames counts.
+		if Engine.get_frames_drawn() == drawn:
+			if not covered:
+				print("%s: window is not being drawn, waiting to start over" % label)
+				covered_since = now
+			covered = true
+			frame_ms.clear()
+			if (now - covered_since) / 1e6 > COVERED_TIMEOUT:
+				push_error("%s: window was not drawn for %d seconds; bring it to the front and run again" % [label, COVERED_TIMEOUT])
+				get_tree().quit(1)
+				# The tree only quits at the end of the frame.
+				covered_since = now
+		else:
+			covered = false
+			frame_ms.append((now - last) / 1000.0)
+		drawn = Engine.get_frames_drawn()
+		last = now
+	return frame_ms
+
+
+## Label -> the boolean properties that switch that part of the frame off.
+func _profile_targets() -> Dictionary:
+	var scene := get_tree().current_scene
+	var environment := get_viewport().find_world_3d().environment
+	var targets := {"sun_shadow": [], "lamp_shadows": []}
+	for effect: String in ["ssao", "ssil", "ssr", "volumetric_fog", "glow"]:
+		targets[effect] = [[environment, effect + "_enabled"]]
+	for light: Light3D in scene.find_children("*", "Light3D", true, false):
+		var label := "sun_shadow" if light is DirectionalLight3D else "lamp_shadows"
+		targets[label].append([light, "shadow_enabled"])
+	# The parts of a level the builder keeps apart, and the lens pass.
+	for part: String in ["Props", "Decals", "Glass", "Post"]:
+		var node := scene.find_child(part, true, false)
+		if node:
+			targets[part.to_lower()] = [[node, "visible"]]
+	return targets
+
+
+## What each effect costs at the current view: the average frame time with
+## everything on minus the one with that effect off, measured back to back so
+## that drift over the run cancels out.
+func _profile_view(label: String) -> Dictionary:
+	var costs := {}
+	var targets := _profile_targets()
+	for effect: String in targets:
+		if effect in _off:
+			continue
+		var on_ms := await _average_ms(label)
+		var before := []
+		for target: Array in targets[effect]:
+			before.append(target[0].get(target[1]))
+			target[0].set(target[1], false)
+		var off_ms := await _average_ms(label)
+		for i in before.size():
+			targets[effect][i][0].set(targets[effect][i][1], before[i])
+		costs[effect] = snappedf(on_ms - off_ms, 0.01)
+	return costs
+
+
+func _average_ms(label: String) -> float:
+	for i in SETTLE_FRAMES:
+		await get_tree().process_frame
+	var frame_ms: PackedFloat64Array = await _measure(PROFILE_FRAMES, label)
+	var total := 0.0
+	for ms in frame_ms:
+		total += ms
+	return total / frame_ms.size()
+
+
+func _print_profile(views: Array) -> void:
+	var header := "%-16s" % "cost in ms"
+	for view: Dictionary in views:
+		header += "%10s" % view.view
+	print(header)
+	var row := "%-16s" % "whole frame"
+	for view: Dictionary in views:
+		row += "%10.2f" % view.avg_ms
+	print(row)
+	for effect: String in views[0].cost_ms:
+		row = "%-16s" % effect
+		for view: Dictionary in views:
+			row += "%10.2f" % view.cost_ms[effect]
+		print(row)
