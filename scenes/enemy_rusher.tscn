@@ -1,12 +1,14 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/rusher.scn" id="2"]
 
 [sub_resource type="CapsuleShape3D" id="shape"]
 radius = 0.36
 height = 1.55
 
 [node name="Rusher" instance=ExtResource("1")]
+model = ExtResource("2")
 max_health = 50.0
 speed = 6.8
 preferred_range = 1.4
@@ -18,15 +20,8 @@ telegraph_time = 0.25
 cooldown = Vector2(0.6, 0.9)
 eye_height = 1.28
 head_start = 1.16
-tint = Color(0.3, 0.16, 0.08, 1)
 visor_color = Color(1, 0.55, 0.05, 1)
 
 [node name="CollisionShape3D" parent="." index="0"]
 position = Vector3(0, 0.775, 0)
 shape = SubResource("shape")
-
-[node name="Model" parent="." index="1"]
-scale = Vector3(0.85, 0.85, 0.85)
-
-[node name="Gun" parent="Model" index="3"]
-visible = false

@@ -23,6 +23,8 @@ uniform float mask_scale = 3.0;
 uniform sampler2D grain : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float grain_scale = 20.0;
 uniform float grain_depth : hint_range(0.0, 2.0) = 0.5;
+// Lights one instance up for a moment, as when a shot lands on it.
+instance uniform float flash = 0.0;
 
 void fragment() {
 	vec3 wide = texture(wear_mask, UV * mask_scale).rgb;
@@ -58,4 +60,5 @@ void fragment() {
 	METALLIC = mix(coat_metallic, core_metallic, worn);
 	NORMAL_MAP = texture(grain, UV * grain_scale).rgb;
 	NORMAL_MAP_DEPTH = grain_depth * (1.0 - 0.6 * worn);
+	EMISSION = vec3(1.0, 0.45, 0.25) * flash;
 }

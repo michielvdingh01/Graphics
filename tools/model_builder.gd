@@ -69,6 +69,11 @@ func marker(marker_name: String, at: Transform3D, parent := "") -> void:
 	node.owner = _figure
 
 
+## Something whoever animates the model has to know about it, stored on its root.
+func tag(key: String, value: Variant) -> void:
+	_figure.set_meta(key, value)
+
+
 func _tool(mat: String, _flags: int, _at: Vector3) -> SurfaceTool:
 	return _tool_named(_current + "/" + mat)
 

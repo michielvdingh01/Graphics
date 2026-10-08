@@ -1207,6 +1207,10 @@ func slab(mat: String, xf: Transform3D, outline: PackedVector2Array, thickness: 
 	var face := inset if b > 0.0 else outline
 	var corners := Geometry2D.triangulate_polygon(face)
 	if corners.is_empty():
+		# The rim has crossed itself where the outline is narrower than two
+		# bevels. The outline itself has the same corners in the same order.
+		corners = Geometry2D.triangulate_polygon(outline)
+	if corners.is_empty():
 		push_error("slab: outline cannot be triangulated (does it cross itself?)")
 	var shift := Vector2(xf.origin.x + xf.origin.z, -xf.origin.y)
 	for t in range(0, corners.size(), 3):

@@ -15,8 +15,9 @@ extends Node
 ## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
 ## stands a scene in the level at that spot, a model or an enemy, without
-## letting it run; several are separated by semicolons and a fifth number
-## scales it. Both are for looking at a model, not for measuring.
+## letting it run; several are separated by semicolons, a fifth number scales
+## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride. All of this is
+## for looking at a model, not for measuring.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -92,6 +93,8 @@ func _run() -> void:
 		node.rotation_degrees.y = numbers[3]
 		if numbers.size() > 4:
 			node.scale = Vector3.ONE * numbers[4]
+		if numbers.size() > 5 and node.has_method("preview"):
+			node.preview(numbers[5])
 	# What is seen through a telescopic sight is drawn by the HUD.
 	var aimed := _weapon.size() > 1 and _weapon[1] >= 1.0
 	for hud in tree.get_nodes_in_group("hud"):

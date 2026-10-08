@@ -484,15 +484,15 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 	if data.loads_singly:
 		# Rolled over, loading port up, while the hand goes to and fro with shells.
 		var elapsed := _reload_total - _reload_left
-		var held := smoothstep(0.0, SHELL_LEAD, elapsed) * (1.0 - smoothstep(_reload_total - SHELL_TAIL, _reload_total, elapsed))
-		offset = Vector3(-0.03, 0.04, 0.02) * held
-		turn += Vector3(0.3, 0.1, -0.8) * held
+		var rolled := smoothstep(0.0, SHELL_LEAD, elapsed) * (1.0 - smoothstep(_reload_total - SHELL_TAIL, _reload_total, elapsed))
+		offset = Vector3(-0.03, 0.04, 0.02) * rolled
+		turn += Vector3(0.3, 0.1, -0.8) * rolled
 		if model.arm_l:
 			var turn_at := fposmod((elapsed - SHELL_LEAD) / (data.reload_time / data.mag_size), 1.0)
 			var at_port := smoothstep(0.1, 0.5, turn_at) * (1.0 - smoothstep(0.7, 1.0, turn_at))
 			var port: Vector3 = (model.arm_l.get_parent() as Node3D).transform.affine_inverse() * model.mag_hold
 			var away := port + Vector3(-0.1, -0.2, 0.12)
-			model.arm_l.position = model.arm_l.position.lerp(away.lerp(port, at_port), held)
+			model.arm_l.position = model.arm_l.position.lerp(away.lerp(port, at_port), rolled)
 		return [offset, turn]
 
 	# Canted with the magazine well towards the hand that changes it.

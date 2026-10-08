@@ -1,7 +1,8 @@
 extends CharacterBody3D
 ## Enemy AI: paths to the player over the navmesh, strafes once it has a clear
 ## shot and attacks in telegraphed bursts. The grunt, rusher and heavy are this
-## same script with different exported tuning.
+## same script with different exported tuning and a different model; how the
+## model moves is up to enemy_rig.gd.
 
 signal died(enemy: Node3D)
 
@@ -10,9 +11,14 @@ const TURN_SPEED := 8.0
 const SIGHT_RANGE := 45.0
 const ALERT_RADIUS := 14.0
 const LOS_MASK := 0b011  # world + player
+const RIG := preload("res://scripts/enemy_rig.gd")
+## Seconds a dead enemy stays around as a node; its pieces look after themselves.
+const LINGER := 6.0
 
 enum Attack { COOLDOWN, TELEGRAPH, BURST }
 
+## What it looks like: a scene from tools/models/enemies.gd.
+@export var model: PackedScene
 ## Tuning for one enemy type; the variants in scenes/ override these.
 @export var max_health := 100.0
 @export var speed := 4.2
@@ -31,7 +37,6 @@ enum Attack { COOLDOWN, TELEGRAPH, BURST }
 ## Height above the feet of the eyes, and of where headshots start.
 @export var eye_height := 1.5
 @export var head_start := 1.36
-@export var tint := Color(0.16, 0.17, 0.2)
 @export var visor_color := Color(1.0, 0.15, 0.1)
 
 var health := 0.0
@@ -47,25 +52,34 @@ var _strafe_timer := 0.0
 var _attack := Attack.COOLDOWN
 var _attack_timer := 1.0
 var _shots_left := 0
-var _body_mat: StandardMaterial3D
-var _visor_mat: StandardMaterial3D
+var _last_hit := Vector3.FORWARD
+var _rig: Node3D
 
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
-@onready var visor: MeshInstance3D = $Model/Visor
-@onready var gun: Node3D = $Model/Gun
 
 
 func _ready() -> void:
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
-	_body_mat = $Model/Body.mesh.surface_get_material(0).duplicate()
-	$Model/Body.material_override = _body_mat
-	$Model/Head.material_override = _body_mat
-	_body_mat.albedo_color = tint
-	_visor_mat = visor.mesh.surface_get_material(0).duplicate()
-	visor.material_override = _visor_mat
-	_visor_mat.emission = visor_color
+	_rig = model.instantiate()
+	_rig.name = "Model"
+	_rig.set_script(RIG)
+	add_child(_rig)
+	_rig.set_glow(visor_color)
 	_los_timer = randf() * 0.15
+
+
+## Strikes a pose for a screenshot of an enemy that is not running: 1 with
+## its weapon on a target straight ahead, 2 in mid-stride as well, 3 shot to pieces.
+func preview(pose: float) -> void:
+	if pose >= 3.0:
+		_die()
+		return
+	if pose >= 2.0:
+		velocity = -global_basis.z * speed
+	_rig.aim(global_position + Vector3.UP * eye_height - global_basis.z * 8.0)
+	for i in 40:
+		_rig._pose(0.03)
 
 
 func is_headshot(hit_position: Vector3) -> bool:
@@ -89,10 +103,8 @@ func take_damage(amount: float, hit_position: Vector3, direction: Vector3) -> bo
 	health -= amount
 	alert()
 	Fx.sparks(hit_position, -direction, Color(4.0, 1.5, 0.4), 6)
-	_body_mat.emission_enabled = true
-	_body_mat.emission = Color(1.0, 0.5, 0.3)
-	_body_mat.emission_energy_multiplier = 2.0
-	create_tween().tween_property(_body_mat, "emission_energy_multiplier", 0.0, 0.15)
+	_last_hit = direction
+	_rig.hit(direction)
 	if health <= 0.0:
 		_die()
 	return dead
@@ -125,6 +137,11 @@ func _physics_process(delta: float) -> void:
 				desired = _strafe(delta)
 			_turn_towards(face, delta)
 			_update_attack(delta, eye, target, distance)
+			# The weapon is on the player for as long as there is a shot.
+			if _has_los and distance < attack_range * 1.5:
+				_rig.aim(target)
+			else:
+				_rig.lower()
 
 	velocity.x = move_toward(velocity.x, desired.x, ACCEL * delta)
 	velocity.z = move_toward(velocity.z, desired.z, ACCEL * delta)
@@ -169,7 +186,7 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 			if _attack_timer <= 0.0 and _has_los and distance < attack_range:
 				_attack = Attack.TELEGRAPH
 				_attack_timer = telegraph_time
-				_visor_mat.emission_energy_multiplier = 12.0
+				_rig.charge(true)
 		Attack.TELEGRAPH:
 			if not _has_los:
 				_end_attack(0.5)
@@ -188,10 +205,11 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 func _end_attack(pause: float) -> void:
 	_attack = Attack.COOLDOWN
 	_attack_timer = pause
-	_visor_mat.emission_energy_multiplier = 3.0
+	_rig.charge(false)
 
 
 func _shoot(eye: Vector3, target: Vector3) -> void:
+	_rig.fire()
 	if melee:
 		if eye.distance_to(target) < attack_range + 0.6:
 			_player.take_damage(damage, target, (target - eye).normalized())
@@ -212,7 +230,7 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 			_player.take_damage(damage, end, direction)
 		else:
 			Fx.impact(end, hit.normal)
-	Fx.tracer(gun.global_position - global_basis.z * 0.3, end, Color(4.0, 0.6, 0.4))
+	Fx.tracer(_rig.muzzle(), end, Color(4.0, 0.6, 0.4))
 	Sfx.play_at(&"enemy_shot", global_position)
 
 
@@ -227,11 +245,7 @@ func _die() -> void:
 	collision_layer = 0
 	collision_mask = 1
 	remove_from_group("enemy")
-	_visor_mat.emission_energy_multiplier = 0.0
 	Sfx.play_at(&"enemy_death", global_position)
 	died.emit(self)
-	var tween := create_tween()
-	tween.tween_property(self, "rotation:x", PI * 0.5, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tween.tween_interval(4.0)
-	tween.tween_property(self, "position:y", position.y - 1.0, 1.0)
-	tween.tween_callback(queue_free)
+	_rig.collapse(_last_hit * 3.0)
+	get_tree().create_timer(LINGER, false).timeout.connect(queue_free)
