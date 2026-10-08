@@ -547,6 +547,16 @@ func _press(at: Vector3) -> void:
 	for x in [-0.95, 0.95]:
 		_ring(IRON, Vector3(x, 3.81, 0.0), Vector3.RIGHT, 0.07, 0.016)
 
+	# What it is and what it can do, and a warning where the slide comes down.
+	var ink := Color(0.84, 0.84, 0.8)
+	var engraved := Color(0.09, 0.07, 0.04)
+	label("250 t", _m * Vector3(0, 3.47, -0.921), Vector3.FORWARD, 0.13, ink, 0.03)
+	label("TYPE EP 250", _m * Vector3(0, 3.3, -0.928), Vector3.FORWARD, 0.05, engraved, 0.012)
+	label("NR 4471", _m * Vector3(0, 3.235, -0.928), Vector3.FORWARD, 0.05, engraved, 0.012)
+	label("P1", _m * Vector3(1.181, 2.6, 0.45), Vector3.RIGHT, 0.3, ink, 0.03)
+	wall_decal("warning_1", _m * Vector3(-0.44, 2.22, -0.781), Vector3.FORWARD, 0.2, 0.2, Color.WHITE, 0.04)
+	wall_decal("warning_1", _m * Vector3(0.44, 2.22, -0.781), Vector3.FORWARD, 0.2, 0.2, Color.WHITE, 0.04)
+
 	# Slide between its gibs, and the die set it works.
 	for x in [-0.72, 0.72]:
 		_block(GREEN, Vector3(x, 2.25, -0.5), Vector3(0.16, 1.1, 0.6), 0.03)
@@ -681,6 +691,10 @@ func _lathe(at: Vector3) -> void:
 	_block(BLUE, Vector3(-2.2, 0.99, -0.52), Vector3(1.3, 0.34, 0.26), 0.03)
 	_block(BRASS, Vector3(-2.45, 1.85, -0.553), Vector3(0.34, 0.2, 0.008), 0.003)
 	_block(BRASS, Vector3(-2.3, 1.0, -0.653), Vector3(0.5, 0.12, 0.008), 0.003)
+	label("TYPE DB 6000", _m * Vector3(-2.45, 1.885, -0.558), Vector3.FORWARD, 0.05, Color(0.09, 0.07, 0.04), 0.012)
+	label("NR 2209", _m * Vector3(-2.45, 1.815, -0.558), Vector3.FORWARD, 0.05, Color(0.09, 0.07, 0.04), 0.012)
+	label("D1", _m * Vector3(-2.72, 0.5, -0.651), Vector3.FORWARD, 0.2, Color(0.84, 0.84, 0.8), 0.03)
+	wall_decal("warning_1", _m * Vector3(-1.98, 2.0, -0.551), Vector3.FORWARD, 0.16, 0.16, Color.WHITE, 0.04)
 	for i in 3:
 		_lever(Vector3(-2.75 + i * 0.3, 1.48, -0.55), Vector3.FORWARD, Vector3(0.3 - i * 0.3, -1, 0), 0.16)
 	for x in [-2.7, -1.85]:

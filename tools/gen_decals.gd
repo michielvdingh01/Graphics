@@ -3,8 +3,8 @@ extends SceneTree
 ## "procedural"): decals into assets/decals/ and the noise masks that shaders
 ## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh
 ##
-## Each entry names a kind (leak, stain, grime or text for a decal, wear or
-## grain for a mask), a size and a seed, so a texture can be regenerated or
+## Each entry names a kind (leak, stain, grime, warning or text for a decal,
+## wear or grain for a mask), a size and a seed, so a texture can be regenerated or
 ## varied without touching this script. A text has a height only; its width
 ## follows from what it says. A grain names the pattern it is made of.
 
@@ -178,6 +178,24 @@ func _stain(uv: Vector2, noise: FastNoiseLite) -> Color:
 	# The noise must never push the stain out to the edge of the texture.
 	var edge := smoothstep(0.5, 0.42, p.length())
 	return Color(0.03, 0.03, 0.035, (0.45 * body + 0.4 * core) * breakup * edge)
+
+
+## Warning sign: a yellow triangle with a black border and an exclamation
+## mark, scuffed where it has been brushed past.
+func _warning(uv: Vector2, noise: FastNoiseLite) -> Color:
+	# Distance to an equilateral triangle, point up, with rounded corners.
+	var p := Vector2(uv.x - 0.5, 0.6 - uv.y)
+	var half := 0.4
+	var q := Vector2(absf(p.x) - half, p.y + half / sqrt(3.0))
+	if q.x + sqrt(3.0) * q.y > 0.0:
+		q = Vector2(q.x - sqrt(3.0) * q.y, -sqrt(3.0) * q.x - q.y) * 0.5
+	q.x -= clampf(q.x, -2.0 * half, 0.0)
+	var distance := -q.length() * signf(q.y) - 0.03
+	var mark := (absf(p.x) < 0.03 + 0.06 * (p.y + 0.02) and p.y > -0.02 and p.y < 0.3) or p.distance_to(Vector2(0, -0.12)) < 0.042
+	var black := distance > -0.065 or mark
+	var color := Color(0.04, 0.04, 0.04) if black else Color(0.85, 0.6, 0.04)
+	var scuffed := smoothstep(0.1, 0.3, _n(noise, uv.x * 900.0, uv.y * 900.0)) * (0.85 + 0.15 * _n(noise, uv.x * 9000.0, uv.y * 9000.0))
+	return Color(color, smoothstep(0.0, -0.012, distance) * scuffed)
 
 
 ## Dirt that has built up along the bottom edge.
