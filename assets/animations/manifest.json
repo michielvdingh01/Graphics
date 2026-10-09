@@ -1,5 +1,5 @@
 {
-	"_doc": "Where the moves of the humanoid enemies come from. tools/fetch_animations.py downloads the sources (no account needed), Godot imports them through the bone maps next to them onto its humanoid profile, and tools/build_moves.sh cuts the moves listed here out of them into moves.res. A move is a clip of a source: 'gait' is a walk cycle, brought to one second a cycle that starts as the left foot comes down and measured for how far it travels; 'loop' repeats as it is; 'once' plays through, with 'then' for a clip that follows on, 'from' and 'to' to trim it in seconds, 'reverse' and 'mirror'; 'hit' is the moment in seconds that a strike lands; 'hands' is the pose of the fingers at 'at' seconds, taken from one hand ('from_hand') for both.",
+	"_doc": "Where the moves of the humanoid enemies come from. tools/fetch_animations.py downloads the sources (no account needed), Godot imports them through the bone maps next to them onto its humanoid profile, and tools/build_moves.sh cuts the moves listed here out of them into moves.res. A move is a clip of a source: 'gait' is a walk cycle, brought to one second a cycle that starts as the left foot comes down and measured for how far it travels; 'loop' repeats as it is; 'once' plays through, with 'then' for a clip that follows on, 'from' and 'to' to trim it in seconds, 'reverse' and 'mirror'; 'hit' is the moment in seconds that a strike lands; 'hands' is the pose of the fingers at 'at' seconds, taken from one hand ('from_hand') for both. 'sets' are the ways of moving a theme can ask for: the clip to stand still to, the walk cycles from slow to fast, the blows, how the fingers are held for those and whose voice it has. Every set flinches with hit_chest and hit_head and falls with death, death_mirror and knockback.",
 	"sources": [
 		{
 			"id": "ual1",
@@ -67,5 +67,9 @@
 		"hand_grip": {"source": "ual1", "clip": "Pistol_Idle", "kind": "hands", "at": 0.0, "from_hand": "Right"},
 		"hand_fist": {"source": "ual1", "clip": "Punch_Cross", "kind": "hands", "at": 0.3, "from_hand": "Right"},
 		"hand_claw": {"source": "ual2", "clip": "Zombie_Idle", "kind": "hands", "at": 0.0, "from_hand": "Right"}
+	},
+	"sets": {
+		"default": {"idle": "idle", "gaits": ["walk", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "voice": "human"},
+		"zombie": {"idle": "zombie_idle", "gaits": ["zombie_walk", "jog"], "attacks": ["zombie_scratch"], "fingers": "hand_claw", "voice": "zombie"}
 	}
 }

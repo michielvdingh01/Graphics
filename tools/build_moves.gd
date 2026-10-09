@@ -11,7 +11,8 @@ extends SceneTree
 ## once, from the moves of kind "hands". Tracks are addressed from the skeleton
 ## itself, as ".:Hips". What the rig has to know about a move (how far a walk
 ## cycle travels, when each foot is down, when a strike lands) is measured here
-## and stored on the library as the metadata "moves".
+## and stored on the library as the metadata "moves", next to "sets": the ways
+## of moving the manifest makes of them.
 
 const DIR := "res://assets/animations/"
 const OUT := DIR + "moves.res"
@@ -77,7 +78,13 @@ func _initialize() -> void:
 		facts[move_name] = fact
 		library.add_animation(move_name, animation)
 		print("%-14s %s" % [move_name, fact])
+	for set_name: String in manifest.sets:
+		var way: Dictionary = manifest.sets[set_name]
+		for move: String in [way.idle, way.fingers] + way.gaits + way.attacks:
+			if not facts.has(move):
+				push_error("set %s names a move that is not there: %s" % [set_name, move])
 	library.set_meta("moves", facts)
+	library.set_meta("sets", manifest.sets)
 	library.set_meta("hips", _hips)
 	print("%s: %d moves, %s" % [OUT, facts.size(), error_string(ResourceSaver.save(library, OUT, ResourceSaver.FLAG_COMPRESS))])
 	for player: AnimationPlayer in _players.values():

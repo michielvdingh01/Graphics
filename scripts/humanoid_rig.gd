@@ -19,11 +19,6 @@ const MOVES: AnimationLibrary = preload("res://assets/animations/moves.res")
 const GLINT: Shader = preload("res://shaders/glint.gdshader")
 const MODELS := "res://scenes/models/"
 const WEAPON_DATA := "res://weapons/"
-## The clips a way of moving is made of. Anything else is "default".
-const SETS := {
-	"default": {"idle": "idle", "gaits": ["walk", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "voice": "human"},
-	"zombie": {"idle": "zombie_idle", "gaits": ["zombie_walk", "jog"], "attacks": ["zombie_scratch"], "fingers": "hand_claw", "voice": "zombie"},
-}
 const FLINCHES: Array[String] = ["hit_chest", "hit_head"]
 const FALLS: Array[String] = ["death", "death_mirror", "knockback"]
 const SIDES: Array[String] = ["Left", "Right"]
@@ -115,8 +110,11 @@ var _figure: Node3D
 var _skeleton: Skeleton3D
 var _tree: AnimationTree
 var _meshes: Array[MeshInstance3D] = []
+## What was measured of each move, and the ways of moving there are: the
+## clips to stand, walk and strike with. See assets/animations/manifest.json.
 var _facts: Dictionary = MOVES.get_meta("moves")
-var _set: Dictionary = SETS["default"]
+var _sets: Dictionary = MOVES.get_meta("sets")
+var _set: Dictionary = _sets["default"]
 var _melee := false
 var _windup := 0.3
 var _hold := Hold.NONE
@@ -238,7 +236,8 @@ func setup(cast: Dictionary) -> bool:
 			if material is BaseMaterial3D and tint.has(material.resource_name):
 				mesh.set_surface_override_material(surface, _tint(material, Color(str(tint[material.resource_name]))))
 
-	_set = SETS.get(cast.get("moves", "default"), SETS["default"])
+	# A way of moving nobody has heard of is the usual one.
+	_set = _sets.get(cast.get("moves", "default"), _sets["default"])
 	_melee = cast.get("melee", false)
 	_windup = cast.get("windup", 0.3)
 	var voice: String = _set.voice
@@ -306,6 +305,8 @@ func _ready() -> void:
 	for mesh in _meshes:
 		top = maxf(top, head + ((mesh.transform * mesh.get_aabb()).end.y - _rest_global(_head).origin.y))
 	fit = {"height": top * size, "eyes": lerpf(head, top, 0.35) * size, "head": (head - 0.02) * size}
+	# Whoever spawned it may still move it to where it belongs.
+	_planted = [false, false]
 
 
 ## Colour of what announces an attack: the glint on its weapon.
@@ -617,6 +618,9 @@ func _walk(delta: float) -> void:
 			shift.y = 0.0
 			if not down or shift.length() > reach or absf(angle_difference(heading, _plant_yaw[side])) > FOOT_TURN:
 				_planted[side] = false
+			# Put down somewhere else altogether: there is no stepping back from that.
+			if shift.length() > reach * 4.0:
+				shift = Vector3.ZERO
 		if not _planted[side]:
 			shift *= exp(-18.0 * delta)
 		_slip[side] = shift
