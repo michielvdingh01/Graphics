@@ -183,7 +183,7 @@ func _mezzanine() -> void:
 		beam("steel", Vector3(x1, DECK_Y - 0.14, z), Vector3(foot.x, -0.14, z), 0.07, NO_COLLIDE, 0.25)
 	var slope := Vector3(foot.x - x1, -DECK_Y, 0.0)
 	var ramp := Transform3D(Basis(Vector3.BACK, atan2(slope.y, slope.x)), Vector3(x1, DECK_Y, -10.9) + slope * 0.5)
-	_collide_box(ramp * Transform3D(Basis(), Vector3(0, -0.1, 0)), Vector3(slope.length(), 0.2, 2.2))
+	_collide_box(ramp * Transform3D(Basis(), Vector3(0, -0.1, 0)), Vector3(slope.length(), 0.2, 2.2), "metal")
 	railing(Vector3(x1, DECK_Y, -9.82), Vector3(foot.x, 0.0, -9.82))
 
 	# Storage underneath.
@@ -289,7 +289,7 @@ func _crane() -> void:
 		block + Vector3(0, -0.75, 0), block + Vector3(0, -0.74, 0.09), block + Vector3(0, -0.66, 0.14), tip,
 	], 0.035, 10)
 	_ball(IRON, tip, 0.035)
-	_collide_box(_m * Transform3D(Basis(), block + Vector3(0, -0.3, 0)), Vector3(0.34, 1.0, 0.4))
+	_collide_box(_m * Transform3D(Basis(), block + Vector3(0, -0.3, 0)), Vector3(0.34, 1.0, 0.4), "metal")
 
 	# Festoon: the trolley's cable hangs in loops from runners on a track, and
 	# the pendant hangs from a runner of its own down to hand height.
@@ -398,7 +398,7 @@ func _tank(at: Vector3, yaw_deg: float, outlet_deg: float, ladder_deg := NAN) ->
 	var facing := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
 	_m = facing
 	cylinder("concrete", at, r + 0.2, 0.25, 0, Vector3.ZERO, -1.0, 32)
-	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, 2.57, 0)), r + 0.02, 4.64)
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, 2.57, 0)), r + 0.02, 4.64, "metal")
 
 	# Base ring bolted to the plinth, the courses lapped in and out, the head.
 	_turned(shell, Vector3(0, 0.25, 0), Vector3.UP, PackedVector2Array([
@@ -498,9 +498,9 @@ func _tank(at: Vector3, yaw_deg: float, outlet_deg: float, ladder_deg := NAN) ->
 ## the middle of its foot; the operator stands on the north side.
 func _press(at: Vector3) -> void:
 	_m = Transform3D(Basis(), at)
-	_collide_box(_m * Transform3D(Basis(), Vector3(0, 0.54, 0)), Vector3(3.1, 1.08, 2.2))
-	_collide_box(_m * Transform3D(Basis(), Vector3(0, 2.4, 0.45)), Vector3(2.42, 2.7, 1.1))
-	_collide_box(_m * Transform3D(Basis(), Vector3(0, 2.75, -0.5)), Vector3(2.5, 2.0, 0.8))
+	_collide_box(_m * Transform3D(Basis(), Vector3(0, 0.54, 0)), Vector3(3.1, 1.08, 2.2), "metal")
+	_collide_box(_m * Transform3D(Basis(), Vector3(0, 2.4, 0.45)), Vector3(2.42, 2.7, 1.1), "metal")
+	_collide_box(_m * Transform3D(Basis(), Vector3(0, 2.75, -0.5)), Vector3(2.5, 2.0, 0.8), "metal")
 
 	# Foot, bolted to the floor, and the bed with its bolster plate.
 	_block(GREEN, Vector3(0, 0.07, 0), Vector3(3.1, 0.14, 2.2), 0.03)
@@ -639,7 +639,7 @@ func _press(at: Vector3) -> void:
 
 	# Lubrication unit behind the bed: tank, pump and the lines up to the head.
 	var lube := Vector3(-0.55, 0, 1.3)
-	_collide_box(_m * Transform3D(Basis(), lube + Vector3(0, 0.4, 0)), Vector3(0.9, 0.8, 0.4))
+	_collide_box(_m * Transform3D(Basis(), lube + Vector3(0, 0.4, 0)), Vector3(0.9, 0.8, 0.4), "metal")
 	_block(IRON, lube + Vector3(0, 0.3, 0), Vector3(0.9, 0.6, 0.4), 0.03)
 	_motor(BLUE, lube + Vector3(-0.3, 0.73, 0), Vector3.RIGHT, 0.1, 0.3)
 	_block(IRON, lube + Vector3(0.2, 0.7, 0), Vector3(0.16, 0.2, 0.18), 0.02)
@@ -658,10 +658,10 @@ func _press(at: Vector3) -> void:
 ## west end and the operator stands on the north side.
 func _lathe(at: Vector3) -> void:
 	_m = Transform3D(Basis(), at)
-	_collide_box(_m * Transform3D(Basis(), Vector3(0, 0.56, 0)), Vector3(6.0, 1.12, 1.4))
-	_collide_box(_m * Transform3D(Basis(), Vector3(-2.25, 1.6, 0)), Vector3(1.6, 1.04, 1.1))
-	_collide_box(_m * Transform3D(Basis(), Vector3(2.45, 1.4, 0)), Vector3(0.7, 0.56, 0.66))
-	_collide_box(_m * Transform3D(Basis(), Vector3(0.45, 1.42, 0)), Vector3(3.3, 0.6, 0.5))
+	_collide_box(_m * Transform3D(Basis(), Vector3(0, 0.56, 0)), Vector3(6.0, 1.12, 1.4), "metal")
+	_collide_box(_m * Transform3D(Basis(), Vector3(-2.25, 1.6, 0)), Vector3(1.6, 1.04, 1.1), "metal")
+	_collide_box(_m * Transform3D(Basis(), Vector3(2.45, 1.4, 0)), Vector3(0.7, 0.56, 0.66), "metal")
+	_collide_box(_m * Transform3D(Basis(), Vector3(0.45, 1.42, 0)), Vector3(3.3, 0.6, 0.5), "metal")
 	var axis := 1.5
 
 	# Pedestals with the chip tray between them, and the bed with its ways.
@@ -779,7 +779,7 @@ func _lathe(at: Vector3) -> void:
 	_line(IRON, [Vector3(-2.2, 1.36, 0.57), Vector3(-2.2, 1.05, 0.62), Vector3(-2.2, 0.92, 0.69), Vector3(-2.2, 0.8, 0.64)], 0.018)
 	_block(BLUE, Vector3(-2.2, 1.6, 0.553), Vector3(1.2, 0.8, 0.012), 0.004)
 	var coolant := Vector3(1.3, 0, 0.8)
-	_collide_box(_m * Transform3D(Basis(), coolant + Vector3(0, 0.3, 0)), Vector3(0.7, 0.6, 0.5))
+	_collide_box(_m * Transform3D(Basis(), coolant + Vector3(0, 0.3, 0)), Vector3(0.7, 0.6, 0.5), "metal")
 	_block(BLUE, coolant + Vector3(0, 0.15, 0), Vector3(0.7, 0.3, 0.5), 0.02)
 	_motor(IRON, coolant + Vector3(0, 0.3, 0.12), Vector3.UP, 0.07, 0.24, false)
 	_line(RUBBER, [coolant + Vector3(0.1, 0.33, 0.12), coolant + Vector3(0.1, 0.9, 0), Vector3(1.15, 1.85, 0.5), Vector3(0.9, 1.8, 0.2), saddle + Vector3(0.02, 0.5, -0.08)], 0.012)

@@ -200,7 +200,7 @@ func railing(from: Vector3, to: Vector3) -> void:
 		beam("steel_yellow", from + toe, to + toe, 0.006, flags, 0.1)
 	var mid := (from + to) * 0.5 + up * 0.5
 	var length := from.distance_to(to)
-	_collide_box(Transform3D(_along(to - from), mid), Vector3(0.06, 1.05, length))
+	_collide_box(Transform3D(_along(to - from), mid), Vector3(0.06, 1.05, length), "metal")
 
 
 func crates(at: Vector3, count: int) -> void:
@@ -241,7 +241,7 @@ func crate(center: Vector3, size: float, facing: Basis) -> void:
 		var skew := deg_to_rad(_prop_rng.randf_range(-4.0, 4.0)) + (PI if _prop_rng.randf() < 0.5 else 0.0)
 		var at := base + Vector3(0, i * box.size.y * scale, 0)
 		prop(CRATE, Transform3D(facing * Basis(Vector3.UP, skew), at), scale)
-	_collide_box(Transform3D(facing, center), Vector3(box.size.x * scale, size, box.size.z * scale))
+	_collide_box(Transform3D(facing, center), Vector3(box.size.x * scale, size, box.size.z * scale), "wood")
 
 
 ## Concrete road barrier, two segments long, centred on `at`.
@@ -265,7 +265,7 @@ func container(mat: String, at: Vector3, along_x: bool, flags := 0) -> void:
 	var half := size * 0.5
 	var xf := Transform3D(Basis() if along_x else Basis(Vector3.UP, PI * 0.5), at + Vector3(0, half.y, 0))
 	if not flags & NO_COLLIDE:
-		_collide_box(xf, size)
+		_collide_box(xf, size, "metal")
 	var skin := flags | NO_COLLIDE
 	# Openings and other dark slivers are not worth a patch of lightmap.
 	var hole := skin | DETAIL
@@ -359,7 +359,7 @@ func pallet(at: Vector3, yaw: float, stack: int) -> void:
 				_local_box("wood", xf, Vector3(x, 0.064, (k - 1) * 0.35), Vector3(0.145, 0.084, wide[k + 1]), NO_COLLIDE)
 		for j in 5:
 			_local_box("wood", xf, Vector3(0, 0.139, (j - 2) * 0.16375), Vector3(1.2, 0.022, wide[j]), NO_COLLIDE)
-	_collide_box(Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), at + Vector3(0, stack * 0.075, 0)), Vector3(1.2, stack * 0.15, 0.8))
+	_collide_box(Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), at + Vector3(0, stack * 0.075, 0)), Vector3(1.2, stack * 0.15, 0.8), "wood")
 
 
 ## Roller shutter `size.x` wide and `size.y` high, seen from the side `normal`
@@ -388,7 +388,7 @@ func roller_door(center: Vector3, normal: Vector3, size: Vector2) -> void:
 ## facing `yaw_deg` (0 looks along +Z).
 func cupboard(mat: String, at: Vector3, yaw_deg: float, size: Vector3) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
-	_collide_box(xf * Transform3D(Basis(), Vector3(0, size.y * 0.5, 0)), size)
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, size.y * 0.5, 0)), size, "metal")
 	var front := size.z * 0.5
 	var middle := 0.08 + (size.y - 0.08) * 0.5
 	_local_box("dark_steel", xf, Vector3(0, 0.04, -0.02), Vector3(size.x - 0.04, 0.08, size.z - 0.08), NO_COLLIDE)
@@ -414,7 +414,7 @@ func lockers(mat: String, at: Vector3, yaw_deg: float, count: int, open := {}) -
 	var height := 1.85
 	var depth := 0.5
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
-	_collide_box(xf * Transform3D(Basis(), Vector3(0, height * 0.5, 0)), Vector3(count * width, height, depth))
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, height * 0.5, 0)), Vector3(count * width, height, depth), "metal")
 	_local_box("dark_steel", xf, Vector3(0, 0.05, -0.02), Vector3(count * width - 0.04, 0.1, depth - 0.08), NO_COLLIDE)
 	var middle := 0.1 + (height - 0.1) * 0.5
 	var inside := Vector3(width, height - 0.1, depth - 0.02)
@@ -448,7 +448,7 @@ func barrel(at: Vector3) -> void:
 	var model := BARRELS[_prop_rng.randi_range(0, BARRELS.size() - 1)]
 	var box: AABB = _model(model).box
 	prop(model, Transform3D(Basis(Vector3.UP, _prop_rng.randf() * TAU), at))
-	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), maxf(box.size.x, box.size.z) * 0.5, box.size.y)
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), maxf(box.size.x, box.size.z) * 0.5, box.size.y, "metal")
 
 
 ## Storage racks against a wall, just under 3 m wide in all and facing
@@ -489,7 +489,7 @@ func shelf(at: Vector3, yaw_deg: float, wide: bool) -> void:
 		else:
 			_stack(BAG, base, turn * Basis(Vector3.UP, PI * 0.5), _clutter_rng.randi_range(1, 2))
 	var height: float = _model(WIDE_RACK if wide else RACK).box.size.y
-	_collide_box(Transform3D(facing, at + Vector3(0, height * 0.5, 0)), Vector3(2.9, height, 0.72 if wide else 0.6))
+	_collide_box(Transform3D(facing, at + Vector3(0, height * 0.5, 0)), Vector3(2.9, height, 0.72 if wide else 0.6), "metal")
 
 
 ## The same model `count` times on top of itself, each turned a little.
@@ -506,13 +506,13 @@ func tyres(at: Vector3, count: int) -> void:
 	var facing := Basis(Vector3.UP, _clutter_rng.randf() * TAU)
 	_stack(TYRE, at, facing, count, Basis(Vector3.RIGHT, PI * 0.5))
 	var height := count * box.size.z
-	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, height * 0.5, 0)), box.size.x * 0.5, height)
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, height * 0.5, 0)), box.size.x * 0.5, height, "soft")
 
 
 func gas_bottle(at: Vector3) -> void:
 	var box: AABB = _model(GAS_BOTTLE).box
 	prop(GAS_BOTTLE, Transform3D(Basis(Vector3.UP, _clutter_rng.randf() * TAU), at))
-	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), box.size.x * 0.5, box.size.y)
+	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), box.size.x * 0.5, box.size.y, "metal")
 
 
 ## Pallets with `layers` of cement bags on top: two bags to a layer, every
@@ -533,7 +533,7 @@ func bags(at: Vector3, yaw: float, layers: int, pallets := 1) -> void:
 			var skew := deg_to_rad(_clutter_rng.randf_range(-5.0, 5.0)) + (PI * 0.5 if quarter else 0.0)
 			prop(BAG, Transform3D(facing * Basis(Vector3.UP, skew), top + facing * offset))
 	var height := layers * box.size.y
-	_collide_box(Transform3D(facing, top + Vector3(0, height * 0.5, 0)), Vector3(1.0, height, 0.8))
+	_collide_box(Transform3D(facing, top + Vector3(0, height * 0.5, 0)), Vector3(1.0, height, 0.8), "soft")
 
 
 ## Row of switchgear cabinets on a concrete plinth, centred on `at`.
@@ -553,7 +553,7 @@ func cabinets(at: Vector3, yaw_deg: float) -> void:
 		prop(id, Transform3D(facing, at + facing * Vector3(x + width * 0.5, plinth, 0)), scale)
 		x += width + gap
 	var size: Vector3 = _model(CABINETS[0]).box.size * scale
-	_collide_box(Transform3D(facing, at + Vector3(0, plinth + size.y * 0.5, 0)), Vector3(total, size.y, size.z))
+	_collide_box(Transform3D(facing, at + Vector3(0, plinth + size.y * 0.5, 0)), Vector3(total, size.y, size.z), "metal")
 
 
 ## A model standing on the ground at `at`, with a box collider around it.
@@ -561,7 +561,7 @@ func place(model: String, at: Vector3, yaw_deg: float, dynamic := false, scale :
 	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
 	var size: Vector3 = _model(model).box.size * scale
 	prop(model, Transform3D(facing, at), scale, dynamic)
-	_collide_box(Transform3D(facing, at + Vector3(0, size.y * 0.5, 0)), size)
+	_collide_box(Transform3D(facing, at + Vector3(0, size.y * 0.5, 0)), size, _model(model).surface)
 
 
 ## A model hung on a wall or a machine: `at` is the middle of its back and
@@ -699,7 +699,10 @@ func _model(id: String) -> Dictionary:
 		var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/manifest.json"))
 		for asset: Dictionary in manifest.assets:
 			if asset.type == "model":
-				_models[asset.id] = {"path": "res://assets/models/%s/%s_%s.gltf" % [asset.id, asset.id, asset.resolution]}
+				_models[asset.id] = {
+					"path": "res://assets/models/%s/%s_%s.gltf" % [asset.id, asset.id, asset.resolution],
+					"surface": asset.get("surface", "metal"),
+				}
 	var info: Dictionary = _models[id]
 	if not info.has("scene"):
 		info.scene = load(info.path)
@@ -884,7 +887,7 @@ func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
 		_quad(st, points, [normal, normal, normal, normal], uvs,
 			[_edge(Vector2(0, 0), face), _edge(Vector2(1, 0), face), _edge(Vector2(1, 1), face), _edge(Vector2(0, 1), face)])
 	if not flags & NO_COLLIDE:
-		_collide_box(xf, size)
+		_collide_box(xf, size, _surface(mat))
 
 
 ## Box whose edges and corners are rounded off over `radius`, for anything
@@ -921,7 +924,7 @@ func rounded_box(mat: String, xf: Transform3D, size: Vector3, radius: float, fla
 					edges.append(_edge(Vector2(across[corner.x] / hr, along[corner.y] / hu) * 0.5 + Vector2(0.5, 0.5), Vector2(hr, hu) * 2.0))
 				_quad(st, points, normals, uvs, edges)
 	if not flags & NO_COLLIDE:
-		_collide_box(xf, size)
+		_collide_box(xf, size, _surface(mat))
 
 
 ## Pressed-steel panel standing in the XY plane of `xf` and facing its +Z:
@@ -954,7 +957,7 @@ func corrugated(mat: String, xf: Transform3D, size: Vector2, pitch: float, depth
 				[left, right, right, left]
 			)
 	if not flags & NO_COLLIDE:
-		_collide_box(xf * Transform3D(Basis(), Vector3(0, 0, -depth * 0.5)), Vector3(size.x, size.y, depth))
+		_collide_box(xf * Transform3D(Basis(), Vector3(0, 0, -depth * 0.5)), Vector3(size.x, size.y, depth), _surface(mat))
 
 
 ## Cylinder or cone standing on `base`; rot_deg tilts its axis.
@@ -997,7 +1000,7 @@ func _cylinder(mat: String, xf: Transform3D, radius: float, height: float, flags
 		_tri(st, [xf * Vector3.ZERO, xf * (d1 * radius), xf * (d0 * radius)], [-up, -up, -up],
 			[Vector2.ZERO, Vector2(d1.x, d1.z) * radius, Vector2(d0.x, d0.z) * radius], [NO_EDGE, rim, rim])
 	if not flags & NO_COLLIDE:
-		_collide_cylinder(xf * Transform3D(Basis(), top * 0.5), maxf(radius, r_top), height)
+		_collide_cylinder(xf * Transform3D(Basis(), top * 0.5), maxf(radius, r_top), height, _surface(mat))
 
 
 ## Surface of revolution around the Y axis of `xf`. `profile` lists (radius,
@@ -1070,7 +1073,7 @@ func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags :=
 	if not flags & NO_COLLIDE:
 		var bottom := profile[0].y
 		var height := profile[last + 1].y - bottom
-		_collide_cylinder(xf * Transform3D(Basis(), Vector3(0, bottom + height * 0.5, 0)), widest, height)
+		_collide_cylinder(xf * Transform3D(Basis(), Vector3(0, bottom + height * 0.5, 0)), widest, height, _surface(mat))
 
 
 ## Hose, cable or bent pipe through `points`, curving smoothly from one to the
@@ -1147,7 +1150,7 @@ func extrude(mat: String, polygon: PackedVector2Array, depth: float, xf: Transfo
 	if not flags & NO_COLLIDE:
 		var shape := ConvexPolygonShape3D.new()
 		shape.points = hull
-		_collide(shape, Transform3D())
+		_collide(shape, Transform3D(), _surface(mat))
 
 
 ## Plate cut to `outline` (counter-clockwise in the local XY of `xf`, hollows
@@ -1232,7 +1235,7 @@ func slab(mat: String, xf: Transform3D, outline: PackedVector2Array, thickness: 
 			hull.append(xf * Vector3(corner.x, corner.y, -half))
 		var shape := ConvexPolygonShape3D.new()
 		shape.points = hull
-		_collide(shape, Transform3D())
+		_collide(shape, Transform3D(), _surface(mat))
 
 
 # --- Part helpers --------------------------------------------------------------
@@ -1383,29 +1386,47 @@ func _material(mat: String) -> Material:
 	return _painted_floor
 
 
-func _collide_box(xf: Transform3D, size: Vector3) -> void:
+## What a bullet finds when it hits something of that material: "brick",
+## "metal", "wood" or "soft". Concrete, which most of a level is made of, goes
+## unmarked.
+func _surface(mat: String) -> String:
+	match mat:
+		"concrete", "plaster", "floor":
+			return ""
+		"brick", "wood":
+			return mat
+		"rubber":
+			return "soft"
+	return "metal"
+
+
+func _collide_box(xf: Transform3D, size: Vector3, surface := "") -> void:
 	var key := "box %s" % size.snappedf(0.001)
 	if not _shapes.has(key):
 		var shape := BoxShape3D.new()
 		shape.size = size
 		_shapes[key] = shape
-	_collide(_shapes[key], xf)
+	_collide(_shapes[key], xf, surface)
 
 
-func _collide_cylinder(xf: Transform3D, radius: float, height: float) -> void:
+func _collide_cylinder(xf: Transform3D, radius: float, height: float, surface := "") -> void:
 	var key := "cyl %s %s" % [snappedf(radius, 0.001), snappedf(height, 0.001)]
 	if not _shapes.has(key):
 		var shape := CylinderShape3D.new()
 		shape.radius = radius
 		shape.height = height
 		_shapes[key] = shape
-	_collide(_shapes[key], xf)
+	_collide(_shapes[key], xf, surface)
 
 
-func _collide(shape: Shape3D, xf: Transform3D) -> void:
+## `surface` is what the collider is made of, see _surface(); the effects read
+## it off the shape a shot hits.
+func _collide(shape: Shape3D, xf: Transform3D, surface := "") -> void:
 	var node := CollisionShape3D.new()
 	node.shape = shape
 	node.transform = xf
+	if surface != "" and surface != "concrete":
+		node.set_meta(&"surface", surface)
 	_add(node, _body)
 
 

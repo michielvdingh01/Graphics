@@ -86,7 +86,7 @@ func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> v
 		st.add_vertex(_to_part * p[i])
 
 
-func _collide(_shape: Shape3D, _xf: Transform3D) -> void:
+func _collide(_shape: Shape3D, _xf: Transform3D, _made_of := "") -> void:
 	pass
 
 
