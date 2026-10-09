@@ -161,6 +161,13 @@ var _yaw := 0.0
 var _backward := false
 var _cycles := 0.0
 var _steps := 0
+## How far the body went of late and how far its speed says it should have:
+## when the two differ it is walking on the spot, for a screenshot or a
+## measurement, and there is no ground to hold a foot to.
+var _went := Vector3.ZERO
+var _due := Vector3.ZERO
+var _was_at := Vector3.ZERO
+var _on_the_spot := false
 var _planted: Array[bool] = [false, false]
 var _plant_at: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
 var _plant_yaw: Array[float] = [0.0, 0.0]
@@ -307,6 +314,7 @@ func _ready() -> void:
 	fit = {"height": top * size, "eyes": lerpf(head, top, 0.35) * size, "head": (head - 0.02) * size}
 	# Whoever spawned it may still move it to where it belongs.
 	_planted = [false, false]
+	_was_at = _body.global_position if _body else Vector3.ZERO
 
 
 ## Colour of what announces an attack: the glint on its weapon.
@@ -417,6 +425,16 @@ func _pose(delta: float) -> void:
 	var to_model := _skeleton.global_basis.inverse()
 	var motion := to_model * _body.velocity if _body else Vector3.ZERO
 	var speed := Vector2(motion.x, motion.z).length() / _hip_height
+	if _body:
+		var fade := exp(-4.0 * delta)
+		var step := _body.global_position - _was_at
+		# Put down somewhere else: that is not walking.
+		if step.length() > 1.0:
+			step = _body.velocity * delta
+		_went = _went * fade + step
+		_due = _due * fade + _body.velocity * delta
+		_was_at = _body.global_position
+		_on_the_spot = _due.length() > 0.15 and (_went - _due).length() > 0.5 * _due.length()
 	var facing := _aim_yaw * _raised
 	var want := facing + float(STANCE[_hold])
 	if speed > STILL:
@@ -609,14 +627,14 @@ func _walk(delta: float) -> void:
 			var from: Array = _downs[_gait][side]
 			down = fposmod(phase - from[0], 1.0) < from[1] - from[0]
 		var shift := _slip[side]
-		if down and lock_feet and not _planted[side]:
+		if down and lock_feet and not _on_the_spot and not _planted[side]:
 			_planted[side] = true
 			_plant_at[side] = ball + shift
 			_plant_yaw[side] = heading
 		if _planted[side]:
 			shift = _plant_at[side] - ball
 			shift.y = 0.0
-			if not down or shift.length() > reach or absf(angle_difference(heading, _plant_yaw[side])) > FOOT_TURN:
+			if not down or _on_the_spot or shift.length() > reach or absf(angle_difference(heading, _plant_yaw[side])) > FOOT_TURN:
 				_planted[side] = false
 			# Put down somewhere else altogether: there is no stepping back from that.
 			if shift.length() > reach * 4.0:
