@@ -1,5 +1,5 @@
 {
-	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing, moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]; eye_height and head_start are the mean of the role's characters, each character's own are in its line). 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again; assets/characters/sheets/<id>.jpg shows each.",
+	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing, moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]). Every role says whether it fights hand to hand, because the scene of a role has a default of its own; where the eyes are and where the head begins is left to the rig, which measures the figure as it stands. 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again; assets/characters/sheets/<id>.jpg shows each.",
 	"themes": {
 		"soldiers": {
 			"grunt": {
@@ -11,8 +11,7 @@
 				"weapon": "rifle",
 				"moves": "default",
 				"tuning": {
-					"eye_height": 1.69,
-					"head_start": 1.57
+					"melee": false
 				}
 			},
 			"rusher": {
@@ -22,6 +21,7 @@
 				"weapon": "smg",
 				"moves": "default",
 				"tuning": {
+					"melee": false,
 					"max_health": 60.0,
 					"speed": 6.0,
 					"preferred_range": 5.0,
@@ -35,9 +35,7 @@
 						0.6,
 						1.0
 					],
-					"flash_size": 0.2,
-					"eye_height": 1.71,
-					"head_start": 1.59
+					"flash_size": 0.2
 				}
 			},
 			"heavy": {
@@ -47,6 +45,7 @@
 				"weapon": "rifle",
 				"moves": "default",
 				"tuning": {
+					"melee": false,
 					"max_health": 320.0,
 					"speed": 2.6,
 					"preferred_range": 14.0,
@@ -59,9 +58,7 @@
 						2.0,
 						3.0
 					],
-					"flash_size": 0.34,
-					"eye_height": 1.85,
-					"head_start": 1.72
+					"flash_size": 0.34
 				}
 			}
 		},
@@ -87,9 +84,7 @@
 					"cooldown": [
 						0.9,
 						1.4
-					],
-					"eye_height": 1.67,
-					"head_start": 1.56
+					]
 				}
 			},
 			"rusher": {
@@ -110,9 +105,7 @@
 					"cooldown": [
 						0.5,
 						0.8
-					],
-					"eye_height": 1.71,
-					"head_start": 1.59
+					]
 				}
 			},
 			"heavy": {
@@ -133,9 +126,7 @@
 					"cooldown": [
 						1.4,
 						2.0
-					],
-					"eye_height": 1.89,
-					"head_start": 1.75
+					]
 				}
 			}
 		},
@@ -148,6 +139,7 @@
 				"weapon": "pistol",
 				"moves": "default",
 				"tuning": {
+					"melee": false,
 					"max_health": 90.0,
 					"preferred_range": 9.0,
 					"attack_range": 22.0,
@@ -160,9 +152,7 @@
 						1.0,
 						1.8
 					],
-					"flash_size": 0.18,
-					"eye_height": 1.72,
-					"head_start": 1.6
+					"flash_size": 0.18
 				}
 			},
 			"rusher": {
@@ -183,9 +173,7 @@
 					"cooldown": [
 						0.5,
 						0.8
-					],
-					"eye_height": 1.73,
-					"head_start": 1.61
+					]
 				}
 			},
 			"heavy": {
@@ -195,6 +183,7 @@
 				"weapon": "shotgun",
 				"moves": "default",
 				"tuning": {
+					"melee": false,
 					"max_health": 300.0,
 					"speed": 2.8,
 					"preferred_range": 6.0,
@@ -207,9 +196,7 @@
 						1.6,
 						2.4
 					],
-					"flash_size": 0.4,
-					"eye_height": 1.92,
-					"head_start": 1.78
+					"flash_size": 0.4
 				}
 			}
 		},
@@ -233,9 +220,7 @@
 					"cooldown": [
 						0.9,
 						1.4
-					],
-					"eye_height": 1.34,
-					"head_start": 1.24
+					]
 				}
 			},
 			"rusher": {
@@ -256,9 +241,7 @@
 					"cooldown": [
 						0.5,
 						0.8
-					],
-					"eye_height": 1.15,
-					"head_start": 1.07
+					]
 				}
 			},
 			"heavy": {
@@ -279,9 +262,7 @@
 					"cooldown": [
 						1.4,
 						2.0
-					],
-					"eye_height": 1.57,
-					"head_start": 1.46
+					]
 				}
 			}
 		}
