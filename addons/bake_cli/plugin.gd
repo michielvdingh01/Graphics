@@ -18,6 +18,9 @@ func _bake(scene_path: String) -> void:
 		await tree.process_frame
 	await tree.create_timer(1.0).timeout
 	EditorInterface.open_scene_from_path(scene_path)
+	# The bake button sits in the toolbar of the 3D view, which is not always
+	# the view the editor comes up in.
+	EditorInterface.set_main_screen_editor("3D")
 	await tree.create_timer(1.0).timeout
 
 	var root := EditorInterface.get_edited_scene_root()
@@ -39,6 +42,11 @@ func _bake(scene_path: String) -> void:
 		func(button: Button) -> bool: return button.text == "Bake Lightmaps" and button.is_visible_in_tree()
 	)
 	if buttons.is_empty():
+		var hidden := EditorInterface.get_base_control().find_children("*", "Button", true, false).filter(
+			func(button: Button) -> bool: return button.text.contains("Bake")
+		)
+		print("Buttons that mention baking: ", hidden.map(func(button: Button) -> String: return "%s (visible: %s)" % [button.text, button.is_visible_in_tree()]))
+		print("Edited scene: ", root.scene_file_path, ", selected: ", selection.get_selected_nodes())
 		_finish("could not find the editor's bake button", 1)
 		return
 	print("Baking lightmaps for ", scene_path, " ...")
