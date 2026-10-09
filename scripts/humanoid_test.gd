@@ -137,6 +137,27 @@ func _run() -> void:
 		one.free()
 	_check("no role is wider than a door allows, and heads can be hit", slim)
 
+	# All three roles at once, in a fight that lasts: they attack for a while
+	# and are then killed in the middle of whatever they are doing, two of
+	# them by a blow that throws them down.
+	var squad: Array[CharacterBody3D] = []
+	for scene: PackedScene in [game.GRUNT, game.GRUNT, game.RUSHER, game.HEAVY]:
+		var one: CharacterBody3D = scene.instantiate()
+		one.position = player.global_position + Vector3(-7.0 - squad.size(), 0, squad.size() * 1.5 - 2.0)
+		game.add_child(one)
+		one.alert()
+		squad.append(one)
+	before = hits[0]
+	await _wait(5.0)
+	for i in squad.size():
+		var one := squad[i]
+		one.take_damage(1e6 if i % 2 == 0 else one.health, one.global_position + Vector3.UP, (one.global_position - player.global_position).normalized())
+	await _wait(3.0)
+	_check("a squad of all roles fights, and falls when it is killed", hits[0] > before and squad.all(
+		func(one: CharacterBody3D) -> bool:
+			return one.dead and (not _is_character(one) or not one._rig.is_processing())
+	))
+
 	# Walking: forwards, to either side and backwards, at the pace of a chase
 	# and of a strafe. A foot that is down has to stay where it is.
 	for other in tree.get_nodes_in_group("enemy"):
