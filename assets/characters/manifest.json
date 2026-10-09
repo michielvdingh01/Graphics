@@ -1,6 +1,418 @@
 {
-	"themes": {},
+	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing, moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]; eye_height and head_start are the mean of the role's characters, each character's own are in its line). 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again; assets/characters/sheets/<id>.jpg shows each.",
+	"themes": {
+		"soldiers": {
+			"grunt": {
+				"characters": [
+					"soldier_01",
+					"soldier_02",
+					"soldier_03"
+				],
+				"weapon": "rifle",
+				"moves": "default",
+				"tuning": {
+					"eye_height": 1.69,
+					"head_start": 1.57
+				}
+			},
+			"rusher": {
+				"characters": [
+					"soldier_04"
+				],
+				"weapon": "smg",
+				"moves": "default",
+				"tuning": {
+					"max_health": 60.0,
+					"speed": 6.0,
+					"preferred_range": 5.0,
+					"attack_range": 14.0,
+					"damage": 5.0,
+					"burst_shots": 5,
+					"shot_interval": 0.08,
+					"spread_deg": 5.0,
+					"telegraph_time": 0.3,
+					"cooldown": [
+						0.6,
+						1.0
+					],
+					"flash_size": 0.2,
+					"eye_height": 1.71,
+					"head_start": 1.59
+				}
+			},
+			"heavy": {
+				"characters": [
+					"soldier_05"
+				],
+				"weapon": "rifle",
+				"moves": "default",
+				"tuning": {
+					"max_health": 320.0,
+					"speed": 2.6,
+					"preferred_range": 14.0,
+					"attack_range": 30.0,
+					"damage": 5.0,
+					"burst_shots": 8,
+					"spread_deg": 4.0,
+					"telegraph_time": 0.7,
+					"cooldown": [
+						2.0,
+						3.0
+					],
+					"flash_size": 0.34,
+					"eye_height": 1.85,
+					"head_start": 1.72
+				}
+			}
+		},
+		"zombies": {
+			"grunt": {
+				"characters": [
+					"zombie_01",
+					"zombie_02",
+					"zombie_03",
+					"zombie_06"
+				],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {
+					"melee": true,
+					"max_health": 90.0,
+					"speed": 2.4,
+					"preferred_range": 1.3,
+					"attack_range": 1.9,
+					"damage": 14.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.5,
+					"cooldown": [
+						0.9,
+						1.4
+					],
+					"eye_height": 1.67,
+					"head_start": 1.56
+				}
+			},
+			"rusher": {
+				"characters": [
+					"zombie_04"
+				],
+				"weapon": "",
+				"moves": "default",
+				"tuning": {
+					"melee": true,
+					"max_health": 45.0,
+					"speed": 6.4,
+					"preferred_range": 1.3,
+					"attack_range": 1.9,
+					"damage": 12.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.25,
+					"cooldown": [
+						0.5,
+						0.8
+					],
+					"eye_height": 1.71,
+					"head_start": 1.59
+				}
+			},
+			"heavy": {
+				"characters": [
+					"zombie_05"
+				],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {
+					"melee": true,
+					"max_health": 380.0,
+					"speed": 1.9,
+					"preferred_range": 1.5,
+					"attack_range": 2.3,
+					"damage": 30.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.8,
+					"cooldown": [
+						1.4,
+						2.0
+					],
+					"eye_height": 1.89,
+					"head_start": 1.75
+				}
+			}
+		},
+		"clowns": {
+			"grunt": {
+				"characters": [
+					"clown_01",
+					"clown_02"
+				],
+				"weapon": "pistol",
+				"moves": "default",
+				"tuning": {
+					"max_health": 90.0,
+					"preferred_range": 9.0,
+					"attack_range": 22.0,
+					"damage": 9.0,
+					"burst_shots": 2,
+					"shot_interval": 0.25,
+					"spread_deg": 3.5,
+					"telegraph_time": 0.5,
+					"cooldown": [
+						1.0,
+						1.8
+					],
+					"flash_size": 0.18,
+					"eye_height": 1.72,
+					"head_start": 1.6
+				}
+			},
+			"rusher": {
+				"characters": [
+					"clown_03"
+				],
+				"weapon": "",
+				"moves": "default",
+				"tuning": {
+					"melee": true,
+					"max_health": 55.0,
+					"speed": 6.6,
+					"preferred_range": 1.3,
+					"attack_range": 1.9,
+					"damage": 16.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.22,
+					"cooldown": [
+						0.5,
+						0.8
+					],
+					"eye_height": 1.73,
+					"head_start": 1.61
+				}
+			},
+			"heavy": {
+				"characters": [
+					"clown_04"
+				],
+				"weapon": "shotgun",
+				"moves": "default",
+				"tuning": {
+					"max_health": 300.0,
+					"speed": 2.8,
+					"preferred_range": 6.0,
+					"attack_range": 13.0,
+					"damage": 22.0,
+					"burst_shots": 1,
+					"spread_deg": 6.0,
+					"telegraph_time": 0.8,
+					"cooldown": [
+						1.6,
+						2.4
+					],
+					"flash_size": 0.4,
+					"eye_height": 1.92,
+					"head_start": 1.78
+				}
+			}
+		},
+		"zombies_blocky": {
+			"grunt": {
+				"characters": [
+					"zombie_blocky_01",
+					"zombie_blocky_02"
+				],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {
+					"melee": true,
+					"max_health": 90.0,
+					"speed": 2.4,
+					"preferred_range": 1.3,
+					"attack_range": 1.9,
+					"damage": 14.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.5,
+					"cooldown": [
+						0.9,
+						1.4
+					],
+					"eye_height": 1.34,
+					"head_start": 1.24
+				}
+			},
+			"rusher": {
+				"characters": [
+					"zombie_blocky_03"
+				],
+				"weapon": "",
+				"moves": "default",
+				"tuning": {
+					"melee": true,
+					"max_health": 45.0,
+					"speed": 6.4,
+					"preferred_range": 1.3,
+					"attack_range": 1.9,
+					"damage": 12.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.25,
+					"cooldown": [
+						0.5,
+						0.8
+					],
+					"eye_height": 1.15,
+					"head_start": 1.07
+				}
+			},
+			"heavy": {
+				"characters": [
+					"zombie_blocky_04"
+				],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {
+					"melee": true,
+					"max_health": 380.0,
+					"speed": 1.9,
+					"preferred_range": 1.5,
+					"attack_range": 2.3,
+					"damage": 30.0,
+					"burst_shots": 1,
+					"telegraph_time": 0.8,
+					"cooldown": [
+						1.4,
+						2.0
+					],
+					"eye_height": 1.57,
+					"head_start": 1.46
+				}
+			}
+		}
+	},
 	"characters": {
+		"clown_01": {
+			"source": "Microsoft Rocketbox, Male_Adult_13",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "a civilian painted up by --look=clown: the costume is paint on everyday clothes, the nose a ball",
+			"wanted": "photorealistic creepy clown, a balding middle-aged man in a filthy yellow polka-dot costume with a ruff, cracked white greasepaint, smeared red grin, red ball nose, tufts of orange hair, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Male_Adult_13/Male_Adult_13.fbx",
+			"options": "--look=clown --seed=0",
+			"route": "rigged",
+			"look": "clown",
+			"triangles": 6790,
+			"source_triangles": 6710,
+			"height": 1.806,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 1.4,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.78,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"clown_02": {
+			"source": "Microsoft Rocketbox, Sports_Male_03",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "a civilian painted up by --look=clown: the costume is paint on everyday clothes, the nose a ball",
+			"wanted": "photorealistic creepy clown with a wild green curly wig, striped purple and yellow costume, cracked greasepaint, black diamonds over the eyes, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Sports_Male_03/Sports_Male_03.fbx",
+			"options": "--look=clown --seed=1",
+			"route": "rigged",
+			"look": "clown",
+			"triangles": 10386,
+			"source_triangles": 9534,
+			"height": 1.843,
+			"eye_height": 1.73,
+			"head_start": 1.61,
+			"megabytes": 2.37,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.54,
+				"source_textures": [
+					"1024x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": true
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"clown_03": {
+			"source": "Microsoft Rocketbox, Sports_Male_02",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "a civilian painted up by --look=clown: the costume is paint on everyday clothes, the nose a ball",
+			"wanted": "photorealistic creepy clown, thin and quick, harlequin costume in black and white diamonds, red wig, too-wide painted grin, bare bloodied hands, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Sports_Male_02/Sports_Male_02.fbx",
+			"options": "--look=clown --seed=2",
+			"route": "rigged",
+			"look": "clown",
+			"triangles": 8226,
+			"source_triangles": 8146,
+			"height": 1.821,
+			"eye_height": 1.73,
+			"head_start": 1.61,
+			"megabytes": 1.32,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.82,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"clown_04": {
+			"source": "Microsoft Rocketbox, Male_Adult_03",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "a civilian painted up by --look=clown: the costume is paint on everyday clothes, the nose a ball",
+			"wanted": "photorealistic creepy clown, huge and fat, an old man in a stained striped costume with oversized shoes, bald crown with green side tufts, greasepaint running, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Male_Adult_03/Male_Adult_03.fbx",
+			"options": "--look=clown --seed=4 --scale=1.12 --wide=1.15",
+			"route": "rigged",
+			"look": "clown",
+			"triangles": 7486,
+			"source_triangles": 7200,
+			"height": 2.024,
+			"eye_height": 1.92,
+			"head_start": 1.78,
+			"megabytes": 2.63,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.02,
+				"source_textures": [
+					"2048x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": true
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
 		"soldier_01": {
 			"source": "Microsoft Rocketbox, Military_Male_01",
 			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
@@ -22,6 +434,428 @@
 				"source_textures": [
 					"2048x1024",
 					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_02": {
+			"source": "Microsoft Rocketbox, Military_Male_04",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "assets/characters/.source/rocketbox/Military_Male_04/Military_Male_04.fbx",
+			"route": "rigged",
+			"triangles": 14907,
+			"source_triangles": 14907,
+			"height": 1.848,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 2.13,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.19,
+				"source_textures": [
+					"2048x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_03": {
+			"source": "Microsoft Rocketbox, Military_Female_01",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "assets/characters/.source/rocketbox/Military_Female_01/Military_Female_01.fbx",
+			"route": "rigged",
+			"triangles": 13015,
+			"source_triangles": 13015,
+			"height": 1.777,
+			"eye_height": 1.64,
+			"head_start": 1.54,
+			"megabytes": 2.01,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.34,
+				"source_textures": [
+					"2048x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_04": {
+			"source": "Microsoft Rocketbox, Military_Male_02",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "assets/characters/.source/rocketbox/Military_Male_02/Military_Male_02.fbx",
+			"route": "rigged",
+			"triangles": 8231,
+			"source_triangles": 8231,
+			"height": 1.811,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 1.59,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.38,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_05": {
+			"source": "Microsoft Rocketbox, Military_Male_03",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "assets/characters/.source/rocketbox/Military_Male_03/Military_Male_03.fbx",
+			"options": "--scale=1.08 --wide=1.08",
+			"route": "rigged",
+			"triangles": 14636,
+			"source_triangles": 15517,
+			"height": 1.998,
+			"eye_height": 1.85,
+			"head_start": 1.72,
+			"megabytes": 2.3,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.06,
+				"source_textures": [
+					"2048x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_01": {
+			"source": "Microsoft Rocketbox, Male_Adult_06",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "an everyday civilian, painted pale and bloody by --look=zombie",
+			"wanted": "photorealistic zombie, a man in his thirties in a torn red henley and jeans, grey mottled skin, sunken eyes, dried blood around the mouth, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Male_Adult_06/Male_Adult_06.fbx",
+			"options": "--look=zombie --seed=1",
+			"route": "rigged",
+			"look": "zombie",
+			"triangles": 8104,
+			"source_triangles": 7456,
+			"height": 1.831,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 2.07,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.18,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": true
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_02": {
+			"source": "Microsoft Rocketbox, Female_Adult_08",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "an everyday civilian, painted pale and bloody by --look=zombie",
+			"wanted": "photorealistic zombie, a woman in a torn grey t-shirt and jeans, matted hair, grey mottled skin, one arm bitten open, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Female_Adult_08/Female_Adult_08.fbx",
+			"options": "--look=zombie --seed=2",
+			"route": "rigged",
+			"look": "zombie",
+			"triangles": 9046,
+			"source_triangles": 8276,
+			"height": 1.735,
+			"eye_height": 1.64,
+			"head_start": 1.53,
+			"megabytes": 2.05,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.43,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": true
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_03": {
+			"source": "Microsoft Rocketbox, Medical_Female_01",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "an everyday civilian, painted pale and bloody by --look=zombie",
+			"wanted": "photorealistic zombie nurse in a blood-soaked white uniform, grey skin, milky eyes, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Medical_Female_01/Medical_Female_01.fbx",
+			"options": "--look=zombie --seed=3",
+			"route": "rigged",
+			"look": "zombie",
+			"triangles": 8884,
+			"source_triangles": 8328,
+			"height": 1.739,
+			"eye_height": 1.64,
+			"head_start": 1.54,
+			"megabytes": 1.91,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.25,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": true
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_04": {
+			"source": "Microsoft Rocketbox, Sports_Male_04",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "an everyday civilian, painted pale and bloody by --look=zombie",
+			"wanted": "photorealistic fast zombie, a lean runner in a torn vest and shorts, sinewy, bared teeth, fresh blood on hands and mouth, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Sports_Male_04/Sports_Male_04.fbx",
+			"options": "--look=zombie --seed=4",
+			"route": "rigged",
+			"look": "zombie",
+			"triangles": 7520,
+			"source_triangles": 7520,
+			"height": 1.804,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 1.28,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.74,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_05": {
+			"source": "Microsoft Rocketbox, Fire_Male_06",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "an everyday civilian, painted pale and bloody by --look=zombie",
+			"wanted": "photorealistic hulking zombie firefighter in scorched turnout gear and helmet, bloated, grey skin, A-pose, game character, 20k triangles, PBR textures",
+			"file": "assets/characters/.source/rocketbox/Fire_Male_06/Fire_Male_06.fbx",
+			"options": "--look=zombie --seed=5 --scale=1.1 --wide=1.1",
+			"route": "rigged",
+			"look": "zombie",
+			"triangles": 7678,
+			"source_triangles": 7678,
+			"height": 2.061,
+			"eye_height": 1.89,
+			"head_start": 1.75,
+			"megabytes": 1.37,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 2.5,
+				"source_textures": [
+					"1024x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_06": {
+			"source": "practice scan (tools/characters/mock_scan.py) of Microsoft Rocketbox, Male_Adult_14",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"placeholder": "an everyday civilian, painted pale and bloody by --look=zombie; it went through the scan route as a scanned friend would",
+			"wanted": "a scan of a real friend, taken as PLAN.md describes",
+			"file": "assets/characters/.source/mock_Male_Adult_14/scan.usdz",
+			"options": "--look=zombie --seed=6",
+			"route": "scan",
+			"look": "zombie",
+			"triangles": 19700,
+			"source_triangles": 595830,
+			"height": 1.78,
+			"eye_height": 1.68,
+			"head_start": 1.56,
+			"megabytes": 2.25,
+			"textures": {
+				"color": "the scan's texture",
+				"normal": "baked from the scan",
+				"roughness": "one value: a scan has none",
+				"texels_per_cm": 4.94,
+				"copied": 0.997,
+				"delight": {
+					"removed": true,
+					"light_from_dark_to_bright": [
+						0.25,
+						1.22
+					],
+					"occlusion_power": 0.85
+				},
+				"size": 1024,
+				"cutout": false
+			},
+			"fitted": "joints from the shape (landmarks.py)",
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_blocky_01": {
+			"source": "Kenney Blocky Characters 2.0, character-l",
+			"url": "https://kenney.nl/assets/blocky-characters",
+			"license": "CC0",
+			"author": "Kenney",
+			"placeholder": "a cartoon figure of six boxes: there to compare a stylised cast with a realistic one, not to stay",
+			"file": "assets/characters/.source/kenney/blocky/Models/GLB format/character-l.glb",
+			"options": "--height=1.75",
+			"route": "parts",
+			"triangles": 136,
+			"source_triangles": 72,
+			"height": 1.75,
+			"eye_height": 1.34,
+			"head_start": 1.24,
+			"megabytes": 0.13,
+			"textures": {
+				"roughness": "one value per material",
+				"normal": "flat",
+				"color": "source",
+				"texels_per_cm": 1.91,
+				"source_textures": [
+					"1024x1024"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_blocky_02": {
+			"source": "Kenney Blocky Characters 2.0, character-o",
+			"url": "https://kenney.nl/assets/blocky-characters",
+			"license": "CC0",
+			"author": "Kenney",
+			"placeholder": "a cartoon figure of six boxes: there to compare a stylised cast with a realistic one, not to stay",
+			"file": "assets/characters/.source/kenney/blocky/Models/GLB format/character-o.glb",
+			"options": "--height=1.75",
+			"route": "parts",
+			"triangles": 136,
+			"source_triangles": 72,
+			"height": 1.75,
+			"eye_height": 1.34,
+			"head_start": 1.24,
+			"megabytes": 0.13,
+			"textures": {
+				"roughness": "one value per material",
+				"normal": "flat",
+				"color": "source",
+				"texels_per_cm": 1.91,
+				"source_textures": [
+					"1024x1024"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_blocky_03": {
+			"source": "Kenney Blocky Characters 2.0, character-l",
+			"url": "https://kenney.nl/assets/blocky-characters",
+			"license": "CC0",
+			"author": "Kenney",
+			"placeholder": "a cartoon figure of six boxes: there to compare a stylised cast with a realistic one, not to stay",
+			"file": "assets/characters/.source/kenney/blocky/Models/GLB format/character-l.glb",
+			"options": "--height=1.5",
+			"route": "parts",
+			"triangles": 136,
+			"source_triangles": 72,
+			"height": 1.5,
+			"eye_height": 1.15,
+			"head_start": 1.07,
+			"megabytes": 0.13,
+			"textures": {
+				"roughness": "one value per material",
+				"normal": "flat",
+				"color": "source",
+				"texels_per_cm": 2.23,
+				"source_textures": [
+					"1024x1024"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"zombie_blocky_04": {
+			"source": "Kenney Blocky Characters 2.0, character-o",
+			"url": "https://kenney.nl/assets/blocky-characters",
+			"license": "CC0",
+			"author": "Kenney",
+			"placeholder": "a cartoon figure of six boxes: there to compare a stylised cast with a realistic one, not to stay",
+			"file": "assets/characters/.source/kenney/blocky/Models/GLB format/character-o.glb",
+			"options": "--height=2.05 --wide=1.1",
+			"route": "parts",
+			"triangles": 136,
+			"source_triangles": 72,
+			"height": 2.05,
+			"eye_height": 1.57,
+			"head_start": 1.46,
+			"megabytes": 0.13,
+			"textures": {
+				"roughness": "one value per material",
+				"normal": "flat",
+				"color": "source",
+				"texels_per_cm": 1.54,
+				"source_textures": [
+					"1024x1024"
 				],
 				"size": 1024,
 				"cutout": false
