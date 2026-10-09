@@ -26,6 +26,7 @@ var _alive := 0
 
 func _ready() -> void:
 	Settings.apply()
+	Blast.clear()
 	# The level's static body is built a frame late, so wait before baking from
 	# it. The server only picks this bake up with region_use_async_iterations off.
 	await get_tree().physics_frame

@@ -5,8 +5,8 @@ extends SceneTree
 ## A level is described in code by overriding _describe() and written to
 ## scenes/levels/ as merged meshes (lightmapped "static", probe-lit "detail"
 ## in blocks and unshadowed "glass"), one static body, the props placed from
-## assets/models/, and the lights, decals and reflection probes that belong to
-## the building. The scene that uses it holds everything that is tuned by
+## assets/models/, a body of its own for each prop that can explode, and the
+## lights, decals and reflection probes that belong to the building. The scene that uses it holds everything that is tuned by
 ## hand: environment, sun, lightmap, spawns and benchmark views.
 
 const OUT_DIR := "res://scenes/levels/"
@@ -26,6 +26,12 @@ const CABINETS: Array[String] = ["utility_box_02", "utility_box_01", "utility_bo
 const TYRE := "old_tyre"
 const GAS_BOTTLE := "propane_tank"
 const BAG := "cement_bag"
+## Models that go up when they are shot, and as which kind of
+## scripts/explosive.gd: a fuel barrel, a gas bottle or a jerrycan.
+const EXPLOSIVES := {"Barrel_01": 0, "propane_tank": 1, "metal_jerrycan": 2}
+## Physics layers of such a prop: the world, so that it is in the way like any
+## other, and the one a blast looks for it on.
+const EXPLOSIVE_LAYERS := 0b10001
 
 ## Box/cylinder flags.
 const DETAIL := 1  # thin or far geometry: no lightmap, lit by probes instead
@@ -52,6 +58,9 @@ var _body: StaticBody3D
 var _lights: Node3D
 var _decals: Node3D
 var _props: Node3D
+var _explosives: Node3D
+## Body the next collider goes into instead of the level's own, see _explosive().
+var _into: StaticBody3D
 ## Model id -> {path, scene, box}; scene and box are filled in on first use.
 var _models := {}
 ## Glowing material -> its copy for a lamp that is off.
@@ -68,6 +77,7 @@ var _glass_rng := RandomNumberGenerator.new()
 var _decal_rng := RandomNumberGenerator.new()
 var _prop_rng := RandomNumberGenerator.new()
 var _clutter_rng := RandomNumberGenerator.new()
+var _fuel_rng := RandomNumberGenerator.new()
 ## Frame of the machine or model being built; the part helpers work in it.
 var _m: Transform3D
 ## Flags those helpers build with: lightmapped, or DETAIL for whatever is too
@@ -81,6 +91,7 @@ func _init() -> void:
 	_decal_rng.seed = 23
 	_prop_rng.seed = 31
 	_clutter_rng.seed = 43
+	_fuel_rng.seed = 59
 	_build()
 	quit()
 
@@ -102,6 +113,9 @@ func _build() -> void:
 	_props = Node3D.new()
 	_props.name = "Props"
 	_add(_props, _root)
+	_explosives = Node3D.new()
+	_explosives.name = "Explosives"
+	_add(_explosives, _root)
 
 	_describe()
 
@@ -441,14 +455,26 @@ func lockers(mat: String, at: Vector3, yaw_deg: float, count: int, open := {}) -
 		_local_box("bare_steel", leaf, Vector3(door.x * 0.5 - 0.045, 0.02, 0.014), Vector3(0.024, 0.1, 0.012), NO_COLLIDE)
 
 
+## Barrel of whichever kind: one in three is a red one full of fuel.
 func barrel(at: Vector3) -> void:
 	# Every barrel takes one draw from the main stream, so the props placed
 	# after it stay put whichever models are on offer.
 	_rng.randf()
-	var model := BARRELS[_prop_rng.randi_range(0, BARRELS.size() - 1)]
+	_barrel(BARRELS[_prop_rng.randi_range(0, BARRELS.size() - 1)], at, _prop_rng.randf() * TAU)
+
+
+## Red barrel of fuel, which goes up when it is shot: something to stay away
+## from, or to wait beside for a robot to walk past.
+func fuel(at: Vector3) -> void:
+	_barrel(BARRELS[0], at, _fuel_rng.randf() * TAU)
+
+
+func _barrel(model: String, at: Vector3, yaw: float) -> void:
 	var box: AABB = _model(model).box
-	prop(model, Transform3D(Basis(Vector3.UP, _prop_rng.randf() * TAU), at))
+	var node := prop(model, Transform3D(Basis(Vector3.UP, yaw), at))
+	_explosive(model, node, at)
 	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), maxf(box.size.x, box.size.z) * 0.5, box.size.y, "metal")
+	_into = null
 
 
 ## Storage racks against a wall, just under 3 m wide in all and facing
@@ -511,8 +537,10 @@ func tyres(at: Vector3, count: int) -> void:
 
 func gas_bottle(at: Vector3) -> void:
 	var box: AABB = _model(GAS_BOTTLE).box
-	prop(GAS_BOTTLE, Transform3D(Basis(Vector3.UP, _clutter_rng.randf() * TAU), at))
+	var node := prop(GAS_BOTTLE, Transform3D(Basis(Vector3.UP, _clutter_rng.randf() * TAU), at))
+	_explosive(GAS_BOTTLE, node, at)
 	_collide_cylinder(Transform3D(Basis(), at + Vector3(0, box.size.y * 0.5, 0)), box.size.x * 0.5, box.size.y, "metal")
+	_into = null
 
 
 ## Pallets with `layers` of cement bags on top: two bags to a layer, every
@@ -560,8 +588,10 @@ func cabinets(at: Vector3, yaw_deg: float) -> void:
 func place(model: String, at: Vector3, yaw_deg: float, dynamic := false, scale := 1.0) -> void:
 	var facing := Basis(Vector3.UP, deg_to_rad(yaw_deg))
 	var size: Vector3 = _model(model).box.size * scale
-	prop(model, Transform3D(facing, at), scale, dynamic)
+	var node := prop(model, Transform3D(facing, at), scale, dynamic)
+	_explosive(model, node, at)
 	_collide_box(Transform3D(facing, at + Vector3(0, size.y * 0.5, 0)), size, _model(model).surface)
+	_into = null
 
 
 ## A model hung on a wall or a machine: `at` is the middle of its back and
@@ -691,6 +721,23 @@ func prop(model: String, xf: Transform3D, scale := 1.0, dynamic := false, pose :
 		for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
 			mesh.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	return node
+
+
+## Gives a model that explodes when it is shot a body of its own, standing at
+## `at`, for its collider to go into: the next one that is made. That body
+## carries scripts/explosive.gd, which takes the model with it when it goes.
+## Any other model keeps its collider in the body of the level.
+func _explosive(model: String, node: Node3D, at: Vector3) -> void:
+	if not EXPLOSIVES.has(model):
+		return
+	_into = StaticBody3D.new()
+	_into.name = "Explosive"
+	_into.position = at
+	_into.collision_layer = EXPLOSIVE_LAYERS
+	_into.set_script(load("res://scripts/explosive.gd"))
+	_add(_into, _explosives)
+	_into.set("kind", EXPLOSIVES[model])
+	_into.set("model", _into.get_path_to(node))
 
 
 ## The imported scene of a model in the manifest and its bounding box.
@@ -1424,10 +1471,10 @@ func _collide_cylinder(xf: Transform3D, radius: float, height: float, surface :=
 func _collide(shape: Shape3D, xf: Transform3D, surface := "") -> void:
 	var node := CollisionShape3D.new()
 	node.shape = shape
-	node.transform = xf
+	node.transform = _into.transform.affine_inverse() * xf if _into else xf
 	if surface != "" and surface != "concrete":
 		node.set_meta(&"surface", surface)
-	_add(node, _body)
+	_add(node, _into if _into else _body)
 
 
 func _add(node: Node, parent: Node) -> void:

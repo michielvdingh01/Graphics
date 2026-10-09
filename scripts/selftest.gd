@@ -3,7 +3,7 @@ extends Node
 ##
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
-## enemy types, checkpoints and settings.
+## enemy types, explosives, grenades, checkpoints and settings.
 
 ## Spots in the factory level: on the mezzanine deck, and an open lane with
 ## 6 m of clear floor to the east of it.
@@ -158,6 +158,65 @@ func _run() -> void:
 	_check("heavy outlasts a grunt", heavy.max_health > 200.0)
 	heavy.free()
 
+	# Explosives: a barrel in the open lane with a robot beside it and a
+	# second barrel a little further on. Shooting the first should set it
+	# alight, then off; its blast should wreck the robot and take the second
+	# barrel with it.
+	rusher.queue_free()
+	var blasts := [0]
+	Blast.exploded.connect(func(_at: Vector3) -> void: blasts[0] += 1)
+	var barrels: Array[StaticBody3D] = []
+	for offset: Vector3 in [Vector3.ZERO, Vector3(-1.6, 0, 0)]:
+		var barrel := StaticBody3D.new()
+		barrel.set_script(preload("res://scripts/explosive.gd"))
+		barrel.collision_layer = 0b10001
+		var collider := CollisionShape3D.new()
+		collider.shape = CylinderShape3D.new()
+		collider.shape.radius = 0.3
+		collider.shape.height = 0.9
+		collider.position.y = 0.45
+		barrel.add_child(collider)
+		barrel.position = RANGE_TARGET + offset
+		game.add_child(barrel)
+		barrels.append(barrel)
+	var bystander: CharacterBody3D = game.GRUNT.instantiate()
+	bystander.position = RANGE_TARGET + Vector3(0, 0, 1.7)
+	game.add_child(bystander)
+	bystander.set_physics_process(false)
+	key = key.duplicate()
+	key.action = "weapon_1"
+	Input.parse_input_event(key)
+	player.global_position = RANGE_TARGET + Vector3(6, 0, 0)
+	player.velocity = Vector3.ZERO
+	player.look_at(Vector3(RANGE_TARGET.x, player.global_position.y, RANGE_TARGET.z))
+	player.head.rotation.x = -atan2(1.15, 6.0)
+	await _wait(0.6)
+	Input.action_press("fire")
+	await _wait(0.16)
+	Input.action_release("fire")
+	_check("two hits set a barrel alight", is_instance_valid(barrels[0]) and barrels[0].is_alight() and blasts[0] == 0)
+	Input.action_press("fire")
+	await _wait(0.5)
+	Input.action_release("fire")
+	_check("more set it off", not is_instance_valid(barrels[0]) and blasts[0] >= 1)
+	_check("the blast wrecks the robot beside it", bystander.dead)
+	await _wait(0.5)
+	_check("and takes the next barrel with it", not is_instance_valid(barrels[1]) and blasts[0] == 2)
+
+	# A grenade: thrown, it lands in the lane and goes off by itself.
+	player.head.rotation.x = 0.0
+	await _wait(4.0)
+	Input.action_press("grenade")
+	await _wait(0.1)
+	Input.action_release("grenade")
+	await _wait(0.5)
+	var thrown := tree.get_nodes_in_group("grenade")
+	_check("a grenade is thrown", weapons.grenades == weapons.GRENADES - 1 and thrown.size() == 1)
+	if not thrown.is_empty():
+		_check("it flies ahead of the player", thrown[0].global_position.x < player.global_position.x - 2.0)
+	await _wait(2.4)
+	_check("and goes off", blasts[0] == 3 and tree.get_nodes_in_group("grenade").is_empty())
+
 	# Checkpoints and settings.
 	var checkpoint: Dictionary = Save.resume_point(game.scene_file_path)
 	_check("wave start is a checkpoint", checkpoint.get("wave", 0) == game.wave)
@@ -188,6 +247,9 @@ func _run() -> void:
 				stranded += 1
 				print("    stranded spawn: ", spawn.name)
 		_check("%s: every spawn reaches the player" % level.name, stranded == 0)
+		var explosives := tree.get_nodes_in_group("explosive")
+		_check("%s: has things that explode, each with its model" % level.name, not explosives.is_empty()
+			and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
 
 	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)

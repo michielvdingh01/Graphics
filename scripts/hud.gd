@@ -29,11 +29,24 @@ class Hitmarker:
 			draw_line(direction * inner, direction * (inner + 9.0), tint, 2.5)
 
 
+class Grenades:
+	extends Control
+	var count := 0
+
+	## One pip for every grenade carried, right to left: a ball with its fuze.
+	func _draw() -> void:
+		for i in count:
+			var at := Vector2(-11.0 - i * 24.0, -12.0)
+			draw_circle(at, 8.0, Color(1, 1, 1, 0.9))
+			draw_rect(Rect2(at.x - 3.0, at.y - 13.0, 6.0, 6.0), Color(1, 1, 1, 0.9))
+
+
 var _player: CharacterBody3D
 var _root := Control.new()
 var _fps_label := Label.new()
 var _ammo_label := Label.new()
 var _weapon_label := Label.new()
+var _grenades := Grenades.new()
 var _health_bar := ProgressBar.new()
 var _score_label := Label.new()
 var _banner := Label.new()
@@ -77,6 +90,9 @@ func _ready() -> void:
 	_place(_weapon_label, Control.PRESET_BOTTOM_RIGHT)
 	_weapon_label.offset_bottom -= 56
 	_weapon_label.offset_top -= 56
+	_place(_grenades, Control.PRESET_BOTTOM_RIGHT)
+	_grenades.offset_bottom -= 88
+	_grenades.offset_top -= 88
 
 	_health_bar.custom_minimum_size = Vector2(260, 14)
 	_health_bar.show_percentage = false
@@ -113,6 +129,8 @@ func _bind() -> void:
 	_player.died.connect(_show_banner.bind("YOU DIED", Color(1, 0.3, 0.25), 10.0))
 	_player.weapons.ammo_changed.connect(_on_ammo_changed)
 	_player.weapons.hit_confirmed.connect(_on_hit_confirmed)
+	_player.weapons.grenades_changed.connect(_on_grenades_changed)
+	_on_grenades_changed(_player.weapons.grenades)
 	var game := get_tree().get_first_node_in_group("game")
 	game.wave_started.connect(_on_wave_started)
 	game.kills_changed.connect(_on_kills_changed)
@@ -166,6 +184,11 @@ func _on_health_changed(health: float, max_health: float) -> void:
 func _on_ammo_changed(_weapon_name: String, mag: int, reserve: int) -> void:
 	_ammo_label.text = "%d / %d" % [mag, reserve]
 	_ammo_label.modulate = Color(1, 0.4, 0.3) if mag == 0 else Color.WHITE
+
+
+func _on_grenades_changed(count: int) -> void:
+	_grenades.count = count
+	_grenades.queue_redraw()
 
 
 func _on_hit_confirmed(headshot: bool, killed: bool) -> void:

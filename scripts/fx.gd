@@ -1,7 +1,8 @@
 extends Node
 ## Short-lived visual effects: muzzle flashes, tracers, what a shot does to the
-## surface it hits, spent cases and the end of a robot. Everything is parented
-## to the current scene so a scene reload cleans it up.
+## surface it hits, spent cases, the end of a robot, explosions and the fires
+## they leave. Everything is parented to the current scene so a scene reload
+## cleans it up.
 ##
 ## Sparks, chips and smoke come in bursts. A burst is one mesh instance whose
 ## shader works out where every particle is from the time since the burst
@@ -37,6 +38,12 @@ var held := false
 var _sparks: ArrayMesh
 var _chips: ArrayMesh
 var _puffs: ArrayMesh
+## The same balls, not lit pixel by pixel, for what fills too much of the
+## picture for that: the smoke of a fire, and the cloud of an explosion.
+var _smoke: ArrayMesh
+var _clouds: ArrayMesh
+var _flames: ArrayMesh
+var _shell := SphereMesh.new()
 var _tracer: ArrayMesh
 var _flame: ArrayMesh
 ## Surface -> one [albedo, normal, orm, emission] per variant of its hole.
@@ -49,6 +56,9 @@ var _expiring: Array[Array] = []
 var _lights: Array[Array] = []
 ## Holes in steel that are still glowing: [decal, start].
 var _cooling: Array[Array] = []
+## Fires that are burning: {light, at, start, seconds, energy, smoke, shade,
+## seed}. `smoke` is when the next of it rises and `shade` the light on it.
+var _fires: Array[Dictionary] = []
 var _casing_mesh := CylinderMesh.new()
 var _shell_mesh := CylinderMesh.new()
 var _shell_head := CylinderMesh.new()
@@ -60,7 +70,18 @@ func _ready() -> void:
 	_sparks = _burst_mesh(28, preload("res://shaders/sparks.gdshader"))
 	_chips = _burst_mesh(18, preload("res://shaders/chips.gdshader"))
 	_puffs = _burst_mesh(7, preload("res://shaders/puff.gdshader"))
-	(_puffs.surface_get_material(0) as ShaderMaterial).set_shader_parameter(&"noise", preload("res://assets/masks/wear.png"))
+	_smoke = _burst_mesh(8, preload("res://shaders/smoke.gdshader"))
+	_clouds = _burst_mesh(20, preload("res://shaders/smoke.gdshader"))
+	_flames = _burst_mesh(36, preload("res://shaders/flames.gdshader"))
+	for mesh: ArrayMesh in [_puffs, _smoke, _clouds, _flames]:
+		(mesh.surface_get_material(0) as ShaderMaterial).set_shader_parameter(&"noise", preload("res://assets/masks/wear.png"))
+	var wave := ShaderMaterial.new()
+	wave.shader = preload("res://shaders/shockwave.gdshader")
+	_shell.radius = 1.0
+	_shell.height = 2.0
+	_shell.radial_segments = 32
+	_shell.rings = 16
+	_shell.material = wave
 	_tracer = _burst_mesh(1, preload("res://shaders/tracer.gdshader"))
 	_flame = _flame_mesh()
 
@@ -178,7 +199,7 @@ func impact(hit: Dictionary, incoming: Vector3, light := false) -> void:
 ## The same without a ray to go by.
 func strike(position: Vector3, normal: Vector3, incoming: Vector3, surface := "concrete", light := false) -> void:
 	var frame := Transform3D(_up_along(normal), position)
-	var floor_y := _floor_below(position + normal * 0.05)
+	var floor_y := floor_below(position + normal * 0.05)
 	var share := 0.45 if light else 1.0
 	match surface:
 		"metal":
@@ -212,7 +233,7 @@ func strike(position: Vector3, normal: Vector3, incoming: Vector3, surface := "c
 ## A shot lands on a robot: sparks, the way the shot glances off.
 func robot_hit(position: Vector3, incoming: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 	var out := (Vector3.UP * 0.5 - incoming).normalized()
-	_burst(_sparks, Transform3D(_up_along(out), position), 0.8, {&"floor_y": _floor_below(position), &"tint": tint, &"amount": randf_range(0.3, 0.6), &"speed": 6.0, &"life": 0.45, &"spread": 0.9})
+	_burst(_sparks, Transform3D(_up_along(out), position), 0.8, {&"floor_y": floor_below(position), &"tint": tint, &"amount": randf_range(0.3, 0.6), &"speed": 6.0, &"life": 0.45, &"spread": 0.9})
 	flash(position - incoming * 0.1, tint.lerp(Color.WHITE, 0.3), 1.0, 3.0, 0.07)
 
 
@@ -220,7 +241,7 @@ func robot_hit(position: Vector3, incoming: Vector3, tint := Color(1.0, 0.5, 0.1
 ## sparks, smoke that hangs about and soot on the floor below.
 func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 	var up := Transform3D(Basis(), position)
-	var floor_y := _floor_below(position)
+	var floor_y := floor_below(position)
 	flash(position, Color(1.0, 0.7, 0.45), 7.0, 9.0, 0.3)
 	_burst(_sparks, up, 1.6, {&"floor_y": floor_y, &"tint": tint, &"speed": 9.0, &"spread": 1.0, &"life": 1.3})
 	_burst(_sparks, up.rotated_local(Vector3.UP, 2.0), 1.6, {&"floor_y": floor_y, &"tint": tint, &"speed": 5.0, &"spread": 0.8, &"life": 0.9})
@@ -238,6 +259,84 @@ func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 		soot.size = Vector3(across, 0.3, across)
 		soot.transform = Transform3D(Basis(Vector3.UP, randf() * TAU), Vector3(position.x, floor_y, position.z))
 		_keep(soot)
+
+
+## Something blows up at `position`: a flash, a pressure wave, a ball of fire
+## that burns out into smoke, a ring of dust along the floor, sparks, debris
+## and soot where it stood. `size` 1 is a fuel barrel or a hand grenade.
+func explosion(position: Vector3, size := 1.0) -> void:
+	var up := Transform3D(Basis(), position)
+	var floor_y := floor_below(position + Vector3.UP * 0.2)
+	var reach := 7.0 * size
+	var shade := light_at(position + Vector3.UP * 0.5)
+	flash(position + Vector3.UP * 0.4, Color(1.0, 0.72, 0.45), 12.0 * size, 14.0 * size, 0.35)
+
+	var shell := MeshInstance3D.new()
+	shell.mesh = _shell
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	shell.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	shell.position = position
+	shell.custom_aabb = AABB(-Vector3.ONE * reach, Vector3.ONE * reach * 2.0)
+	shell.set_instance_shader_parameter(&"start", time)
+	shell.set_instance_shader_parameter(&"reach", reach)
+	_spawn(shell, 0.4)
+
+	# The fire is out within half a second; what it burnt hangs about as smoke.
+	_burst(_clouds, up, 3.6, {&"tint": Color(0.085, 0.08, 0.075, 0.9), &"shade": shade, &"glow": 1.0, &"fire": 0.16, &"speed": 12.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.5) * size, &"life": 3.4, &"rise": 0.9}, reach)
+	_burst(_smoke, up, 0.5, {&"tint": Color(1.0, 0.6, 0.25, 1.0), &"glow": 1.6, &"fire": 1.0, &"speed": 5.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.0) * size, &"life": 0.4, &"rise": 0.5}, reach)
+	var column := _burst(_smoke, up, 6.0, {&"tint": Color(0.09, 0.088, 0.085, 0.7), &"shade": shade, &"speed": 2.5 * size, &"spread": 0.8, &"size": Vector2(0.4, 1.8) * size, &"life": 5.0, &"rise": 0.9}, reach)
+	column.set_instance_shader_parameter(&"start", time + 0.25)
+	for turn in 3:
+		_burst(_sparks, up.rotated_local(Vector3.UP, turn * 2.1), 2.0, {&"floor_y": floor_y, &"speed": randf_range(11.0, 17.0) * size, &"spread": 1.0, &"life": randf_range(1.1, 1.8)}, reach * 2.0)
+	for turn in 2:
+		_burst(_chips, up.rotated_local(Vector3.UP, turn * 1.3), 3.0, {&"floor_y": floor_y, &"tint": Color(0.07, 0.07, 0.075), &"speed": randf_range(8.0, 11.0) * size, &"size": 0.06 * size, &"spread": 1.0}, reach * 2.0)
+
+	if floor_y > position.y - 2.0 * size:
+		var ground := Vector3(position.x, floor_y, position.z)
+		# The blast sweeps the dust off the floor in a ring.
+		_burst(_clouds, Transform3D(Basis(), ground + Vector3.UP * 0.15), 1.6, {&"tint": Color(0.33, 0.31, 0.28, 0.4), &"shade": shade, &"speed": 17.0 * size, &"spread": 2.0, &"size": Vector2(0.25, 1.0) * size, &"life": 1.4, &"rise": 0.2}, reach)
+		var soot := Decal.new()
+		soot.texture_albedo = _scorch_textures.pick_random()
+		var across := randf_range(3.0, 3.6) * size
+		soot.size = Vector3(across, 0.3, across)
+		soot.transform = Transform3D(Basis(Vector3.UP, randf() * TAU), ground)
+		_keep(soot)
+
+
+## A fire that burns for `seconds` on a patch `across` metres wide around
+## `position`: the flames, the light they throw and the smoke that rises off
+## them. Freeing what it returns puts it out.
+func fire(position: Vector3, across: float, seconds: float) -> Node3D:
+	var scale := clampf(across, 0.5, 1.6)
+	var flames := _burst(_flames, Transform3D(Basis(), position), seconds, {&"life": seconds, &"radius": across * 0.5, &"size": Vector2(0.24, 1.3) * scale})
+	_burn(flames, Vector3.UP * 0.5 * scale, 1.6 * scale, 3.5 + across * 2.0, seconds, time + 0.3)
+	return flames
+
+
+## The flame that roars out of a hole in something under pressure: `length`
+## metres long, leaving `position` along `direction`, for `seconds`. Freeing
+## what it returns puts it out.
+func jet(position: Vector3, direction: Vector3, length: float, seconds: float) -> Node3D:
+	var flames := _burst(_flames, Transform3D(_up_along(direction), position), seconds, {&"life": seconds, &"radius": 0.015, &"size": Vector2(0.13, length), &"rush": 5.0, &"amount": 0.45})
+	_burn(flames, Vector3.UP * length * 0.4, 1.0, 3.5, seconds, INF)
+	return flames
+
+
+## The light of a fire, which flickers for as long as it burns: it hangs at
+## `offset` from the flames and goes when they do. Smoke starts to rise at
+## the moment `smoke`.
+func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds: float, smoke: float) -> void:
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.55, 0.22)
+	light.light_energy = 0.0
+	light.omni_range = reach
+	# It falls off as the light of a real flame does, so it stays near the fire.
+	light.omni_attenuation = 2.0
+	light.light_bake_mode = Light3D.BAKE_DISABLED
+	light.position = offset
+	flames.add_child(light)
+	var at := flames.global_transform * offset
+	_fires.append({"light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "shade": light_at(at), "seed": randf() * 100.0})
 
 
 ## The wisp of smoke a barrel leaves once it falls silent, drifting on along
@@ -282,7 +381,7 @@ func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false) 
 	# It leaves lying along the barrel.
 	node.transform = Transform3D(basis * Basis(Vector3.RIGHT, PI * 0.5), position)
 	get_tree().current_scene.add_child(node)
-	var floor_y := _floor_below(position, 4.0)
+	var floor_y := floor_below(position, 4.0)
 	if floor_y < position.y - 4.0:
 		floor_y = position.y - 4.0
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(12.0, 30.0)
@@ -297,7 +396,7 @@ func _process(delta: float) -> void:
 	if held:
 		return
 	time += delta
-	if time > CLOCK_SPAN and _expiring.is_empty() and _lights.is_empty() and _cooling.is_empty():
+	if time > CLOCK_SPAN and _expiring.is_empty() and _lights.is_empty() and _cooling.is_empty() and _fires.is_empty():
 		time = 0.0
 	_step(delta)
 
@@ -328,6 +427,23 @@ func _step(delta: float) -> void:
 			if left <= 0.0:
 				_cooling.remove_at(i)
 
+	for i in range(_fires.size() - 1, -1, -1):
+		var burning := _fires[i]
+		var age: float = time - burning.start
+		if not is_instance_valid(burning.light) or age > burning.seconds:
+			_fires.remove_at(i)
+			continue
+		# In step with the flames: up at once, down over the last second or so.
+		var dying := minf(1.5, burning.seconds * 0.4)
+		var strength := smoothstep(0.0, 0.2, age) * (1.0 - smoothstep(burning.seconds - dying, burning.seconds, age))
+		var flicker := 0.8 + 0.12 * sin(time * 23.0 + burning.seed) + 0.08 * sin(time * 57.0 + burning.seed * 2.0)
+		burning.light.light_energy = burning.energy * strength * flicker
+		while time >= burning.smoke and burning.smoke < burning.start + burning.seconds - dying:
+			var smoke := _burst(_smoke, Transform3D(Basis(), burning.at + Vector3.UP * 0.4), 3.0,
+				{&"tint": Color(0.07, 0.07, 0.075, 0.5), &"shade": burning.shade, &"speed": 0.7, &"spread": 0.5, &"size": Vector2(0.15, 0.75), &"life": 2.6, &"rise": 1.2, &"amount": 0.45})
+			smoke.set_instance_shader_parameter(&"start", burning.smoke)
+			burning.smoke += 0.3
+
 	for i in range(_casings.size() - 1, -1, -1):
 		var item := _casings[i]
 		if not is_instance_valid(item.node):
@@ -356,8 +472,9 @@ func _step(delta: float) -> void:
 
 
 ## Sets off a burst at `at`, flying out along its +Y, and frees it `seconds`
-## later. `parameters` are the instance uniforms of its shader.
-func _burst(mesh: Mesh, at: Transform3D, seconds: float, parameters: Dictionary) -> MeshInstance3D:
+## later. `parameters` are the instance uniforms of its shader, and `reach` is
+## how far it throws its particles.
+func _burst(mesh: Mesh, at: Transform3D, seconds: float, parameters: Dictionary, reach := REACH) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -365,7 +482,7 @@ func _burst(mesh: Mesh, at: Transform3D, seconds: float, parameters: Dictionary)
 	# The box is what the probes are read at the middle of: a little way out
 	# from the surface.
 	node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED if mesh == _sparks else GeometryInstance3D.GI_MODE_DYNAMIC
-	node.custom_aabb = AABB(Vector3(-REACH, 0.3 - REACH, -REACH), Vector3.ONE * REACH * 2.0)
+	node.custom_aabb = AABB(Vector3(-reach, 0.3 - reach, -reach), Vector3.ONE * reach * 2.0)
 	node.transform = at
 	node.set_instance_shader_parameter(&"start", time)
 	for parameter: StringName in parameters:
@@ -416,8 +533,21 @@ func _expire(node: Node3D, seconds: float) -> void:
 	_expiring.append([node, time + seconds])
 
 
+## How much light falls on a point, for smoke that is not lit by the renderer:
+## 1 in the shade, more where the sun reaches it.
+func light_at(position: Vector3) -> float:
+	var sun: DirectionalLight3D = null
+	for light in get_tree().current_scene.find_children("*", "DirectionalLight3D", false, false):
+		sun = light
+	if sun == null or not sun.visible:
+		return 1.0
+	var query := PhysicsRayQueryParameters3D.create(position, position + sun.global_basis.z * 80.0, WORLD)
+	var shaded := not get_viewport().find_world_3d().direct_space_state.intersect_ray(query).is_empty()
+	return 1.0 if shaded else 1.0 + sun.light_energy * 0.3
+
+
 ## Height of the floor below a point, or far below when there is none within `reach`.
-func _floor_below(from: Vector3, reach := 8.0) -> float:
+func floor_below(from: Vector3, reach := 8.0) -> float:
 	var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * reach, WORLD)
 	var hit := get_viewport().find_world_3d().direct_space_state.intersect_ray(query)
 	return hit.position.y if hit else -1000.0

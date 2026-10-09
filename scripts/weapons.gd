@@ -1,6 +1,6 @@
 extends Node3D
 ## Owns the player's loadout: firing, recoil, aim down sights, reloading,
-## switching and the animation of the weapon in view.
+## switching, throwing grenades and the animation of the weapon in view.
 ##
 ## A viewmodel is a scene built by tools/models/weapons.gd. Whatever moves on
 ## it is found by name, and a weapon without one of these simply skips that
@@ -9,6 +9,7 @@ extends Node3D
 
 signal ammo_changed(weapon_name: String, mag: int, reserve: int)
 signal hit_confirmed(headshot: bool, killed: bool)
+signal grenades_changed(count: int)
 
 const LOADOUT: Array[WeaponData] = [
 	preload("res://weapons/rifle.tres"),
@@ -17,6 +18,14 @@ const LOADOUT: Array[WeaponData] = [
 	preload("res://weapons/smg.tres"),
 	preload("res://weapons/marksman.tres"),
 ]
+const GRENADE := preload("res://scenes/grenade.tscn")
+## Grenades carried at the start of every wave.
+const GRENADES := 3
+## A throw: how long the left hand is away from the weapon, the fraction of
+## that after which the grenade leaves it, and the speed it leaves at in m/s.
+const THROW_TIME := 0.55
+const THROW_RELEASE := 0.4
+const THROW_SPEED := 15.0
 const HIT_MASK := 0b101  # world + enemy
 const SWITCH_TIME := 0.3
 const FIRE_BUFFER := 0.12
@@ -92,6 +101,7 @@ class Viewmodel:
 
 ## 0 at the hip, 1 fully aimed down sights.
 var ads_blend := 0.0
+var grenades := GRENADES
 
 var _index := 0
 var _pending := 0
@@ -109,6 +119,8 @@ var _reload_total := 1.0
 var _reload_stage := 0
 var _shells_to_load := 0
 var _switch_left := 0.0
+var _throw_left := 0.0
+var _thrown := true
 var _bloom := 0.0
 var _kick := 0.0
 var _sway := Vector2.ZERO
@@ -201,10 +213,12 @@ func preview(index: int, aim := 0.0, reload := 0.0) -> void:
 	_animate_viewmodel(current(), 0.0)
 
 
-## Tops up reserve ammo for every weapon, e.g. between waves.
+## Tops up reserve ammo for every weapon and the grenades, e.g. between waves.
 func refill() -> void:
 	for i in LOADOUT.size():
 		_reserves[i] = LOADOUT[i].reserve_ammo
+	grenades = GRENADES
+	grenades_changed.emit(grenades)
 	_emit_ammo()
 
 
@@ -244,9 +258,13 @@ func _process(delta: float) -> void:
 	if _reload_left > 0.0:
 		_reload_left -= delta
 		_update_reload()
+	if _throw_left > 0.0:
+		_throw_left -= delta
+		if not _thrown and _throw_left <= THROW_TIME * (1.0 - THROW_RELEASE):
+			_release_grenade()
 
 	var data := current()
-	var busy := _switch_left > 0.0 or _reload_left > 0.0
+	var busy := _switch_left > 0.0 or _reload_left > 0.0 or _throw_left > 0.0
 	var aiming := control and Input.is_action_pressed("ads") and not busy
 	ads_blend = move_toward(ads_blend, 1.0 if aiming else 0.0, delta / data.ads_time)
 	_bloom = move_toward(_bloom, 0.0, data.bloom_recovery_deg * delta)
@@ -268,6 +286,8 @@ func _process(delta: float) -> void:
 			_fire_buffer = 0.0
 		if Input.is_action_just_pressed("reload"):
 			_start_reload()
+		if Input.is_action_just_pressed("grenade"):
+			_start_throw()
 
 	_update_pump(data)
 	_heat = maxf(_heat - COOLING * delta, 0.0)
@@ -302,17 +322,20 @@ func _fire(data: WeaponData) -> void:
 		if hit:
 			end = hit.position
 			var target: Object = hit.collider
+			# A robot shows a hit itself; anything else is part of the level,
+			# even if it can be damaged, like a fuel barrel.
+			var robot := target.has_method("is_headshot")
+			if not robot:
+				Fx.impact(hit, direction, data.pellets > 1)
 			if target.has_method("take_damage"):
 				var distance := origin.distance_to(end)
 				var falloff := remap(distance, data.falloff_start, data.falloff_end, 1.0, data.min_damage_scale)
 				var amount := data.damage * clampf(falloff, data.min_damage_scale, 1.0)
-				if target.has_method("is_headshot") and target.is_headshot(end):
+				if robot and target.is_headshot(end):
 					amount *= data.headshot_multiplier
 					headshot = true
-				any_hit = true
+				any_hit = any_hit or robot
 				killed = target.take_damage(amount, end, direction) or killed
-			else:
-				Fx.impact(hit, direction, data.pellets > 1)
 		# One pellet in three of a load of shot is enough to show where it went.
 		if i % 3 == 0:
 			Fx.tracer(muzzle, end)
@@ -383,7 +406,7 @@ func _update_pump(data: WeaponData) -> void:
 
 func _start_reload() -> void:
 	var data := current()
-	if _reload_left > 0.0 or _switch_left > 0.0:
+	if _reload_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0:
 		return
 	if _mags[_index] >= data.mag_size or _reserves[_index] <= 0:
 		return
@@ -429,6 +452,36 @@ func _update_reload() -> void:
 		_emit_ammo()
 
 
+## The left hand lets go of the weapon, which breaks off a reload, and comes
+## back once the grenade is on its way.
+func _start_throw() -> void:
+	if grenades <= 0 or _throw_left > 0.0 or _switch_left > 0.0:
+		return
+	_reload_left = 0.0
+	_throw_left = THROW_TIME
+	_thrown = false
+	Sfx.play(&"pin", -4.0)
+
+
+func _release_grenade() -> void:
+	_thrown = true
+	grenades -= 1
+	grenades_changed.emit(grenades)
+	var eye := camera.global_position
+	var aim := camera.global_basis
+	# It leaves from the left hand, unless there is a wall where that is.
+	var from := eye + aim * Vector3(-0.22, -0.1, -0.45)
+	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, [player.get_rid()])
+	if get_world_3d().direct_space_state.intersect_ray(query):
+		from = eye
+	var grenade: RigidBody3D = GRENADE.instantiate()
+	get_tree().current_scene.add_child(grenade)
+	grenade.global_position = from
+	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
+	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
+	Sfx.play(&"throw", -6.0)
+
+
 func _switch_to(index: int) -> void:
 	if index == _pending:
 		return
@@ -466,6 +519,14 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	# The weapon dips out of view while it is being switched.
 	var lower := sin(PI * (1.0 - _switch_left / SWITCH_TIME)) if _switch_left > 0.0 else 0.0
 	var handling := _animate_parts(model, data, delta)
+	# Held in one hand while the other throws, it sags and rolls outwards.
+	var throw := sin(PI * (1.0 - _throw_left / THROW_TIME)) if _throw_left > 0.0 else 0.0
+	handling[0] += Vector3(0.025, -0.045, 0.02) * throw
+	handling[1] += Vector3(-0.12, -0.16, -0.22) * throw
+	if model.arm_l:
+		# The arm that throws swings down and back out of view, then forward.
+		var swing := 1.0 - _throw_left / THROW_TIME if _throw_left > 0.0 else 0.0
+		model.arm_l.position += Vector3(-0.1, -0.32, 0.25 - 0.3 * smoothstep(0.2, 0.6, swing)) * throw
 
 	# Up against a wall it is drawn back with the muzzle up, instead of poking
 	# through to the other side.

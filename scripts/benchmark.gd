@@ -22,10 +22,16 @@ extends Node
 ## later: the flash of the weapon in view, the tracer and what the bullet does
 ## to whatever it hits. --shoot=0.3,6,4 fires six shots within four degrees.
 ## --hold=0.5 shows what went off when the run began, such as that robot
-## falling apart, that many seconds on. All of this is for looking at a model
-## or an effect, not for measuring. --firefight=12 is for measuring: it keeps
-## firing that many shots a second along every view, six degrees wide, to
-## show what the effects cost while they are all going off.
+## falling apart, that many seconds on. --blast=x,y,z sets off an explosion at
+## that spot when the run begins, to look at with --hold; a fourth number is
+## its size and a fifth the width in metres of the fire it leaves.
+## --ignite=x,y,z holes whatever in the level can explode nearest to that
+## point, there, and leaves it burning; --detonate=x,y,z sets it off. All of
+## this is for looking at a model or an effect, not for measuring. --firefight=12
+## is for measuring: it keeps firing that many shots a second along every
+## view, six degrees wide, to show what the effects cost while they are all
+## going off. --barrage=1 does the same with an explosion and its fire that
+## many times a second, nine metres ahead of every view.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -45,8 +51,13 @@ var _spawn := PackedStringArray()
 var _weapon := PackedFloat64Array()
 var _shoot := PackedFloat64Array()
 var _hold := -1.0
+var _blast := PackedFloat64Array()
+var _ignite := PackedFloat64Array()
+var _detonate := PackedFloat64Array()
 var _firefight := 0.0
 var _fire_due := 0.0
+var _barrage := 0.0
+var _blast_due := 0.0
 var _eye: Camera3D
 var _random := RandomNumberGenerator.new()
 var _warmup_frames := 120
@@ -79,8 +90,16 @@ func _ready() -> void:
 			_shoot = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--hold="):
 			_hold = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--blast="):
+			_blast = arg.get_slice("=", 1).split_floats(",")
+		elif arg.begins_with("--ignite="):
+			_ignite = arg.get_slice("=", 1).split_floats(",")
+		elif arg.begins_with("--detonate="):
+			_detonate = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--firefight="):
 			_firefight = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--barrage="):
+			_barrage = arg.get_slice("=", 1).to_float()
 	if active:
 		_run.call_deferred()
 
@@ -117,6 +136,32 @@ func _run() -> void:
 			node.scale = Vector3.ONE * numbers[4]
 		if numbers.size() > 5 and node.has_method("preview"):
 			node.preview(numbers[5])
+	if not _blast.is_empty():
+		# It reads the floor off the colliders, which a level has a frame late.
+		await tree.physics_frame
+		await tree.physics_frame
+		var at := Vector3(_blast[0], _blast[1], _blast[2])
+		Fx.explosion(at, _blast[3] if _blast.size() > 3 else 1.0)
+		if _blast.size() > 4:
+			Fx.fire(Vector3(at.x, Fx.floor_below(at), at.z), _blast[4], 8.0)
+	for numbers in [_ignite, _detonate]:
+		if numbers.is_empty():
+			continue
+		await tree.physics_frame
+		await tree.physics_frame
+		var at := Vector3(numbers[0], numbers[1], numbers[2])
+		var nearest: Node3D = null
+		for explosive: Node3D in tree.get_nodes_in_group("explosive"):
+			if nearest == null or explosive.global_position.distance_to(at) < nearest.global_position.distance_to(at):
+				nearest = explosive
+		# Whatever is alight would go off before the picture is taken, with
+		# the clock of its effects standing still.
+		for explosive: Node3D in tree.get_nodes_in_group("explosive"):
+			explosive.process_mode = Node.PROCESS_MODE_DISABLED
+		if numbers == _detonate:
+			nearest.explode()
+		else:
+			nearest.take_damage(nearest.health, at, Vector3.DOWN)
 	if _hold >= 0.0:
 		Fx.advance(_hold)
 	# What is seen through a telescopic sight is drawn by the HUD.
@@ -194,6 +239,8 @@ func _run() -> void:
 			"avg_fps": snappedf(1000.0 / avg_ms, 0.1),
 			"low_1pct_fps": snappedf(1000.0 / p99_ms, 0.1),
 			"avg_ms": snappedf(avg_ms, 0.01),
+			# The one slowest frame: a hitch, such as an effect seen for the first time.
+			"worst_ms": snappedf(frame_ms[-1], 0.01),
 			"draw_calls": RenderingServer.get_rendering_info(
 				RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
 			),
@@ -201,7 +248,7 @@ func _run() -> void:
 				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
 			),
 		}
-		print("%-12s %7.1f fps avg  %7.1f fps 1%% low" % [view.name, result.avg_fps, result.low_1pct_fps])
+		print("%-12s %7.1f fps avg  %7.1f fps 1%% low  %6.1f ms worst frame" % [view.name, result.avg_fps, result.low_1pct_fps, result.worst_ms])
 		if _profile:
 			result["cost_ms"] = await _profile_view(view.name)
 		views.append(result)
@@ -232,12 +279,19 @@ func _run() -> void:
 
 
 func _process(delta: float) -> void:
-	if _firefight <= 0.0 or _eye == null:
+	if _eye == null:
 		return
 	_fire_due += delta * _firefight
 	while _fire_due >= 1.0:
 		_fire_due -= 1.0
 		_fire(_eye, 1, 6.0)
+	_blast_due += delta * _barrage
+	while _blast_due >= 1.0:
+		_blast_due -= 1.0
+		var ahead := _eye.global_position - (_eye.global_basis.z * Vector3(1, 0, 1)).normalized() * 9.0
+		var ground := Vector3(ahead.x, Fx.floor_below(ahead, 20.0), ahead.z)
+		Fx.explosion(ground + Vector3.UP * 0.45)
+		Fx.fire(ground, 1.2, 3.0)
 
 
 ## Fires `count` shots along the view of `eye`, within `spread_deg` of it:

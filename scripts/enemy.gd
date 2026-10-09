@@ -236,6 +236,9 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 			_player.take_damage(damage, end, direction)
 		else:
 			Fx.impact(hit, direction)
+			# A stray shot sets off a fuel barrel as well as the player's does.
+			if hit.collider.has_method("take_damage"):
+				hit.collider.take_damage(damage, end, direction)
 	var muzzle: Vector3 = _rig.muzzle()
 	Fx.tracer(muzzle, end, Color(1.0, 0.3, 0.2))
 	Fx.muzzle_flash(null, Transform3D(Fx.facing(end - muzzle), muzzle), flash_size, 3, Color(1.0, 0.45, 0.3))

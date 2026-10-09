@@ -389,6 +389,13 @@ func _hall_props() -> void:
 	tyres(Vector3(-7.8, 0, 11.1), 3)
 	for p in [Vector3(17.0, 0, -11.2), Vector3(17.45, 0, -11.25), Vector3(17.2, 0, -10.8)]:
 		gas_bottle(p)
+	# Fuel, left where it was last needed: beside the lane the robots come
+	# down, at the ends of the containers and up on the deck.
+	for p in [
+		Vector3(-4.3, 0, -2.9), Vector3(-3.6, 0, -3.15), Vector3(7.5, 0, -3.4), Vector3(-7.7, 0, 9.0),
+		Vector3(-19.0, 0, 5.2), Vector3(18.6, 0, 10.6), Vector3(-14.2, DECK_Y, -11.3),
+	]:
+		fuel(p)
 
 
 ## Storage tank of three welded courses under a dished head, on a concrete

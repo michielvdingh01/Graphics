@@ -42,9 +42,11 @@ vec3 ballistic(vec3 p, inout vec3 v, float t, float floor_y, float bounce, out f
 }
 
 // A direction within a cone around +Y: `spread` 0 is straight along it, 1 is
-// anywhere in the half space.
+// anywhere in the half space. From there to 2 it flattens into a ring that
+// runs out along the surface, as the blast of an explosion does.
 vec3 cone(vec3 random_direction, float spread) {
-	return normalize(mix(vec3(0.0, 1.0, 0.0), vec3(random_direction.x, abs(random_direction.y), random_direction.z), spread));
+	vec3 out_of = vec3(random_direction.x, abs(random_direction.y) * clamp(2.0 - spread, 0.0, 1.0), random_direction.z);
+	return normalize(mix(vec3(0.0, 1.0, 0.0), out_of, min(spread, 1.0)));
 }
 
 vec2 turned(vec2 p, float angle) {

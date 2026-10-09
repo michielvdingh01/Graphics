@@ -33,6 +33,10 @@ const MAX_PITCH := deg_to_rad(89.0)
 const RECOIL_SNAP := 30.0
 const RECOIL_RETURN := 7.0
 const STEP_DISTANCE := 2.4
+## How fast the view settles after an explosion, per second, and how far it
+## is thrown about at worst, in radians.
+const SHAKE_DECAY := 1.3
+const SHAKE_ANGLE := 0.055
 
 const MAX_HEALTH := 100.0
 const REGEN_DELAY := 4.0
@@ -57,6 +61,8 @@ var _recoil_target := Vector3.ZERO
 var _recoil := Vector3.ZERO
 ## A click of the left stick keeps sprinting until the stick is let go.
 var _sprint_latched := false
+var _trauma := 0.0
+var _shake_time := 0.0
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -94,6 +100,11 @@ func is_sprinting() -> bool:
 ## Kicks the camera by the given angles in radians; it settles back by itself.
 func add_recoil(pitch: float, yaw: float) -> void:
 	_recoil_target += Vector3(pitch, yaw, yaw * 0.5)
+
+
+## Rattles the view: 1 is an explosion at arm's length. It settles by itself.
+func shake(amount: float) -> void:
+	_trauma = minf(_trauma + amount, 1.0)
 
 
 func take_damage(amount: float, _position := Vector3.ZERO, _direction := Vector3.ZERO) -> bool:
@@ -235,7 +246,14 @@ func _process(delta: float) -> void:
 	var sideways := velocity.dot(global_basis.x)
 	var tilt := -sideways * 0.004 + (0.07 if _sliding else 0.0) + (0.5 if dead else 0.0)
 	_tilt = lerpf(_tilt, tilt, 1.0 - exp(-10.0 * delta))
-	camera.rotation = _recoil + Vector3(0.0, 0.0, _tilt)
+	_trauma = maxf(_trauma - SHAKE_DECAY * delta, 0.0)
+	_shake_time += delta
+	var rattle := Vector3(
+		sin(_shake_time * 53.0) + sin(_shake_time * 31.7 + 1.3),
+		sin(_shake_time * 47.0 + 2.1) + sin(_shake_time * 27.1),
+		sin(_shake_time * 41.0 + 0.7) + sin(_shake_time * 23.3 + 4.0)
+	) * (_trauma * _trauma * SHAKE_ANGLE * 0.5)
+	camera.rotation = _recoil + Vector3(0.0, 0.0, _tilt) + rattle
 
 	var fov: float = Settings.fov
 	if _sliding:

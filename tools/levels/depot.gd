@@ -229,6 +229,13 @@ func _cover() -> void:
 	tyres(Vector3(-28.9, 0, 17.2), 3)
 	for p in [Vector3(28.8, 0, -5.0), Vector3(28.9, 0, -5.8), Vector3(28.2, 0, -5.5), Vector3(-28.8, 0, 18.6), Vector3(-28.0, 0, 18.9), Vector3(5.5, 0, 18.9)]:
 		barrel(p)
+	# Fuel at the ends of the containers, where the aisles cross, and one on
+	# the dock.
+	for p in [
+		Vector3(0.3, 0, -6.4), Vector3(0.45, 0, -7.25), Vector3(10.3, 0, 1.0), Vector3(-5.8, 0, 10.4),
+		Vector3(20.0, 0, 0.3), Vector3(-18.3, 0, 2.1), Vector3(9.6, DOCK_Y, -18.8),
+	]:
+		fuel(p)
 
 
 func _surroundings() -> void:
