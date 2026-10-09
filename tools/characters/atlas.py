@@ -83,6 +83,16 @@ class Source:
         if shader is None:
             if material is not None:
                 self.base = tuple(material.diffuse_color)
+            if material is not None and material.node_tree is not None:
+                # A material that is not lit at all, as cartoon models have
+                # them: the colour is whatever it glows with.
+                glow = next((node for node in material.node_tree.nodes if node.type == "EMISSION"), None)
+                image = next((node for node in material.node_tree.nodes if node.type == "TEX_IMAGE" and node.image is not None), None)
+                if glow is not None:
+                    self.color = _upstream(glow.inputs["Color"])
+                    self.base = tuple(glow.inputs["Color"].default_value)
+                elif image is not None:
+                    self.color = (image.image, "RGB")
             return
         inputs = shader.inputs
         self.base = tuple(inputs["Base Color"].default_value)

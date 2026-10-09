@@ -31,7 +31,7 @@ JOINTS = ("Hips", "Spine", "Chest", "UpperChest", "Neck", "Head", "LeftShoulder"
 
 
 def measure(path: str) -> tuple:
-    args = argparse.Namespace(source=path, drop="", keep_weapons=False, route="auto", id="statue", height=0.0, scale=1.0, yaw=None)
+    args = argparse.Namespace(source=path, drop="", keep_weapons=False, route="auto", id="statue", height=0.0, scale=1.0, wide=1.0, yaw=None)
     prepare.load(path)
     body, armature, _ = prepare.gather(args)
     mapping = humanoid.guess(armature, {group.name for group in body.vertex_groups})

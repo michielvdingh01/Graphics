@@ -27,6 +27,7 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import atlas  # noqa: E402
 import humanoid  # noqa: E402
+import parts  # noqa: E402
 
 WEAPONS = r"weapon|pistol|rifle|gun|knife|sword|blade|grenade|rocket|launcher|bayonet"
 
@@ -39,11 +40,12 @@ def options() -> argparse.Namespace:
     parser.add_argument("--triangles", type=int, default=20000)
     parser.add_argument("--height", type=float, default=0.0, help="scale to this many metres")
     parser.add_argument("--scale", type=float, default=1.0, help="after that, scale by this much")
+    parser.add_argument("--wide", type=float, default=1.0, help="make it this much broader without making it taller")
     parser.add_argument("--yaw", type=float, default=None, help="degrees to turn instead of guessing the front")
     parser.add_argument("--drop", default="", help="regex of objects and materials to leave out, besides weapons")
     parser.add_argument("--keep-weapons", action="store_true")
     parser.add_argument("--bones", default="", help="JSON file mapping profile bone names to source bone names")
-    parser.add_argument("--route", choices=("auto", "rigged", "scan"), default="auto")
+    parser.add_argument("--route", choices=("auto", "rigged", "scan", "parts"), default="auto")
     parser.add_argument("--look", default="", help="zombie or clown: paint the character up as one")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--no-delight", action="store_true", help="scan: leave the light that is baked into the texture")
@@ -154,12 +156,20 @@ def gather(args: argparse.Namespace) -> tuple:
     for obj in list(bpy.context.scene.objects):
         if obj not in keep:
             bpy.data.objects.remove(obj, do_unlink=True)
-    body = meshes[0]
-    if len(meshes) > 1:
-        with bpy.context.temp_override(active_object=body, selected_editable_objects=meshes):
-            bpy.ops.object.join()
+    report = {"source_triangles": found, "dropped": dropped}
+    pieces = parts.sort(meshes) if armature is None and args.route in ("auto", "parts") else None
+    if args.route == "parts" and pieces is None:
+        sys.exit("import_character: --route=parts needs a head, a torso, two arms and two legs, named so")
+    if pieces is not None:
+        body, armature = parts.rig(pieces)
+        report["route"] = "parts"
+    else:
+        body = meshes[0]
+        if len(meshes) > 1:
+            with bpy.context.temp_override(active_object=body, selected_editable_objects=meshes):
+                bpy.ops.object.join()
     body.name = body.data.name = args.id or "character"
-    return body, armature, {"source_triangles": found, "dropped": dropped}
+    return body, armature, report
 
 
 def triangles(mesh: bpy.types.Mesh) -> int:
@@ -199,7 +209,7 @@ def settle(body: bpy.types.Object, armature, args: argparse.Namespace, forward: 
             sys.exit("import_character: the model is %.3g units tall, which is no person in any unit; pass --height=1.8" % height)
     scale *= args.scale
     yaw = math.radians(args.yaw) if args.yaw is not None else math.atan2(-forward.x, -forward.y)
-    turn = Matrix.Rotation(yaw, 4, "Z") @ Matrix.Scale(scale, 4)
+    turn = Matrix.Diagonal((args.wide, args.wide, 1.0, 1.0)) @ Matrix.Rotation(yaw, 4, "Z") @ Matrix.Scale(scale, 4)
     centre = turn @ Vector(((low.x + high.x) / 2, (low.y + high.y) / 2, low.z))
     if hips:
         middle = turn @ armature.data.bones[hips].head_local
@@ -321,8 +331,17 @@ def main() -> None:
     args = options()
     load(args.source)
     body, armature, report = gather(args)
+    if args.look == "clown":
+        # Room for the nose.
+        args.triangles -= 100
 
-    if armature is not None:
+    if report.get("route") == "parts":
+        bones = armature.data.bones
+        across = bones["LeftUpperArm"].head_local - bones["RightUpperArm"].head_local
+        report.update(settle(body, armature, args, Vector((0.0, -1.0 if across.x > 0.0 else 1.0, 0.0)), "Hips"))
+        thin(body, args.triangles)
+        textures = atlas.pack(body)
+    elif armature is not None:
         report["route"] = "rigged"
         names = {group.name for group in body.vertex_groups}
         try:
@@ -335,7 +354,9 @@ def main() -> None:
         forward = across.cross(Vector((0.0, 0.0, 1.0))).normalized()
         report.update(settle(body, armature, args, forward, mapping["Hips"]))
         report.update(humanoid.conform(armature, [body], mapping, Vector((0.0, -1.0, 0.0))))
-        thin(body, args.triangles)
+        # Hair cards get a second face later on: leave room for those.
+        cards = [atlas.Source(slot.material).alpha is not None for slot in body.material_slots]
+        thin(body, args.triangles - sum(len(polygon.vertices) - 2 for polygon in body.data.polygons if cards and cards[polygon.material_index]))
         textures = atlas.pack(body)
     else:
         import scan

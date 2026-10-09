@@ -55,7 +55,7 @@ def bake(body: bpy.types.Object, name: str, folder: str, lit: bool) -> bpy.types
 def main() -> None:
     source, folder = sys.argv[sys.argv.index("--") + 1:][:2]
     os.makedirs(folder, exist_ok=True)
-    args = argparse.Namespace(source=source, drop="", keep_weapons=False, route="auto", id="scan", height=0.0, scale=1.0, yaw=None)
+    args = argparse.Namespace(source=source, drop="", keep_weapons=False, route="auto", id="scan", height=0.0, scale=1.0, wide=1.0, yaw=None)
     prepare.load(source)
     body, armature, _ = prepare.gather(args)
     mapping = humanoid.guess(armature, {group.name for group in body.vertex_groups})

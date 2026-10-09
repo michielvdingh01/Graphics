@@ -453,10 +453,10 @@ def rig(source: bpy.types.Object, args, report: dict) -> tuple:
     except landmarks.PoseError as error:
         sys.exit("import_character: this does not look like a person standing for a scan: %s" % error)
     # Stand it on the origin by its hips.
-    shift = Matrix.Translation((-joints["Hips"][0], -joints["Hips"][1], 0.0))
+    shift = Matrix.Diagonal((args.wide, args.wide, 1.0, 1.0)) @ Matrix.Translation((-joints["Hips"][0], -joints["Hips"][1], 0.0))
     source.data.transform(shift)
     hull.data.transform(shift)
-    joints = {name: (at[0] - joints["Hips"][0], at[1] - joints["Hips"][1], at[2]) for name, at in joints.items()}
+    joints = {name: ((at[0] - joints["Hips"][0]) * args.wide, (at[1] - joints["Hips"][1]) * args.wide, at[2]) for name, at in joints.items()}
     height = float(coordinates(hull.data)[:, 2].max())
     report.update(height=round(height, 3), turned=round(math.degrees(yaw), 1), fitted="joints from the shape (landmarks.py)")
 

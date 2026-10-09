@@ -12,13 +12,15 @@
 4. sheet.gd renders the contact sheet to assets/characters/sheets/<id>.jpg.
 5. The character gets its line in assets/characters/manifest.json.
 
-Where it came from goes in the manifest: --source, --license, --author, and
-for a generated model --prompt and --model. --placeholder="why" marks a
-character that stands in for something better. Everything else is passed on to
-prepare.py; the ones that matter:
+Where it came from goes in the manifest: --source, --url, --license, --author,
+and for a generated model --prompt and --model. --placeholder="why" marks a
+character that stands in for something better, and --wanted="..." describes
+that something, as a prompt for whatever is going to make it. Everything else
+is passed on to prepare.py; the ones that matter:
 
     --height=1.8        scale to this many metres (default: guess the unit)
     --scale=1.1         after that, make it this much bigger
+    --wide=1.1          and this much broader without making it taller
     --yaw=180           turn it by hand instead of guessing the front
     --triangles=20000   the budget
     --drop=REGEX        objects and materials to leave out, besides weapons
@@ -107,7 +109,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("file", nargs="?")
     parser.add_argument("id", nargs="?")
-    for name in ("source", "url", "license", "author", "prompt", "model", "placeholder", "note"):
+    for name in ("source", "url", "license", "author", "prompt", "model", "placeholder", "wanted", "note"):
         parser.add_argument("--" + name, default="")
     parser.add_argument("--no-sheet", action="store_true")
     parser.add_argument("--no-manifest", action="store_true")
@@ -159,6 +161,7 @@ def main() -> None:
         "license": args.license or "unknown",
         "author": args.author,
         "placeholder": args.placeholder,
+        "wanted": args.wanted,
         "prompt": args.prompt,
         "model": args.model,
         "note": args.note,

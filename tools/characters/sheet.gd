@@ -141,6 +141,8 @@ func _show(id: String) -> void:
 		printerr("sheet: no character at assets/characters/%s/%s.glb" % [id, id])
 		_failed = true
 		return
+	var height := 0.0
+	var span := 0.0
 	for view: Array in VIEWS:
 		var figure: Node3D = scene.instantiate()
 		_stage.add_child(figure)
@@ -151,6 +153,10 @@ func _show(id: String) -> void:
 			printerr("sheet: %s has no GeneralSkeleton" % id)
 			_failed = true
 			continue
+		for instance: MeshInstance3D in figure.find_children("*", "MeshInstance3D", true, false):
+			height = maxf(height, instance.mesh.get_aabb().end.y)
+		if skeleton.find_bone("LeftHand") >= 0 and skeleton.find_bone("RightHand") >= 0:
+			span = (skeleton.get_bone_global_rest(skeleton.find_bone("LeftHand")).origin.x - skeleton.get_bone_global_rest(skeleton.find_bone("RightHand")).origin.x) * 1.2
 		for turn: Array in view[2]:
 			var bone := skeleton.find_bone(turn[0])
 			if bone < 0:
@@ -160,9 +166,14 @@ func _show(id: String) -> void:
 			var pose := skeleton.get_bone_global_pose(bone)
 			pose.basis = Basis(turn[1], deg_to_rad(turn[2])) * pose.basis
 			skeleton.set_bone_global_pose(bone, pose)
+	# A giant or a figure with very long arms is shown smaller, so that the
+	# five still stand clear of each other; the title says how tall it is.
+	if height > 0.0:
+		for figure: Node3D in _stage.get_children():
+			figure.scale = Vector3.ONE * minf(1.0, minf(1.9 / height, 1.7 / maxf(span, 0.1)))
 	var title := Label.new()
 	title.name = "Title"
-	title.text = id
+	title.text = "%s    %.2f m" % [id, height]
 	title.add_theme_font_size_override("font_size", 36)
 	title.position = Vector2(28.0, SIZE.y - 64.0)
 	_stage.add_child(title)
