@@ -43,6 +43,8 @@ extends Node
 ## --posted stands the robots of the level's route at their posts, switched
 ## off, as the player finds them: to see a view as it is in the game, or to
 ## measure what it costs that they stand there.
+## --exit shows the way out of the level as it is once every zone is cleared:
+## the lamp over it on and its door rolled up.
 ## --snap=3 is for looking at the game itself instead of at a level: without
 ## --benchmark, and with --play to skip the title screen, it lets the game run
 ## as it is played, saves one screenshot after that many seconds and quits.
@@ -86,6 +88,7 @@ var _only := PackedStringArray()
 var _show := PackedStringArray()
 var _eval := PackedStringArray()
 var _posted := false
+var _exit := false
 
 
 func _ready() -> void:
@@ -97,6 +100,7 @@ func _ready() -> void:
 		_measure_frames = 30
 	_profile = "--profile" in args
 	_posted = "--posted" in args
+	_exit = "--exit" in args
 	for arg in args:
 		if arg.begins_with("--res="):
 			var parts := arg.get_slice("=", 1).split("x")
@@ -176,6 +180,8 @@ func _run() -> void:
 			node.preview(numbers[5])
 	if _posted and tree.current_scene.has_method("post_robots"):
 		tree.current_scene.post_robots()
+	if _exit and tree.current_scene.has_method("_open_exit"):
+		tree.current_scene._open_exit(false)
 	if not _blast.is_empty():
 		# It reads the floor off the colliders, which a level has a frame late.
 		await tree.physics_frame

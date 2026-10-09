@@ -8,8 +8,9 @@ extends Node
 ## that the route can be walked over the navmesh, that every robot can reach
 ## the player from its post and none stands close by and in view where the
 ## player appears or walks into its zone, that the robots a zone lists wait
-## at their posts until its fight starts, and that a checkpoint is still there
-## after a restart of the game and after a death. Where a level is cut into zones
+## at their posts until its fight starts, that a checkpoint is still there
+## after a restart of the game and after a death, and that the door at the
+## exit is shut until the level is cleared. Where a level is cut into zones
 ## that are only drawn when they can be seen, it looks for lines of sight
 ## into a zone from where that zone is switched off.
 
@@ -371,6 +372,15 @@ func _play_through(level: Dictionary, next: String) -> void:
 			if zone.order > checkpoint.order and _box(zone.area).has_point(checkpoint.pose.origin + Vector3.UP):
 				misplaced += 1
 	_check("%s: no checkpoint lies in a zone that comes after it" % title, misplaced == 0)
+	# Where the level is left: on the floor in the middle of the exit, which
+	# lies behind its door if it has one.
+	var out := _box(game.exit)
+	var beyond := Vector3(out.get_center().x, out.end.y, out.get_center().z)
+	var floor_there := space.intersect_ray(PhysicsRayQueryParameters3D.create(beyond, beyond + Vector3.DOWN * (out.size.y + 1.0), 1))
+	beyond = floor_there.position if floor_there else Vector3(beyond.x, out.position.y, beyond.z)
+	var has_door := not tree.get_nodes_in_group("exit_door").is_empty()
+	if has_door and not walk.is_empty():
+		_check("%s: the door at the exit is shut" % title, not _open_way(space, walk[-1], beyond))
 	var parts := game.get_node_or_null("Level")
 	if parts and parts.has_method("drawn"):
 		_check("%s: a zone that is switched off cannot be seen" % title, _sightlines(game, parts) == 0)
@@ -458,8 +468,13 @@ func _play_through(level: Dictionary, next: String) -> void:
 		and game.objective == game.exit.get_meta(&"title"))
 	var left := []
 	game.finished.connect(func(to: String) -> void: left.append(to))
-	if not walk.is_empty():
+	if has_door and not walk.is_empty():
+		# In front of the door nothing happens; it has to go up first.
 		_move(game.player, walk[-1])
+		await _wait(game.DOOR_DELAY + game.DOOR_TIME + 0.5)
+		_check("%s: and its door rolls up out of the way" % title, left.is_empty()
+			and _open_way(game.player.get_world_3d().direct_space_state, walk[-1], beyond))
+	_move(game.player, beyond)
 	await _wait(0.3)
 	_check("%s: walking into it leaves the level" % title, left == [next] and game.next_level() == next)
 	if next:
@@ -477,10 +492,20 @@ func _walk(game: Node) -> PackedVector3Array:
 	var stops: Array[Vector3] = [game.start.origin]
 	for checkpoint: RefCounted in game.checkpoints:
 		stops.append(checkpoint.pose.origin)
-	# The exit is a box; make for the floor in the middle of it.
+	# The exit is a box; make for the floor in the middle of it. If it lies
+	# behind a door that is still shut, the way there ends a step in front of
+	# that door.
 	var out := _box(game.exit)
-	var door := NavigationServer3D.map_get_closest_point(map, Vector3(out.get_center().x, out.position.y, out.get_center().z))
-	if not out.grow(0.3).has_point(door):
+	var door := Vector3(out.get_center().x, out.position.y, out.get_center().z)
+	var shutters := get_tree().get_nodes_in_group("exit_door")
+	if not shutters.is_empty():
+		var shutter: Node3D = shutters[0]
+		var before: Vector3 = shutter.global_position + shutter.get_meta(&"front", Vector3.ZERO)
+		var space: PhysicsDirectSpaceState3D = game.player.get_world_3d().direct_space_state
+		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(before, before + Vector3.DOWN * 10.0, 1))
+		door = ground.position if ground else before
+	door = NavigationServer3D.map_get_closest_point(map, door)
+	if shutters.is_empty() and not out.grow(0.3).has_point(door):
 		print("    the exit has no floor to stand on")
 		return PackedVector3Array()
 	stops.append(door)
@@ -621,6 +646,12 @@ func _kinds(enemies: Array) -> Array:
 func _reaches(map: RID, from: Vector3, to: Vector3) -> bool:
 	var route := NavigationServer3D.map_get_path(map, from, to, true)
 	return route.size() > 1 and route[0].distance_to(from) < 1.0 and route[-1].distance_to(to) < 1.0
+
+
+## True if nothing stands between two spots on the floor, at the height of
+## the player's middle.
+func _open_way(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> bool:
+	return space.intersect_ray(PhysicsRayQueryParameters3D.create(from + Vector3.UP * 0.9, to + Vector3.UP * 0.9, 1)).is_empty()
 
 
 ## True if a robot standing at `spot` shows from `eye`: its head or its middle.

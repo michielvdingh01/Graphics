@@ -8,8 +8,10 @@ extends SceneTree
 ## assets/models/, a body of its own for each prop that can explode, the
 ## lights, decals and reflection probes that belong to the building, and the
 ## route through it: where the player starts, the zones that are fought over,
-## the checkpoints and the exit. The scene that uses it holds everything that
-## is tuned by hand: environment, sun, lightmap and benchmark views.
+## the checkpoints and the exit. A part of the building that the game moves,
+## such as the shutter at the exit, is a body of its own with its own mesh.
+## The scene that uses it holds everything that is tuned by hand: environment,
+## sun, lightmap and benchmark views.
 ##
 ## A level that is more than one space cuts itself into zones with zone():
 ## everything is then filed under the zone it stands in, each zone gets meshes,
@@ -68,8 +70,13 @@ var _lights: Node3D
 var _decals: Node3D
 var _props: Node3D
 var _explosives: Node3D
-## Body the next collider goes into instead of the level's own, see _explosive().
+## Body the next collider goes into instead of the level's own, see
+## _explosive() and _build_into().
 var _into: StaticBody3D
+## Parts of the level that the game moves: body -> [zone, kind of mesh].
+var _movers := {}
+## The one that is being built, or null.
+var _moving: AnimatableBody3D
 ## Holds the route through the level, in the order it is described.
 var _route: Node3D
 ## Zones the level is cut into, by name and in the order they were declared:
@@ -583,18 +590,33 @@ func pallet(at: Vector3, yaw: float, stack: int) -> void:
 
 ## Roller shutter `size.x` wide and `size.y` high, seen from the side `normal`
 ## points to. `center` is the middle of its curtain; the roll sits in a hood
-## above that.
-func roller_door(center: Vector3, normal: Vector3, size: Vector2) -> void:
+## above that. With `opens` it is the door of the level's exit: the curtain
+## is then a body of its own, in the group "exit_door", that the game rolls
+## up by its "rise" when the exit opens; "front" is the side the player
+## comes to it from. Such a door has to hang in a doorway, inside the
+## thickness of a wall that goes on above it: that wall is what hides the
+## curtain as it goes up.
+func roller_door(center: Vector3, normal: Vector3, size: Vector2, opens := false) -> void:
 	var xf := Transform3D(Basis(Vector3.UP.cross(normal), Vector3.UP, normal), center)
 	var half := size * 0.5
+	var curtain: AnimatableBody3D = null
+	if opens:
+		curtain = _mover("Shutter", center)
+		curtain.add_to_group("exit_door", true)
+		curtain.set_meta(&"rise", size.y - 0.15)
+		curtain.set_meta(&"front", normal)
+	_build_into(curtain)
 	# The slats only face the room, so a plate behind them keeps the daylight out.
 	_local_box("steel", xf, Vector3(0, 0, -0.04), Vector3(size.x, size.y, 0.03))
 	corrugated("roof", xf * Transform3D(Basis(Vector3.BACK, PI * 0.5), Vector3.ZERO), Vector2(size.y - 0.1, size.x), 0.095, 0.014, NO_COLLIDE)
+	_build_into(null)
 	for side: float in [-1.0, 1.0]:
 		_local_box("dark_steel", xf, Vector3(side * (half.x - 0.03), 0, 0.03), Vector3(0.1, size.y, 0.1), NO_COLLIDE)
+	_build_into(curtain)
 	_local_box("dark_steel", xf, Vector3(0, -half.y + 0.06, 0.02), Vector3(size.x - 0.16, 0.1, 0.05), NO_COLLIDE)
 	_local_box("rubber", xf, Vector3(0, -half.y + 0.008, 0.02), Vector3(size.x - 0.16, 0.016, 0.03), DETAIL | NO_COLLIDE)
 	_local_box("bare_steel", xf, Vector3(0, -half.y + 0.07, 0.055), Vector3(0.22, 0.03, 0.02), NO_COLLIDE)
+	_build_into(null)
 	rounded_box("steel", xf * Transform3D(Basis(), Vector3(0, half.y + 0.21, 0.17)), Vector3(size.x + 0.3, 0.42, 0.42), 0.05, NO_COLLIDE)
 	# Hand chain, hanging in a loop from the end of the hood.
 	var chain := half.x - 0.18
@@ -1285,6 +1307,33 @@ func _check_route() -> void:
 	print("Route: %d zones, %d checkpoints" % [zones.size(), steps.size() - zones.size() - 2])
 
 
+# --- Moving parts --------------------------------------------------------------
+# Most of a level is merged into a few meshes and one body. What the game has
+# to move is kept apart.
+
+
+## A part of the level that the game moves: a body of its own at `at`, in the
+## zone it stands in. What is built between _build_into(body) and
+## _build_into(null) becomes its mesh and its colliders. The mesh gets a patch
+## of lightmap like the rest of the building, and keeps it as it moves.
+func _mover(mover_name: String, at: Vector3) -> AnimatableBody3D:
+	var zone_name := _zone_at(at)
+	var body := AnimatableBody3D.new()
+	body.name = mover_name
+	body.position = at
+	# With the shell of its zone, which is never switched off: it keeps the
+	# sun out as the walls do.
+	_add(body, _zones[zone_name].node if zone_name else _root)
+	_movers[body] = [zone_name, "mover " + String(body.name).to_snake_case()]
+	return body
+
+
+## Builds what follows into that moving part, or into the level again for null.
+func _build_into(body: AnimatableBody3D) -> void:
+	_moving = body
+	_into = body
+
+
 # --- Geometry builders -------------------------------------------------------
 
 
@@ -1782,6 +1831,8 @@ func _up_along(direction: Vector3) -> Basis:
 ## The surface a piece of geometry at `at` goes into: that of its zone, its
 ## kind and its material.
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	if _moving:
+		return _tool_named("%s|%s/%s" % [_movers[_moving][0], _movers[_moving][1], mat])
 	var zone_name := _zone_at(at)
 	var kind := "glass" if flags & GLASS else ("detail" if flags & DETAIL else "static")
 	if kind == "detail":
@@ -1890,7 +1941,8 @@ func _commit(zone_name: String, kind: String) -> void:
 		st.set_material(_material(key.get_slice("/", 1)))
 		st.commit(mesh)
 		triangles += mesh.surface_get_array_index_len(mesh.get_surface_count() - 1) / 3
-	if kind == "static":
+	var mover: AnimatableBody3D = _movers.find_key([zone_name, kind])
+	if kind == "static" or mover:
 		var err := mesh.lightmap_unwrap(Transform3D(), TEXEL)
 		print("Lightmap unwrap: ", error_string(err), ", size hint ", mesh.lightmap_size_hint)
 	var stem := kind.replace(" ", "_")
@@ -1908,7 +1960,12 @@ func _commit(zone_name: String, kind: String) -> void:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_:
 			instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
-	if zone_name == "":
+	if mover:
+		instance.name = "Mesh"
+		instance.gi_mode = GeometryInstance3D.GI_MODE_STATIC
+		instance.transform = mover.transform.affine_inverse()
+		_add(instance, mover)
+	elif zone_name == "":
 		_add(instance, _root)
 		_root.move_child(instance, 0)
 	elif kind == "static":

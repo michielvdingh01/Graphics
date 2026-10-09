@@ -93,9 +93,10 @@ func _route_through() -> void:
 	# The last of them hold the way out: one on the deck, one in front of the door.
 	route_zone("loading_bay", "the loading bay", AABB(Vector3(-HX, 0, -HZ), Vector3(HX, EAVES, HZ * 2.0)), [
 		["grunt", Vector3(-10.3, 0, 6.2)], ["grunt", Vector3(-16.3, 0, 10.2)], ["grunt", Vector3(-15.0, DECK_Y, -8.2)],
-		["rusher", Vector3(-13.5, 0, -9.0)], ["rusher", Vector3(-18.0, 0, -6.0)], ["heavy", Vector3(-17.5, 0, 0.5)],
+		["rusher", Vector3(-13.5, 0, -9.0)], ["rusher", Vector3(-17.2, 0, -10.2)], ["heavy", Vector3(-17.5, 0, 0.5)],
 	])
-	route_exit("Leave by the loading door", AABB(Vector3(-HX, 0, -2.5), Vector3(2.2, 4.0, 5.0)), "depot", Vector3(-HX, 5.6, 0.0), Vector3.RIGHT)
+	# Out is out: the level ends a step beyond the door, in the yard.
+	route_exit("Leave by the loading door", AABB(Vector3(-HX - 4.5, -0.3, -4.0), Vector3(3.0, 4.5, 8.0)), "depot", Vector3(-HX, 5.6, 0.0), Vector3.RIGHT)
 
 
 func _shell() -> void:
@@ -117,9 +118,10 @@ func _shell() -> void:
 		_mullions(Vector3(x, 6.2, -HZ - 0.25), 3.0, 1.6, true, 1.0)
 	wall("brick", true, -HZ - 0.25, 0.5, -HX - 0.5, HX + 0.5, 0.0, EAVES, north)
 
-	# West wall with the closed loading door.
+	# West wall with the loading door, which is the way out and stays shut
+	# until the hall is cleared.
 	wall("brick", false, -HX - 0.25, 0.5, -HZ, HZ, 0.0, EAVES, [[-2.5, 2.5, 0.0, 5.0]])
-	roller_door(Vector3(-HX - 0.26, 2.29, 0.0), Vector3.RIGHT, Vector2(5.0, 4.58))
+	roller_door(Vector3(-HX - 0.26, 2.29, 0.0), Vector3.RIGHT, Vector2(5.0, 4.58), true)
 	for z in [-2.6, 2.6]:
 		box("steel", Vector3(-HX - 0.05, 2.6, z), Vector3(0.2, 5.2, 0.2))
 	box("steel", Vector3(-HX - 0.05, 5.1, 0.0), Vector3(0.2, 0.25, 5.4))
@@ -1435,7 +1437,19 @@ func _exterior() -> void:
 	box("floor", Vector3(5, -0.55, 0), Vector3(160, 1.0, 160), Vector3.ZERO, DETAIL)
 	# Yard wall and a skyline so the windows do not look out on nothing.
 	box("brick", Vector3(5, 1.6, 34), Vector3(110, 3.2, 0.5), Vector3.ZERO, DETAIL)
-	box("brick", Vector3(-50, 1.6, 0), Vector3(0.5, 3.2, 68), Vector3.ZERO, DETAIL)
+	# The west wall has the gate of the yard in it, straight across from the
+	# loading door: what the player sees when that door goes up.
+	for side: float in [-1.0, 1.0]:
+		box("brick", Vector3(-50, 1.6, side * 19.0), Vector3(0.5, 3.2, 30.0), Vector3.ZERO, DETAIL)
+		box("concrete", Vector3(-50, 1.9, side * 3.7), Vector3(0.7, 3.8, 0.7), Vector3.ZERO, DETAIL)
+		box("concrete", Vector3(-50, 3.86, side * 3.7), Vector3(0.9, 0.12, 0.9), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	# The apron in front of the loading door, level with the floor of the hall,
+	# with a post either side of the door to keep lorries off the frame.
+	box("concrete", Vector3(-HX - 5.0, -0.03, 0.0), Vector3(8.0, 0.06, 9.0), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	for z: float in [-3.1, 3.1]:
+		cylinder("steel_yellow", Vector3(-HX - 1.3, 0, z), 0.09, 1.0, DETAIL)
+	container("container_red", Vector3(-HX - 7.5, 0, -8.0), true, DETAIL)
+	container("container_grey", Vector3(-HX - 11.0, 0, 9.5), false, DETAIL)
 	box("brick", Vector3(60, 1.6, 0), Vector3(0.5, 3.2, 68), Vector3.ZERO, DETAIL)
 	box("brick", Vector3(5, 1.6, -34), Vector3(110, 3.2, 0.5), Vector3.ZERO, DETAIL)
 	box("brick", Vector3(34, 5, 52), Vector3(26, 10, 16), Vector3.ZERO, DETAIL | NO_COLLIDE)

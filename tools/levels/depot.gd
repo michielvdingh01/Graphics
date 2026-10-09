@@ -12,6 +12,11 @@ const DOCK_Y := 1.2
 const DOCK_Z := -14.0
 const DOCK_X := 22.0
 const CANOPY_Y := 5.6
+## Where the roller doors of the warehouse are, along the dock. The one in
+## the middle, door 3, is the way out.
+const DOORS: Array[float] = [-16.0, -8.0, 0.0, 8.0, 16.0]
+## How far the way into the warehouse behind door 3 goes back.
+const WAY_IN := 9.0
 
 
 func _level_name() -> String:
@@ -52,15 +57,20 @@ func _route_through() -> void:
 		["grunt", Vector3(-6.0, DOCK_Y, -16.5)], ["grunt", Vector3(10.5, DOCK_Y, -16.0)], ["rusher", Vector3(3.5, DOCK_Y, -15.5)],
 		["heavy", Vector3(16.5, DOCK_Y, -17.0)], ["heavy", Vector3(-1.0, DOCK_Y, -17.5)],
 	])
-	route_exit("Leave through dock door 3", AABB(Vector3(-2.0, DOCK_Y, -YZ), Vector3(4.0, 3.4, 2.4)), "", Vector3(0.0, 5.35, -YZ), Vector3.BACK)
+	# Through the door: the game ends a step inside the warehouse.
+	route_exit("Leave through dock door 3", AABB(Vector3(-2.3, DOCK_Y - 0.1, -YZ - 4.0), Vector3(4.6, 3.6, 3.0)), "", Vector3(0.0, 5.35, -YZ), Vector3.BACK)
 
 
 func _yard() -> void:
 	box("floor", Vector3(0, -0.25, 0), Vector3(YX * 2.0 + 1.0, 0.5, YZ * 2.0 + 1.0))
 	wall("brick", true, YZ + 0.25, 0.5, -YX - 0.5, YX + 0.5, 0.0, WALL, [])
 	wall("brick", false, -YX - 0.25, 0.5, -YZ, YZ, 0.0, WALL, [])
-	# The dock backs onto the warehouse, whose wall is higher.
-	wall("concrete", true, -YZ - 0.25, 0.5, -YX - 0.5, YX + 0.5, 0.0, 8.0, [])
+	# The dock backs onto the warehouse, whose wall is higher. Its roller
+	# doors hang in doorways in that wall.
+	var doorways: Array = []
+	for x in DOORS:
+		doorways.append([x - 2.0, x + 2.0, DOCK_Y, DOCK_Y + 3.82])
+	wall("concrete", true, -YZ - 0.25, 0.5, -YX - 0.5, YX + 0.5, 0.0, 8.0, doorways)
 	# East wall with the closed gate the player came in through.
 	wall("brick", false, YX + 0.25, 0.5, -YZ, YZ, 0.0, WALL, [[-3.0, 3.0, 0.0, 4.0]])
 	roller_door(Vector3(YX + 0.26, 1.79, 0.0), Vector3.LEFT, Vector2(6.0, 3.58))
@@ -103,12 +113,26 @@ func _dock() -> void:
 		beam("steel", Vector3(x, CANOPY_Y - 0.25, DOCK_Z - 0.3), Vector3(x, CANOPY_Y + 0.1, -YZ), 0.16, DETAIL | NO_COLLIDE)
 		beam("steel", Vector3(x, CANOPY_Y - 1.4, DOCK_Z - 0.3), Vector3(x, CANOPY_Y - 0.2, DOCK_Z - 1.8), 0.08, DETAIL | NO_COLLIDE)
 
-	# Roller doors in the warehouse wall, each with a number plate of light above.
+	# Roller doors in the warehouse wall, each with a number plate of light
+	# above. Door 3 goes up when the yard is cleared.
 	var lit := [-16.0, 0.0, 8.0]
-	for x in [-16.0, -8.0, 0.0, 8.0, 16.0]:
-		roller_door(Vector3(x, DOCK_Y + 1.7, -YZ + 0.06), Vector3.BACK, Vector2(4.0, 3.4))
+	for x in DOORS:
+		roller_door(Vector3(x, DOCK_Y + 1.7, -YZ - 0.26), Vector3.BACK, Vector2(4.0, 3.4), x == 0.0)
 		label(str(roundi(x / 8.0) + 3), Vector3(x - 2.9, DOCK_Y + 2.3, -YZ), Vector3.BACK, 0.7, Color(0.08, 0.12, 0.2))
 		tube(Vector3(x, CANOPY_Y - 0.5, mid_z), true, x in lit, x == 0.0)
+
+	# Behind door 3: a bare way into the warehouse, lit from deep inside so
+	# that none of the light falls on the dock while the door is down.
+	var back := -YZ - 0.5 - WAY_IN
+	var mid := -YZ - 0.5 - WAY_IN * 0.5
+	for y: float in [DOCK_Y - 0.1, DOCK_Y + 3.9]:
+		box("concrete", Vector3(0, y, mid), Vector3(5.0, 0.2, WAY_IN))
+	for x: float in [-2.4, 2.4]:
+		box("concrete", Vector3(x, DOCK_Y + 1.9, mid), Vector3(0.2, 3.8, WAY_IN))
+	box("concrete", Vector3(0, DOCK_Y + 1.9, back - 0.1), Vector3(5.0, 3.8, 0.2))
+	tube(Vector3(0, DOCK_Y + 3.74, back + 3.5), false, true, false, 5.0)
+	crates(Vector3(-1.1, DOCK_Y, back + 1.4), 3)
+	pallet(Vector3(1.3, DOCK_Y, back + 1.2), 8.0, 3)
 
 	crates(Vector3(-15.0, DOCK_Y, -18.0), 4)
 	crates(Vector3(7.0, DOCK_Y, -17.6), 3)
@@ -267,8 +291,12 @@ func _cover() -> void:
 
 func _surroundings() -> void:
 	box("floor", Vector3(0, -0.55, 0), Vector3(220, 1.0, 220), Vector3.ZERO, DETAIL)
-	# The warehouse behind the dock and a skyline beyond the other walls.
-	box("concrete", Vector3(0, 6.0, -31), Vector3(72, 12, 21), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	# The warehouse behind the dock, in blocks around the way into it behind
+	# door 3, and a skyline beyond the other walls.
+	for side: float in [-1.0, 1.0]:
+		box("concrete", Vector3(side * 19.5, 6.0, -31), Vector3(33, 12, 21), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	box("concrete", Vector3(0, 8.7, -31), Vector3(6, 6.6, 21), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	box("concrete", Vector3(0, 2.7, -36.25), Vector3(6, 5.4, 10.5), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	box("roof", Vector3(0, 12.6, -31), Vector3(74, 1.2, 23), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	box("brick", Vector3(-22, 6.5, 38), Vector3(30, 13, 16), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	box("concrete", Vector3(26, 9, 44), Vector3(22, 18, 18), Vector3.ZERO, DETAIL | NO_COLLIDE)

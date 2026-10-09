@@ -5,7 +5,8 @@ extends Node3D
 ## off. Their fight starts when the player walks into the zone or shoots at
 ## one of them. A checkpoint is a place: it counts once everything before it
 ## is cleared, and a death or a restart of the game carries on from the last
-## one. The exit opens when every zone is cleared.
+## one. The exit opens when every zone is cleared: its lamp comes on and its
+## door rolls up.
 
 ## What the HUD shows as the thing to do, and how many robots still stand in
 ## the way of it.
@@ -28,6 +29,10 @@ const HUNT_DELAY := Vector2(1.5, 4.0)
 const RESTART_DELAY := 2.5
 ## How long the screen takes to go dark at the exit before the next level loads.
 const EXIT_FADE := 0.9
+## How long the door at the exit takes to roll up, and how long after the
+## lamp over it has come on it starts.
+const DOOR_TIME := 3.2
+const DOOR_DELAY := 0.5
 
 
 ## A part of the level that is fought over.
@@ -305,6 +310,18 @@ func _open_exit(announce: bool) -> void:
 		lamp.visible = true
 		if announce:
 			Sfx.play_at(&"clang", lamp.global_position, 4.0)
+	# The door of the exit is part of the level (the group "exit_door", see
+	# roller_door() in tools/level_builder.gd) and goes up into the wall.
+	for door: Node3D in get_tree().get_nodes_in_group("exit_door"):
+		var rise: float = door.get_meta(&"rise", 0.0)
+		var up := door.position + Vector3.UP * rise
+		if not announce:
+			door.position = up
+			continue
+		var rolling := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+		rolling.tween_interval(DOOR_DELAY)
+		rolling.tween_property(door, "position", up, DOOR_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		rolling.tween_callback(func() -> void: Sfx.play_at(&"clang", door.global_position, -2.0))
 	exit_opened.emit()
 	_on_exit_entered(player)
 
