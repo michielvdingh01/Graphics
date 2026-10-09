@@ -28,6 +28,9 @@ prepare.py; the ones that matter:
     --look=zombie       paint it up as a zombie or a clown
     --no-delight        scan: leave the light that is baked into the texture
     --keep=DIR          leave the Blender scene and the textures there
+    --report=FILE       leave what Blender measured there, joints and all
+    --no-manifest       a try-out: do not put it in the manifest
+    --no-sheet          skip the contact sheet
 
 Blender runs without a window (blender -b). Set BLENDER or GODOT when they are
 not where Homebrew and /Applications put them.
@@ -107,6 +110,8 @@ def main() -> None:
     for name in ("source", "url", "license", "author", "prompt", "model", "placeholder", "note"):
         parser.add_argument("--" + name, default="")
     parser.add_argument("--no-sheet", action="store_true")
+    parser.add_argument("--no-manifest", action="store_true")
+    parser.add_argument("--report", default="")
     args, rest = parser.parse_known_args()
     if not args.file or not args.id:
         sys.exit(__doc__)
@@ -131,6 +136,8 @@ def main() -> None:
         run([BLENDER, "-b", "--factory-startup", "--python", str(HERE / "prepare.py"), "--",
              str(source), str(target), "--id", args.id, "--report", str(report_file)] + rest, "Blender")
         report = json.loads(report_file.read_text())
+        if args.report:
+            shutil.copy(report_file, args.report)
     settings.write_text(IMPORT.format(id=args.id) % ((uid.group(0) + "\n") if uid else ""))
 
     print("%s: importing in Godot" % args.id)
@@ -170,11 +177,12 @@ def main() -> None:
         "imported": datetime.date.today().isoformat(),
         "tools": "Blender %s" % report.get("blender", "?"),
     }
-    manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
-    manifest.setdefault("themes", {})
-    manifest.setdefault("characters", {})[args.id] = {key: value for key, value in entry.items() if value not in ("", None)}
-    manifest["characters"] = dict(sorted(manifest["characters"].items()))
-    MANIFEST.write_text(json.dumps(manifest, indent="\t", ensure_ascii=False) + "\n")
+    if not args.no_manifest:
+        manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+        manifest.setdefault("themes", {})
+        manifest.setdefault("characters", {})[args.id] = {key: value for key, value in entry.items() if value not in ("", None)}
+        manifest["characters"] = dict(sorted(manifest["characters"].items()))
+        MANIFEST.write_text(json.dumps(manifest, indent="\t", ensure_ascii=False) + "\n")
 
     print("%s: %s route, %s triangles (from %s), %.2f m tall, %.1f MB" % (
         args.id, entry["route"], entry["triangles"], entry["source_triangles"], entry["height"] or 0.0, entry["megabytes"]))

@@ -9,21 +9,24 @@ avatar is already there.
 import json
 import pathlib
 import sys
+import urllib.parse
 import urllib.request
 
 REPO = "microsoft/Microsoft-Rocketbox"
-API = "https://api.github.com/repos/%s/contents/Assets/Avatars/%s/%s/%s"
+TREE = "https://api.github.com/repos/%s/git/trees/master?recursive=1" % REPO
+RAW = "https://raw.githubusercontent.com/%s/master/" % REPO
 ROOT = pathlib.Path(__file__).resolve().parents[2] / "assets/characters/.source/rocketbox"
 
 
-def listing(group: str, name: str, folder: str) -> list:
-    try:
-        with urllib.request.urlopen(API % (REPO, group, name, folder)) as reply:
-            return json.load(reply)
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return []
-        raise
+def listing() -> list:
+    """Every file of the library; asked once, because GitHub only answers 60
+    questions an hour from someone who is not signed in."""
+    cache = ROOT / "tree.json"
+    if not cache.exists():
+        ROOT.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(TREE) as reply:
+            cache.write_bytes(reply.read())
+    return json.loads(cache.read_text())["tree"]
 
 
 def fetch(name: str) -> pathlib.Path:
@@ -31,21 +34,24 @@ def fetch(name: str) -> pathlib.Path:
     fbx = target / (name + ".fbx")
     if (target / "complete").exists():
         return fbx
-    for group in ("Adults", "Professions", "Children"):
-        files = listing(group, name, "Export") + listing(group, name, "Textures")
-        if files:
-            break
-    else:
+    files = []
+    for entry in listing():
+        parts = entry["path"].split("/")
+        # Assets/Avatars/<group>/<name>/Export|Textures/<file>
+        if len(parts) == 6 and parts[:2] == ["Assets", "Avatars"] and parts[3] == name and parts[4] in ("Export", "Textures"):
+            files.append(entry)
+    if not files:
         sys.exit("fetch_rocketbox: no avatar named %s" % name)
     target.mkdir(parents=True, exist_ok=True)
     for entry in files:
+        file = entry["path"].split("/")[-1]
         # The second FBX carries face bones nothing here uses.
-        if entry["name"].endswith("_facial.fbx"):
+        if file.endswith("_facial.fbx"):
             continue
-        path = target / entry["name"]
+        path = target / file
         if not path.exists() or path.stat().st_size != entry["size"]:
-            print("  %s (%.1f MB)" % (entry["name"], entry["size"] / 1e6), file=sys.stderr)
-            urllib.request.urlretrieve(entry["download_url"], path)
+            print("  %s (%.1f MB)" % (file, entry["size"] / 1e6), file=sys.stderr)
+            urllib.request.urlretrieve(RAW + urllib.parse.quote(entry["path"]), path)
     (target / "complete").touch()
     return fbx
 

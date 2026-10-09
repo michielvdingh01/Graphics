@@ -17,6 +17,11 @@ GUTTER = 4
 # How much sharper the head is than the rest.
 HEAD_BOOST = 1.7
 HEAD_BONES = ("Head", "Neck", "Jaw", "LeftEye", "RightEye")
+CUTOUT_BOOST = 2.0
+# Set for FBX and OBJ files. Their materials are from before metalness: the
+# importer reads how much a material reflects as how metallic it is, and a
+# person in a cotton shirt comes out as polished steel.
+LEGACY = False
 
 
 def pixels(image: bpy.types.Image) -> np.ndarray:
@@ -89,6 +94,10 @@ class Source:
         self.roughness = _upstream(inputs["Roughness"])
         self.metallic = _upstream(inputs["Metallic"])
         self.specular = _upstream(inputs["Specular IOR Level"]) if "Specular IOR Level" in inputs else None
+        if LEGACY and self.metallic is None:
+            self.metal = 0.0
+            # Likewise a material without a gloss map is not a mirror.
+            self.rough = max(self.rough, 0.7)
 
     def size(self) -> tuple:
         for found in (self.color, self.normal, self.roughness, self.specular):
@@ -225,6 +234,13 @@ class Atlas:
             return (at * self.weights).sum(axis=2)
         return (at * self.weights[:, :, :, None]).sum(axis=2)
 
+    def corner_attribute(self, values: np.ndarray) -> np.ndarray:
+        """A per-corner value, such as a tangent, spread over the texels."""
+        at = values[self.triangles[np.maximum(self.face, 0)]]
+        if at.ndim == 3:
+            return (at * self.weights).sum(axis=2)
+        return (at * self.weights[:, :, :, None]).sum(axis=2)
+
     def positions(self, mesh: bpy.types.Mesh) -> np.ndarray:
         co = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
         mesh.vertices.foreach_get("co", co)
@@ -287,7 +303,8 @@ def _save(name: str, data: np.ndarray, folder: str, kind: str, srgb: bool) -> bp
 
 def _material(name: str, images: dict, cutout: bool) -> bpy.types.Material:
     material = bpy.data.materials.new(name)
-    material.use_nodes = True
+    if material.node_tree is None:
+        material.use_nodes = True
     nodes, links = material.node_tree.nodes, material.node_tree.links
     shader = next(node for node in nodes if node.type == "BSDF_PRINCIPLED")
 
@@ -311,7 +328,7 @@ def _material(name: str, images: dict, cutout: bool) -> bpy.types.Material:
     links.new(texture("orm").outputs["Color"], split.inputs[0])
     links.new(split.outputs[1], shader.inputs["Roughness"])
     links.new(split.outputs[2], shader.inputs["Metallic"])
-    material.use_backface_culling = not cutout
+    material.use_backface_culling = True
     return material
 
 
@@ -361,6 +378,10 @@ def pack(obj: bpy.types.Object, side: int = SIDE) -> Atlas:
         covered = 0.5 * np.abs(edge1[:, 0] * edge2[:, 1] - edge1[:, 1] * edge2[:, 0]).sum() * (width / height)
         surface = float(area[faces].sum())
         boost = 1.0 + (HEAD_BOOST - 1.0) * float((area[faces] * head[faces]).sum() / max(surface, 1e-9))
+        if source.alpha is not None:
+            # Cards of hair lie over each other on the texture, and their
+            # outline is all there is to them.
+            boost *= CUTOUT_BOOST
         entries.append({
             "source": source, "faces": faces, "low": low, "high": high, "aspect": width / height,
             # Texels per UV unit for one texel per metre of surface.
@@ -455,3 +476,19 @@ def _head_share(obj: bpy.types.Object, mesh: bpy.types.Mesh, corners: np.ndarray
     loops = np.empty(len(mesh.loops), dtype=np.int32)
     mesh.loops.foreach_get("vertex_index", loops)
     return share[loops[corners]].mean(axis=1)
+
+
+def sample(data: np.ndarray, uv: np.ndarray) -> np.ndarray:
+    """Looks an image up at UV coordinates, between its pixels, repeating at the edges."""
+    rows, columns = data.shape[:2]
+    x = uv[:, 0] * columns - 0.5
+    y = uv[:, 1] * rows - 0.5
+    x0 = np.floor(x).astype(np.int64)
+    y0 = np.floor(y).astype(np.int64)
+    fx = (x - x0)[:, None].astype(np.float32)
+    fy = (y - y0)[:, None].astype(np.float32)
+    x1, y1 = (x0 + 1) % columns, (y0 + 1) % rows
+    x0, y0 = x0 % columns, y0 % rows
+    low = data[y0, x0] * (1 - fx) + data[y0, x1] * fx
+    high = data[y1, x0] * (1 - fx) + data[y1, x1] * fx
+    return low * (1 - fy) + high * fy

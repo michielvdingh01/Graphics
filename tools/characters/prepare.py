@@ -56,6 +56,7 @@ def options() -> argparse.Namespace:
 def load(path: str) -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     kind = pathlib.Path(path).suffix.lower()
+    atlas.LEGACY = kind in (".fbx", ".obj")
     if kind == ".fbx":
         bpy.ops.import_scene.fbx(filepath=path, use_anim=False)
     elif kind in (".glb", ".gltf"):
@@ -197,7 +198,7 @@ def settle(body: bpy.types.Object, armature, args: argparse.Namespace, forward: 
         if scale == 0.0:
             sys.exit("import_character: the model is %.3g units tall, which is no person in any unit; pass --height=1.8" % height)
     scale *= args.scale
-    yaw = math.radians(args.yaw) if args.yaw is not None else math.atan2(forward.x, -forward.y)
+    yaw = math.radians(args.yaw) if args.yaw is not None else math.atan2(-forward.x, -forward.y)
     turn = Matrix.Rotation(yaw, 4, "Z") @ Matrix.Scale(scale, 4)
     centre = turn @ Vector(((low.x + high.x) / 2, (low.y + high.y) / 2, low.z))
     if hips:
@@ -219,10 +220,52 @@ def bounds(obj: bpy.types.Object) -> tuple:
     return Vector(co.min(axis=0)), Vector(co.max(axis=0))
 
 
+def soften(body: bpy.types.Object) -> None:
+    """Makes see-through cards, which is to say hair, look like the one mass
+    they stand for. Every card gets the normals of a ball around their middle:
+    each lit by its own flat face, they come out as light and dark planks. And
+    every card gets a second face looking the other way with those same
+    normals, instead of a material that shows both sides: seen from behind, a
+    card that the engine has to turn around picks up a grey sheen."""
+    mesh = body.data
+    if len(mesh.materials) < 2:
+        return
+    import bmesh
+    both = bmesh.new()
+    both.from_mesh(mesh)
+    cards = [face for face in both.faces if face.material_index == 1]
+    copies = bmesh.ops.duplicate(both, geom=cards)
+    bmesh.ops.reverse_faces(both, faces=[item for item in copies["geom"] if isinstance(item, bmesh.types.BMFace)])
+    both.to_mesh(mesh)
+    both.free()
+    slot = np.empty(len(mesh.polygons), dtype=np.int32)
+    mesh.polygons.foreach_get("material_index", slot)
+    start = np.empty(len(mesh.polygons), dtype=np.int32)
+    mesh.polygons.foreach_get("loop_start", start)
+    corners = (start[slot == 1][:, None] + np.arange(3)[None, :]).ravel()
+    vertex = np.empty(len(mesh.loops), dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", vertex)
+    co = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
+    mesh.vertices.foreach_get("co", co)
+    at = co.reshape(-1, 3)[vertex[corners]]
+    normals = np.empty(len(mesh.loops) * 3, dtype=np.float32)
+    mesh.corner_normals.foreach_get("vector", normals)
+    normals = normals.reshape(-1, 3)
+    outward = at - at.mean(axis=0)
+    normals[corners] = outward / np.maximum(np.linalg.norm(outward, axis=1, keepdims=True), 1e-6)
+    mesh.normals_split_custom_set(normals.tolist())
+
+
 def export(body: bpy.types.Object, armature: bpy.types.Object, target: str) -> None:
     armature.name = "Armature"
     armature.data.name = "Armature"
     body.parent = armature
+    body.matrix_parent_inverse = Matrix.Identity(4)
+    for modifier in list(body.modifiers):
+        body.modifiers.remove(modifier)
+    # Vertex colours would be multiplied into the texture, and cost eight floats a vertex.
+    for attribute in list(body.data.color_attributes):
+        body.data.color_attributes.remove(attribute)
     modifier = body.modifiers.new("Armature", "ARMATURE")
     modifier.object = armature
     for obj in bpy.context.scene.objects:
@@ -235,6 +278,43 @@ def export(body: bpy.types.Object, armature: bpy.types.Object, target: str) -> N
         export_normals=True, export_tangents=False, export_texcoords=True, export_materials="EXPORT",
         export_image_format="AUTO", export_cameras=False, export_lights=False, export_extras=False,
     )
+
+
+def share_textures(path: str) -> None:
+    """Makes the materials in a GLB refer to one set of textures. Blender
+    writes a texture entry per material even when the image is the same, and
+    Godot then keeps a copy of the image for each."""
+    import struct
+    data = pathlib.Path(path).read_bytes()
+    length = struct.unpack_from("<I", data, 12)[0]
+    document = json.loads(data[20:20 + length])
+    rest = data[20 + length:]
+    kept = []
+    moved = {}
+    for index, texture in enumerate(document.get("textures", [])):
+        if texture not in kept:
+            kept.append(texture)
+        moved[index] = kept.index(texture)
+    if len(kept) == len(moved):
+        return
+
+    def walk(value) -> None:
+        if isinstance(value, dict):
+            for key, inner in value.items():
+                if key.endswith("Texture") and isinstance(inner, dict) and "index" in inner:
+                    inner["index"] = moved[inner["index"]]
+                else:
+                    walk(inner)
+        elif isinstance(value, list):
+            for inner in value:
+                walk(inner)
+
+    walk(document.get("materials", []))
+    document["textures"] = kept
+    text = json.dumps(document, separators=(",", ":")).encode()
+    text += b" " * (-len(text) % 4)
+    header = struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(text) + len(rest))
+    pathlib.Path(path).write_bytes(header + struct.pack("<I4s", len(text), b"JSON") + text + rest)
 
 
 def main() -> None:
@@ -260,7 +340,7 @@ def main() -> None:
     else:
         import scan
         report["route"] = "scan"
-        body, armature, textures = scan.rig(body, args, report, settle)
+        body, armature, textures = scan.rig(body, args, report)
 
     if args.flip_normal_y:
         textures.normal[:, :, 1] = 1.0 - textures.normal[:, :, 1]
@@ -271,8 +351,11 @@ def main() -> None:
     folder = os.path.abspath(args.keep) if args.keep else tempfile.mkdtemp(prefix="character_")
     os.makedirs(folder, exist_ok=True)
     textures.material(body, args.id or "character", folder)
+    soften(body)
     export(body, armature, args.target)
+    share_textures(args.target)
 
+    report["joints"] = {bone.name: [round(value, 4) for value in bone.head_local] for bone in armature.data.bones}
     report["triangles"] = triangles(body.data)
     report["vertices"] = len(body.data.vertices)
     report["bones"] = len(armature.data.bones)

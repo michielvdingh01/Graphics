@@ -9,11 +9,11 @@
 			"file": "assets/characters/.source/rocketbox/Military_Male_01/Military_Male_01.fbx",
 			"route": "rigged",
 			"triangles": 14723,
-			"source_triangles": 14723,
+			"source_triangles": 15387,
 			"height": 1.844,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 2.55,
+			"megabytes": 2.4,
 			"textures": {
 				"roughness": "derived from the specular map",
 				"normal": "source",

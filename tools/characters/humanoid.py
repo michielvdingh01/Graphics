@@ -227,6 +227,14 @@ def conform(armature: bpy.types.Object, meshes: list, mapping: dict, forward: Ve
             edit.remove(bone)
 
     height = max((mesh.matrix_world @ vertex.co).z for mesh in meshes for vertex in mesh.data.vertices)
+    added = complete(edit, forward, height)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return {"added": added, "unweighted": unweighted}
+
+
+def complete(edit, forward: Vector, height: float) -> list:
+    """Adds the profile bones an armature in edit mode does not have yet, and
+    hangs every bone on the parent the profile gives it."""
     added = []
     for name in ORDER:
         if name in edit:
@@ -237,22 +245,32 @@ def conform(armature: bpy.types.Object, meshes: list, mapping: dict, forward: Ve
         bone.tail = bone.head + Vector((0.0, 0.0, 0.03))
         bone.use_deform = name != "Root"
     for name in ORDER:
+        edit[name].use_connect = False
         edit[name].parent = edit[PARENT[name]] if PARENT[name] else None
-    # Blender throws a bone without length away when it leaves edit mode.
+    # Blender throws a bone without length away when it leaves edit mode, and
+    # weighs a skin by where each bone points.
     for name in ORDER:
         bone = edit[name]
-        children = [child for child in bone.children if child.name in ORDER]
+        children = [child.name for child in bone.children]
         toward = None
-        if len(children) == 1 or (children and name in SPINE + ("Hips", "Neck")):
-            toward = children[0].head
-        elif bone.parent is not None and name != "Hips":
+        if name in _TOWARD:
+            toward = edit[_TOWARD[name]].head
+        elif len(children) == 1:
+            toward = edit[children[0]].head
+        elif name.endswith("Hand"):
+            toward = bone.head + (bone.head - bone.parent.head).normalized() * (0.105 * height)
+        elif name == "Head":
+            toward = Vector((bone.head.x, bone.head.y, max(height * 0.985, bone.head.z + 0.05 * height)))
+        elif bone.parent is not None:
             toward = bone.head + (bone.head - bone.parent.head) * 0.4
-        if toward is None or (toward - bone.head).length < 0.01:
-            toward = bone.head + Vector((0.0, 0.0, 0.05))
+        if toward is None or (toward - bone.head).length < 0.005 * height:
+            toward = bone.head + Vector((0.0, 0.0, 0.03 * height))
         bone.tail = toward
         bone.roll = 0.0
-    bpy.ops.object.mode_set(mode="OBJECT")
-    return {"added": added, "unweighted": unweighted}
+    return added
+
+
+_TOWARD = {"Root": "Hips", "Hips": "Spine", "Spine": "Chest", "Chest": "UpperChest", "UpperChest": "Neck", "Neck": "Head"}
 
 
 def _place(name: str, edit, forward: Vector, height: float) -> Vector:
