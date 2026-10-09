@@ -8,7 +8,9 @@ extends Node
 ## that the route can be walked over the navmesh, that every spawn point can
 ## reach the player and is out of sight when its robot appears, that a zone
 ## brings out the robots it lists, and that a checkpoint is still there after
-## a restart of the game and after a death.
+## a restart of the game and after a death. Where a level is cut into zones
+## that are only drawn when they can be seen, it looks for lines of sight
+## into a zone from where that zone is switched off.
 
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
@@ -20,6 +22,10 @@ const RUNWAY := Vector3(17.5, 0, 5.5)
 const SPAWN_DISTANCE := 14.0
 ## Distance in metres between the points a route is sampled at.
 const STRIDE := 0.5
+## To see whether one zone can be seen from another: how many spots to look
+## from at most, and how far apart the points are that are looked at.
+const LOOKOUTS := 150
+const SIGHT_GRID := 1.5
 
 ## True for a self-test run; menus and saved progress stay out of the way.
 var active := false
@@ -334,6 +340,9 @@ func _play_through(level: Dictionary, next: String) -> void:
 			if zone.order > checkpoint.order and _box(zone.area).has_point(checkpoint.pose.origin + Vector3.UP):
 				misplaced += 1
 	_check("%s: no checkpoint lies in a zone that comes after it" % title, misplaced == 0)
+	var parts := game.get_node_or_null("Level")
+	if parts and parts.has_method("drawn"):
+		_check("%s: a zone that is switched off cannot be seen" % title, _sightlines(game, parts) == 0)
 
 	# Now along it. A restart loads the level again, so everything is looked
 	# up afresh at every step.
@@ -460,6 +469,69 @@ func _entries(game: Node, walk: PackedVector3Array) -> Dictionary:
 				entries[zone.id] = inside if box.has_point(inside + Vector3.UP) else walk[i]
 				break
 	return entries
+
+
+## Counts the lines of sight between where the player can stand in one zone
+## and the inside of a zone that is not drawn from there. Windows count as
+## holes: nothing that has no collider stops a look.
+func _sightlines(game: Node, level: Node) -> int:
+	var space: PhysicsDirectSpaceState3D = game.player.get_world_3d().direct_space_state
+	var zones := level.get_children().filter(func(node: Node) -> bool: return node.is_in_group("level_zone"))
+	# Where eyes can be: over every corner and every middle of the navmesh,
+	# standing and crouching, a share of them if there are many.
+	var navmesh: NavigationMesh = game.nav_region.navigation_mesh
+	var corners := navmesh.get_vertices()
+	var spots := PackedVector3Array(corners)
+	for i in navmesh.get_polygon_count():
+		var middle := Vector3.ZERO
+		var polygon := navmesh.get_polygon(i)
+		for corner in polygon:
+			middle += corners[corner]
+		spots.append(middle / polygon.size())
+	var eyes := {}
+	var insides := {}
+	for zone: Node in zones:
+		var boxes: Array = zone.get_meta(&"bounds")
+		var mine := PackedVector3Array()
+		for spot in spots:
+			if boxes.any(func(box: AABB) -> bool: return box.has_point(spot + Vector3.UP * 0.5)):
+				mine.append(spot)
+		var looks := PackedVector3Array()
+		var step := maxi(1, ceili(float(mine.size()) / LOOKOUTS))
+		for i in range(0, mine.size(), step):
+			var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(mine[i] + Vector3.UP, mine[i] + Vector3.DOWN * 2.0, 1))
+			var feet: Vector3 = ground.position if ground else mine[i]
+			looks.append(feet + Vector3.UP * 1.6)
+			looks.append(feet + Vector3.UP * 0.95)
+		eyes[zone.get_meta(&"zone")] = looks
+		# What there is to see of a zone: points all through it.
+		var points := PackedVector3Array()
+		for box: AABB in boxes:
+			var inner := box.grow(-0.6)
+			var counts := Vector3i((inner.size / SIGHT_GRID).ceil()).maxi(1)
+			for x in counts.x + 1:
+				for y in counts.y + 1:
+					for z in counts.z + 1:
+						points.append(inner.position + inner.size * Vector3(x, y, z) / Vector3(counts))
+		insides[zone.get_meta(&"zone")] = points
+	var found := 0
+	for zone: Node in zones:
+		var from: String = zone.get_meta(&"zone")
+		var sees: PackedStringArray = zone.get_meta(&"sees")
+		for to: String in insides:
+			if to == from or to in sees:
+				continue
+			var lines := 0
+			for eye: Vector3 in eyes[from]:
+				for point: Vector3 in insides[to]:
+					if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, point, 1)).is_empty():
+						lines += 1
+						if lines == 1:
+							print("    %s is in sight from %s: from %s to %s" % [to, from, eye, point])
+			if _routes_only:
+				print("    %s from %s: %d looks from %d spots at %d points" % [to, from, lines, eyes[from].size(), insides[to].size()])
+			found += lines
+	return found
 
 
 ## The box of a zone, a checkpoint or an exit.

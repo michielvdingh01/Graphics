@@ -32,6 +32,11 @@ extends Node
 ## view, six degrees wide, to show what the effects cost while they are all
 ## going off. --barrage=1 does the same with an explosion and its fire that
 ## many times a second, nine metres ahead of every view.
+## --only=zones,dust limits --profile to those effects, to measure one thing
+## several times over instead of everything once.
+## --warmup=0 starts measuring a view that many frames after the camera got
+## there instead of after 120. With 0 the slowest frame of a view includes
+## whatever arriving there cost, such as the zones that had to be switched on.
 ## --show=Lamp makes a node of that name visible that a level keeps hidden
 ## until the game switches it on, such as the lamp over an exit; several are
 ## separated by commas.
@@ -74,6 +79,7 @@ var _random := RandomNumberGenerator.new()
 var _warmup_frames := 120
 var _measure_frames := 600
 var _snap := -1.0
+var _only := PackedStringArray()
 var _show := PackedStringArray()
 var _eval := PackedStringArray()
 
@@ -114,6 +120,10 @@ func _ready() -> void:
 			_firefight = arg.get_slice("=", 1).to_float()
 		elif arg.begins_with("--barrage="):
 			_barrage = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--only="):
+			_only = arg.get_slice("=", 1).split(",")
+		elif arg.begins_with("--warmup="):
+			_warmup_frames = arg.get_slice("=", 1).to_int()
 		elif arg.begins_with("--show="):
 			_show = arg.get_slice("=", 1).split(",")
 		elif arg.begins_with("--snap="):
@@ -424,6 +434,15 @@ func _profile_targets() -> Dictionary:
 		var node := scene.find_child(part, true, false)
 		if node:
 			targets[part.to_lower()] = [[node, "visible"]]
+	# In a level that is cut into zones, every zone has such parts of its own,
+	# and "zones" is drawing only the zones in sight: off draws all of them.
+	var level := scene.get_node_or_null("Level")
+	if level and "culling" in level:
+		targets["zones"] = [[level, "culling"]]
+		for part: String in ["Props", "Decals", "Glass", "Dust"]:
+			targets[part.to_lower()] = []
+			for node in level.find_children(part, "Node3D", true, false):
+				targets[part.to_lower()].append([node, "visible"])
 	return targets
 
 
@@ -435,6 +454,8 @@ func _profile_view(label: String) -> Dictionary:
 	var targets := _profile_targets()
 	for effect: String in targets:
 		if effect in _off:
+			continue
+		if not _only.is_empty() and effect not in _only:
 			continue
 		var on_ms := await _average_ms(label)
 		var before := []

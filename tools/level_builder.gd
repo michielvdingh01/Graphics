@@ -10,6 +10,13 @@ extends SceneTree
 ## route through it: where the player starts, the zones that are fought over,
 ## the checkpoints and the exit. The scene that uses it holds everything that
 ## is tuned by hand: environment, sun, lightmap and benchmark views.
+##
+## A level that is more than one space cuts itself into zones with zone():
+## everything is then filed under the zone it stands in, each zone gets meshes,
+## a lightmap and a place in the scene of its own, and scripts/zones.gd draws
+## only the zones that can be seen from where the camera is. That is what
+## lets a level grow: what a frame costs depends on what is in sight, not on
+## how much there is.
 
 const OUT_DIR := "res://scenes/levels/"
 ## Lightmap texel size in metres. Imported models get the same value through
@@ -65,6 +72,12 @@ var _explosives: Node3D
 var _into: StaticBody3D
 ## Holds the route through the level, in the order it is described.
 var _route: Node3D
+## Zones the level is cut into, by name and in the order they were declared:
+## {node, contents, bounds, sees}.
+var _zones := {}
+## Zone that everything goes into whatever its position, see in_zone(); null
+## files things by where they stand.
+var _zone_forced: Variant = null
 ## Model id -> {path, scene, box}; scene and box are filled in on first use.
 var _models := {}
 ## Glowing material -> its copy for a lamp that is off.
@@ -124,18 +137,24 @@ func _build() -> void:
 	_describe()
 	_check_route()
 
-	var kinds := {}
-	for key: String in _tools:
-		kinds[key.get_slice("/", 0)] = true
-	# Detail comes in as many meshes as it has blocks; clear out last time's.
+	# The meshes come in as many files as there are zones and blocks of detail;
+	# clear out last time's.
 	var folder := DirAccess.open(OUT_DIR)
 	for file in folder.get_files():
-		if file.begins_with(_level_name() + "_detail"):
+		if file.begins_with(_level_name() + "_") and file.get_extension() == "res":
 			folder.remove(file)
-	var names := kinds.keys()
-	names.sort()
-	for kind: String in names:
-		_commit(kind, kind.replace(" ", "_"))
+	var zone_names: Array = [""]
+	zone_names.append_array(_zones.keys())
+	for zone_name: String in zone_names:
+		var kinds := {}
+		for key: String in _tools:
+			if key.begins_with(zone_name + "|"):
+				kinds[key.get_slice("|", 1).get_slice("/", 0)] = true
+		var names := kinds.keys()
+		names.sort()
+		for kind: String in names:
+			_commit(zone_name, kind)
+	_finish_zones()
 	var scene := PackedScene.new()
 	scene.pack(_root)
 	var err := ResourceSaver.save(scene, OUT_DIR + _level_name() + "_level.tscn")
@@ -152,21 +171,202 @@ func _describe() -> void:
 	pass
 
 
+# --- Zones --------------------------------------------------------------------
+# A level of more than one space is cut into zones before anything is built.
+
+
+## Declares a zone: a part of the level that is drawn as a whole or not at
+## all. Whatever is built inside one of the boxes of `bounds` from here on
+## belongs to it. `sees` names the zones that can be seen from inside it,
+## through a doorway or over a wall; it works both ways, so one side naming
+## the other is enough. A zone has to be closed by its own walls, floor and
+## roof, because its lightmap is baked with nothing else around it.
+func zone(zone_name: String, bounds: Array[AABB], sees: Array[String] = []) -> void:
+	var node := Node3D.new()
+	node.name = "Zone" + zone_name.to_pascal_case()
+	node.add_to_group("level_zone", true)
+	_add(node, _root)
+	# What is switched off as one when the zone is out of sight; the shell
+	# stays, to keep casting its shadow.
+	var contents := Node3D.new()
+	contents.name = "Contents"
+	_add(contents, node)
+	_zones[zone_name] = {"node": node, "contents": contents, "bounds": bounds, "sees": sees.duplicate()}
+
+
+## Files what is built from here on under that zone wherever it stands, or
+## under none for an empty name: for what straddles zones or surrounds them.
+## by_position() goes back to filing by position.
+func in_zone(zone_name: String) -> void:
+	_zone_forced = zone_name
+
+
+func by_position() -> void:
+	_zone_forced = null
+
+
+## Closes a doorway while the lightmap of the zone on that side of it is
+## baked, with a black panel that is never drawn: `at` is the middle of the
+## panel and has to lie inside the zone. Without one, daylight that the
+## neighbouring zone would have kept out comes in through the opening.
+func bake_blocker(at: Vector3, size: Vector3) -> void:
+	var zone_name := _zone_at(at)
+	if zone_name == "":
+		push_error("bake_blocker: %s lies in no zone" % at)
+		return
+	var black := StandardMaterial3D.new()
+	black.albedo_color = Color.BLACK
+	var panel := MeshInstance3D.new()
+	panel.name = "Blocker"
+	panel.mesh = BoxMesh.new()
+	panel.mesh.size = size
+	panel.mesh.add_uv2 = true
+	panel.mesh.material = black
+	panel.position = at
+	panel.visible = false
+	panel.add_to_group("bake_blocker", true)
+	_add(panel, _zones[zone_name].node)
+
+
+## Dust in the air of a space: specks that only show where light falls on
+## them, so in the beams of the sun and under the lamps.
+func dust(volume: AABB, amount: int) -> void:
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.15, 0.85, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color.WHITE, Color.WHITE, Color(1, 1, 1, 0)])
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	var drift := ParticleProcessMaterial.new()
+	drift.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	drift.emission_box_extents = volume.size * 0.5
+	drift.spread = 180.0
+	drift.initial_velocity_min = 0.01
+	drift.initial_velocity_max = 0.05
+	drift.gravity = Vector3(0, -0.003, 0)
+	drift.scale_min = 0.6
+	drift.scale_max = 1.6
+	drift.color_ramp = ramp
+	drift.turbulence_enabled = true
+	drift.turbulence_noise_strength = 0.15
+	drift.turbulence_noise_scale = 3.0
+	drift.turbulence_influence_min = 0.02
+	drift.turbulence_influence_max = 0.06
+	var speck := ShaderMaterial.new()
+	speck.shader = load("res://shaders/dust.gdshader")
+	speck.set_shader_parameter("brightness", 0.35)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.009, 0.009)
+	quad.material = speck
+	var node := GPUParticles3D.new()
+	node.name = "Dust"
+	node.position = volume.get_center()
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.amount = amount
+	node.lifetime = 30.0
+	node.preprocess = 30.0
+	node.randomness = 1.0
+	node.visibility_aabb = AABB(-volume.size * 0.5 - Vector3.ONE * 0.5, volume.size + Vector3.ONE)
+	node.process_material = drift
+	node.draw_pass_1 = quad
+	var zone_name := _zone_at(node.position)
+	_add(node, _zones[zone_name].contents if zone_name else _root)
+
+
+## Name of the zone a point lies in, or empty for none.
+func _zone_at(at: Vector3) -> String:
+	if _zone_forced != null:
+		return _zone_forced
+	for zone_name: String in _zones:
+		for box: AABB in _zones[zone_name].bounds:
+			if box.has_point(at):
+				return zone_name
+	return ""
+
+
+## The node that the lights, the decals or the props of a zone go under: the
+## one of the zone that `at` lies in, or the level's own.
+func _group(group: String, at: Vector3) -> Node3D:
+	var zone_name := _zone_at(at)
+	if zone_name == "":
+		return _root.get_node(group)
+	var contents: Node3D = _zones[zone_name].contents
+	if not contents.has_node(group):
+		var node := Node3D.new()
+		node.name = group
+		_add(node, contents)
+	return contents.get_node(group)
+
+
+## Gives every zone a lightmap of its own and writes down what the game needs
+## to know to switch zones on and off.
+func _finish_zones() -> void:
+	if _zones.is_empty():
+		return
+	for zone_name: String in _zones:
+		var info: Dictionary = _zones[zone_name]
+		var node: Node3D = info.node
+		# Whoever names a zone is seen from it in turn.
+		var sees: Array[String] = info.sees.duplicate()
+		for other: String in _zones:
+			if zone_name in _zones[other].sees and other not in sees:
+				sees.append(other)
+		for other in sees:
+			if not _zones.has(other):
+				push_error("Zone '%s' sees '%s', which does not exist" % [zone_name, other])
+		node.set_meta(&"zone", zone_name)
+		node.set_meta(&"bounds", info.bounds)
+		node.set_meta(&"sees", PackedStringArray(sees))
+		if not node.has_node("Static"):
+			continue
+		var whole: AABB = info.bounds[0]
+		for box: AABB in info.bounds:
+			whole = whole.merge(box)
+		var lightmap := LightmapGI.new()
+		lightmap.name = "LightmapGI"
+		lightmap.quality = LightmapGI.BAKE_QUALITY_HIGH
+		lightmap.bounces = 4
+		lightmap.directional = true
+		# Probes for what moves through the zone, about as far apart in a small
+		# zone as in a large one.
+		var cells := whole.get_longest_axis_size() / 1.3
+		lightmap.generate_probes_subdiv = (
+			LightmapGI.GENERATE_PROBES_SUBDIV_32 if cells > 16.0
+			else LightmapGI.GENERATE_PROBES_SUBDIV_16 if cells > 8.0
+			else LightmapGI.GENERATE_PROBES_SUBDIV_8 if cells > 4.0
+			else LightmapGI.GENERATE_PROBES_SUBDIV_4
+		)
+		# The bake overwrites this file; until the first one it holds nothing.
+		var path := "res://scenes/%s_%s.lmbake" % [_level_name(), zone_name]
+		if not ResourceLoader.exists(path):
+			ResourceSaver.save(LightmapGIData.new(), path)
+		lightmap.light_data = load(path)
+		_add(lightmap, node)
+	_root.set_script(load("res://scripts/zones.gd"))
+
+
 # --- Prefabs -----------------------------------------------------------------
 
 
 ## Wall along X (or Z) at a fixed position on the other axis. Openings are
-## [from, to, bottom, top] along the wall.
+## [from, to, bottom, top] along the wall; one may sit above another, as a
+## window over a door.
 func wall(mat: String, along_x: bool, fixed: float, thickness: float, a0: float, a1: float, y0: float, y1: float, openings: Array) -> void:
-	var sorted := openings.duplicate()
-	sorted.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
-	var cursor := a0
-	for o: Array in sorted:
-		_wall_piece(mat, along_x, fixed, thickness, cursor, o[0], y0, y1)
-		_wall_piece(mat, along_x, fixed, thickness, o[0], o[1], y0, o[2])
-		_wall_piece(mat, along_x, fixed, thickness, o[0], o[1], o[3], y1)
-		cursor = o[1]
-	_wall_piece(mat, along_x, fixed, thickness, cursor, a1, y0, y1)
+	# Between two edges of openings the wall is the same all the way along:
+	# solid from the bottom up, but for the openings over that stretch.
+	var edges: Array[float] = [a0, a1]
+	for o: Array in openings:
+		edges.append(clampf(o[0], a0, a1))
+		edges.append(clampf(o[1], a0, a1))
+	edges.sort()
+	for i in edges.size() - 1:
+		var middle := (edges[i] + edges[i + 1]) * 0.5
+		var over := openings.filter(func(o: Array) -> bool: return o[0] < middle and middle < o[1])
+		over.sort_custom(func(a: Array, b: Array) -> bool: return a[2] < b[2])
+		var y := y0
+		for o: Array in over:
+			_wall_piece(mat, along_x, fixed, thickness, edges[i], edges[i + 1], y, o[2])
+			y = maxf(y, o[3])
+		_wall_piece(mat, along_x, fixed, thickness, edges[i], edges[i + 1], y, y1)
 
 
 func _wall_piece(mat: String, along_x: bool, fixed: float, thickness: float, a0: float, a1: float, y0: float, y1: float) -> void:
@@ -652,7 +852,7 @@ func lamp(at: Vector3, hang_y: float, on: bool, shadows: bool) -> void:
 	light.spot_attenuation = 1.2
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
-	_add(light, _lights)
+	_add(light, _group("Lights", light.position))
 
 
 ## Bare bulb in a cage under the mezzanine.
@@ -668,7 +868,7 @@ func bulb(at: Vector3, shadows: bool) -> void:
 	light.omni_attenuation = 1.3
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
-	_add(light, _lights)
+	_add(light, _group("Lights", light.position))
 
 
 ## Fluorescent ceiling fixture; `reach` is how far its light carries.
@@ -688,7 +888,7 @@ func tube(at: Vector3, along_x: bool, on: bool, shadows := true, reach := 7.5) -
 	light.omni_attenuation = 1.4
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
-	_add(light, _lights)
+	_add(light, _group("Lights", light.position))
 
 
 func probe(probe_name: String, center: Vector3, size: Vector3, origin: Vector3) -> void:
@@ -701,7 +901,8 @@ func probe(probe_name: String, center: Vector3, size: Vector3, origin: Vector3) 
 	node.enable_shadows = true
 	node.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 	node.max_distance = 60.0
-	_add(node, _root)
+	var zone_name := _zone_at(center)
+	_add(node, _zones[zone_name].contents if zone_name else _root)
 
 
 ## Places a model from assets/models/ with the centre of its base at the
@@ -718,7 +919,7 @@ func prop(model: String, xf: Transform3D, scale := 1.0, dynamic := false, pose :
 	var node: Node3D = info.scene.instantiate()
 	node.name = model.to_pascal_case()
 	node.transform = xf * Transform3D(Basis.from_scale(Vector3.ONE * scale) * pose, -base * scale)
-	_add(node, _props)
+	_add(node, _group("Props", xf.origin))
 	if dynamic:
 		# Overrides on the nodes inside an instanced scene are only saved for
 		# an editable instance.
@@ -821,7 +1022,7 @@ func _decal(texture: String, xf: Transform3D, size: Vector3, tint: Color) -> voi
 	node.distance_fade_enabled = true
 	node.distance_fade_begin = 35.0
 	node.distance_fade_length = 10.0
-	_add(node, _decals)
+	_add(node, _group("Decals", xf.origin))
 
 
 ## Sets aside the part of the floor (x and z) that floor_line() and the others
@@ -1578,8 +1779,10 @@ func _up_along(direction: Vector3) -> Basis:
 	return Basis(x, y, x.cross(y))
 
 
-## The surface a piece of geometry at `at` goes into.
+## The surface a piece of geometry at `at` goes into: that of its zone, its
+## kind and its material.
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	var zone_name := _zone_at(at)
 	var kind := "glass" if flags & GLASS else ("detail" if flags & DETAIL else "static")
 	if kind == "detail":
 		# A mesh without a lightmap takes its indirect light from the probes at
@@ -1590,11 +1793,11 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 		elif _detail_inside.has_point(at):
 			# What sits in or on a wall belongs to the block on the inside of it.
 			at = at.clamp(_detail_inside.position + Vector3.ONE, _detail_inside.end - Vector3.ONE)
-		else:
-			return _tool_named("detail far/" + mat)
+		elif zone_name == "":
+			return _tool_named("|detail far/" + mat)
 		var block := Vector3i((at / _detail_block + Vector3(0.5, 0, 0)).floor())
 		kind = "detail %d %d %d" % [block.x, block.y, block.z]
-	return _tool_named(kind + "/" + mat)
+	return _tool_named("%s|%s/%s" % [zone_name, kind, mat])
 
 
 func _tool_named(key: String) -> SurfaceTool:
@@ -1672,10 +1875,11 @@ func _add(node: Node, parent: Node) -> void:
 		node.owner = _root
 
 
-## Merges every surface of one kind into a single mesh instance, saved under
-## `stem`.
-func _commit(kind: String, stem: String) -> void:
-	var keys := _tools.keys().filter(func(key: String) -> bool: return key.begins_with(kind + "/"))
+## Merges every surface of one kind in one zone (or in none, for an empty
+## name) into a single mesh instance with a file of its own.
+func _commit(zone_name: String, kind: String) -> void:
+	var prefix := "%s|%s/" % [zone_name, kind]
+	var keys := _tools.keys().filter(func(key: String) -> bool: return key.begins_with(prefix))
 	keys.sort()
 	var mesh := ArrayMesh.new()
 	var triangles := 0
@@ -1689,7 +1893,8 @@ func _commit(kind: String, stem: String) -> void:
 	if kind == "static":
 		var err := mesh.lightmap_unwrap(Transform3D(), TEXEL)
 		print("Lightmap unwrap: ", error_string(err), ", size hint ", mesh.lightmap_size_hint)
-	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), stem]
+	var stem := kind.replace(" ", "_")
+	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), stem if zone_name == "" else zone_name + "_" + stem]
 	ResourceSaver.save(mesh, path, ResourceSaver.FLAG_COMPRESS)
 	mesh.take_over_path(path)
 	var instance := MeshInstance3D.new()
@@ -1703,6 +1908,14 @@ func _commit(kind: String, stem: String) -> void:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_:
 			instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
-	_add(instance, _root)
-	_root.move_child(instance, 0)
-	print("%s: %d surfaces, %d triangles" % [kind, mesh.get_surface_count(), triangles])
+	if zone_name == "":
+		_add(instance, _root)
+		_root.move_child(instance, 0)
+	elif kind == "static":
+		# The shell stays beside the rest of the zone, see zone().
+		_add(instance, _zones[zone_name].node)
+		_zones[zone_name].node.move_child(instance, 0)
+	else:
+		_add(instance, _zones[zone_name].contents)
+		_zones[zone_name].contents.move_child(instance, 0)
+	print("%s%s: %d surfaces, %d triangles" % [zone_name + " " if zone_name else "", kind, mesh.get_surface_count(), triangles])
