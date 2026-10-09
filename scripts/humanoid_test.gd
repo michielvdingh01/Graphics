@@ -172,6 +172,17 @@ func _run() -> void:
 			worst = maxf(worst, slides[1])
 			print("    feet slide %.3f m/s %s; left to the clips they would slide %.3f m/s" % [slides[1], lap[0], slides[0]])
 		_check("feet that are down stay put (worst %.3f m/s)" % worst, worst < SLIDE)
+		# What a frame of all that costs in script and animation, for the record.
+		legs.set_process(false)
+		var began := Time.get_ticks_usec()
+		for i in 600:
+			_walker.global_position += _stride / 60.0
+			legs._pose(1.0 / 60.0)
+		var whole := (Time.get_ticks_usec() - began) / 600
+		began = Time.get_ticks_usec()
+		for i in 600:
+			legs._tree.advance(1.0 / 60.0)
+		print("    posing it takes %d microseconds a frame, %d of them to blend the clips" % [whole, (Time.get_ticks_usec() - began) / 600])
 	else:
 		_check("the grunt of this theme is a character", false)
 	_walker.queue_free()
