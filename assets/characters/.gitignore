@@ -1,0 +1,2 @@
+# Raw sources (downloaded avatars, scans of friends) stay out of git.
+.source/

@@ -1,0 +1,33 @@
+{
+	"themes": {},
+	"characters": {
+		"soldier_01": {
+			"source": "Microsoft Rocketbox, Military_Male_01",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "assets/characters/.source/rocketbox/Military_Male_01/Military_Male_01.fbx",
+			"route": "rigged",
+			"triangles": 14723,
+			"source_triangles": 14723,
+			"height": 1.844,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 2.55,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 3.38,
+				"source_textures": [
+					"2048x1024",
+					"2048x2048"
+				],
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		}
+	}
+}
