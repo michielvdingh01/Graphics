@@ -43,6 +43,29 @@ func _describe() -> void:
 	_probes()
 	_dirt()
 	_floor_paint()
+	_route_through()
+
+
+## From the locker room in the annex, down the corridor and the length of the
+## hall, to the loading door in the west wall.
+func _route_through() -> void:
+	route_start(Vector3(26.6, 0, -1.8), Vector3(23.6, 0, -2.0))
+	# Two come out of the storeroom and one in from the hall, all at the far
+	# end of the corridor.
+	route_zone("corridor", "the corridor", AABB(Vector3(20.5, 0, -12.0), Vector3(3.0, 3.4, 14.0)), [
+		["grunt", Vector3(26.2, 0, -9.6)], ["grunt", Vector3(28.4, 0, -9.0)], ["rusher", Vector3(18.5, 0, -9.0)],
+	])
+	route_checkpoint("corridor", "Corridor", Vector3(22.0, 0, -1.5), Vector3(19.0, 0, -1.5), AABB(Vector3(20.5, 0, -12.0), Vector3(3.0, 3.4, 14.0)))
+	route_zone("hall", "the hall", AABB(Vector3(0.0, 0, -HZ), Vector3(HX, EAVES, HZ * 2.0)), [
+		["grunt", Vector3(7.0, 0, -1.5)], ["grunt", Vector3(3.6, 0, 10.0)], ["grunt", Vector3(1.5, 0, -6.5)], ["rusher", Vector3(5.6, 0, -8.6)],
+	])
+	route_checkpoint("hall", "Hall", Vector3(2.5, 0, 0.0), Vector3(-5.0, 0, 0.0), AABB(Vector3(0.0, 0, -HZ), Vector3(4.0, 4.0, HZ * 2.0)))
+	# The last of them hold the way out: one on the deck, one in front of the door.
+	route_zone("loading_bay", "the loading bay", AABB(Vector3(-HX, 0, -HZ), Vector3(HX, EAVES, HZ * 2.0)), [
+		["grunt", Vector3(-10.3, 0, 6.2)], ["grunt", Vector3(-16.3, 0, 10.2)], ["grunt", Vector3(-15.0, DECK_Y, -8.2)],
+		["rusher", Vector3(-13.5, 0, -9.0)], ["rusher", Vector3(-18.0, 0, -6.0)], ["heavy", Vector3(-17.5, 0, 0.5)],
+	])
+	route_exit("Leave by the loading door", AABB(Vector3(-HX, 0, -2.5), Vector3(2.2, 4.0, 5.0)), "depot", Vector3(-HX, 5.6, 0.0), Vector3.RIGHT)
 
 
 func _shell() -> void:
@@ -1131,9 +1154,12 @@ func _clutter() -> void:
 
 ## Lines from when the hall was in use: an aisle from the loading door to the
 ## annex with a branch to the stairs, borders around the machines, bays along
-## the south wall and hatching where nothing was to be put down.
+## the south wall and hatching where nothing was to be put down. Arrows down
+## the aisle point the way out, which is the way the route goes.
 func _floor_paint() -> void:
-	floor_paint_area(Rect2(-HX, -HZ, HX * 2.0, HZ * 2.0))
+	floor_paint_area(Rect2(-HX, -HZ, 51.0, HZ * 2.0))
+	for x: float in [22.0, 16.5, 12.6, 1.5, -5.5, -12.5]:
+		floor_arrow(Vector2(x, 1.2 if x == 12.6 else (-1.6 if x == 22.0 else 0.0)), Vector2.LEFT)
 	floor_line(Vector2(-16.2, 2.2), Vector2(19.95, 2.2))
 	floor_line(Vector2(-16.2, -2.2), Vector2(3.3, -2.2))
 	floor_line(Vector2(6.7, -2.2), Vector2(19.95, -2.2))

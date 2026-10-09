@@ -3,17 +3,29 @@ extends Node
 ##
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
-## enemy types, explosives, grenades, checkpoints and settings.
+## enemy types, explosives, grenades and settings. Then it goes through every
+## level along its route, from the start to the exit and on into the next:
+## that the route can be walked over the navmesh, that every spawn point can
+## reach the player and is out of sight when its robot appears, that a zone
+## brings out the robots it lists, and that a checkpoint is still there after
+## a restart of the game and after a death.
 
-## Spots in the factory level: on the mezzanine deck, and an open lane with
-## 6 m of clear floor to the east of it.
+## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
+## of clear floor to the east of it, and a stretch of floor to sprint along.
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
 const RANGE_TARGET := Vector3(1, 0, -7.5)
+const RUNWAY := Vector3(17.5, 0, 5.5)
+## A robot may appear in sight of where the player walks into its zone, but
+## not closer than this.
+const SPAWN_DISTANCE := 14.0
+## Distance in metres between the points a route is sampled at.
+const STRIDE := 0.5
 
 ## True for a self-test run; menus and saved progress stay out of the way.
 var active := false
 
 var _failures := 0
+var _routes_only := false
 
 
 func _ready() -> void:
@@ -25,12 +37,35 @@ func _ready() -> void:
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
-	tree.create_timer(120.0, true, true).timeout.connect(
+	tree.create_timer(300.0, true, true).timeout.connect(
 		func() -> void:
 			print("SELFTEST FAILED (timed out)")
 			tree.quit(1)
 	)
 	await _wait(0.5)
+	# --routes leaves out everything but the levels and their routes, and
+	# lists every spawn point: for working on a level.
+	_routes_only = "--routes" in OS.get_cmdline_user_args()
+	if not _routes_only:
+		await _handling()
+
+	# Every level, in the order they are played, each entered the way the
+	# game enters it: the first from the menu, the rest through an exit.
+	Save.clear()
+	tree.change_scene_to_file(Menu.LEVELS[0].scene)
+	await tree.scene_changed
+	for i in Menu.LEVELS.size():
+		await _wait(0.5)
+		await _play_through(Menu.LEVELS[i], Menu.LEVELS[i + 1].scene if i + 1 < Menu.LEVELS.size() else "")
+
+	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+	tree.quit(1 if _failures else 0)
+
+
+## How the game handles, tried out in the factory: moving, shooting, the
+## robots, what explodes and the settings.
+func _handling() -> void:
+	var tree := get_tree()
 	var game := tree.current_scene
 	var player: CharacterBody3D = game.player
 	var weapons: Node3D = player.weapons
@@ -41,16 +76,25 @@ func _run() -> void:
 
 	var navmesh: NavigationMesh = game.nav_region.navigation_mesh
 	_check("navmesh is baked", navmesh.get_polygon_count() > 0)
-	var enemies := tree.get_nodes_in_group("enemy")
-	_check("first wave spawned", enemies.size() == 3 and game.wave == 1)
+	_check("the level starts quiet, with the player at its start", tree.get_nodes_in_group("enemy").is_empty()
+		and not game.fighting() and player.global_position.distance_to(game.start.origin) < 0.5)
+	var first: RefCounted = game.zones[0]
+	_check("the HUD is told where to go", game.objective == "Reach %s" % first.title)
 
 	var map := player.get_world_3d().navigation_map
-	var path := NavigationServer3D.map_get_path(map, enemies[0].global_position, player.global_position, true)
-	_check("enemy can path to player", path.size() > 1)
 	var top := NavigationServer3D.map_get_path(map, MEZZANINE, player.global_position, true)
 	_check("mezzanine connects via stairs", top.size() > 1 and top[0].y > 2.5 and top[-1].distance_to(player.global_position) < 1.0)
 
+	# The part that tests how things handle goes all over the hall; only the
+	# first zone is left to notice.
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", zone == first)
+	await _wait(0.1)
+
 	# Sprint, then slide.
+	player.global_position = RUNWAY
+	player.rotation.y = PI * 0.5
+	await _wait(0.2)
 	Input.action_press("move_forward")
 	Input.action_press("sprint")
 	await _wait(0.6)
@@ -65,8 +109,18 @@ func _run() -> void:
 	await _wait(0.2)
 	_check("stands up again", not player.is_crouched())
 
-	# Enemy AI: the wave should come looking for the player, wherever it
-	# spawned, close in and deal damage. The player stands still from here on.
+	# A fight: walking into a zone brings out the robots it lists, and no others.
+	var entries := _entries(game, _walk(game))
+	_move(player, entries.get(first.id, Vector3.ZERO))
+	await _wait(0.3)
+	var enemies := tree.get_nodes_in_group("enemy")
+	_check("walking into a zone starts its fight", first.fighting() and game.objective == "Clear %s" % first.title)
+	_check("with the robots that zone lists", not enemies.is_empty() and _kinds(enemies) == _roster(game, first))
+	var path := NavigationServer3D.map_get_path(map, enemies[0].global_position, player.global_position, true)
+	_check("enemy can path to player", path.size() > 1)
+
+	# Enemy AI: they should come looking for the player, wherever they
+	# appeared, close in and deal damage. The player stands still from here on.
 	var enemy: CharacterBody3D = enemies[0]
 	player.health = 1e6
 	var start_distances := {}
@@ -143,10 +197,7 @@ func _run() -> void:
 	_check("scope takes over from the weapon in view", weapons.scope_blend() == 1.0 and not weapons._models[4].root.visible)
 	Input.action_release("ads")
 
-	# Enemy types and wave make-up.
-	_check("first wave is all grunts", game.roster(1).all(func(s: PackedScene) -> bool: return s == game.GRUNT))
-	var later: Array[PackedScene] = game.roster(4)
-	_check("later waves mix in rushers and heavies", later.has(game.RUSHER) and later.has(game.HEAVY))
+	# Enemy types.
 	var rusher: CharacterBody3D = game.RUSHER.instantiate()
 	rusher.position = player.global_position + Vector3(-5, 0, 1.5)
 	game.add_child(rusher)
@@ -217,9 +268,7 @@ func _run() -> void:
 	await _wait(2.4)
 	_check("and goes off", blasts[0] == 3 and tree.get_nodes_in_group("grenade").is_empty())
 
-	# Checkpoints and settings.
-	var checkpoint: Dictionary = Save.resume_point(game.scene_file_path)
-	_check("wave start is a checkpoint", checkpoint.get("wave", 0) == game.wave)
+	# Settings.
 	var environment: Environment = game.get_viewport().find_world_3d().environment
 	Settings.put("quality", 0)
 	_check("low quality switches effects off", not environment.ssr_enabled and not environment.volumetric_fog_enabled)
@@ -230,29 +279,229 @@ func _run() -> void:
 	_check("upscaler applies to the viewport", game.get_viewport().scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2
 		and is_equal_approx(game.get_viewport().scaling_3d_scale, 0.67))
 
-	# Every level: loads, bakes a navmesh and has spawns the enemies can leave.
-	for level in Menu.LEVELS:
-		tree.change_scene_to_file(level.scene)
-		await tree.scene_changed
-		await _wait(0.5)
-		game = tree.current_scene
-		var region: NavigationMesh = game.nav_region.navigation_mesh
-		_check("%s: navmesh is baked" % level.name, region.get_polygon_count() > 0)
-		var nav_map: RID = game.player.get_world_3d().navigation_map
-		var goal: Vector3 = game.player.global_position
-		var stranded := 0
-		for spawn: Node3D in tree.get_nodes_in_group("enemy_spawn"):
-			var route := NavigationServer3D.map_get_path(nav_map, spawn.global_position, goal, true)
-			if route.size() < 2 or route[0].distance_to(spawn.global_position) > 1.0 or route[-1].distance_to(goal) > 1.0:
-				stranded += 1
-				print("    stranded spawn: ", spawn.name)
-		_check("%s: every spawn reaches the player" % level.name, stranded == 0)
-		var explosives := tree.get_nodes_in_group("explosive")
-		_check("%s: has things that explode, each with its model" % level.name, not explosives.is_empty()
-			and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
 
-	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
-	tree.quit(1 if _failures else 0)
+## Plays the level that is loaded from its start to its exit: zone by zone
+## and checkpoint by checkpoint, with a restart of the game at the first
+## checkpoint and a death at the last. `next` is the level its exit should
+## lead to, or empty for the last one.
+func _play_through(level: Dictionary, next: String) -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var title: String = level.name
+	_check("%s: is the level that loads" % title, game.scene_file_path == level.scene)
+	_check("%s: navmesh is baked" % title, game.nav_region.navigation_mesh.get_polygon_count() > 0)
+	_check("%s: starts quiet, with the player at its start" % title, tree.get_nodes_in_group("enemy").is_empty()
+		and game.player.global_position.distance_to(game.start.origin) < 0.5)
+	_check("%s: starting it is something to carry on from" % title, Save.resume_point(level.scene).get("at", "?") == "")
+	var explosives := tree.get_nodes_in_group("explosive")
+	_check("%s: has things that explode, each with its model" % title, not explosives.is_empty()
+		and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
+
+	# The route as the level describes it, before anything is fought over.
+	var walk := _walk(game)
+	_check("%s: the route can be walked from start to exit" % title, not walk.is_empty())
+	var entries := _entries(game, walk)
+	_check("%s: the route passes through every zone" % title, entries.size() == game.zones.size())
+	if _routes_only:
+		print("    zones are entered at ", entries)
+	var map: RID = game.player.get_world_3d().navigation_map
+	var space: PhysicsDirectSpaceState3D = game.player.get_world_3d().direct_space_state
+	var stranded := 0
+	var exposed := 0
+	for zone: RefCounted in game.zones:
+		for spawn: Node3D in _spawns(zone):
+			var at := spawn.global_position
+			if not _reaches(map, at, game.start.origin):
+				stranded += 1
+				print("    stranded spawn: %s/%s" % [zone.id, spawn.name])
+			if not entries.has(zone.id):
+				continue
+			# The player's eyes, over the floor at the spot the navmesh gives.
+			var eye: Vector3 = entries[zone.id] + Vector3.UP
+			var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + Vector3.DOWN * 3.0, 1))
+			eye = (ground.position if ground else entries[zone.id]) + Vector3.UP * 1.6
+			var seen := _in_view(space, eye, at)
+			if _routes_only:
+				print("    %s/%s: %.1f m from where the zone is entered, %s" % [zone.id, spawn.name, eye.distance_to(at), "in view" if seen else "hidden"])
+			if eye.distance_to(at) < SPAWN_DISTANCE and seen:
+				exposed += 1
+				print("    spawn in view: %s/%s at %.1f m" % [zone.id, spawn.name, eye.distance_to(at)])
+	_check("%s: every spawn point reaches the player" % title, stranded == 0)
+	_check("%s: no robot appears close by and in view" % title, exposed == 0)
+	var misplaced := 0
+	for checkpoint: RefCounted in game.checkpoints:
+		for zone: RefCounted in game.zones:
+			if zone.order > checkpoint.order and _box(zone.area).has_point(checkpoint.pose.origin + Vector3.UP):
+				misplaced += 1
+	_check("%s: no checkpoint lies in a zone that comes after it" % title, misplaced == 0)
+
+	# Now along it. A restart loads the level again, so everything is looked
+	# up afresh at every step.
+	var restarts := 0
+	var step := 0
+	while true:
+		var steps := []
+		steps.append_array(game.zones)
+		steps.append_array(game.checkpoints)
+		steps.sort_custom(func(a: RefCounted, b: RefCounted) -> bool: return a.order < b.order)
+		if step >= steps.size():
+			break
+		var player: CharacterBody3D = game.player
+		player.force_control = true
+		player.health = 1e6
+		var here: RefCounted = steps[step]
+		step += 1
+		if here.area.is_in_group("route_zone"):
+			_move(player, entries.get(here.id, Vector3.ZERO))
+			await _wait(0.3)
+			var robots := tree.get_nodes_in_group("enemy")
+			_check("%s: %s brings out the robots it lists" % [title, here.title], here.fighting() and _kinds(robots) == _roster(game, here))
+			var before: int = game.kills
+			for robot in robots:
+				robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
+			await _wait(0.2)
+			_check("%s: and is cleared when they are down" % title, here.cleared and not game.fighting() and game.kills == before + robots.size())
+			continue
+
+		# A checkpoint.
+		_move(player, here.pose.origin)
+		await _wait(0.3)
+		_check("%s: checkpoint %s is taken" % [title, here.title], Save.resume_point(level.scene).get("at", "") == here.id)
+		var kills: int = game.kills
+		var last: bool = here == game.checkpoints[-1]
+		if restarts == 0:
+			# A restart of the game: what is on disk is all that is left.
+			Save.reload()
+			tree.change_scene_to_file(level.scene)
+		elif last:
+			player.health = 1.0
+			player.take_damage(50.0)
+		else:
+			continue
+		var how := "a restart" if restarts == 0 else "a death"
+		restarts += 1
+		var old := game
+		for i in 80:
+			await _wait(0.1)
+			if tree.current_scene != null and tree.current_scene != old:
+				break
+		game = tree.current_scene
+		await _wait(0.5)
+		var again: RefCounted = game.checkpoints.filter(func(c: RefCounted) -> bool: return c.id == here.id)[0]
+		_check("%s: %s carries on from that checkpoint" % [title, how], game != old
+			and game.player.global_position.distance_to(again.pose.origin) < 0.5 and game.kills == kills)
+		# What lies before it stays cleared, also when it is walked into again.
+		var quiet := true
+		for zone: RefCounted in game.zones:
+			quiet = quiet and zone.cleared == (zone.order < again.order)
+			if zone.order < again.order:
+				_move(game.player, entries.get(zone.id, Vector3.ZERO))
+				await _wait(0.3)
+				quiet = quiet and tree.get_nodes_in_group("enemy").is_empty()
+		_check("%s: and what was cleared before it stays cleared" % title, quiet)
+		_move(game.player, again.pose.origin)
+		await _wait(0.2)
+
+	# And out.
+	var lamp := game.exit.get_node_or_null("Lamp") as Node3D
+	_check("%s: the exit opens when every zone is cleared" % title, game.exit_open and (lamp == null or lamp.visible)
+		and game.objective == game.exit.get_meta(&"title"))
+	var left := []
+	game.finished.connect(func(to: String) -> void: left.append(to))
+	if not walk.is_empty():
+		_move(game.player, walk[-1])
+	await _wait(0.3)
+	_check("%s: walking into it leaves the level" % title, left == [next] and game.next_level() == next)
+	if next:
+		await tree.scene_changed
+		_check("%s: and the next one starts from its beginning" % title, tree.current_scene.scene_file_path == next
+			and Save.resume_point(next).get("at", "?") == "")
+	else:
+		_check("%s: and that is the end of the game" % title, Save.checkpoint.is_empty())
+
+
+## The way from the start past every checkpoint to the exit, as points
+## STRIDE apart over the navmesh; empty if a stretch of it cannot be walked.
+func _walk(game: Node) -> PackedVector3Array:
+	var map: RID = game.player.get_world_3d().navigation_map
+	var stops: Array[Vector3] = [game.start.origin]
+	for checkpoint: RefCounted in game.checkpoints:
+		stops.append(checkpoint.pose.origin)
+	# The exit is a box; make for the floor in the middle of it.
+	var out := _box(game.exit)
+	var door := NavigationServer3D.map_get_closest_point(map, Vector3(out.get_center().x, out.position.y, out.get_center().z))
+	if not out.grow(0.3).has_point(door):
+		print("    the exit has no floor to stand on")
+		return PackedVector3Array()
+	stops.append(door)
+	var points := PackedVector3Array()
+	for i in stops.size() - 1:
+		if not _reaches(map, stops[i], stops[i + 1]):
+			print("    no way from %s to %s" % [stops[i], stops[i + 1]])
+			return PackedVector3Array()
+		var leg := NavigationServer3D.map_get_path(map, stops[i], stops[i + 1], true)
+		for j in leg.size() - 1:
+			var steps := maxi(1, ceili(leg[j].distance_to(leg[j + 1]) / STRIDE))
+			for k in steps:
+				points.append(leg[j].lerp(leg[j + 1], float(k) / steps))
+	points.append(door)
+	return points
+
+
+## Zone id -> a spot just inside that zone on the way along `walk`.
+func _entries(game: Node, walk: PackedVector3Array) -> Dictionary:
+	var entries := {}
+	for zone: RefCounted in game.zones:
+		var box := _box(zone.area)
+		for i in walk.size():
+			if box.has_point(walk[i] + Vector3.UP):
+				# A step further, so that all of the player is inside.
+				var inside := walk[mini(i + 2, walk.size() - 1)]
+				entries[zone.id] = inside if box.has_point(inside + Vector3.UP) else walk[i]
+				break
+	return entries
+
+
+## The box of a zone, a checkpoint or an exit.
+func _box(area: Area3D) -> AABB:
+	var size: Vector3 = (area.get_child(0) as CollisionShape3D).shape.size
+	return AABB(area.global_position - size * 0.5, size)
+
+
+func _spawns(zone: RefCounted) -> Array:
+	return zone.area.get_children().filter(func(node: Node) -> bool: return node.is_in_group("enemy_spawn"))
+
+
+## The scenes a zone lists, sorted, to compare with what _kinds() finds.
+func _roster(game: Node, zone: RefCounted) -> Array:
+	var scenes := _spawns(zone).map(func(spawn: Node) -> String: return game.ENEMIES[spawn.get_meta(&"kind")].resource_path)
+	scenes.sort()
+	return scenes
+
+
+func _kinds(enemies: Array) -> Array:
+	var scenes := enemies.map(func(enemy: Node) -> String: return enemy.scene_file_path)
+	scenes.sort()
+	return scenes
+
+
+## True if the navmesh has a way from one point to the other.
+func _reaches(map: RID, from: Vector3, to: Vector3) -> bool:
+	var route := NavigationServer3D.map_get_path(map, from, to, true)
+	return route.size() > 1 and route[0].distance_to(from) < 1.0 and route[-1].distance_to(to) < 1.0
+
+
+## True if a robot standing at `spot` shows from `eye`: its head or its middle.
+func _in_view(space: PhysicsDirectSpaceState3D, eye: Vector3, spot: Vector3) -> bool:
+	for height: float in [1.5, 0.8]:
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, spot + Vector3.UP * height, 1)).is_empty():
+			return true
+	return false
+
+
+func _move(player: CharacterBody3D, to: Vector3) -> void:
+	player.global_position = to
+	player.velocity = Vector3.ZERO
 
 
 func _check(label: String, ok: bool) -> void:

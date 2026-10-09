@@ -32,6 +32,27 @@ func _describe() -> void:
 	_probes()
 	_dirt()
 	_floor_paint()
+	_route_through()
+
+
+## In by the east gate, west between the rows of containers, up the ramp at
+## the far end and back along the dock to the one door that stands lit.
+func _route_through() -> void:
+	route_start(Vector3(26.0, 0, 0.0), Vector3(20.0, 0, 0.0))
+	route_zone("gate", "the east yard", AABB(Vector3(5.0, 0, DOCK_Z), Vector3(17.0, 6.0, YZ - DOCK_Z)), [
+		["grunt", Vector3(8.8, 0, -1.5)], ["grunt", Vector3(17.5, 0, -9.0)], ["grunt", Vector3(7.5, 0, 13.5)], ["rusher", Vector3(16.0, 0, -11.0)],
+	])
+	route_checkpoint("rows", "Container rows", Vector3(6.5, 0, 5.8), Vector3(-5.0, 0, 5.8), AABB(Vector3(5.0, 0, DOCK_Z), Vector3(4.0, 4.0, YZ - DOCK_Z)))
+	route_zone("rows", "the container rows", AABB(Vector3(-YX, 0, DOCK_Z), Vector3(YX + 5.0, 6.0, YZ - DOCK_Z)), [
+		["grunt", Vector3(-12.0, 0, 5.5)], ["grunt", Vector3(-20.0, 0, -3.0)], ["grunt", Vector3(-6.0, 0, 14.5)],
+		["rusher", Vector3(-13.0, 0, -11.0)], ["rusher", Vector3(-25.0, 0, 15.0)], ["heavy", Vector3(-24.0, 0, 6.0)],
+	])
+	route_checkpoint("ramp", "West ramp", Vector3(-27.0, 0, -12.5), Vector3(-25.0, 0, -17.0), AABB(Vector3(-YX, 0, DOCK_Z), Vector3(8.0, 4.0, 4.0)))
+	route_zone("dock", "the loading dock", AABB(Vector3(-DOCK_X, DOCK_Y - 0.2, -YZ), Vector3(DOCK_X * 2.0, 4.6, YZ + DOCK_Z)), [
+		["grunt", Vector3(-6.0, DOCK_Y, -16.5)], ["grunt", Vector3(10.5, DOCK_Y, -16.0)], ["rusher", Vector3(3.5, DOCK_Y, -15.5)],
+		["heavy", Vector3(16.5, DOCK_Y, -17.0)], ["heavy", Vector3(-1.0, DOCK_Y, -17.5)],
+	])
+	route_exit("Leave through dock door 3", AABB(Vector3(-2.0, DOCK_Y, -YZ), Vector3(4.0, 3.4, 2.4)), "", Vector3(0.0, 5.35, -YZ), Vector3.BACK)
 
 
 func _yard() -> void:
@@ -167,9 +188,15 @@ func _drains() -> void:
 
 ## What is left of the yard's markings: a slot around every container on the
 ## ground, a line the lorries kept behind along the dock, and hatching that
-## kept the gate clear.
+## kept the gate clear. The yard was driven one way round, and the arrows for
+## that are the way the route goes: west down the south lane, then north along
+## the wall to the ramp.
 func _floor_paint() -> void:
 	floor_paint_area(Rect2(-YX, -YZ, YX * 2.0, YZ * 2.0))
+	for x: float in [20.5, 14.8, 2.0, -8.0, -17.0]:
+		floor_arrow(Vector2(x, 5.2), Vector2.LEFT, PAINT_WHITE, 2.4)
+	for z: float in [-3.0, -9.0]:
+		floor_arrow(Vector2(-27.2, z), Vector2.UP, PAINT_WHITE, 2.4)
 	for x: float in [-23.5, -17.0, -10.5, -4.0, 2.5, 9.0, 15.5]:
 		for z: float in [-7.0, 1.5, 10.0]:
 			floor_frame(Rect2(x - 3.15, z - 1.4, 6.3, 2.8), PAINT_WHITE, 0.08)

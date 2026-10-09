@@ -1,10 +1,11 @@
 extends CanvasLayer
-## Title screen, pause menu and settings, built in code like the HUD.
+## Title screen, pause menu, settings and the screen the game ends on, built
+## in code like the HUD.
 ##
 ## The title screen sits on top of the loaded level, which stays paused and
 ## inert behind it as a backdrop. Pass --play to skip straight into the game.
 
-enum Screen { NONE, TITLE, LEVELS, PAUSE, SETTINGS }
+enum Screen { NONE, TITLE, LEVELS, PAUSE, SETTINGS, END }
 
 const LEVELS: Array[Dictionary] = [
 	{"name": "Factory", "scene": "res://scenes/factory.tscn"},
@@ -22,6 +23,8 @@ var _shade := ColorRect.new()
 var _column := VBoxContainer.new()
 var _title_camera: Camera3D
 var _time := 0.0
+## What the end screen has to say about the run that just finished.
+var _end_kills := 0
 
 
 func _ready() -> void:
@@ -43,6 +46,15 @@ func _ready() -> void:
 
 func is_open() -> bool:
 	return _screen != Screen.NONE
+
+
+## The player has walked out of the last level: the game stops on a screen
+## that says so. `kills` is the number of robots destroyed on the way.
+func show_end(kills: int) -> void:
+	if not _enabled:
+		return
+	_end_kills = kills
+	_show(Screen.END)
 
 
 ## True while the loaded level is only a backdrop for the title screen.
@@ -86,6 +98,9 @@ func _show(screen: Screen) -> void:
 	_root.visible = screen != Screen.NONE
 	get_tree().paused = screen != Screen.NONE
 	_shade.color.a = 0.45 if screen == Screen.PAUSE or not at_title() else 0.0
+	if screen == Screen.END:
+		# The level went dark as the player left it.
+		_shade.color.a = 1.0
 	if screen == Screen.NONE:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		return
@@ -96,7 +111,9 @@ func _show(screen: Screen) -> void:
 			_heading(ProjectSettings.get_setting("application/config/name").to_upper(), 64)
 			var checkpoint := Save.checkpoint
 			if checkpoint:
-				var text := "Continue  ·  %s, wave %d" % [_level_name(checkpoint.level), checkpoint.wave]
+				var text := "Continue  ·  %s" % _level_name(checkpoint.level)
+				if checkpoint.title:
+					text += ", %s" % (checkpoint.title as String).to_lower()
 				_button(text, _play.bind(checkpoint.level, false))
 			_button("New game", _show.bind(Screen.LEVELS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
@@ -128,6 +145,11 @@ func _show(screen: Screen) -> void:
 			_toggle("Invert Y", "invert_y")
 			_slider("Volume", "volume", 0.0, 1.0, 0.05, "%.0f%%", 100.0)
 			_button("Back", _show.bind(_settings_parent))
+		Screen.END:
+			_heading("You made it out", 56)
+			_note("%d robots lie in pieces between here and the factory." % _end_kills)
+			_button("Play again", _play.bind(LEVELS[0].scene, true))
+			_button("Quit to title", _quit_to_title)
 	_focus_first.call_deferred()
 
 
@@ -231,6 +253,17 @@ func _heading(text: String, size: int) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", size)
+	_column.add_child(label)
+	var gap := Control.new()
+	gap.custom_minimum_size.y = 18
+	_column.add_child(gap)
+
+
+## A line of plain text between a heading and the buttons under it.
+func _note(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.modulate.a = 0.8
 	_column.add_child(label)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18

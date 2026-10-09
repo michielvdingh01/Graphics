@@ -5,9 +5,11 @@ extends SceneTree
 ## A level is described in code by overriding _describe() and written to
 ## scenes/levels/ as merged meshes (lightmapped "static", probe-lit "detail"
 ## in blocks and unshadowed "glass"), one static body, the props placed from
-## assets/models/, a body of its own for each prop that can explode, and the
-## lights, decals and reflection probes that belong to the building. The scene that uses it holds everything that is tuned by
-## hand: environment, sun, lightmap, spawns and benchmark views.
+## assets/models/, a body of its own for each prop that can explode, the
+## lights, decals and reflection probes that belong to the building, and the
+## route through it: where the player starts, the zones that are fought over,
+## the checkpoints and the exit. The scene that uses it holds everything that
+## is tuned by hand: environment, sun, lightmap and benchmark views.
 
 const OUT_DIR := "res://scenes/levels/"
 ## Lightmap texel size in metres. Imported models get the same value through
@@ -61,6 +63,8 @@ var _props: Node3D
 var _explosives: Node3D
 ## Body the next collider goes into instead of the level's own, see _explosive().
 var _into: StaticBody3D
+## Holds the route through the level, in the order it is described.
+var _route: Node3D
 ## Model id -> {path, scene, box}; scene and box are filled in on first use.
 var _models := {}
 ## Glowing material -> its copy for a lamp that is off.
@@ -118,6 +122,7 @@ func _build() -> void:
 	_add(_explosives, _root)
 
 	_describe()
+	_check_route()
 
 	var kinds := {}
 	for key: String in _tools:
@@ -871,6 +876,45 @@ func floor_hatch(area: Rect2, color := PAINT_YELLOW, stripe := 0.15) -> void:
 	_fill(area, color, stripe)
 
 
+## Arrow on the floor, `length` long with its middle at `at` (x and z), that
+## points along `heading`: the way a lane is driven or an aisle is walked.
+func floor_arrow(at: Vector2, heading: Vector2, color := PAINT_YELLOW, length := 1.8) -> void:
+	var along := heading.normalized()
+	var across := Vector2(-along.y, along.x)
+	var tip := length * 0.5
+	var neck := tip - length * 0.4
+	var shaft := length * 0.075
+	var barb := length * 0.24
+	var outline := PackedVector2Array()
+	for corner: Vector2 in [
+		Vector2(-tip, -shaft), Vector2(neck, -shaft), Vector2(neck, -barb), Vector2(tip, 0.0),
+		Vector2(neck, barb), Vector2(neck, shaft), Vector2(-tip, shaft),
+	]:
+		outline.append(at + along * corner.x + across * corner.y)
+	_fill_outline(outline, color)
+
+
+## Paints the inside of an outline on the floor (x and z).
+func _fill_outline(outline: PackedVector2Array, color: Color) -> void:
+	var low := outline[0]
+	var high := outline[0]
+	for corner in outline:
+		low = low.min(corner)
+		high = high.max(corner)
+	var from := Vector2i(((low - _paint_area.position) * PAINT_SCALE).floor())
+	var to := Vector2i(((high - _paint_area.position) * PAINT_SCALE).ceil())
+	for y in range(maxi(from.y, 1), mini(to.y, _paint.get_height() - 1)):
+		for x in range(maxi(from.x, 1), mini(to.x, _paint.get_width() - 1)):
+			# How much of this pixel lies inside, from nine points in it.
+			var cover := 0.0
+			for i in 9:
+				var sample := Vector2(x + (i % 3 + 0.5) / 3.0, y + (i / 3 + 0.5) / 3.0) / PAINT_SCALE + _paint_area.position
+				if Geometry2D.is_point_in_polygon(sample, outline):
+					cover += 1.0 / 9.0
+			if cover > _paint.get_pixel(x, y).a:
+				_paint.set_pixel(x, y, Color(color.r, color.g, color.b, cover))
+
+
 ## Paints a rectangle of floor, solid or in diagonal stripes of `color` with
 ## `between` in the gaps.
 func _fill(area: Rect2, color: Color, stripe := 0.0, between := Color(0, 0, 0, 0)) -> void:
@@ -893,6 +937,151 @@ func _fill(area: Rect2, color: Color, stripe := 0.0, between := Color(0, 0, 0, 0
 					cover *= inside
 			if cover > _paint.get_pixel(x, y).a:
 				_paint.set_pixel(x, y, Color(paint.r, paint.g, paint.b, cover))
+
+
+# --- Route -------------------------------------------------------------------
+# The way through a level, played by scripts/game.gd in the order it is
+# described here: the start, then zones and checkpoints as the player comes
+# to them, then the exit.
+
+
+## Where the player stands when the level begins, looking towards `look`.
+func route_start(at: Vector3, look: Vector3) -> void:
+	var node := Marker3D.new()
+	node.name = "Start"
+	node.transform = _pose(at, look)
+	_add(node, _route_node())
+
+
+## A part of the level that robots hold. They appear when the player walks
+## into `area`, each at its own spot, and the zone is cleared when the last of
+## them is down. `title` is what the HUD calls the place, as in "Clear the
+## corridor". `enemies` lists [kind, position], with "grunt", "rusher" or
+## "heavy" for a kind.
+func route_zone(id: String, title: String, area: AABB, enemies: Array) -> void:
+	var node := _route_area("Zone", id, title, area, "route_zone")
+	for enemy: Array in enemies:
+		var spawn := Marker3D.new()
+		spawn.name = (enemy[0] as String).capitalize()
+		spawn.position = (enemy[1] as Vector3) - node.position
+		spawn.set_meta(&"kind", enemy[0])
+		spawn.add_to_group("enemy_spawn", true)
+		_add(spawn, node)
+
+
+## A place to carry on from after a death or a restart of the game: `at`,
+## looking towards `look`. It counts once the player is inside `area` with
+## every zone described before it cleared, so it has to lie outside the zones
+## that come after it.
+func route_checkpoint(id: String, title: String, at: Vector3, look: Vector3, area: AABB) -> void:
+	var node := _route_area("Checkpoint", id, title, area, "route_checkpoint")
+	var pose := Marker3D.new()
+	pose.name = "Respawn"
+	pose.transform = node.transform.affine_inverse() * _pose(at, look)
+	_add(pose, node)
+
+
+## The way out, open once every zone is cleared; `title` is what the HUD then
+## says. `next` names the level it leads to; without one the game ends here.
+## With `lamp`, a lamp at that spot on a wall facing `lamp_normal` comes on
+## when the exit opens.
+func route_exit(title: String, area: AABB, next := "", lamp := Vector3.INF, lamp_normal := Vector3.ZERO) -> void:
+	var node := _route_area("Exit", "", title, area, "route_exit")
+	node.set_meta(&"next", next)
+	if lamp == Vector3.INF:
+		return
+	# A bulkhead fitting: the housing is part of the building, what lights up
+	# is a node of its own for the game to switch on.
+	var xf := Transform3D(Basis.looking_at(-lamp_normal), lamp)
+	rounded_box("dark_steel", xf * Transform3D(Basis(), Vector3(0, 0, 0.04)), Vector3(0.62, 0.3, 0.08), 0.02, DETAIL | NO_COLLIDE)
+	var glow := StandardMaterial3D.new()
+	glow.albedo_color = Color(0.05, 0.2, 0.08)
+	glow.emission_enabled = true
+	glow.emission = Color(0.25, 1.0, 0.45)
+	glow.emission_energy_multiplier = 5.0
+	var lens := MeshInstance3D.new()
+	lens.name = "Lamp"
+	lens.mesh = BoxMesh.new()
+	lens.mesh.size = Vector3(0.5, 0.2, 0.05)
+	lens.mesh.material = glow
+	lens.transform = node.transform.affine_inverse() * xf * Transform3D(Basis(), Vector3(0, 0, 0.1))
+	lens.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lens.visible = false
+	_add(lens, node)
+	var light := OmniLight3D.new()
+	light.name = "Light"
+	light.position = Vector3(0, -0.3, 0.9)
+	light.light_color = Color(0.45, 1.0, 0.6)
+	light.light_energy = 4.0
+	light.omni_range = 8.0
+	light.omni_attenuation = 1.3
+	light.light_bake_mode = Light3D.BAKE_DISABLED
+	_add(light, lens)
+
+
+func _route_node() -> Node3D:
+	if _route == null:
+		_route = Node3D.new()
+		_route.name = "Route"
+		_add(_route, _root)
+	return _route
+
+
+## One step of the route with a box the player walks into; it only sees the
+## player.
+func _route_area(kind: String, id: String, title: String, area: AABB, group: String) -> Area3D:
+	var node := Area3D.new()
+	node.name = kind + id.to_pascal_case()
+	node.position = area.get_center()
+	node.collision_layer = 0
+	node.collision_mask = 0b10
+	node.monitorable = false
+	node.set_meta(&"id", id)
+	node.set_meta(&"title", title)
+	node.add_to_group(group, true)
+	_add(node, _route_node())
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = area.size
+	_add(shape, node)
+	return node
+
+
+## Standing at `at` and facing `look`, level with the ground.
+func _pose(at: Vector3, look: Vector3) -> Transform3D:
+	return Transform3D(Basis.looking_at(Vector3(look.x - at.x, 0.0, look.z - at.z)), at)
+
+
+## The box a zone, checkpoint or exit was given.
+func _area_of(node: Area3D) -> AABB:
+	var size: Vector3 = (node.get_child(0) as CollisionShape3D).shape.size
+	return AABB(node.position - size * 0.5, size)
+
+
+## Catches a route that cannot be played as described.
+func _check_route() -> void:
+	if _route == null:
+		return
+	var steps := _route.get_children()
+	var zones := steps.filter(func(step: Node) -> bool: return step.is_in_group("route_zone"))
+	var start := _route.get_node_or_null("Start") as Marker3D
+	if start == null or _route.get_node_or_null("Exit") == null:
+		push_error("Route: needs a start and an exit")
+		return
+	for zone: Area3D in zones:
+		if _area_of(zone).has_point(start.position):
+			push_error("Route: the player starts inside zone '%s'" % zone.get_meta(&"id"))
+		if zone.get_child_count() < 2:
+			push_error("Route: zone '%s' has no enemies" % zone.get_meta(&"id"))
+	for step in steps:
+		if not step.is_in_group("route_checkpoint"):
+			continue
+		var at: Vector3 = (step as Area3D).transform * (step.get_node("Respawn") as Marker3D).position
+		for zone: Area3D in zones:
+			if zone.get_index() > step.get_index() and _area_of(zone).has_point(at):
+				push_error("Route: checkpoint '%s' lies inside zone '%s', which comes after it" % [step.get_meta(&"id"), zone.get_meta(&"id")])
+	print("Route: %d zones, %d checkpoints" % [zones.size(), steps.size() - zones.size() - 2])
 
 
 # --- Geometry builders -------------------------------------------------------
