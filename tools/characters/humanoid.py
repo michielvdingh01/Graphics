@@ -29,7 +29,7 @@ OTHER_SEGMENTS = ("Proximal", "Intermediate", "Distal")
 
 _PREFIX = re.compile(r"^(mixamorig\d*|bip0*\d*|valvebiped|def|org|cc_base|rig|jnt|joint|bn|b)(?=[\s:._\-]|$)", re.I)
 _HELPER = re.compile(r"(^|[^a-z])(ik|pole|target|ctrl|control|twist|roll|helper|nub|end)([^a-z]|$)", re.I)
-_HAND = {"hand", "wrist"}
+_HAND = {"hand", "wrist", "fist", "palm"}
 _FOOT = {"foot", "ankle"}
 _HIPS = {"hips", "hip", "pelvis"}
 _TOES = {"toe", "toes", "toebase", "ball", "toe0", "toes0"}
@@ -72,7 +72,18 @@ def guess(armature: bpy.types.Object, weighted: set) -> dict:
     mapping = {}
     head = pick({"head"}, "")
     if head is None:
-        raise ValueError("no bone named like a head among: %s" % ", ".join(sorted(bones.keys())[:40]))
+        # Some rigs number the whole spine through to the skull. Then the head
+        # is where the bones end that go up from where the arms branch off.
+        hands = [pick(_HAND, side) for side in "LR"]
+        if None in hands:
+            raise ValueError("no bone named like a head or like hands among: %s" % ", ".join(sorted(bones.keys())[:40]))
+        arms = [{bone.name for bone in [hand] + hand.parent_recursive} for hand in hands]
+        head = next(bone for bone in hands[0].parent_recursive if bone.name in arms[1])
+        while True:
+            up = [child for child in head.children if child.name not in arms[0] and child.name not in arms[1] and carries(child)]
+            if len(up) != 1:
+                break
+            head = up[0]
     spine_path = [head] + head.parent_recursive
     on_spine = {bone.name for bone in spine_path}
 
@@ -158,7 +169,7 @@ def guess(armature: bpy.types.Object, weighted: set) -> dict:
             chain = [finger]
             while len(chain[-1].children) == 1:
                 chain.append(chain[-1].children[0])
-            if which != "Thumb" and (len(chain) >= 4 or "carpal" in key):
+            if which != "Thumb" and "carpal" in key:
                 chain = chain[1:]
             for segment, bone in zip(SEGMENTS.get(which, OTHER_SEGMENTS), chain):
                 mapping[word + which + segment] = bone.name
