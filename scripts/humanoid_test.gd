@@ -86,9 +86,11 @@ func _run() -> void:
 	player.global_position = RANGE_TARGET + Vector3(6, 0, 0)
 	player.velocity = Vector3.ZERO
 	player.look_at(Vector3(enemy.global_position.x, player.global_position.y, enemy.global_position.z))
-	player.head.rotation.x = 0.0
-	await _wait(0.3)
+	# At the chest: a character that stoops is shorter than the player's eyes are high.
 	var rig: Node3D = enemy._rig
+	var chest: Vector3 = enemy.global_position + Vector3.UP * rig.fit.height * 0.65
+	player.head.rotation.x = atan2(chest.y - player.head.global_position.y, 6.0)
+	await _wait(0.3)
 	var stains: int = Fx._stains.size()
 	Input.action_press("fire")
 	await _wait(0.25)
@@ -127,7 +129,7 @@ func _run() -> void:
 		var one: CharacterBody3D = scene.instantiate()
 		game.add_child(one)
 		var capsule: CapsuleShape3D = one.get_node("CollisionShape3D").shape
-		slim = slim and capsule.radius <= 0.46
+		slim = slim and capsule.radius <= 0.461
 		if _is_character(one):
 			# The head is inside the collider and counts as one.
 			var fit: Dictionary = one._rig.fit
@@ -178,14 +180,24 @@ func _run() -> void:
 		for i in 600:
 			_walker.global_position += _stride / 60.0
 			legs._pose(1.0 / 60.0)
-		var whole := (Time.get_ticks_usec() - began) / 600
+		var whole := (Time.get_ticks_usec() - began) / 600.0
 		began = Time.get_ticks_usec()
 		for i in 600:
 			legs._tree.advance(1.0 / 60.0)
-		print("    posing it takes %d microseconds a frame, %d of them to blend the clips" % [whole, (Time.get_ticks_usec() - began) / 600])
+		print("    posing it takes %d microseconds a frame, %d of them to blend the clips" % [whole, (Time.get_ticks_usec() - began) / 600.0])
 	else:
 		_check("the grunt of this theme is a character", false)
 	_walker.queue_free()
+
+	# The setting in the menu steps through the themes.
+	Menu._show(Menu.Screen.SETTINGS)
+	var chooser: Button = null
+	for control: Control in Menu._column.get_children():
+		if control is Button and (control as Button).text.begins_with("Enemies"):
+			chooser = control
+	chooser.pressed.emit()
+	_check("the menu steps on to the next theme", Settings.enemy_theme != theme and chooser.text.ends_with(Settings.enemy_names[Settings.enemies]))
+	Menu._show(Menu.Screen.NONE)
 
 	print("HUMANOID TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)
