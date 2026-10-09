@@ -40,6 +40,9 @@ extends Node
 ## --show=Lamp makes a node of that name visible that a level keeps hidden
 ## until the game switches it on, such as the lamp over an exit; several are
 ## separated by commas.
+## --posted stands the robots of the level's route at their posts, switched
+## off, as the player finds them: to see a view as it is in the game, or to
+## measure what it costs that they stand there.
 ## --snap=3 is for looking at the game itself instead of at a level: without
 ## --benchmark, and with --play to skip the title screen, it lets the game run
 ## as it is played, saves one screenshot after that many seconds and quits.
@@ -82,6 +85,7 @@ var _snap := -1.0
 var _only := PackedStringArray()
 var _show := PackedStringArray()
 var _eval := PackedStringArray()
+var _posted := false
 
 
 func _ready() -> void:
@@ -92,6 +96,7 @@ func _ready() -> void:
 		_warmup_frames = 90
 		_measure_frames = 30
 	_profile = "--profile" in args
+	_posted = "--posted" in args
 	for arg in args:
 		if arg.begins_with("--res="):
 			var parts := arg.get_slice("=", 1).split("x")
@@ -169,6 +174,8 @@ func _run() -> void:
 			node.scale = Vector3.ONE * numbers[4]
 		if numbers.size() > 5 and node.has_method("preview"):
 			node.preview(numbers[5])
+	if _posted and tree.current_scene.has_method("post_robots"):
+		tree.current_scene.post_robots()
 	if not _blast.is_empty():
 		# It reads the floor off the colliders, which a level has a frame late.
 		await tree.physics_frame

@@ -5,10 +5,11 @@ extends Node
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
 ## enemy types, explosives, grenades and settings. Then it goes through every
 ## level along its route, from the start to the exit and on into the next:
-## that the route can be walked over the navmesh, that every spawn point can
-## reach the player and is out of sight when its robot appears, that a zone
-## brings out the robots it lists, and that a checkpoint is still there after
-## a restart of the game and after a death. Where a level is cut into zones
+## that the route can be walked over the navmesh, that every robot can reach
+## the player from its post and none stands close by and in view where the
+## player appears or walks into its zone, that the robots a zone lists wait
+## at their posts until its fight starts, and that a checkpoint is still there
+## after a restart of the game and after a death. Where a level is cut into zones
 ## that are only drawn when they can be seen, it looks for lines of sight
 ## into a zone from where that zone is switched off.
 
@@ -17,8 +18,8 @@ extends Node
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
 const RANGE_TARGET := Vector3(1, 0, -7.5)
 const RUNWAY := Vector3(17.5, 0, 5.5)
-## A robot may appear in sight of where the player walks into its zone, but
-## not closer than this.
+## A robot may stand in sight of where the player walks into its zone, starts
+## the level or carries on from a checkpoint, but not closer than this.
 const SPAWN_DISTANCE := 14.0
 ## Distance in metres between the points a route is sampled at.
 const STRIDE := 0.5
@@ -82,7 +83,7 @@ func _handling() -> void:
 
 	var navmesh: NavigationMesh = game.nav_region.navigation_mesh
 	_check("navmesh is baked", navmesh.get_polygon_count() > 0)
-	_check("the level starts quiet, with the player at its start", tree.get_nodes_in_group("enemy").is_empty()
+	_check("the level starts quiet, with the player at its start", _all_posted(game)
 		and not game.fighting() and player.global_position.distance_to(game.start.origin) < 0.5)
 	var first: RefCounted = game.zones[0]
 	_check("the HUD is told where to go", game.objective == "Reach %s" % first.title)
@@ -92,9 +93,12 @@ func _handling() -> void:
 	_check("mezzanine connects via stairs", top.size() > 1 and top[0].y > 2.5 and top[-1].distance_to(player.global_position) < 1.0)
 
 	# The part that tests how things handle goes all over the hall; only the
-	# first zone is left to notice.
+	# first zone is left to notice, and only its robots are left standing.
 	for zone: RefCounted in game.zones:
 		zone.area.set_deferred("monitoring", zone == first)
+		if zone != first:
+			for robot: Node3D in zone.robots:
+				robot.queue_free()
 	await _wait(0.1)
 
 	# Sprint, then slide.
@@ -115,13 +119,14 @@ func _handling() -> void:
 	await _wait(0.2)
 	_check("stands up again", not player.is_crouched())
 
-	# A fight: walking into a zone brings out the robots it lists, and no others.
+	# A fight: walking into a zone switches on the robots it lists, and no others.
 	var entries := _entries(game, _walk(game))
 	_move(player, entries.get(first.id, Vector3.ZERO))
 	await _wait(0.3)
 	var enemies := tree.get_nodes_in_group("enemy")
 	_check("walking into a zone starts its fight", first.fighting() and game.objective == "Clear %s" % first.title)
-	_check("with the robots that zone lists", not enemies.is_empty() and _kinds(enemies) == _roster(game, first))
+	_check("with the robots that zone lists", not enemies.is_empty() and _kinds(enemies) == _roster(game, first)
+		and enemies.all(func(e: Node) -> bool: return e.can_process()))
 	var path := NavigationServer3D.map_get_path(map, enemies[0].global_position, player.global_position, true)
 	_check("enemy can path to player", path.size() > 1)
 
@@ -296,8 +301,8 @@ func _play_through(level: Dictionary, next: String) -> void:
 	var title: String = level.name
 	_check("%s: is the level that loads" % title, game.scene_file_path == level.scene)
 	_check("%s: navmesh is baked" % title, game.nav_region.navigation_mesh.get_polygon_count() > 0)
-	_check("%s: starts quiet, with the player at its start" % title, tree.get_nodes_in_group("enemy").is_empty()
-		and game.player.global_position.distance_to(game.start.origin) < 0.5)
+	_check("%s: starts quiet, with the player at its start and every robot at its post" % title, _all_posted(game)
+		and not game.fighting() and game.player.global_position.distance_to(game.start.origin) < 0.5)
 	_check("%s: starting it is something to carry on from" % title, Save.resume_point(level.scene).get("at", "?") == "")
 	var explosives := tree.get_nodes_in_group("explosive")
 	_check("%s: has things that explode, each with its model" % title, not explosives.is_empty()
@@ -328,12 +333,38 @@ func _play_through(level: Dictionary, next: String) -> void:
 			eye = (ground.position if ground else entries[zone.id]) + Vector3.UP * 1.6
 			var seen := _in_view(space, eye, at)
 			if _routes_only:
-				print("    %s/%s: %.1f m from where the zone is entered, %s" % [zone.id, spawn.name, eye.distance_to(at), "in view" if seen else "hidden"])
+				# And from where on the way there the player already sees it standing.
+				var early := PackedStringArray()
+				for other: RefCounted in game.zones:
+					if other.order >= zone.order or not entries.has(other.id):
+						continue
+					var from: Vector3 = entries[other.id] + Vector3.UP * 1.15
+					if _in_view(space, from, at):
+						early.append("%s at %.0f m" % [other.title, from.distance_to(at)])
+				print("    %s/%s: %.1f m from where the zone is entered, %s%s" % [zone.id, spawn.name, eye.distance_to(at),
+					"in view" if seen else "hidden", "" if early.is_empty() else "; stands in view from the way into " + ", ".join(early)])
 			if eye.distance_to(at) < SPAWN_DISTANCE and seen:
 				exposed += 1
 				print("    spawn in view: %s/%s at %.1f m" % [zone.id, spawn.name, eye.distance_to(at)])
-	_check("%s: every spawn point reaches the player" % title, stranded == 0)
-	_check("%s: no robot appears close by and in view" % title, exposed == 0)
+	_check("%s: every robot can reach the player from its post" % title, stranded == 0)
+	_check("%s: none stands close by and in view where its zone is walked into" % title, exposed == 0)
+	# Nor where the player appears: at the start, or at a checkpoint with the
+	# zones before it cleared.
+	var company := 0
+	var poses := [[-1, "the start", game.start.origin]]
+	for checkpoint: RefCounted in game.checkpoints:
+		poses.append([checkpoint.order, checkpoint.title, checkpoint.pose.origin])
+	for pose: Array in poses:
+		var eye: Vector3 = pose[2] + Vector3.UP * 1.6
+		for zone: RefCounted in game.zones:
+			if zone.order < pose[0]:
+				continue
+			for spawn: Node3D in _spawns(zone):
+				var at := spawn.global_position
+				if eye.distance_to(at) < SPAWN_DISTANCE and _in_view(space, eye, at):
+					company += 1
+					print("    in view from %s: %s/%s at %.1f m" % [pose[1], zone.id, spawn.name, eye.distance_to(at)])
+	_check("%s: nor where the player starts or carries on" % title, company == 0)
 	var misplaced := 0
 	for checkpoint: RefCounted in game.checkpoints:
 		for zone: RefCounted in game.zones:
@@ -361,10 +392,18 @@ func _play_through(level: Dictionary, next: String) -> void:
 		var here: RefCounted = steps[step]
 		step += 1
 		if here.area.is_in_group("route_zone"):
-			_move(player, entries.get(here.id, Vector3.ZERO))
+			var robots: Array = here.robots.duplicate()
+			_check("%s: the robots of %s wait at their posts" % [title, here.title], not here.started
+				and _kinds(robots) == _roster(game, here) and _waiting(robots, _spawns(here)))
+			# The last zone is not walked into but shot at from outside it.
+			var shot: bool = here == game.zones[-1] and not robots.is_empty()
+			if shot:
+				robots[0].take_damage(1.0, robots[0].global_position + Vector3.UP, Vector3.DOWN)
+			else:
+				_move(player, entries.get(here.id, Vector3.ZERO))
 			await _wait(0.3)
-			var robots := tree.get_nodes_in_group("enemy")
-			_check("%s: %s brings out the robots it lists" % [title, here.title], here.fighting() and _kinds(robots) == _roster(game, here))
+			_check("%s: %s starts their fight" % [title, "a shot at one of them" if shot else "walking in"], here.fighting()
+				and robots.all(func(robot: Node) -> bool: return robot.can_process()))
 			var before: int = game.kills
 			for robot in robots:
 				robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
@@ -406,7 +445,9 @@ func _play_through(level: Dictionary, next: String) -> void:
 			if zone.order < again.order:
 				_move(game.player, entries.get(zone.id, Vector3.ZERO))
 				await _wait(0.3)
-				quiet = quiet and tree.get_nodes_in_group("enemy").is_empty()
+				quiet = quiet and zone.robots.is_empty() and not game.fighting()
+			else:
+				quiet = quiet and _kinds(zone.robots) == _roster(game, zone)
 		_check("%s: and what was cleared before it stays cleared" % title, quiet)
 		_move(game.player, again.pose.origin)
 		await _wait(0.2)
@@ -542,6 +583,25 @@ func _box(area: Area3D) -> AABB:
 
 func _spawns(zone: RefCounted) -> Array:
 	return zone.area.get_children().filter(func(node: Node) -> bool: return node.is_in_group("enemy_spawn"))
+
+
+## True if every zone has the robots it lists standing at their posts.
+func _all_posted(game: Node) -> bool:
+	for zone: RefCounted in game.zones:
+		if _kinds(zone.robots) != _roster(game, zone) or not _waiting(zone.robots, _spawns(zone)):
+			return false
+	return not game.zones.is_empty()
+
+
+## True if those robots stand where they were posted, switched off.
+func _waiting(robots: Array, posts: Array) -> bool:
+	if robots.size() != posts.size():
+		return false
+	for i in robots.size():
+		var robot: Node3D = robots[i]
+		if robot.can_process() or robot.global_position.distance_to(posts[i].global_position) > 0.1:
+			return false
+	return true
 
 
 ## The scenes a zone lists, sorted, to compare with what _kinds() finds.

@@ -1,10 +1,11 @@
 extends Node3D
 ## Level flow: bakes the navmesh and takes the player down the route the level
-## describes (tools/levels/<name>.gd, built into Level/Route). A fight starts
-## when the player walks into a zone, with the robots that zone lists. A
-## checkpoint is a place: it counts once everything before it is cleared, and
-## a death or a restart of the game carries on from the last one. The exit
-## opens when every zone is cleared.
+## describes (tools/levels/<name>.gd, built into Level/Route). The robots a
+## zone lists stand at their posts from the moment the level loads, switched
+## off. Their fight starts when the player walks into the zone or shoots at
+## one of them. A checkpoint is a place: it counts once everything before it
+## is cleared, and a death or a restart of the game carries on from the last
+## one. The exit opens when every zone is cleared.
 
 ## What the HUD shows as the thing to do, and how many robots still stand in
 ## the way of it.
@@ -21,7 +22,8 @@ const RUSHER := preload("res://scenes/enemy_rusher.tscn")
 const HEAVY := preload("res://scenes/enemy_heavy.tscn")
 ## What a zone can list.
 const ENEMIES := {"grunt": GRUNT, "rusher": RUSHER, "heavy": HEAVY}
-## Shortest and longest time before a spawned enemy comes looking for the player.
+## Shortest and longest time before a robot whose fight has started comes
+## looking for the player.
 const HUNT_DELAY := Vector2(1.5, 4.0)
 const RESTART_DELAY := 2.5
 ## How long the screen takes to go dark at the exit before the next level loads.
@@ -38,6 +40,8 @@ class Zone:
 	var started := false
 	var cleared := false
 	var alive := 0
+	## The robots that hold it, from the moment they are posted.
+	var robots: Array[Node3D] = []
 
 	func fighting() -> bool:
 		return started and not cleared
@@ -78,6 +82,7 @@ func _ready() -> void:
 	var playing := not Benchmark.active and not Menu.at_title()
 	if playing:
 		_resume()
+		post_robots()
 		_watch_route()
 		player.died.connect(_on_player_died)
 		_update_objective()
@@ -154,6 +159,71 @@ func _resume() -> void:
 	kills_changed.emit(kills)
 
 
+## Stands the robots of every zone that is still to be fought over at their
+## posts, facing the way the player will come. They wait there switched off:
+## a robot that is running goes for the player on sight, and across a hall
+## that would start every fight at once. Switched off, a robot does not move
+## a joint either: one that so much as sways makes every lamp around it draw
+## its shadows again, frame after frame. Of a robot this reads no more than
+## the agreed signal, alert() and dead, and its health to see that it was hit.
+func post_robots() -> void:
+	for zone in zones:
+		if zone.cleared or not zone.robots.is_empty():
+			continue
+		var from := _approach(zone)
+		for spawn in zone.area.get_children():
+			if not spawn.is_in_group("enemy_spawn"):
+				continue
+			var robot: CharacterBody3D = ENEMIES[spawn.get_meta(&"kind")].instantiate()
+			robot.position = (spawn as Node3D).global_position
+			var towards := from - robot.position
+			robot.rotation.y = atan2(-towards.x, -towards.z)
+			robot.died.connect(_on_enemy_died.bind(zone))
+			add_child(robot)
+			# It stays there to be shot at and walked into.
+			robot.disable_mode = CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE
+			robot.process_mode = Node.PROCESS_MODE_DISABLED
+			zone.robots.append(robot)
+			zone.alive += 1
+
+
+## Where the player is last sure to have stood on the way to a zone: the
+## checkpoint before it on the route, or the start.
+func _approach(zone: Zone) -> Vector3:
+	var from := start.origin
+	for checkpoint in checkpoints:
+		if checkpoint.order < zone.order:
+			from = checkpoint.pose.origin
+	return from
+
+
+func _physics_process(_delta: float) -> void:
+	# A robot that is shot at where it stands does not take it standing.
+	for zone in zones:
+		if not zone.started and zone.robots.any(_is_hurt):
+			_start(zone)
+
+
+## Untyped, as is the robot in _start(): one that has been freed is not a
+## node any more.
+func _is_hurt(robot: Variant) -> bool:
+	return is_instance_valid(robot) and robot.health < robot.max_health
+
+
+## Begins the fight for a zone: its robots are switched on.
+func _start(zone: Zone) -> void:
+	if zone.started:
+		return
+	zone.started = true
+	for robot: Variant in zone.robots:
+		if not is_instance_valid(robot) or robot.dead:
+			continue
+		robot.process_mode = Node.PROCESS_MODE_INHERIT
+		# One that cannot see the player would otherwise stand there for good.
+		get_tree().create_timer(randf_range(HUNT_DELAY.x, HUNT_DELAY.y), false).timeout.connect(robot.alert)
+	_update_objective()
+
+
 func _watch_route() -> void:
 	for zone in zones:
 		zone.area.body_entered.connect(_on_zone_entered.bind(zone))
@@ -182,27 +252,17 @@ func _holds(area: Area3D) -> bool:
 func _on_zone_entered(body: Node3D, zone: Zone) -> void:
 	if body != player or zone.started or player.dead or not _holds(zone.area):
 		return
-	zone.started = true
-	for spawn in zone.area.get_children():
-		if not spawn.is_in_group("enemy_spawn"):
-			continue
-		var enemy: Node3D = ENEMIES[spawn.get_meta(&"kind")].instantiate()
-		enemy.position = (spawn as Node3D).global_position
-		# Facing the way the player came in.
-		var towards := player.global_position - enemy.position
-		enemy.rotation.y = atan2(-towards.x, -towards.z)
-		enemy.died.connect(_on_enemy_died.bind(zone))
-		add_child(enemy)
-		zone.alive += 1
-		# One that cannot see the player would otherwise stand there for good.
-		get_tree().create_timer(randf_range(HUNT_DELAY.x, HUNT_DELAY.y), false).timeout.connect(enemy.alert)
-	_update_objective()
+	_start(zone)
 
 
-func _on_enemy_died(_enemy: Node3D, zone: Zone) -> void:
+func _on_enemy_died(enemy: Node3D, zone: Zone) -> void:
+	# One that is shot down where it stood still has to fall.
+	enemy.process_mode = Node.PROCESS_MODE_INHERIT
 	kills += 1
 	kills_changed.emit(kills)
 	zone.alive -= 1
+	# One shot from afar can be the first the others know of it.
+	_start(zone)
 	if zone.alive > 0:
 		_update_objective()
 		return
