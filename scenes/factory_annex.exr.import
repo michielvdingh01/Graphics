@@ -2,8 +2,8 @@
 
 importer="2d_array_texture"
 type="CompressedTexture2DArray"
-uid="uid://clx1b5iifnn76"
-path.bptc="res://.godot/imported/factory.exr-b75b5106fcac19a001c2d735e5aa458c.bptc.ctexarray"
+uid="uid://1m4ypxrah2yr"
+path.bptc="res://.godot/imported/factory_annex.exr-b10cdd7667552261a14f5830c4e510ce.bptc.ctexarray"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://scenes/factory.exr"
-dest_files=["res://.godot/imported/factory.exr-b75b5106fcac19a001c2d735e5aa458c.bptc.ctexarray"]
+source_file="res://scenes/factory_annex.exr"
+dest_files=["res://.godot/imported/factory_annex.exr-b10cdd7667552261a14f5830c4e510ce.bptc.ctexarray"]
 
 [params]
 
@@ -26,4 +26,4 @@ compress/channel_pack=1
 mipmaps/generate=false
 mipmaps/limit=-1
 slices/horizontal=1
-slices/vertical=8
+slices/vertical=4

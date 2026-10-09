@@ -66,6 +66,8 @@
 		{"id": "text_10_t", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "10 t", "height": 128, "seed": 50, "use": "safe working load on the crane"},
 		{"id": "text_t1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T1", "height": 128, "seed": 51, "use": "tank number"},
 		{"id": "text_t2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T2", "height": 128, "seed": 52, "use": "tank number"},
+		{"id": "text_t3", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T3", "height": 128, "seed": 81, "use": "number of the feed tank in the boiler house"},
+		{"id": "text_k1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "K1", "height": 128, "seed": 82, "use": "boiler number"},
 		{"id": "text_kldu_482316_7", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "KLDU 482316 7", "height": 128, "seed": 53, "use": "container number"},
 		{"id": "text_trnu_207745_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "TRNU 207745 2", "height": 128, "seed": 54, "use": "container number"},
 		{"id": "text_mbcu_931580_4", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "MBCU 931580 4", "height": 128, "seed": 55, "use": "container number"},
