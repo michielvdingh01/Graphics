@@ -1,0 +1,15 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/blue_metal_plate/blue_metal_plate_arm.jpg" id="arm"]
+[ext_resource type="Texture2D" path="res://assets/masks/grain_blast.png" id="grain"]
+
+[resource]
+albedo_color = Color(0.62, 0.64, 0.65, 1)
+metallic = 0.85
+roughness = 1.7
+roughness_texture = ExtResource("arm")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_scale = 0.35
+normal_texture = ExtResource("grain")
+uv1_scale = Vector3(2, 2, 2)

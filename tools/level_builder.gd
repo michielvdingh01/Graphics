@@ -1391,7 +1391,7 @@ func _material(mat: String) -> Material:
 ## unmarked.
 func _surface(mat: String) -> String:
 	match mat:
-		"concrete", "plaster", "floor":
+		"concrete", "plaster", "plaster_dado", "floor":
 			return ""
 		"brick", "wood":
 			return mat
