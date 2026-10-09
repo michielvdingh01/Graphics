@@ -20,7 +20,11 @@ const LOADOUT: Array[WeaponData] = [
 const HIT_MASK := 0b101  # world + enemy
 const SWITCH_TIME := 0.3
 const FIRE_BUFFER := 0.12
-const FLASH_TIME := 0.04
+## A barrel smokes once it has been silent for this long, more the more shots
+## went through it: the heat of a shot, and how much of it is lost per second.
+const SMOKE_DELAY := 0.14
+const SHOT_HEAT := 0.14
+const COOLING := 0.35
 ## Field of view the weapon in hand is drawn with, whatever the view of the
 ## world is set to or zoomed to: narrower, so it sits large and undistorted.
 const VIEWMODEL_FOV := 58.0
@@ -116,8 +120,9 @@ var _locked := 0.0
 var _crowded := 0.0
 ## Where the pump is in its stroke: 0 due, 1 on its way back, 2 done.
 var _pump_stage := 2
-var _flash := Node3D.new()
-var _flash_left := 0.0
+## 0 for a cold barrel, 1 for one that has just emptied a magazine.
+var _heat := 0.0
+var _smoke_due := false
 
 @onready var player: CharacterBody3D = owner
 @onready var camera: Camera3D = get_parent()
@@ -136,7 +141,6 @@ func _ready() -> void:
 		_mags.append(data.mag_size)
 		_reserves.append(data.reserve_ammo)
 	_models[_index].root.visible = true
-	_build_flash()
 	_build_fill()
 	_emit_ammo.call_deferred()
 
@@ -266,8 +270,10 @@ func _process(delta: float) -> void:
 			_start_reload()
 
 	_update_pump(data)
-	_flash_left -= delta
-	_flash.visible = _flash_left > 0.0
+	_heat = maxf(_heat - COOLING * delta, 0.0)
+	if _smoke_due and _since_shot > SMOKE_DELAY:
+		_smoke_due = false
+		smoke(_heat)
 	_animate_viewmodel(data, delta)
 
 
@@ -306,8 +312,10 @@ func _fire(data: WeaponData) -> void:
 				any_hit = true
 				killed = target.take_damage(amount, end, direction) or killed
 			else:
-				Fx.impact(end, hit.normal)
-		Fx.tracer(muzzle, end)
+				Fx.impact(hit, direction, data.pellets > 1)
+		# One pellet in three of a load of shot is enough to show where it went.
+		if i % 3 == 0:
+			Fx.tracer(muzzle, end)
 
 	var recoil_scale := lerpf(1.0, data.ads_recoil_scale, ads_blend)
 	player.add_recoil(
@@ -316,10 +324,9 @@ func _fire(data: WeaponData) -> void:
 	)
 	_bloom = minf(_bloom + data.bloom_per_shot_deg, data.bloom_max_deg)
 	_kick = 1.0
-	_flash_left = FLASH_TIME
-	_flash.global_position = muzzle
-	_flash.rotation.z = randf() * TAU
-	_flash.scale = Vector3.ONE * randf_range(0.8, 1.3)
+	flash()
+	_heat = minf(_heat + SHOT_HEAT * (2.5 if data.pellets > 1 else 1.0), 1.0)
+	_smoke_due = true
 	if model.pump:
 		_pump_stage = 0
 	else:
@@ -332,6 +339,24 @@ func _fire(data: WeaponData) -> void:
 		Sfx.play(&"kill" if killed else (&"headshot" if headshot else &"hit"), -4.0)
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()
+
+
+## Where the shots of the weapon in hand leave it.
+func muzzle_position() -> Vector3:
+	return _models[_index].muzzle.global_position
+
+
+## The flash at the muzzle of the weapon in hand. Over the sights it is
+## smaller, so that it does not hide what is being shot at.
+func flash() -> void:
+	var data := current()
+	Fx.muzzle_flash(_models[_index].muzzle, Transform3D(), data.flash_size * lerpf(1.0, 0.65, ads_blend), data.flash_prongs)
+
+
+## The wisp of smoke the barrel leaves when it falls silent; `heat` is 1 after
+## a long burst.
+func smoke(heat: float) -> void:
+	Fx.gun_smoke(muzzle_position(), Vector3.UP * 0.4 - camera.global_basis.z, heat)
 
 
 ## Throws the spent case out of the ejection port, to the right and a little up.
@@ -523,39 +548,6 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 			var reach := smoothstep(0.03, MAG_OUT, fraction) * (1.0 - smoothstep(MAG_IN + 0.05, BOLT_RELEASE + 0.06, fraction))
 			model.arm_l.position = model.arm_l.position.lerp(model.mag_hold, reach) + drop
 	return [offset, turn]
-
-
-func _build_flash() -> void:
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.billboard_keep_scale = true
-	mat.albedo_color = Color(3.0, 1.8, 0.6)
-	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray([Color.WHITE, Color(1, 1, 1, 0)])
-	var texture := GradientTexture2D.new()
-	texture.gradient = gradient
-	texture.fill = GradientTexture2D.FILL_RADIAL
-	texture.fill_from = Vector2(0.5, 0.5)
-	texture.fill_to = Vector2(1.0, 0.5)
-	texture.width = 64
-	texture.height = 64
-	mat.albedo_texture = texture
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * 0.22
-	quad.material = mat
-	var sprite := MeshInstance3D.new()
-	sprite.mesh = quad
-	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_flash.add_child(sprite)
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.75, 0.4)
-	light.light_energy = 2.5
-	light.omni_range = 7.0
-	_flash.add_child(light)
-	_flash.visible = false
-	add_child(_flash)
 
 
 ## A dim light over the left shoulder that reaches only the weapon in view, so

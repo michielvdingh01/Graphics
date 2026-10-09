@@ -93,6 +93,15 @@
 		{"id": "leak_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "leak", "size": [256, 512], "seed": 19, "use": "water streaks under windows"},
 		{"id": "stain_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "stain", "size": [512, 512], "seed": 5, "use": "oil on floors"},
 		{"id": "stain_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "stain", "size": [512, 512], "seed": 42, "use": "oil on floors"},
-		{"id": "grime", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "grime", "size": [1024, 256], "seed": 8, "use": "dirt along wall bases"}
+		{"id": "grime", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "grime", "size": [1024, 256], "seed": 8, "use": "dirt along wall bases"},
+		{"id": "hole_concrete_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "concrete", "size": [256, 256], "seed": 91, "use": "bullet holes in concrete and brick"},
+		{"id": "hole_concrete_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "concrete", "size": [256, 256], "seed": 92, "use": "bullet holes in concrete and brick"},
+		{"id": "hole_metal_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "metal", "size": [256, 256], "seed": 93, "use": "bullet holes in steel"},
+		{"id": "hole_metal_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "metal", "size": [256, 256], "seed": 94, "use": "bullet holes in steel"},
+		{"id": "hole_wood_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "wood", "size": [256, 256], "seed": 95, "use": "bullet holes in wood"},
+		{"id": "hole_wood_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "wood", "size": [256, 256], "seed": 96, "use": "bullet holes in wood"},
+		{"id": "hole_soft_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "soft", "size": [128, 128], "seed": 97, "use": "bullet holes in bags, tyres and cardboard"},
+		{"id": "scorch_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "scorch", "size": [512, 512], "seed": 98, "use": "burn mark where a robot blew up"},
+		{"id": "scorch_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "scorch", "size": [512, 512], "seed": 99, "use": "burn mark where a robot blew up"}
 	]
 }

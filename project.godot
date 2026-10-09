@@ -183,3 +183,10 @@ world/region_use_async_iterations=false
 
 common/physics_ticks_per_second=120
 3d/physics_engine="Jolt Physics"
+
+[shader_globals]
+
+fx_time={
+"type": "float",
+"value": 0.0
+}

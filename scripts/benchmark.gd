@@ -16,8 +16,16 @@ extends Node
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
 ## stands a scene in the level at that spot, a model or an enemy, without
 ## letting it run; several are separated by semicolons, a fifth number scales
-## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride. All of this is
-## for looking at a model, not for measuring.
+## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride, 3 shot to pieces,
+## 4 firing.
+## --shoot=0.02 fires a shot along the view and shows it that many seconds
+## later: the flash of the weapon in view, the tracer and what the bullet does
+## to whatever it hits. --shoot=0.3,6,4 fires six shots within four degrees.
+## --hold=0.5 shows what went off when the run began, such as that robot
+## falling apart, that many seconds on. All of this is for looking at a model
+## or an effect, not for measuring. --firefight=12 is for measuring: it keeps
+## firing that many shots a second along every view, six degrees wide, to
+## show what the effects cost while they are all going off.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -35,6 +43,12 @@ var _off := PackedStringArray()
 var _at := PackedStringArray()
 var _spawn := PackedStringArray()
 var _weapon := PackedFloat64Array()
+var _shoot := PackedFloat64Array()
+var _hold := -1.0
+var _firefight := 0.0
+var _fire_due := 0.0
+var _eye: Camera3D
+var _random := RandomNumberGenerator.new()
 var _warmup_frames := 120
 var _measure_frames := 600
 
@@ -61,6 +75,12 @@ func _ready() -> void:
 			_spawn = arg.get_slice("=", 1).split(";")
 		elif arg.begins_with("--weapon="):
 			_weapon = arg.get_slice("=", 1).split_floats(",")
+		elif arg.begins_with("--shoot="):
+			_shoot = arg.get_slice("=", 1).split_floats(",")
+		elif arg.begins_with("--hold="):
+			_hold = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--firefight="):
+			_firefight = arg.get_slice("=", 1).to_float()
 	if active:
 		_run.call_deferred()
 
@@ -84,6 +104,8 @@ func _run() -> void:
 	if player:
 		player.process_mode = Node.PROCESS_MODE_DISABLED
 		player.visible = not _weapon.is_empty()
+	# An effect is looked at with its clock stopped at the age that was asked for.
+	Fx.held = _hold >= 0.0 or not _shoot.is_empty()
 	for entry in _spawn:
 		var numbers := entry.get_slice("@", 1).split_floats(",")
 		var node: Node3D = (load(entry.get_slice("@", 0)) as PackedScene).instantiate()
@@ -95,6 +117,8 @@ func _run() -> void:
 			node.scale = Vector3.ONE * numbers[4]
 		if numbers.size() > 5 and node.has_method("preview"):
 			node.preview(numbers[5])
+	if _hold >= 0.0:
+		Fx.advance(_hold)
 	# What is seen through a telescopic sight is drawn by the HUD.
 	var aimed := _weapon.size() > 1 and _weapon[1] >= 1.0
 	for hud in tree.get_nodes_in_group("hud"):
@@ -132,13 +156,25 @@ func _run() -> void:
 	var views := []
 	for view: Node3D in markers:
 		camera.global_transform = view.global_transform
+		_eye = camera
 		if player and not _weapon.is_empty():
 			# Look through the player's own eyes, so the weapon sits where it would.
 			player.rotation = Vector3(0, view.global_rotation.y, 0)
 			player.head.rotation.x = view.global_rotation.x
 			player.global_position += view.global_position - player.camera.global_position
 			player.camera.make_current()
+			_eye = player.camera
 			player.weapons.preview(int(_weapon[0]), _weapon[1] if _weapon.size() > 1 else 0.0, _weapon[2] if _weapon.size() > 2 else 0.0)
+		if not _shoot.is_empty():
+			# The level has to have its colliders before a shot can land on it.
+			await tree.physics_frame
+			await tree.physics_frame
+			Fx.clear()
+			_random.seed = 5
+			_fire(_eye, int(_shoot[1]) if _shoot.size() > 1 else 1, _shoot[2] if _shoot.size() > 2 else 0.0)
+			if not _weapon.is_empty():
+				player.weapons.smoke(1.0)
+			Fx.advance(_shoot[0])
 		for i in _warmup_frames:
 			await tree.process_frame
 
@@ -193,6 +229,40 @@ func _run() -> void:
 	file.close()
 	print("Saved to ", out_dir)
 	tree.quit()
+
+
+func _process(delta: float) -> void:
+	if _firefight <= 0.0 or _eye == null:
+		return
+	_fire_due += delta * _firefight
+	while _fire_due >= 1.0:
+		_fire_due -= 1.0
+		_fire(_eye, 1, 6.0)
+
+
+## Fires `count` shots along the view of `eye`, within `spread_deg` of it:
+## only what there is to see of them.
+func _fire(eye: Camera3D, count: int, spread_deg: float) -> void:
+	var from := eye.global_position
+	var muzzle := from + eye.global_basis * Vector3(0.15, -0.12, -0.8)
+	if not _weapon.is_empty():
+		var weapons: Node3D = eye.get_node("Weapons")
+		weapons.flash()
+		muzzle = weapons.muzzle_position()
+	var spread := tan(deg_to_rad(spread_deg))
+	for i in count:
+		var angle := _random.randf() * TAU
+		var radius := sqrt(_random.randf()) * spread
+		var direction := (eye.global_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)).normalized()
+		var end := from + direction * 200.0
+		var hit := eye.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, end, 0b101))
+		if hit:
+			end = hit.position
+			if hit.collider.has_method("take_damage"):
+				Fx.robot_hit(end, direction)
+			else:
+				Fx.impact(hit, direction)
+		Fx.tracer(muzzle, end)
 
 
 ## Frame times in milliseconds of an unbroken run of drawn frames.

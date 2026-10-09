@@ -52,6 +52,12 @@ extends Resource
 ## the weapon itself goes out of view.
 @export var scoped := false
 
+@export_group("Muzzle")
+## Length of the flash in metres, and the number of tongues the muzzle device
+## splits it into: 0 for a bare muzzle, 2 for a brake that blows to the sides.
+@export var flash_size := 0.34
+@export var flash_prongs := 4
+
 @export_group("Viewmodel")
 @export var hip_offset := Vector3(0.2, -0.2, -0.4)
 @export var ads_offset := Vector3(0.0, -0.06, -0.3)

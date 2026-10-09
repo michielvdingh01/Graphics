@@ -22,6 +22,7 @@ cooldown = Vector2(2.0, 3.0)
 eye_height = 1.72
 head_start = 1.56
 visor_color = Color(0.7, 0.1, 1, 1)
+flash_size = 0.34
 
 [node name="CollisionShape3D" parent="." index="0"]
 position = Vector3(0, 1.035, 0)

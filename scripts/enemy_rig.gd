@@ -131,7 +131,7 @@ func collapse(push: Vector3) -> void:
 		tween.tween_interval(DEBRIS_TIME - 1.0 + randf())
 		tween.tween_property(mesh, "scale", Vector3.ONE * 0.01, 0.6)
 		tween.tween_callback(piece.queue_free)
-	Fx.sparks(middle, Vector3.UP, Color(4.0, 2.2, 0.8), 24)
+	Fx.wreck(middle)
 
 
 func _process(delta: float) -> void:

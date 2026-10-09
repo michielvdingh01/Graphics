@@ -1,16 +1,54 @@
 extends Node
-## Short-lived visual effects: tracers, impact sparks, bullet holes and spent cases.
-## Everything is parented to the current scene so a scene reload cleans it up.
+## Short-lived visual effects: muzzle flashes, tracers, what a shot does to the
+## surface it hits, spent cases and the end of a robot. Everything is parented
+## to the current scene so a scene reload cleans it up.
+##
+## Sparks, chips and smoke come in bursts. A burst is one mesh instance whose
+## shader works out where every particle is from the time since the burst
+## began (see shaders/fx_common.gdshaderinc), so it costs nothing per frame
+## here. All of it runs on `time`, a clock of its own that stops with the game
+## and that a screenshot can hold still.
 
-const MAX_HOLES := 64
-const TRACER_TIME := 0.05
+const MAX_HOLES := 80
 const MAX_CASINGS := 24
 const CASING_TIME := 3.0
+const TRACER_SPEED := 260.0
+## Seconds a hole in steel keeps glowing, and how brightly it starts.
+const COOLING_TIME := 0.9
+const HOLE_HEAT := 5.0
+## How far a burst can throw its particles; it is not drawn when a box this
+## size around it is out of view.
+const REACH := 3.0
+const WORLD := 1
+## The shaders keep time in single precision, which gets coarse after hours;
+## past this many seconds the clock starts again as soon as nothing is playing.
+const CLOCK_SPAN := 600.0
 
-var _tracer_mesh := BoxMesh.new()
-var _spark_mesh := BoxMesh.new()
-var _hole_mesh := QuadMesh.new()
-var _holes: Array[Node3D] = []
+const HOLE_VARIANTS := {"concrete": 2, "metal": 2, "wood": 2, "soft": 1}
+const SCORCH_VARIANTS := 2
+const DECALS := "res://assets/decals/"
+
+## Seconds the effects have been running. Bursts are timed against this.
+var time := 0.0
+## Stops the clock and keeps everything from expiring, so that a screenshot can
+## show an effect at an exact age: fire it, then advance(). See benchmark.gd.
+var held := false
+
+var _sparks: ArrayMesh
+var _chips: ArrayMesh
+var _puffs: ArrayMesh
+var _tracer: ArrayMesh
+var _flame: ArrayMesh
+## Surface -> one [albedo, normal, orm, emission] per variant of its hole.
+var _hole_textures := {}
+var _scorch_textures: Array[Texture2D] = []
+var _holes: Array[Decal] = []
+## What is freed once `time` passes a moment: [node, moment].
+var _expiring: Array[Array] = []
+## Lights that die down: [light, start, seconds, energy].
+var _lights: Array[Array] = []
+## Holes in steel that are still glowing: [decal, start].
+var _cooling: Array[Array] = []
 var _casing_mesh := CylinderMesh.new()
 var _shell_mesh := CylinderMesh.new()
 var _shell_head := CylinderMesh.new()
@@ -19,29 +57,22 @@ var _casings: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	_tracer_mesh.size = Vector3(0.012, 0.012, 1.0)
-	_spark_mesh.size = Vector3.ONE * 0.025
+	_sparks = _burst_mesh(28, preload("res://shaders/sparks.gdshader"))
+	_chips = _burst_mesh(18, preload("res://shaders/chips.gdshader"))
+	_puffs = _burst_mesh(7, preload("res://shaders/puff.gdshader"))
+	(_puffs.surface_get_material(0) as ShaderMaterial).set_shader_parameter(&"noise", preload("res://assets/masks/wear.png"))
+	_tracer = _burst_mesh(1, preload("res://shaders/tracer.gdshader"))
+	_flame = _flame_mesh()
 
-	var spark_mat := StandardMaterial3D.new()
-	spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	spark_mat.vertex_color_use_as_albedo = true
-	_spark_mesh.material = spark_mat
-
-	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray([Color(0.02, 0.02, 0.02, 0.95), Color(0.05, 0.05, 0.05, 0.0)])
-	var hole_tex := GradientTexture2D.new()
-	hole_tex.gradient = gradient
-	hole_tex.fill = GradientTexture2D.FILL_RADIAL
-	hole_tex.fill_from = Vector2(0.5, 0.5)
-	hole_tex.fill_to = Vector2(1.0, 0.5)
-	hole_tex.width = 32
-	hole_tex.height = 32
-	var hole_mat := StandardMaterial3D.new()
-	hole_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	hole_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	hole_mat.albedo_texture = hole_tex
-	_hole_mesh.size = Vector2.ONE * 0.09
-	_hole_mesh.material = hole_mat
+	for surface: String in HOLE_VARIANTS:
+		var variants := []
+		for i in HOLE_VARIANTS[surface]:
+			var stem := "%shole_%s_%d" % [DECALS, surface, i + 1]
+			var glow: Texture2D = load(stem + "_e.png") if surface == "metal" else null
+			variants.append([load(stem + ".png"), load(stem + "_n.png"), load(stem + "_orm.png"), glow])
+		_hole_textures[surface] = variants
+	for i in SCORCH_VARIANTS:
+		_scorch_textures.append(load("%sscorch_%d.png" % [DECALS, i + 1]))
 
 	var brass: Material = load("res://materials/brass.tres")
 	for mesh: CylinderMesh in [_casing_mesh, _shell_mesh, _shell_head]:
@@ -60,62 +91,178 @@ func _ready() -> void:
 	_shell_head.height = 0.014
 
 
-func tracer(from: Vector3, to: Vector3, color := Color(4.0, 3.0, 1.5)) -> void:
-	var length := from.distance_to(to)
-	if length < 0.5:
-		return
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = color
-	var streak := MeshInstance3D.new()
-	streak.mesh = _tracer_mesh
-	streak.material_override = mat
-	streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	streak.transform = Transform3D(_facing(to - from).scaled_local(Vector3(1, 1, length)), (from + to) * 0.5)
-	_spawn(streak, TRACER_TIME)
+## Moves the clock on by hand while it is held.
+func advance(seconds: float) -> void:
+	time += seconds
+	_step(0.0)
 
 
-func sparks(position: Vector3, direction: Vector3, color := Color(4.0, 2.5, 1.0), amount := 8) -> void:
-	var particles := CPUParticles3D.new()
-	particles.mesh = _spark_mesh
-	particles.amount = amount
-	particles.lifetime = 0.35
-	particles.one_shot = true
-	particles.explosiveness = 1.0
-	particles.direction = direction
-	particles.spread = 40.0
-	particles.initial_velocity_min = 2.0
-	particles.initial_velocity_max = 6.0
-	particles.color = color
-	particles.position = position
-	particles.emitting = true
-	_spawn(particles, 0.6)
+## The flame at a muzzle and the light it throws. The flame is `size` metres
+## long and points along the -Z of `at`, which is in the space of `parent`: the
+## muzzle of a weapon it should stay on, or nothing for a place in the world.
+## `prongs` is the number of tongues the muzzle device splits it into, 0 for a
+## bare muzzle.
+func muzzle_flash(parent: Node3D, at: Transform3D, size: float, prongs := 4, tint := Color(1.0, 0.62, 0.25), energy := 2.5) -> void:
+	var seconds := randf_range(0.035, 0.05)
+	var flame := MeshInstance3D.new()
+	flame.mesh = _flame
+	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flame.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	# A muzzle brake blows to the sides and stays level; any other flash is
+	# turned about the barrel at random.
+	var roll := 0.0 if prongs == 2 else randf() * TAU
+	flame.transform = at * Transform3D(Basis(Vector3.FORWARD, roll).scaled(Vector3.ONE * size * randf_range(0.8, 1.2)), Vector3.ZERO)
+	flame.set_instance_shader_parameter(&"start", time)
+	flame.set_instance_shader_parameter(&"seed", randf() * 100.0)
+	flame.set_instance_shader_parameter(&"life", seconds)
+	flame.set_instance_shader_parameter(&"tint", tint)
+	flame.set_instance_shader_parameter(&"prongs", float(prongs))
+	if parent:
+		parent.add_child(flame)
+		_expire(flame, seconds)
+	else:
+		_spawn(flame, seconds)
+	var from := parent.global_transform * at.origin if parent else at.origin
+	flash(from, tint.lerp(Color.WHITE, 0.3), energy * size / 0.3, 7.0, seconds + 0.02)
 
 
-## Brief burst of light, as from the muzzle of an enemy's weapon.
-func flash(position: Vector3, color := Color(1.0, 0.75, 0.4), energy := 2.0) -> void:
+## Brief burst of light that dies down over `seconds`.
+func flash(position: Vector3, color := Color(1.0, 0.75, 0.4), energy := 2.0, reach := 5.0, seconds := 0.06) -> void:
 	var light := OmniLight3D.new()
 	light.light_color = color
 	light.light_energy = energy
-	light.omni_range = 5.0
+	light.omni_range = reach
+	light.light_bake_mode = Light3D.BAKE_DISABLED
 	light.position = position
-	_spawn(light, 0.05)
+	_spawn(light, seconds)
+	_lights.append([light, time, seconds, energy])
 
 
-## Sparks plus a bullet hole on world geometry.
-func impact(position: Vector3, normal: Vector3) -> void:
-	sparks(position, normal)
-	Sfx.play_at(&"impact", position, -8.0)
-	var hole := MeshInstance3D.new()
-	hole.mesh = _hole_mesh
-	hole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# QuadMesh faces +Z, so look along the inverted normal.
-	hole.transform = Transform3D(_facing(-normal), position + normal * 0.005)
-	get_tree().current_scene.add_child(hole)
-	_holes.append(hole)
-	_holes = _holes.filter(is_instance_valid)
-	while _holes.size() > MAX_HOLES:
-		_holes.pop_front().queue_free()
+## The streak of a bullet on its way from `from` to `to`.
+func tracer(from: Vector3, to: Vector3, tint := Color(1.0, 0.7, 0.35)) -> void:
+	var length := from.distance_to(to)
+	if length < 2.0:
+		return
+	var streak := MeshInstance3D.new()
+	streak.mesh = _tracer
+	streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	streak.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	streak.position = from
+	streak.custom_aabb = AABB(Vector3.ZERO, to - from).abs().grow(0.5)
+	streak.set_instance_shader_parameter(&"start", time)
+	streak.set_instance_shader_parameter(&"from", from)
+	streak.set_instance_shader_parameter(&"to", to)
+	streak.set_instance_shader_parameter(&"tint", tint)
+	streak.set_instance_shader_parameter(&"speed", TRACER_SPEED)
+	_spawn(streak, length / TRACER_SPEED + 0.05)
+
+
+## What a ray hit is made of: "concrete", "brick", "metal", "wood" or "soft".
+## The level builder marks every collider that is not concrete.
+func surface_of(hit: Dictionary) -> String:
+	var body := hit.collider as CollisionObject3D
+	if body == null or body.get_shape_owners().is_empty():
+		return "concrete"
+	var shape := body.shape_owner_get_owner(body.shape_find_owner(hit.shape))
+	return shape.get_meta(&"surface", "concrete") if shape else "concrete"
+
+
+## A shot that came in along `incoming` lands on the level: `hit` is what the
+## ray found. One pellet of several makes a `light` impact, so that a load of
+## shot does not throw nine times the dust of a bullet.
+func impact(hit: Dictionary, incoming: Vector3, light := false) -> void:
+	strike(hit.position, hit.normal, incoming, surface_of(hit), light)
+	Sfx.play_at(&"impact", hit.position, -8.0)
+
+
+## The same without a ray to go by.
+func strike(position: Vector3, normal: Vector3, incoming: Vector3, surface := "concrete", light := false) -> void:
+	var frame := Transform3D(_up_along(normal), position)
+	var floor_y := _floor_below(position + normal * 0.05)
+	var share := 0.45 if light else 1.0
+	match surface:
+		"metal":
+			# Steel throws sparks, mostly the way the shot glances off.
+			var off := Transform3D(_up_along((incoming.bounce(normal) + normal).normalized()), position)
+			_burst(_sparks, off, 1.0, {&"floor_y": floor_y, &"amount": share * randf_range(0.5, 1.0), &"speed": randf_range(6.0, 10.0)})
+			_burst(_puffs, frame, 0.7, {&"tint": Color(0.45, 0.44, 0.43, 0.3), &"speed": 1.2, &"size": Vector2(0.03, 0.16), &"life": 0.6, &"amount": 0.45})
+			flash(position + normal * 0.08, Color(1.0, 0.6, 0.3), 1.2 * share, 3.0, 0.07)
+			_cooling.append([_hole("metal", frame, randf_range(0.06, 0.075)), time])
+		"wood":
+			_burst(_chips, frame, 3.0, {&"floor_y": floor_y, &"tint": Color(0.7, 0.55, 0.36), &"slender": 4.5, &"size": 0.04, &"speed": 3.5, &"amount": share})
+			_burst(_puffs, frame, 0.8, {&"tint": Color(0.68, 0.58, 0.45, 0.35), &"speed": 1.4, &"size": Vector2(0.03, 0.2), &"life": 0.7, &"amount": 0.6 * share})
+			_hole("wood", frame, randf_range(0.085, 0.11))
+		"soft":
+			_burst(_puffs, frame, 1.3, {&"tint": Color(0.7, 0.69, 0.66, 0.45), &"speed": 1.6, &"size": Vector2(0.04, 0.26), &"life": 1.1, &"rise": -0.05, &"amount": 0.7 * share})
+			_hole("soft", frame, 0.035)
+		_:
+			# Concrete and brick: a puff of dust, chips, and now and then a
+			# spark off the jacket of the bullet.
+			var brick := surface == "brick"
+			var dust := Color(0.66, 0.44, 0.36, 0.5) if brick else Color(0.72, 0.7, 0.66, 0.5)
+			_burst(_puffs, frame, 1.6, {&"tint": dust, &"speed": randf_range(1.8, 2.8), &"size": Vector2(0.05, 0.32), &"life": 1.4, &"rise": -0.04, &"amount": share})
+			_burst(_chips, frame, 3.0, {&"floor_y": floor_y, &"tint": Color(0.55, 0.27, 0.2) if brick else Color(0.62, 0.6, 0.57), &"amount": share})
+			if randf() < 0.3:
+				_burst(_sparks, frame, 0.5, {&"floor_y": floor_y, &"amount": 0.15, &"speed": 5.0, &"life": 0.35})
+			var hole := _hole("concrete", frame, randf_range(0.11, 0.15))
+			if brick:
+				hole.modulate = Color(1.0, 0.72, 0.62)
+
+
+## A shot lands on a robot: sparks, the way the shot glances off.
+func robot_hit(position: Vector3, incoming: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
+	var out := (Vector3.UP * 0.5 - incoming).normalized()
+	_burst(_sparks, Transform3D(_up_along(out), position), 0.8, {&"floor_y": _floor_below(position), &"tint": tint, &"amount": randf_range(0.3, 0.6), &"speed": 6.0, &"life": 0.45, &"spread": 0.9})
+	flash(position - incoming * 0.1, tint.lerp(Color.WHITE, 0.3), 1.0, 3.0, 0.07)
+
+
+## A robot blows up around `position`: a flash, a ball of fire, a shower of
+## sparks, smoke that hangs about and soot on the floor below.
+func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
+	var up := Transform3D(Basis(), position)
+	var floor_y := _floor_below(position)
+	flash(position, Color(1.0, 0.7, 0.45), 7.0, 9.0, 0.3)
+	_burst(_sparks, up, 1.6, {&"floor_y": floor_y, &"tint": tint, &"speed": 9.0, &"spread": 1.0, &"life": 1.3})
+	_burst(_sparks, up.rotated_local(Vector3.UP, 2.0), 1.6, {&"floor_y": floor_y, &"tint": tint, &"speed": 5.0, &"spread": 0.8, &"life": 0.9})
+	_burst(_chips, up, 3.0, {&"floor_y": floor_y, &"tint": Color(0.09, 0.09, 0.1), &"speed": 6.5, &"size": 0.045, &"spread": 1.0})
+	# The fire is out in a third of a second; the smoke it leaves is not.
+	_burst(_puffs, up, 0.5, {&"tint": Color(1.0, 0.5, 0.16, 0.85), &"glow": 9.0, &"speed": 3.5, &"spread": 1.0, &"size": Vector2(0.15, 0.6), &"life": 0.32, &"rise": 0.8})
+	_burst(_puffs, up, 4.0, {&"tint": Color(0.07, 0.07, 0.075, 0.8), &"speed": 2.4, &"spread": 0.9, &"size": Vector2(0.2, 0.95), &"life": 3.4, &"rise": 0.55})
+	var smoulder := _burst(_puffs, Transform3D(Basis(), Vector3(position.x, maxf(floor_y, position.y - 0.9) + 0.25, position.z)), 6.0,
+		{&"tint": Color(0.1, 0.1, 0.105, 0.5), &"speed": 0.5, &"spread": 0.5, &"size": Vector2(0.12, 0.6), &"life": 4.5, &"rise": 0.7})
+	smoulder.set_instance_shader_parameter(&"start", time + 0.6)
+	if floor_y > position.y - 2.5:
+		var soot := Decal.new()
+		soot.texture_albedo = _scorch_textures.pick_random()
+		var across := randf_range(1.5, 2.1)
+		soot.size = Vector3(across, 0.3, across)
+		soot.transform = Transform3D(Basis(Vector3.UP, randf() * TAU), Vector3(position.x, floor_y, position.z))
+		_keep(soot)
+
+
+## The wisp of smoke a barrel leaves once it falls silent, drifting on along
+## `direction`; `amount` is 1 after a long burst.
+func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
+	_burst(_puffs, Transform3D(_up_along(direction), position), 1.2,
+		{&"tint": Color(0.62, 0.62, 0.64, 0.42), &"speed": 0.9, &"spread": 0.3, &"size": Vector2(0.015, 0.17), &"life": 1.0, &"rise": 0.3, &"amount": lerpf(0.45, 1.0, amount)})
+
+
+## Looking along `direction`, whichever way that is.
+func facing(direction: Vector3) -> Basis:
+	var up := Vector3.RIGHT if absf(direction.normalized().y) > 0.99 else Vector3.UP
+	return Basis.looking_at(direction, up)
+
+
+## Frees every effect at once, marks included.
+func clear() -> void:
+	for entry: Array in _expiring:
+		if is_instance_valid(entry[0]):
+			entry[0].queue_free()
+	for decal in _holes:
+		if is_instance_valid(decal):
+			decal.queue_free()
+	_expiring.clear()
+	_holes.clear()
 
 
 ## Spent case thrown from a weapon that points along `basis`: it tumbles,
@@ -135,11 +282,9 @@ func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false) 
 	# It leaves lying along the barrel.
 	node.transform = Transform3D(basis * Basis(Vector3.RIGHT, PI * 0.5), position)
 	get_tree().current_scene.add_child(node)
-	var floor_y := position.y - 4.0
-	var query := PhysicsRayQueryParameters3D.create(position, position + Vector3.DOWN * 4.0, 1)
-	var hit := node.get_world_3d().direct_space_state.intersect_ray(query)
-	if hit:
-		floor_y = hit.position.y
+	var floor_y := _floor_below(position, 4.0)
+	if floor_y < position.y - 4.0:
+		floor_y = position.y - 4.0
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(12.0, 30.0)
 	_casings.append({"node": node, "velocity": velocity, "spin": spin, "floor": floor_y + (0.011 if shell else 0.005), "age": 0.0, "bounces": 0})
 	if _casings.size() > MAX_CASINGS:
@@ -149,13 +294,46 @@ func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false) 
 
 
 func _process(delta: float) -> void:
+	if held:
+		return
+	time += delta
+	if time > CLOCK_SPAN and _expiring.is_empty() and _lights.is_empty() and _cooling.is_empty():
+		time = 0.0
+	_step(delta)
+
+
+func _step(delta: float) -> void:
+	RenderingServer.global_shader_parameter_set(&"fx_time", time)
+	# A scene reload takes its effects with it, so any of these may be gone.
+	for i in range(_expiring.size() - 1, -1, -1):
+		if not is_instance_valid(_expiring[i][0]):
+			_expiring.remove_at(i)
+		elif time > _expiring[i][1] and not held:
+			_expiring[i][0].queue_free()
+			_expiring.remove_at(i)
+	for i in range(_lights.size() - 1, -1, -1):
+		var left: float = 1.0 - (time - _lights[i][1]) / _lights[i][2]
+		if not is_instance_valid(_lights[i][0]):
+			_lights.remove_at(i)
+		else:
+			_lights[i][0].light_energy = _lights[i][3] * maxf(left, 0.0) ** 2
+			if left <= 0.0:
+				_lights.remove_at(i)
+	for i in range(_cooling.size() - 1, -1, -1):
+		var left: float = 1.0 - (time - _cooling[i][1]) / COOLING_TIME
+		if not is_instance_valid(_cooling[i][0]):
+			_cooling.remove_at(i)
+		else:
+			_cooling[i][0].emission_energy = HOLE_HEAT * maxf(left, 0.0) ** 2
+			if left <= 0.0:
+				_cooling.remove_at(i)
+
 	for i in range(_casings.size() - 1, -1, -1):
 		var item := _casings[i]
-		var node: MeshInstance3D = item.node
-		# A scene reload takes the cases with it.
-		if not is_instance_valid(node):
+		if not is_instance_valid(item.node):
 			_casings.remove_at(i)
 			continue
+		var node: MeshInstance3D = item.node
 		item.age += delta
 		if item.age > CASING_TIME:
 			node.queue_free()
@@ -177,11 +355,143 @@ func _process(delta: float) -> void:
 					node.rotation = Vector3(PI * 0.5, node.rotation.y, 0.0)
 
 
-func _facing(direction: Vector3) -> Basis:
-	var up := Vector3.RIGHT if absf(direction.normalized().y) > 0.99 else Vector3.UP
-	return Basis.looking_at(direction, up)
+## Sets off a burst at `at`, flying out along its +Y, and frees it `seconds`
+## later. `parameters` are the instance uniforms of its shader.
+func _burst(mesh: Mesh, at: Transform3D, seconds: float, parameters: Dictionary) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Lit by the lightmap probes around where it goes off, unless it glows.
+	# The box is what the probes are read at the middle of: a little way out
+	# from the surface.
+	node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED if mesh == _sparks else GeometryInstance3D.GI_MODE_DYNAMIC
+	node.custom_aabb = AABB(Vector3(-REACH, 0.3 - REACH, -REACH), Vector3.ONE * REACH * 2.0)
+	node.transform = at
+	node.set_instance_shader_parameter(&"start", time)
+	for parameter: StringName in parameters:
+		node.set_instance_shader_parameter(parameter, parameters[parameter])
+	_spawn(node, seconds)
+	return node
 
 
-func _spawn(node: Node3D, lifetime: float) -> void:
+## A bullet hole `across` metres wide on the surface `frame` stands on. The
+## oldest hole makes way once there are MAX_HOLES.
+func _hole(surface: String, frame: Transform3D, across: float) -> Decal:
+	var textures: Array = (_hole_textures[surface] as Array).pick_random()
+	var decal := Decal.new()
+	decal.texture_albedo = textures[0]
+	decal.texture_normal = textures[1]
+	decal.texture_orm = textures[2]
+	if textures[3]:
+		decal.texture_emission = textures[3]
+		decal.emission_energy = HOLE_HEAT
+	# Deep enough to find the model inside a collider that fits it loosely.
+	decal.size = Vector3(across, 0.16, across)
+	decal.transform = frame.rotated_local(Vector3.UP, randf() * TAU)
+	_keep(decal)
+	_holes.append(decal)
+	_holes = _holes.filter(is_instance_valid)
+	while _holes.size() > MAX_HOLES:
+		_holes.pop_front().queue_free()
+	return decal
+
+
+## Adds a mark that stays for as long as the level does.
+func _keep(decal: Decal) -> void:
+	decal.upper_fade = 0.05
+	decal.lower_fade = 0.05
+	decal.normal_fade = 0.4
+	decal.distance_fade_enabled = true
+	decal.distance_fade_begin = 30.0
+	decal.distance_fade_length = 10.0
+	get_tree().current_scene.add_child(decal)
+
+
+func _spawn(node: Node3D, seconds: float) -> void:
 	get_tree().current_scene.add_child(node)
-	get_tree().create_timer(lifetime, false).timeout.connect(node.queue_free)
+	_expire(node, seconds)
+
+
+func _expire(node: Node3D, seconds: float) -> void:
+	_expiring.append([node, time + seconds])
+
+
+## Height of the floor below a point, or far below when there is none within `reach`.
+func _floor_below(from: Vector3, reach := 8.0) -> float:
+	var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * reach, WORLD)
+	var hit := get_viewport().find_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position.y if hit else -1000.0
+
+
+## Basis whose Y axis points along `direction`.
+func _up_along(direction: Vector3) -> Basis:
+	var y := direction.normalized()
+	var x := (Vector3.FORWARD if absf(y.y) > 0.99 else Vector3.UP).cross(y).normalized()
+	return Basis(x, y, x.cross(y))
+
+
+## A mesh of `count` quads for a burst shader. A quad carries nothing but the
+## random numbers of its particle: three in the vertex, a direction in the
+## normal and two in UV2, the first of which says how many-eth it is, so that
+## a burst can use a fraction of them. UV is the corner.
+func _burst_mesh(count: int, shader: Shader) -> ArrayMesh:
+	var random := RandomNumberGenerator.new()
+	random.seed = count
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var extras := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for i in count:
+		var numbers := Vector3(random.randf_range(-1, 1), random.randf_range(-1, 1), random.randf_range(-1, 1))
+		var direction := Vector3(random.randfn(), random.randfn(), random.randfn()).normalized()
+		var extra := Vector2((i + 0.5) / count, random.randf())
+		for corner: Vector2 in [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]:
+			vertices.append(numbers)
+			normals.append(direction)
+			uvs.append(corner)
+			extras.append(extra)
+		for corner: int in [0, 1, 2, 0, 2, 3]:
+			indices.append(i * 4 + corner)
+	return _mesh(vertices, normals, uvs, extras, indices, shader)
+
+
+## The cards a muzzle flash is drawn on, one unit long along -Z: three down
+## the length of the flame and one across it just ahead of the muzzle. UV2.x
+## tells the shader which is which.
+func _flame_mesh() -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var extras := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var corners: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	for card in 4:
+		var turn := Basis(Vector3.FORWARD, card * PI / 3.0)
+		for corner in corners:
+			if card < 3:
+				vertices.append(turn * Vector3((corner.x - 0.5) * 0.5, 0.0, -corner.y))
+			else:
+				vertices.append(Vector3(corner.x - 0.5, corner.y - 0.5, -0.06) * 0.95)
+			normals.append(Vector3.BACK)
+			uvs.append(corner)
+			extras.append(Vector2(float(card == 3), card / 3.0))
+		for corner: int in [0, 1, 2, 0, 2, 3]:
+			indices.append(card * 4 + corner)
+	return _mesh(vertices, normals, uvs, extras, indices, preload("res://shaders/muzzle_flash.gdshader"))
+
+
+func _mesh(vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array, extras: PackedVector2Array, indices: PackedInt32Array, shader: Shader) -> ArrayMesh:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_TEX_UV2] = extras
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	mesh.surface_set_material(0, material)
+	return mesh

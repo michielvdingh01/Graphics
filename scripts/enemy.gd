@@ -38,6 +38,8 @@ enum Attack { COOLDOWN, TELEGRAPH, BURST }
 @export var eye_height := 1.5
 @export var head_start := 1.36
 @export var visor_color := Color(1.0, 0.15, 0.1)
+## Length of the flame at its muzzle, in metres.
+@export var flash_size := 0.26
 
 var health := 0.0
 var dead := false
@@ -70,16 +72,20 @@ func _ready() -> void:
 
 
 ## Strikes a pose for a screenshot of an enemy that is not running: 1 with
-## its weapon on a target straight ahead, 2 in mid-stride as well, 3 shot to pieces.
+## its weapon on a target straight ahead, 2 in mid-stride as well, 3 shot to
+## pieces, 4 firing at that target.
 func preview(pose: float) -> void:
-	if pose >= 3.0:
+	if pose == 3.0:
 		_die()
 		return
-	if pose >= 2.0:
+	if pose == 2.0:
 		velocity = -global_basis.z * speed
-	_rig.aim(global_position + Vector3.UP * eye_height - global_basis.z * 8.0)
+	var eye := global_position + Vector3.UP * eye_height
+	_rig.aim(eye - global_basis.z * 8.0)
 	for i in 40:
 		_rig._pose(0.03)
+	if pose == 4.0:
+		_shoot(eye, eye - global_basis.z * 8.0)
 
 
 func is_headshot(hit_position: Vector3) -> bool:
@@ -102,7 +108,7 @@ func take_damage(amount: float, hit_position: Vector3, direction: Vector3) -> bo
 		return false
 	health -= amount
 	alert()
-	Fx.sparks(hit_position, -direction, Color(4.0, 1.5, 0.4), 6)
+	Fx.robot_hit(hit_position, direction)
 	_last_hit = direction
 	_rig.hit(direction)
 	if health <= 0.0:
@@ -229,9 +235,10 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 		if hit.collider == _player:
 			_player.take_damage(damage, end, direction)
 		else:
-			Fx.impact(end, hit.normal)
-	Fx.tracer(_rig.muzzle(), end, Color(4.0, 0.6, 0.4))
-	Fx.flash(_rig.muzzle(), Color(1.0, 0.5, 0.35))
+			Fx.impact(hit, direction)
+	var muzzle: Vector3 = _rig.muzzle()
+	Fx.tracer(muzzle, end, Color(1.0, 0.3, 0.2))
+	Fx.muzzle_flash(null, Transform3D(Fx.facing(end - muzzle), muzzle), flash_size, 3, Color(1.0, 0.45, 0.3))
 	Sfx.play_at(&"enemy_shot", global_position)
 
 
