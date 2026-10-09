@@ -12,6 +12,12 @@ const GLOW_CHARGED := 14.0
 ## Footsteps are heard from this far.
 const STEP_RANGE := 30.0
 
+## What enemy.gd plays and draws for this enemy.
+var sounds := {&"alert": &"enemy_alert", &"death": &"enemy_death", &"shot": &"enemy_shot", &"melee": &"melee"}
+var tracer_tint := Color(1.0, 0.3, 0.2)
+var flash_tint := Color(1.0, 0.45, 0.3)
+var flash_prongs := 3
+
 var _joints := {}
 var _rest := {}
 var _meshes: Array[MeshInstance3D] = []
@@ -88,8 +94,9 @@ func muzzle() -> Vector3:
 	return (_joints["Muzzle"] as Node3D).global_position
 
 
-## A hit that came in along `direction`.
-func hit(direction: Vector3) -> void:
+## A hit at `at` that came in along `direction`: sparks, and it flinches.
+func hit(at: Vector3, direction: Vector3, _amount := 0.0) -> void:
+	Fx.robot_hit(at, direction)
 	_flinch = (global_basis.inverse() * direction).limit_length(1.0)
 	_flash = 1.0
 
