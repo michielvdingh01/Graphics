@@ -102,6 +102,9 @@
 		{"id": "hole_wood_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "wood", "size": [256, 256], "seed": 96, "use": "bullet holes in wood"},
 		{"id": "hole_soft_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "hole", "surface": "soft", "size": [128, 128], "seed": 97, "use": "bullet holes in bags, tyres and cardboard"},
 		{"id": "scorch_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "scorch", "size": [512, 512], "seed": 98, "use": "burn mark where a robot blew up"},
-		{"id": "scorch_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "scorch", "size": [512, 512], "seed": 99, "use": "burn mark where a robot blew up"}
+		{"id": "scorch_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "scorch", "size": [512, 512], "seed": 99, "use": "burn mark where a robot blew up"},
+		{"id": "blood_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood", "size": [256, 256], "seed": 121, "use": "blood on the floor or the wall behind somebody who is shot"},
+		{"id": "blood_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood", "size": [256, 256], "seed": 122, "use": "blood on the floor or the wall behind somebody who is shot"},
+		{"id": "blood_pool", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood_pool", "size": [512, 512], "seed": 123, "use": "blood that runs out from under a body"}
 	]
 }

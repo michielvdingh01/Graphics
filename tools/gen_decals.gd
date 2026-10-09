@@ -3,8 +3,8 @@ extends SceneTree
 ## "procedural"): decals into assets/decals/ and the noise masks that shaders
 ## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh
 ##
-## Each entry names a kind (leak, stain, grime, scorch, warning, text or hole
-## for a decal, wear or grain for a mask), a size and a seed, so a texture can
+## Each entry names a kind (leak, stain, grime, scorch, blood, blood_pool,
+## warning, text or hole for a decal, wear or grain for a mask), a size and a seed, so a texture can
 ## be regenerated or varied without touching this script. A text has a height
 ## only; its width follows from what it says. A grain names the pattern it is
 ## made of, and a hole the surface it is shot in; a hole comes with a normal
@@ -312,6 +312,35 @@ func _scorch(uv: Vector2, noise: FastNoiseLite) -> Color:
 	var core := smoothstep(0.4, 0.0, r)
 	var breakup := 0.55 + 0.45 * _n(noise, uv.x * 3000.0, uv.y * 3000.0)
 	return Color(0.02, 0.018, 0.016, (0.55 * body + 0.35 * core) * breakup * smoothstep(1.0, 0.85, r))
+
+
+## Blood thrown against a surface: a blot, streaks out from it and drops
+## that landed further off.
+func _blood(uv: Vector2, noise: FastNoiseLite) -> Color:
+	var p := uv * 2.0 - Vector2.ONE
+	var r := p.length()
+	var around := p.normalized()
+	var reach := 0.22 + 0.3 * _n(noise, around.x * 260.0, around.y * 260.0)
+	var blot := smoothstep(reach, reach * 0.75, r + (_n(noise, uv.x * 1800.0, uv.y * 1800.0) - 0.5) * 0.1)
+	var ray := smoothstep(0.62, 0.8, _n(noise, around.x * 2600.0, around.y * 2600.0))
+	var ray_reach := 0.35 + 0.6 * _n(noise, around.x * 900.0 + 40.0, around.y * 900.0)
+	var streak := ray * smoothstep(ray_reach, ray_reach * 0.5, r)
+	var drops := smoothstep(0.76, 0.8, _n(noise, uv.x * 14000.0, uv.y * 14000.0)) * smoothstep(0.95, 0.3, r) * smoothstep(0.3, 0.6, _n(noise, uv.x * 1100.0 + 9.0, uv.y * 1100.0))
+	var cover := maxf(blot, maxf(streak * 0.9, drops * 0.85))
+	var color := Color(0.2, 0.006, 0.006).lerp(Color(0.09, 0.0, 0.0), blot * (0.4 + 0.6 * _n(noise, uv.x * 700.0, uv.y * 700.0)))
+	return Color(color, cover * 0.94 * smoothstep(1.0, 0.9, r))
+
+
+## Blood that has run out from under a body: a pool with a sharp, wandering
+## edge, thinner towards it.
+func _blood_pool(uv: Vector2, noise: FastNoiseLite) -> Color:
+	var p := uv * 2.0 - Vector2.ONE
+	var around := p.normalized()
+	var r := p.length() + (_n(noise, around.x * 330.0, around.y * 330.0) - 0.5) * 0.36 + (_n(noise, uv.x * 1500.0, uv.y * 1500.0) - 0.5) * 0.08
+	var body := smoothstep(0.74, 0.7, r)
+	var thin := smoothstep(0.74, 0.45, r)
+	var color := Color(0.24, 0.008, 0.008).lerp(Color(0.1, 0.0, 0.0), thin)
+	return Color(color, body * lerpf(0.8, 0.96, thin) * smoothstep(1.0, 0.92, p.length()))
 
 
 ## Dirt that has built up along the bottom edge.
