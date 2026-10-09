@@ -289,6 +289,10 @@ def transfer(source: bpy.types.Object, low: bpy.types.Object, height: float) -> 
     weights = np.stack([1.0 - w1 - w2, w1, w2], axis=1)
 
     colour = np.full((count, 3), 0.5, dtype=np.float32)
+    # A scan knows nothing of how rough its surface is; a generated model does.
+    rough = np.full(count, 0.78, dtype=np.float32)
+    metal = np.zeros(count, dtype=np.float32)
+    measured = False
     origin = "the scan's texture"
     if mesh.uv_layers.active is not None and any(slot_.material for slot_ in source.material_slots):
         layer = mesh.uv_layers.active.data
@@ -311,6 +315,11 @@ def transfer(source: bpy.types.Object, low: bpy.types.Object, height: float) -> 
             if max(image.size) > 4096:
                 image.scale(min(image.size[0], 4096), min(image.size[1], 4096))
             taken[use] = atlas.sample(atlas.pixels(image)[:, :, :3], where[use])
+            spots = np.nonzero(hit)[0][use]
+            for found, target in ((material.roughness, rough), (material.metallic, metal)):
+                if found is not None and found[1] in ("R", "G", "B"):
+                    target[spots] = atlas.sample(atlas.pixels(found[0])[:, :, "RGB".index(found[1])][:, :, None], where[use])[:, 0]
+                    measured = True
         colour[hit] = taken
     elif mesh.color_attributes:
         # A scan that carries its colour on its vertices.
@@ -335,8 +344,10 @@ def transfer(source: bpy.types.Object, low: bpy.types.Object, height: float) -> 
             lookup.insert(here[index], order)
         lookup.balance()
         for index in missed:
-            near = lookup.find_n(here[index], 6)
-            colour[index] = np.mean([colour[known[order]] for _, order, _ in near], axis=0)
+            near = [known[order] for _, order, _ in lookup.find_n(here[index], 6)]
+            colour[index] = colour[near].mean(axis=0)
+            rough[index] = rough[near].mean()
+            metal[index] = metal[near].mean()
 
     # The detail of the scan as a normal map: its normal, seen from the
     # tangent frame Godot will build on the thinned mesh.
@@ -364,7 +375,9 @@ def transfer(source: bpy.types.Object, low: bpy.types.Object, height: float) -> 
     result.normal[rows, columns] = local * 0.5 + 0.5
     result.color[rows, columns, :3] = colour
     result.rough[:] = 0.78
-    result.notes.update(color=origin, normal="baked from the scan", roughness="one value: a scan has none",
+    result.rough[rows, columns] = rough
+    result.metal[rows, columns] = metal
+    result.notes.update(color=origin, normal="baked from the scan", roughness="the model's own" if measured else "one value: a scan has none",
                         texels_per_cm=round(math.sqrt(count / max(sum(polygon.area for polygon in low.data.polygons), 1e-6)) / 100.0, 2),
                         copied=round(float(hit.mean()), 3))
     return result, {"rows": rows, "columns": columns, "normal": detail, "position": position, "hit": hit}
