@@ -131,9 +131,11 @@ def main():
         for shot in shots:
             view = shot
             zone = zones[shot["zone"]]
-            if view["draw_calls"] > DRAWS:
+            # The limits are those of a room without its robots: with them
+            # posted, only the frame rate is held against a view.
+            if view["draw_calls"] > DRAWS and "--posted" not in passed_on:
                 zone["short"].append("%s: %d draw calls" % (shot["label"], view["draw_calls"]))
-            if view["primitives"] > TRIANGLES:
+            if view["primitives"] > TRIANGLES and "--posted" not in passed_on:
                 zone["short"].append("%s: %.1f million triangles" % (shot["label"], view["primitives"] / 1e6))
             if view["avg_fps"] < FPS:
                 zone["short"].append("%s: %.0f fps" % (shot["label"], view["avg_fps"]))
