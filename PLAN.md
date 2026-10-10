@@ -528,7 +528,7 @@ Het spel is met meer spelers over het netwerk te spelen: samen de route door de 
 **Nog open**
 
 - **Alleen getest op één machine**, zonder vertraging en zonder verlies. Hoe het voelt over een echt netwerk, met 30 tot 100 ms ertussen, heeft niemand gezien, en ook niet met twee vensters naast elkaar gespeeld: de test kijkt naar wat er gebeurt, niet naar hoe het eruitziet.
-- **Nog geen download voor vrienden.** Er zijn geen exportinstellingen en geen export-templates; het spel heeft nooit op Windows gedraaid.
+- **De Windows-build heeft nog nooit gedraaid**, en de Mac-build alleen zonder venster. Zie "De download voor vrienden".
 - **Port forwarding moet met de hand.** Geen UPnP, geen relay, geen uitnodigingslink.
 - **De gevechten en het geluid** van de andere branches moeten er nog bij. In het nieuwe `scripts/enemy.gd` moet opnieuw worden gescheiden wat de host beslist en wat iedereen ziet (schild, rugzak, dekking, bukken), en wat daar per robot wordt geloot moet op elke machine hetzelfde uitvallen.
 - **Met het thema soldaten lijken medespelers op vijanden**; alleen de naam boven het hoofd onderscheidt ze.
@@ -537,3 +537,12 @@ Het spel is met meer spelers over het netwerk te spelen: samen de route door de 
 - Geen deathmatch. Daarvoor moeten spelers elkaar kunnen raken (de straal van een schot slaat spelers nu over), verspreid opnieuw beginnen en moet er een stand zijn.
 - Stopt de host, dan is het spel voor iedereen voorbij: de gasten staan weer op het titelscherm met de melding waarom.
 - Wrakken, hulzen, brokstukken en kogelgaten zijn per machine verschillend, en een vat dat al weg was toen je binnenkwam heeft bij jou geen wrak.
+
+**De download voor vrienden**
+
+- `tools/export.sh` bouwt `build/GraphicsFPS-windows.zip` (365 MB) en `build/GraphicsFPS-macos.zip` (387 MB, voor Intel en Apple Silicon), elk met `tools/LEESMIJ.txt` erin: hoe je het start, meedoet en host. De instellingen staan in `export_presets.cfg`; `build/` staat niet in git. Van de export-templates van Godot 4.7.2 zijn alleen die voor Windows en macOS opgehaald (231 MB van de 1,28 GB).
+- **Getest:** de gebouwde Mac-app speelt, twee keer gestart zonder venster, de hele netwerktest (58 controles), ook met soldaten als vijand. Er zit dus in wat het spel nodig heeft, de tabellen met thema's inbegrepen (`*.json` gaat apart mee, want het zijn geen resources). Met een venster heeft de build niet gedraaid, en de Windows-build helemaal niet.
+- **De Mac-build komt uit een kopie van het project**, `build/src`. Godot exporteert alleen voor Apple Silicon als elke textuur ook als ETC2/ASTC is geïmporteerd, en pakt daarna dezelfde texturen in als voor Windows. In het project zelf zou die instelling elke import en elke lightmap-bake alle texturen een tweede keer laten omzetten, dus staat hij alleen in de kopie aan.
+- **Het duurt lang.** Het script deed er de eerste keer 20 minuten over, met alle cores: beide exports importeerden alles opnieuw. Of een tweede keer sneller gaat, zoals de bedoeling van de kopie is, is niet gemeten.
+- **Niet ondertekend.** Windows waarschuwt bij het starten en een Mac weigert de eerste keer; `LEESMIJ.txt` zegt hoe je erdoor komt. Zonder waarschuwing kost een Apple Developer-account.
+- Er is nog geen plek waar de zips staan, en het spel heeft geen eigen icoon.
