@@ -649,7 +649,6 @@ func _land_blow() -> void:
 	var robot := target.has_method("is_headshot")
 	var killed: bool = Net.damage(target, MELEE_DAMAGE, at, direction)
 	if robot and not target.deflected:
-		Sfx.play(&"kill" if killed else &"hit", -10.0)
 		hit_confirmed.emit(false, killed)
 
 
