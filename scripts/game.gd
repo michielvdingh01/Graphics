@@ -74,6 +74,7 @@ var exit_open := false
 ## Index of the checkpoint to carry on from; -1 is the start of the level.
 var _checkpoint := -1
 var _finished := false
+var _playing := false
 
 @onready var nav_region: NavigationRegion3D = $NavigationRegion3D
 @onready var player: CharacterBody3D = $Player
@@ -85,6 +86,7 @@ func _ready() -> void:
 	_read_route()
 	# Behind the title screen the level is only a backdrop.
 	var playing := not Benchmark.active and not Menu.at_title()
+	_playing = playing
 	if playing:
 		_resume()
 		post_robots()
@@ -261,6 +263,11 @@ func _on_zone_entered(body: Node3D, zone: Zone) -> void:
 	_start(zone)
 
 
+func _process(delta: float) -> void:
+	if _playing and not _finished and not player.dead:
+		Save.tally("seconds", delta)
+
+
 func _on_enemy_died(enemy: Node3D, zone: Zone) -> void:
 	# One that is shot down where it stood still has to fall.
 	enemy.process_mode = Node.PROCESS_MODE_INHERIT
@@ -333,7 +340,8 @@ func _on_exit_entered(body: Node3D) -> void:
 	_finished = true
 	var next := next_level()
 	# The next level starts at its beginning; after the last there is nothing
-	# left to carry on from.
+	# left to carry on from, only what the run came to.
+	var run := Save.stats.duplicate()
 	if next:
 		Save.store(next, "", "", kills)
 	else:
@@ -343,7 +351,7 @@ func _on_exit_entered(body: Node3D) -> void:
 	if next:
 		get_tree().change_scene_to_file(next)
 	else:
-		Menu.show_end(kills)
+		Menu.show_end(kills, run)
 
 
 ## Works out what there is to do: finish the fight that is going on, or else
@@ -368,5 +376,7 @@ func _update_objective() -> void:
 
 
 func _on_player_died() -> void:
+	Save.tally("deaths")
+	Save.flush()
 	await get_tree().create_timer(RESTART_DELAY, false).timeout
 	get_tree().reload_current_scene()

@@ -361,7 +361,11 @@ func _fire(data: WeaponData) -> void:
 		_locked = 1.0
 
 	Sfx.play(data.shot_sound)
+	Save.tally("shots")
 	if any_hit:
+		Save.tally("hits")
+		if headshot:
+			Save.tally("headshots")
 		Sfx.play(&"kill" if killed else (&"headshot" if headshot else &"hit"), -4.0)
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()

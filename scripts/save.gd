@@ -9,9 +9,16 @@ extends Node
 const PATH := "user://save.cfg"
 const SELFTEST_PATH := "user://selftest_save.cfg"
 
+## What a run is measured by, see `stats`.
+const STATS: Array[String] = ["seconds", "shots", "hits", "headshots", "deaths"]
+
 ## Empty when there is nothing to resume; otherwise {level, at, title, kills},
 ## with an empty `at` for the start of the level.
 var checkpoint := {}
+## What the run has come to since "New game": seconds played, shots fired,
+## shots that hit, headshots and deaths. It goes into the file with every
+## checkpoint and with every death, and clear() starts it again.
+var stats := {}
 
 var _path := PATH
 var _persistent := true
@@ -29,9 +36,12 @@ func _ready() -> void:
 ## Reads the file again, as a restart of the game would.
 func reload() -> void:
 	checkpoint = {}
+	_reset_stats()
 	var file := ConfigFile.new()
 	if not _persistent or file.load(_path) != OK:
 		return
+	for key in STATS:
+		stats[key] = float(file.get_value("stats", key, 0.0))
 	var level: String = file.get_value("checkpoint", "level", "")
 	if ResourceLoader.exists(level):
 		checkpoint = {
@@ -49,7 +59,24 @@ func store(level: String, at: String, title: String, kills: int) -> void:
 
 func clear() -> void:
 	checkpoint = {}
+	_reset_stats()
 	_write()
+
+
+## Adds to one of the things a run is measured by.
+func tally(what: String, by := 1.0) -> void:
+	stats[what] = stats.get(what, 0.0) + by
+
+
+## Writes what there is to the file now, instead of at the next checkpoint.
+func flush() -> void:
+	_write()
+
+
+func _reset_stats() -> void:
+	stats = {}
+	for key in STATS:
+		stats[key] = 0.0
 
 
 ## The checkpoint for the given level scene, or an empty dictionary.
@@ -63,4 +90,6 @@ func _write() -> void:
 	var file := ConfigFile.new()
 	for key: String in checkpoint:
 		file.set_value("checkpoint", key, checkpoint[key])
+	for key: String in stats:
+		file.set_value("stats", key, stats[key])
 	file.save(_path)

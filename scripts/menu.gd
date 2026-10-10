@@ -25,6 +25,7 @@ var _title_camera: Camera3D
 var _time := 0.0
 ## What the end screen has to say about the run that just finished.
 var _end_kills := 0
+var _end_run := {}
 
 
 func _ready() -> void:
@@ -49,12 +50,27 @@ func is_open() -> bool:
 
 
 ## The player has walked out of the last level: the game stops on a screen
-## that says so. `kills` is the number of robots destroyed on the way.
-func show_end(kills: int) -> void:
+## that says so. `kills` is the number of robots destroyed on the way and
+## `run` what else the run came to, see Save.stats.
+func show_end(kills: int, run := {}) -> void:
 	if not _enabled:
 		return
 	_end_kills = kills
+	_end_run = run
 	_show(Screen.END)
+
+
+## What a run came to, as the lines the end screen shows.
+func run_summary(run: Dictionary) -> PackedStringArray:
+	var seconds := int(run.get("seconds", 0.0))
+	var shots: float = run.get("shots", 0.0)
+	var lines := PackedStringArray()
+	@warning_ignore("integer_division")
+	var minutes := seconds / 60
+	lines.append("Time  %d:%02d   ·   Deaths  %d   ·   %s" % [minutes, seconds % 60, int(run.get("deaths", 0.0)), Settings.DIFFICULTY_NAMES[Settings.difficulty]])
+	if shots > 0.0:
+		lines.append("Accuracy  %d%%   ·   Headshots  %d" % [roundi(100.0 * run.get("hits", 0.0) / shots), int(run.get("headshots", 0.0))])
+	return lines
 
 
 ## True while the loaded level is only a backdrop for the title screen.
@@ -150,6 +166,8 @@ func _show(screen: Screen) -> void:
 		Screen.END:
 			_heading("You made it out", 56)
 			_note("%d robots lie in pieces between here and the factory." % _end_kills)
+			for line in run_summary(_end_run):
+				_note(line)
 			_button("Play again", _play.bind(LEVELS[0].scene, true))
 			_button("Quit to title", _quit_to_title)
 	_focus_first.call_deferred()
