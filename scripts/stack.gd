@@ -342,11 +342,7 @@ func _scatter(member: Member, push: Vector3, most: int) -> void:
 		var collider := CollisionShape3D.new()
 		collider.shape = shape
 		piece.add_child(collider)
-		# Lit by the probes wherever it ends up, as the hulk of a barrel is.
-		var looks := MeshInstance3D.new()
-		looks.mesh = cut.mesh
-		looks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		looks.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+		var looks := _looks(cut.mesh)
 		looks.transform = Transform3D(Basis.from_scale(scale), -(cut.at as Vector3) * scale)
 		piece.add_child(looks)
 		piece.add_collision_exception_with(self)
@@ -362,6 +358,34 @@ func _scatter(member: Member, push: Vector3, most: int) -> void:
 		tween.parallel().tween_property(looks, "position", looks.position * 0.01, SHRINK_TIME)
 		tween.tween_callback(piece.queue_free)
 		_pieces.append(piece)
+
+
+## What is drawn of a piece: lit by the probes wherever it ends up, as the
+## hulk of a barrel is, and too small to cast a shadow worth its cost.
+static func _looks(mesh: Mesh) -> MeshInstance3D:
+	var looks := MeshInstance3D.new()
+	looks.mesh = mesh
+	looks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	looks.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+	return looks
+
+
+## A piece of every model that has been cut so far, one for each material it
+## is made of, as it will lie about: for Fx.rehearse(), which draws them once
+## before the first crate breaks.
+static func first_pieces() -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	var seen := {}
+	for key: String in _cut:
+		for cut: Dictionary in _cut[key]:
+			var mesh: Mesh = cut.mesh
+			var fresh := false
+			for surface in mesh.get_surface_count():
+				fresh = fresh or not seen.has(mesh.surface_get_material(surface))
+				seen[mesh.surface_get_material(surface)] = true
+			if fresh:
+				found.append(_looks(mesh))
+	return found
 
 
 ## How many pieces lie about at the moment. One that has been cleared away

@@ -23,6 +23,8 @@ const REACH := 3.0
 const WORLD := 1
 ## How far below a lamp its glass and its sparks look for a floor, in metres.
 const LAMP_DROP := 14.0
+## How many frames rehearse() draws for.
+const REHEARSAL := 4
 ## The shaders keep time in single precision, which gets coarse after hours;
 ## past this many seconds the clock starts again as soon as nothing is playing.
 const CLOCK_SPAN := 600.0
@@ -311,6 +313,41 @@ func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 		soot.size = Vector3(across, 0.3, across)
 		soot.transform = Transform3D(Basis(Vector3.UP, randf() * TAU), Vector3(position.x, floor_y, position.z))
 		_keep(soot)
+
+
+## Draws every kind of burst once, with nothing in it, and with it whatever
+## is in `extras`: meshes as they will look when their moment comes, such as
+## a board of a crate that has yet to be shot to pieces. The first time the
+## renderer is to draw a kind of thing it has to make ready for it, and on a
+## machine that has never drawn it before that can hold up a frame for
+## seconds. A level calls this as it loads, so that it happens while the
+## picture comes up out of black and not at the first shot. It is all drawn
+## a metre in front of the camera, a thousandth of its size.
+func rehearse(extras: Array[MeshInstance3D] = []) -> void:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		for extra in extras:
+			extra.free()
+		return
+	var stage := Node3D.new()
+	stage.position = Vector3(0.0, 0.0, -1.0)
+	stage.scale = Vector3.ONE * 0.001
+	for mesh: Mesh in [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]:
+		var burst := MeshInstance3D.new()
+		burst.mesh = mesh
+		burst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		burst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED if mesh == _sparks else GeometryInstance3D.GI_MODE_DYNAMIC
+		burst.custom_aabb = AABB(Vector3.ONE * -REACH, Vector3.ONE * REACH * 2.0)
+		# Less than none of it: every one of its particles is left out.
+		burst.set_instance_shader_parameter(&"amount", -1.0)
+		stage.add_child(burst)
+	for extra in extras:
+		stage.add_child(extra)
+	camera.add_child(stage)
+	for i in REHEARSAL:
+		await get_tree().process_frame
+	if is_instance_valid(stage):
+		stage.queue_free()
 
 
 ## Something of wood or cardboard comes apart around `position`: `matter` is

@@ -186,16 +186,38 @@ func _shatter() -> void:
 			after.tween_callback(Fx.spit.bind(global_transform * _spots[randi() % _spots.size()], facing))
 
 
+## What a lamp of this kind looks like once it is out, as a mesh of its own:
+## for Fx.rehearse(), which draws it once before any lamp is shot out. Null
+## for a lamp that leaves nothing to see.
+func broken_look() -> MeshInstance3D:
+	var looks: MeshInstance3D = null
+	if _model:
+		looks = MeshInstance3D.new()
+		looks.mesh = _model.mesh
+		looks.cast_shadow = _model.cast_shadow
+		looks.gi_mode = _model.gi_mode
+		_darken(looks)
+	elif not _covers.is_empty():
+		looks = _covers[0].duplicate()
+		looks.transform = Transform3D()
+		looks.visible = true
+	return looks
+
+
 ## It is out from here on: nothing to hit, and nothing that glows.
 func _go_dark() -> void:
 	out = true
 	collision_layer = 0
 	for cover in _covers:
 		cover.visible = true
-	if _model == null:
-		return
-	for surface in _model.mesh.get_surface_count():
-		var material := _model.mesh.surface_get_material(surface) as BaseMaterial3D
+	if _model:
+		_darken(_model)
+
+
+## Takes the glass off a mesh of a hall lamp and puts out the bulb under it.
+func _darken(mesh: MeshInstance3D) -> void:
+	for surface in mesh.mesh.get_surface_count():
+		var material := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
 		if material == null:
 			continue
 		if _is_glass(material):
@@ -204,14 +226,14 @@ func _go_dark() -> void:
 				_nothing = StandardMaterial3D.new()
 				_nothing.albedo_color = Color(0.0, 0.0, 0.0, 0.0)
 				_nothing.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-			_model.set_surface_override_material(surface, _nothing)
+			mesh.set_surface_override_material(surface, _nothing)
 		elif material.emission_enabled:
 			# The bulb under the glass, as the level builder makes it for a
 			# lamp that is off.
 			if not _dark.has(material):
 				_dark[material] = material.duplicate()
 				_dark[material].emission_enabled = false
-			_model.set_surface_override_material(surface, _dark[material])
+			mesh.set_surface_override_material(surface, _dark[material])
 
 
 func _is_glass(material: Material) -> bool:

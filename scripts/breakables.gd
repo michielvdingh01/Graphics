@@ -68,6 +68,7 @@ func _ready() -> void:
 	var level := get_parent() as Node3D
 	_adopt_stacks(level)
 	_adopt_lamps(level)
+	_rehearse()
 
 
 ## Gives every stack of crates and every cardboard box a body of its own.
@@ -219,6 +220,27 @@ func _adopt_lamps(level: Node3D) -> void:
 		if lamps[light].get_child_count() == 0:
 			push_warning("Breakables: nothing glows by %s, so it goes out and leaves no dark glass" % level.get_path_to(light))
 			lamps[light].bare()
+
+
+## Has everything that breaking brings into view drawn once now, while the
+## level comes up out of black: a board of every model that is stacked, a
+## hall lamp without its glass, the dark glass of the other lamps, and the
+## splinters, the shards and the sparks. See Fx.rehearse() for why.
+func _rehearse() -> void:
+	var looks: Array[MeshInstance3D] = STACK.first_pieces()
+	var hall := false
+	var other := false
+	for body in get_children():
+		if not body.has_method("broken_look") or (hall if body.kind == LAMP.Kind.HALL else other):
+			continue
+		var look: MeshInstance3D = body.broken_look()
+		if look:
+			looks.append(look)
+			if body.kind == LAMP.Kind.HALL:
+				hall = true
+			else:
+				other = true
+	Fx.rehearse(looks)
 
 
 ## The kind of lamp a light is, or -1 if it is not one of the LAMPS.
