@@ -35,8 +35,10 @@ static func names() -> Array[String]:
 
 
 ## What an enemy of `role` is in `theme`: {character, weapon, moves, tuning,
-## tint}, with the character as a scene. Empty for a robot.
-static func cast(theme: String, role: String) -> Dictionary:
+## tint}, with the character as a scene. Empty for a robot. The character is
+## picked at random, unless `pick` is given: the same number picks the same
+## one, which is how machines that play together see the same faces.
+static func cast(theme: String, role: String, pick := -1) -> Dictionary:
 	var part: Variant = (_all().get(theme, {}) as Dictionary).get(role)
 	if not part is Dictionary:
 		return {}
@@ -54,7 +56,7 @@ static func cast(theme: String, role: String) -> Dictionary:
 	var tuning: Variant = part.get("tuning")
 	var tint: Variant = part.get("tint")
 	return {
-		"character": load(scenes.pick_random()),
+		"character": load(scenes.pick_random() if pick < 0 else scenes[pick % scenes.size()]),
 		"weapon": str(part.get("weapon", "")),
 		"moves": str(part.get("moves", "default")),
 		"tuning": tuning if tuning is Dictionary else {},

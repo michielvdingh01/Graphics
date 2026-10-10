@@ -5,6 +5,10 @@ extends CharacterBody3D
 ## model moves is up to its rig. That is enemy_rig.gd for a robot, and
 ## humanoid_rig.gd when the theme of the enemies (see enemy_themes.gd) has a
 ## character for this role.
+##
+## In a game with others (see net.gd) all of that happens on the host. What
+## there is to see of it, the _show_ functions, happens on every machine, and
+## on a guest the enemy only goes where the host says it is.
 
 signal died(enemy: Node3D)
 
@@ -26,6 +30,10 @@ const PREVIEW_MOVES := {2.0: Vector3.FORWARD, 5.0: Vector3.RIGHT * 0.5, 6.0: Vec
 ## A character is slighter than a robot: its collider is this many times its
 ## height across at most, and never wider than the one in the scene.
 const GIRTH := 0.19
+## Seconds between two looks at which of the players to go for, and how much
+## closer another has to be before it lets go of the one it is after.
+const CHOOSE_TIME := 0.5
+const LOYALTY := 0.75
 
 enum Attack { COOLDOWN, TELEGRAPH, BURST }
 
@@ -74,12 +82,21 @@ var _attack_timer := 1.0
 var _shots_left := 0
 var _last_hit := Vector3.FORWARD
 var _rig: Node3D
+var _choose_timer := 0.0
+## True while it has its weapon on the one it is after.
+var _aims := false
+## On a guest: where the host last said it was and which way it faced, and
+## the id of the player it has its weapon on, 0 for nobody.
+var _told_at := Vector3.ZERO
+var _told_yaw := 0.0
+var _told_aim := 0
 
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
 
 
 func _ready() -> void:
-	var cast := THEMES.cast(Settings.enemy_theme, role)
+	# Every machine has to cast the same character for the same enemy.
+	var cast := THEMES.cast(Settings.enemy_theme, role, String(name).hash() if Net.active else -1)
 	var tuned := _tune(cast.get("tuning", {}))
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
@@ -90,6 +107,8 @@ func _ready() -> void:
 		add_child(_rig)
 	_rig.set_glow(visor_color)
 	_los_timer = randf() * 0.15
+	_told_at = global_position
+	_told_yaw = rotation.y
 
 
 ## Takes over what a theme says is different about this role: exported
@@ -195,7 +214,7 @@ func alert() -> void:
 		return
 	_alerted = true
 	_attack_timer = randf_range(0.4, 1.2)
-	Sfx.play_at(_rig.sounds[&"alert"], global_position)
+	Net.show(self, &"_show_alert")
 	for other in get_tree().get_nodes_in_group("enemy"):
 		if other.global_position.distance_to(global_position) < ALERT_RADIUS:
 			other.alert()
@@ -207,16 +226,24 @@ func take_damage(amount: float, hit_position: Vector3, direction: Vector3) -> bo
 	health -= amount
 	alert()
 	_last_hit = direction
-	_rig.hit(hit_position, direction, amount)
+	Net.show(self, &"_show_hit", [hit_position, direction, amount, health])
 	if health <= 0.0:
 		_die()
 	return dead
 
 
 func _physics_process(delta: float) -> void:
+	if Net.is_guest():
+		_follow(delta)
+		return
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 	var desired := Vector3.ZERO
+	_aims = false
+	_choose_timer -= delta
+	if _choose_timer <= 0.0:
+		_choose_timer = CHOOSE_TIME
+		_choose()
 
 	if not dead and is_instance_valid(_player) and not _player.dead:
 		var eye := global_position + Vector3.UP * eye_height
@@ -242,6 +269,7 @@ func _physics_process(delta: float) -> void:
 			_update_attack(delta, eye, target, distance)
 			# The weapon is on the player for as long as there is a shot.
 			if _has_los and distance < attack_range * 1.5:
+				_aims = true
 				_rig.aim(target)
 			else:
 				_rig.lower()
@@ -289,7 +317,7 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 			if _attack_timer <= 0.0 and _has_los and distance < attack_range:
 				_attack = Attack.TELEGRAPH
 				_attack_timer = telegraph_time
-				_rig.charge(true)
+				Net.show(self, &"_show_charge", [true])
 		Attack.TELEGRAPH:
 			if not _has_los:
 				_end_attack(0.5)
@@ -308,15 +336,14 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 func _end_attack(pause: float) -> void:
 	_attack = Attack.COOLDOWN
 	_attack_timer = pause
-	_rig.charge(false)
+	Net.show(self, &"_show_charge", [false])
 
 
 func _shoot(eye: Vector3, target: Vector3) -> void:
-	_rig.fire()
 	if melee:
 		if eye.distance_to(target) < attack_range + 0.6:
 			_player.take_damage(damage, target, (target - eye).normalized())
-		Sfx.play_at(_rig.sounds[&"melee"], global_position)
+		Net.show(self, &"_show_blow")
 		return
 	# A fast-moving player is harder to hit, which rewards sprinting and sliding.
 	var spread := tan(deg_to_rad(spread_deg + _player.velocity.length() * 0.45))
@@ -327,19 +354,16 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 	var end := eye + direction * 100.0
 	var query := PhysicsRayQueryParameters3D.create(eye, end, LOS_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	# Whether it struck something that shows where: anything but a player.
+	var struck := false
 	if hit:
 		end = hit.position
-		if hit.collider == _player:
-			_player.take_damage(damage, end, direction)
-		else:
-			Fx.impact(hit, direction)
-			# A stray shot sets off a fuel barrel as well as the player's does.
-			if hit.collider.has_method("take_damage"):
-				hit.collider.take_damage(damage, end, direction)
-	var muzzle: Vector3 = _rig.muzzle()
-	Fx.tracer(muzzle, end, _rig.tracer_tint)
-	Fx.muzzle_flash(null, Transform3D(Fx.facing(end - muzzle), muzzle), flash_size, _rig.flash_prongs, _rig.flash_tint)
-	Sfx.play_at(_rig.sounds[&"shot"], global_position)
+		struck = not hit.collider.is_in_group("player")
+		# A stray shot sets off a fuel barrel as well as the player's does, and
+		# hurts a player who was not the one it was meant for.
+		if hit.collider.has_method("take_damage"):
+			hit.collider.take_damage(damage, end, direction)
+	Net.show(self, &"_show_shot", [end, struck])
 
 
 func _ray_hits_player(from: Vector3, to: Vector3) -> bool:
@@ -349,11 +373,111 @@ func _ray_hits_player(from: Vector3, to: Vector3) -> bool:
 
 
 func _die() -> void:
+	Net.show(self, &"_show_death", [_last_hit])
+
+
+## Goes for whoever of the players is nearest and still standing. The one it
+## is after stays that, unless another is clearly closer.
+func _choose() -> void:
+	var best: CharacterBody3D = null
+	var nearest := INF
+	if is_instance_valid(_player) and not _player.dead:
+		best = _player
+		nearest = global_position.distance_to(_player.global_position) * LOYALTY
+	for body: CharacterBody3D in get_tree().get_nodes_in_group("player"):
+		var distance := global_position.distance_to(body.global_position)
+		if not body.dead and distance < nearest:
+			best = body
+			nearest = distance
+	if best:
+		_player = best
+
+
+# --- What there is to see of it, on every machine ----------------------------
+
+
+func _show_alert() -> void:
+	Sfx.play_at(_rig.sounds[&"alert"], global_position)
+
+
+## `left` is the health it has left, which a guest counts its own shots
+## against, see Net.damage().
+func _show_hit(at: Vector3, direction: Vector3, amount: float, left: float) -> void:
+	health = left
+	_rig.hit(at, direction, amount)
+
+
+func _show_charge(on: bool) -> void:
+	_rig.charge(on)
+
+
+func _show_blow() -> void:
+	_rig.fire()
+	Sfx.play_at(_rig.sounds[&"melee"], global_position)
+
+
+## A shot that went to `end`; `struck` if it left its mark on something there.
+func _show_shot(end: Vector3, struck: bool) -> void:
+	_rig.fire()
+	var muzzle: Vector3 = _rig.muzzle()
+	var along := (end - muzzle).normalized()
+	if struck:
+		# What it struck is looked up again here, where the mark is made.
+		var query := PhysicsRayQueryParameters3D.create(end - along * 0.3, end + along * 0.3, LOS_MASK & 1, [get_rid()])
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit:
+			Fx.impact(hit, along)
+	Fx.tracer(muzzle, end, _rig.tracer_tint)
+	Fx.muzzle_flash(null, Transform3D(Fx.facing(along), muzzle), flash_size, _rig.flash_prongs, _rig.flash_tint)
+	Sfx.play_at(_rig.sounds[&"shot"], global_position)
+
+
+func _show_death(push: Vector3) -> void:
 	dead = true
 	collision_layer = 0
 	collision_mask = 1
 	remove_from_group("enemy")
 	Sfx.play_at(_rig.sounds[&"death"], global_position)
 	died.emit(self)
-	_rig.collapse(_last_hit * 3.0)
+	_rig.collapse(push * 3.0)
 	get_tree().create_timer(LINGER, false).timeout.connect(queue_free)
+
+
+# --- On a guest: where the host says it is ------------------------------------
+
+
+## What the copies of this enemy on the other machines need to be shown as it
+## is here: where it is, which way it faces, how it moves and the id of the
+## player it has its weapon on, 0 for nobody.
+func net_state() -> Array:
+	var aimed := 0
+	if _aims and is_instance_valid(_player):
+		aimed = _player.get(&"id") if _player.get(&"id") else 1
+	return [global_position, rotation.y, velocity, aimed]
+
+
+## The host's word on the above. `at_once` puts it there instead of letting it
+## catch up, for somebody who walks into a fight that is going on.
+func net_follow(at: Vector3, yaw: float, moving: Vector3, aimed: int, at_once := false) -> void:
+	_told_at = at
+	_told_yaw = yaw
+	_told_aim = aimed
+	velocity = moving
+	if at_once:
+		global_position = at
+		rotation.y = yaw
+
+
+## Carries on the way it was last said to be going, and closes in on where
+## that should have brought it.
+func _follow(delta: float) -> void:
+	if dead:
+		return
+	_told_at += velocity * delta
+	global_position = global_position.lerp(_told_at, 1.0 - exp(-18.0 * delta))
+	rotation.y = lerp_angle(rotation.y, _told_yaw, 1.0 - exp(-14.0 * delta))
+	var target := Net.body(_told_aim) if _told_aim else null
+	if target:
+		_rig.aim(target.head.global_position - Vector3.UP * 0.25)
+	else:
+		_rig.lower()

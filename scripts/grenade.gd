@@ -6,6 +6,10 @@ const FUSE := 2.2
 const RADIUS := 6.5
 const DAMAGE := 160.0
 
+## True for the copy another machine shows of a grenade its player threw:
+## that one goes off where the thrower's own does, and this only disappears.
+var echo := false
+
 var _fuse := FUSE
 
 
@@ -17,7 +21,8 @@ func _physics_process(delta: float) -> void:
 	_fuse -= delta
 	if _fuse <= 0.0:
 		# A little above the floor it lies on, so that the floor is not in the way.
-		Blast.explode(global_position + Vector3.UP * 0.12, RADIUS, DAMAGE, 1.0, self)
+		if not echo:
+			Blast.explode(global_position + Vector3.UP * 0.12, RADIUS, DAMAGE, 1.0, self)
 		queue_free()
 
 

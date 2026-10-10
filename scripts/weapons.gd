@@ -310,6 +310,7 @@ func _fire(data: WeaponData) -> void:
 	var any_hit := false
 	var headshot := false
 	var killed := false
+	var ends := PackedVector3Array()
 
 	for i in data.pellets:
 		var angle := randf() * TAU
@@ -335,10 +336,12 @@ func _fire(data: WeaponData) -> void:
 					amount *= data.headshot_multiplier
 					headshot = true
 				any_hit = any_hit or robot
-				killed = target.take_damage(amount, end, direction) or killed
+				killed = Net.damage(target, amount, end, direction) or killed
+		ends.append(end)
 		# One pellet in three of a load of shot is enough to show where it went.
 		if i % 3 == 0:
 			Fx.tracer(muzzle, end)
+	Net.player_did(&"fired", [_index, ends])
 
 	var recoil_scale := lerpf(1.0, data.ads_recoil_scale, ads_blend)
 	player.add_recoil(
@@ -479,6 +482,7 @@ func _release_grenade() -> void:
 	grenade.global_position = from
 	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
 	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
+	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity])
 	Sfx.play(&"throw", -6.0)
 
 

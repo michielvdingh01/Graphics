@@ -30,10 +30,14 @@ var _tick := 0.0
 ## Something goes off at `position`: `damage` at the centre, nothing beyond
 ## `radius`. `size` is how large it looks, 1 for a fuel barrel, and `source`
 ## the body that is exploding, if it is still there to be in the way.
+##
+## In a game with others the host does the harm and everybody sees the blast;
+## on a guest this asks the host for it, as a grenade of its player does.
 func explode(position: Vector3, radius: float, damage: float, size := 1.0, source: CollisionObject3D = null) -> void:
-	Fx.explosion(position, size)
-	Sfx.play_at(&"explosion", position, 6.0)
-	exploded.emit(position)
+	if Net.is_guest():
+		Net.ask(self, &"explode", [position, radius, damage, size])
+		return
+	Net.show(self, &"_show_blast", [position, radius, size])
 
 	var space := get_viewport().find_world_3d().direct_space_state
 	var ball := SphereShape3D.new()
@@ -61,11 +65,21 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 		var player := body.is_in_group("player")
 		if body.has_method("take_damage"):
 			body.take_damage(damage * strength * (PLAYER_SHARE if player else 1.0), middle, away * 2.5)
-		if body is CharacterBody3D:
+		if body.has_method("shove"):
+			# Somebody else's player: that is up to their own machine.
+			body.shove(away * PUSH * strength)
+		elif body is CharacterBody3D:
 			body.velocity += away * PUSH * strength
 		elif body is RigidBody3D:
 			body.apply_central_impulse(away * PUSH * strength * body.mass)
 
+
+## What a blast looks and sounds like, and how it rattles the view of the
+## player on this machine, who is the first of the players here.
+func _show_blast(position: Vector3, radius: float, size: float) -> void:
+	Fx.explosion(position, size)
+	Sfx.play_at(&"explosion", position, 6.0)
+	exploded.emit(position)
 	var witness := get_tree().get_first_node_in_group("player")
 	if witness and witness.has_method("shake"):
 		var distance: float = witness.global_position.distance_to(position)
@@ -75,8 +89,12 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 ## Fuel burning on the floor around `position`, `across` metres wide, for
 ## `seconds`.
 func burn(position: Vector3, across: float, seconds: float) -> void:
-	Fx.fire(position, across, seconds)
+	Net.show(self, &"_show_fire", [position, across, seconds])
 	_burning.append({"at": position, "radius": across * 0.5 + 0.45, "left": seconds})
+
+
+func _show_fire(position: Vector3, across: float, seconds: float) -> void:
+	Fx.fire(position, across, seconds)
 
 
 func _physics_process(delta: float) -> void:
@@ -90,6 +108,9 @@ func _physics_process(delta: float) -> void:
 	if _tick > 0.0:
 		return
 	_tick = BURN_TICK
+	# A fire hurts at the host's word, like everything else in the world.
+	if Net.is_guest():
+		return
 	var bodies := get_tree().get_nodes_in_group("enemy")
 	bodies.append_array(get_tree().get_nodes_in_group("player"))
 	for body: Node3D in bodies:
