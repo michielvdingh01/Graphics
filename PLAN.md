@@ -807,6 +807,7 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 - De fabriek, het depot, de showroom en de modellen komen er gelijk uit, en `tools/selftest.sh --routes` slaagt.
 - **De vleugel is gebakken en bekeken, na een herstart van de laptop.** Het contactblad laat vijf ruimtes zien die bij de fabriek passen: een lobby met een bureau onder het raam, een magazijn met stellingen en kisten, een gang met leidingen en open deuren, een werkplaats met pers, draaibank en tank onder hallampen, en een ketelruimte met de ketel, het metersbord en de pompen. Wat opvalt: de lobby is kaal en schemerig met één brandende buis, en de voorste hoek van de werkplaats is donker.
 - **Gespeeld is hij niet.** Of de gevechten kloppen, weet ik niet. De selftest loopt hem niet af: hij staat niet in de levelkeuze van het spel.
+- **Een proeflevel laat het savebestand met rust.** De vleugel spelen schreef eerst over wat er van het echte spel bewaard was: de start van de vleugel bij het begin, niets meer aan het eind. `scripts/save.gd` schrijft nu alleen nog voor de levels uit de levelkeuze; een ander level houdt zijn checkpoints zolang het draait. Getest in een kopie van het project met een eigen savemap: de vleugel schrijft niets, de fabriek wel, en de vleugel daarna laat staan wat de fabriek schreef.
 
 **De vleugel gemeten**, tien standpunten, op 10 oktober 2026 vlak na de herstart
 

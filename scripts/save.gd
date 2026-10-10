@@ -4,7 +4,9 @@ extends Node
 ## there. A checkpoint is named by the id the level gives it; what was cleared
 ## on the way to it follows from where it lies on the route, so that is not
 ## stored. A benchmark or --snap run never reads or writes it, and a
-## self-test run keeps a file of its own.
+## self-test run keeps a file of its own. A level that is not in the game's
+## list of levels, one that is being tried out, keeps its checkpoints for as
+## long as it runs and leaves the file as it found it.
 
 const PATH := "user://save.cfg"
 const SELFTEST_PATH := "user://selftest_save.cfg"
@@ -79,13 +81,19 @@ func _reset_stats() -> void:
 		stats[key] = 0.0
 
 
+## True while the scene that is played is not one of the game's levels.
+func _trying_out() -> bool:
+	var scene := get_tree().current_scene
+	return scene != null and not Menu.LEVELS.any(func(level: Dictionary) -> bool: return level.scene == scene.scene_file_path)
+
+
 ## The checkpoint for the given level scene, or an empty dictionary.
 func resume_point(level: String) -> Dictionary:
 	return checkpoint if checkpoint.get("level", "") == level else {}
 
 
 func _write() -> void:
-	if not _persistent:
+	if not _persistent or _trying_out():
 		return
 	var file := ConfigFile.new()
 	for key: String in checkpoint:
