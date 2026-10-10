@@ -434,7 +434,7 @@ func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false) 
 	if floor_y < position.y - 4.0:
 		floor_y = position.y - 4.0
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(12.0, 30.0)
-	_casings.append({"node": node, "velocity": velocity, "spin": spin, "floor": floor_y + (0.011 if shell else 0.005), "age": 0.0, "bounces": 0})
+	_casings.append({"node": node, "velocity": velocity, "spin": spin, "floor": floor_y + (0.011 if shell else 0.005), "age": 0.0, "bounces": 0, "shell": shell})
 	if _casings.size() > MAX_CASINGS:
 		var oldest: Dictionary = _casings.pop_front()
 		if is_instance_valid(oldest.node):
@@ -511,7 +511,8 @@ func _step(delta: float) -> void:
 				node.position.y = item.floor
 				item.bounces += 1
 				if item.bounces == 1:
-					Sfx.play_at(&"casing", node.position, -12.0)
+					# The take rings on over the bounces that follow.
+					Sfx.play_at(&"shell_drop" if item.shell and Sfx.has(&"shell_drop") else &"casing", node.position, -12.0)
 				item.velocity = Vector3(item.velocity.x * 0.45, -item.velocity.y * 0.3, item.velocity.z * 0.45)
 				item.spin *= 0.4
 				if item.velocity.y < 0.5:

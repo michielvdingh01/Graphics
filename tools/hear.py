@@ -14,6 +14,8 @@ plays a footstep or an enemy's shot.
     tools/hear.py --quiet smg_shot 900    only writes the file
     tools/hear.py reload shotgun          a shot and then the weapon being reloaded,
                                           each step at the moment the game plays it
+    tools/hear.py casings rifle           a burst, with the cases landing after it
+    tools/hear.py grenade                 the pin, the throw, three bounces and the bang
 
 Only recorded sounds, those with a folder in assets/audio/.
 """
@@ -86,6 +88,25 @@ def reload(weapon: str) -> list:
     return events
 
 
+def casings(weapon: str) -> list:
+    """Five shots and the case of each landing, at the level the game plays it."""
+    shell = weapon == "shotgun" and (ROOT / "assets/audio/shell_drop").is_dir()
+    times = [START + i * (0.75 if weapon == "shotgun" else 0.25) for i in range(5)]
+    events = played(f"{weapon}_shot", times)
+    for at in times:
+        events += played("shell_drop" if shell else "casing", [at + random.uniform(0.5, 0.65)], -12.0)
+    return events
+
+
+def grenade() -> list:
+    """A grenade from the pin to the bang: the levels of scripts/weapons.gd,
+    and bounces that get quieter as scripts/grenade.gd has them."""
+    events = played("pin", [START], -4.0) + played("throw", [START + 0.22], -6.0)
+    for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
+        events += played("bounce", [START + after], db)
+    return events + played("explosion", [START + 0.22 + 2.2])
+
+
 def render(sound: str, rate: float) -> pathlib.Path:
     if sound == "reload":
         raise SystemExit("say which weapon: tools/hear.py reload shotgun")
@@ -122,6 +143,10 @@ def main() -> None:
         raise SystemExit(__doc__)
     if args[0] == "reload" and len(args) > 1:
         out = mixed(f"reload_{args[1]}", reload(args[1]))
+    elif args[0] == "casings" and len(args) > 1:
+        out = mixed(f"casings_{args[1]}", casings(args[1]))
+    elif args[0] == "grenade":
+        out = mixed("grenade", grenade())
     else:
         out = render(args[0], float(args[1]) if len(args) > 1 else 0.0)
     print(out.relative_to(ROOT))

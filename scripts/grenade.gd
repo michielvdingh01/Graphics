@@ -33,5 +33,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_bounce(_other: Node) -> void:
-	if linear_velocity.length() > 1.0:
-		Sfx.play_at(&"bounce", global_position, -5.0)
+	# The harder it comes down, the louder; once it only rolls it is quiet.
+	var speed := linear_velocity.length()
+	if speed > 1.0:
+		Sfx.play_at(&"bounce", global_position, clampf(remap(speed, 1.0, 10.0, -16.0, -2.0), -16.0, -2.0))
