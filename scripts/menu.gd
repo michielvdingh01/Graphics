@@ -118,6 +118,7 @@ func _show(screen: Screen) -> void:
 			# MetalFX only exists on Apple hardware.
 			var upscalers := Settings.UPSCALER_NAMES if OS.get_name() == "macOS" else Settings.UPSCALER_NAMES.slice(0, 3)
 			_choice("Upscaler", "upscaler", upscalers)
+			_choice("Enemies", "enemies", Settings.enemy_names)
 			_slider("Render scale", "render_scale", 0.5, 1.0, 0.05, "%.0f%%", 100.0)
 			_toggle("V-Sync", "vsync")
 			_toggle("Fullscreen", "fullscreen")

@@ -1,0 +1,51 @@
+{
+	"_doc": "The theme that is always there: the mannequins the moves were made on, in the three roles. Same shape as assets/characters/manifest.json, see scripts/enemy_themes.gd. It is what the humanoid rig is tried on while there are no characters yet.",
+	"themes": {
+		"mannequin": {
+			"grunt": {
+				"characters": ["res://assets/animations/ual1.glb", "res://assets/animations/mannequin_f.glb"],
+				"weapon": "rifle",
+				"moves": "default",
+				"tuning": {},
+				"tint": {"M_Main": "8c8f8a", "M_Joints": "2b2d30"}
+			},
+			"rusher": {
+				"characters": ["res://assets/animations/ual1.glb", "res://assets/animations/mannequin_f.glb"],
+				"weapon": "",
+				"moves": "default",
+				"tuning": {"size": 0.93},
+				"tint": {"M_Main": "c9762a", "M_Joints": "2b2d30"}
+			},
+			"heavy": {
+				"characters": ["res://assets/animations/ual1.glb"],
+				"weapon": "smg",
+				"moves": "default",
+				"tuning": {"size": 1.12},
+				"tint": {"M_Main": "4a5238", "M_Joints": "1c1d1f"}
+			}
+		},
+		"mannequin_zombie": {
+			"grunt": {
+				"characters": ["res://assets/animations/ual1.glb", "res://assets/animations/mannequin_f.glb"],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {"melee": true, "speed": 2.4},
+				"tint": {"M_Main": "6f7d5c", "M_Joints": "3a2a2a"}
+			},
+			"rusher": {
+				"characters": ["res://assets/animations/mannequin_f.glb"],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {"speed": 4.6},
+				"tint": {"M_Main": "8a8f6a", "M_Joints": "3a2a2a"}
+			},
+			"heavy": {
+				"characters": ["res://assets/animations/ual1.glb"],
+				"weapon": "",
+				"moves": "zombie",
+				"tuning": {"melee": true, "speed": 1.8, "size": 1.15, "damage": 30.0},
+				"tint": {"M_Main": "4f5a48", "M_Joints": "3a2a2a"}
+			}
+		}
+	}
+}

@@ -16,7 +16,9 @@ const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "me
 const KEYS: Array[String] = [
 	"quality", "upscaler", "render_scale", "vsync", "fullscreen", "show_fps",
 	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume",
+	"enemy_theme",
 ]
+const THEMES := preload("res://scripts/enemy_themes.gd")
 
 # Per quality level: [SSAO, SSIL, SSR, volumetric fog, MSAA, sun shadow atlas,
 # soft shadow quality, chromatic aberration]
@@ -46,13 +48,35 @@ var mouse_sensitivity := 1.0
 var stick_sensitivity := 1.0
 var invert_y := false
 var volume := 0.8
+## Who the enemies are: a theme from enemy_themes.gd, robots unless chosen
+## otherwise here or with --enemies=<theme> on the command line. It holds for
+## the enemies that spawn from then on.
+var enemy_theme := THEMES.ROBOTS
+## The themes to choose from, and their names as the menu shows them.
+var enemy_themes: Array[String] = THEMES.names()
+var enemy_names: Array[String] = []
+## The same setting as an index into `enemy_themes`, for the menu.
+var enemies: int:
+	get:
+		return maxi(enemy_themes.find(enemy_theme), 0)
+	set(value):
+		enemy_theme = enemy_themes[clampi(value, 0, enemy_themes.size() - 1)]
 
 
 func _ready() -> void:
+	for theme in enemy_themes:
+		enemy_names.append(theme.capitalize())
 	if Benchmark.active:
 		_read_args()
 	elif not SelfTest.active:
 		_load()
+	# The command line decides for this run, whatever was saved.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--enemies="):
+			enemy_theme = arg.get_slice("=", 1)
+	if not enemy_themes.has(enemy_theme):
+		push_warning("No enemies called '%s'; choose from %s. They will be robots." % [enemy_theme, ", ".join(enemy_themes)])
+		enemy_theme = THEMES.ROBOTS
 	apply()
 
 
