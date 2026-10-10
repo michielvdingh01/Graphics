@@ -9,8 +9,10 @@ extends Node
 ##
 ## Where a sound goes is decided here as well. Everything in the game world,
 ## the player's own weapon included, plays on the World bus, which carries the
-## reverb of the space the player stands in; the hit-marker tones play dry on
-## UI. The buses themselves are in res://default_bus_layout.tres.
+## reverb of the space the player stands in. A sound that tells the player
+## something instead of coming from the world would play dry on UI; there is
+## none at the moment. The buses themselves are in
+## res://default_bus_layout.tres.
 ##
 ## Music is a piece in assets/music/, played from disk as it goes, on the
 ## Music bus: see music().
@@ -27,8 +29,9 @@ const PIECE_KINDS: Array[String] = [".ogg", ".mp3"]
 ## Seconds a piece takes to make way for the next.
 const CHANGE_TIME := 0.7
 ## Sounds that tell the player something instead of coming from the world.
-## They play dry and always at the same pitch.
-const UI_SOUNDS: Array[StringName] = [&"hit", &"headshot", &"kill"]
+## They play dry and always at the same pitch. A hit had three of them, which
+## went: what a shot does to an enemy is heard where it lands.
+const UI_SOUNDS: Array[StringName] = []
 
 ## The reverb on World per kind of space: room_size, damping, hipass,
 ## predelay_msec, predelay_feedback, wet. "hall" is what the bus layout holds.
@@ -56,9 +59,6 @@ const SOUNDS := {
 	&"reload": [0.12, 0.6, 40.0, 0.8, 0.4, 500.0, 30.0, 50.0, 1.5],
 	&"reload_end": [0.08, 0.6, 60.0, 1.0, 0.5, 900.0, 10.0, 70.0, 1.5],
 	&"switch": [0.07, 0.5, 60.0, 0.6, 0.3, 700.0, 20.0, 60.0, 1.2],
-	&"hit": [0.05, 0.1, 200.0, 1.0, 0.8, 1400.0, 0.0, 60.0, 1.0],
-	&"headshot": [0.07, 0.1, 200.0, 1.0, 0.8, 2100.0, 0.0, 45.0, 1.0],
-	&"kill": [0.18, 0.0, 1.0, 1.0, 0.7, 880.0, -4.0, 14.0, 1.0],
 	&"slide": [0.60, 0.5, 5.0, 0.25, 0.0, 100.0, 0.0, 1.0, 1.2],
 	&"human_step": [0.09, 0.5, 50.0, 0.12, 0.35, 85.0, 22.0, 55.0, 1.4],
 	&"human_alert": [0.26, 0.2, 10.0, 0.6, 0.9, 330.0, 2.2, 6.0, 3.5, 0.02],

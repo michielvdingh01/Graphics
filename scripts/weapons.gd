@@ -454,7 +454,8 @@ func _fire(data: WeaponData) -> void:
 		Save.tally("hits")
 		if headshot:
 			Save.tally("headshots")
-		Sfx.play(&"kill" if killed else (&"headshot" if headshot else &"hit"), -10.0)
+		# No sound of its own for a hit: the shot landing on the enemy is what
+		# there is to hear, and the HUD marks it.
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()
 
