@@ -225,6 +225,8 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 | Gameplay en beide levels testen (headless) | `tools/selftest.sh` |
 | Alleen testen wat de vijanden in een gevecht doen en wat er te vinden is (50 seconden). Met `--map` erbij de dekking in de fabriek als plattegrond, met `--trace` wat één grunt van stap tot stap doet | `tools/selftest.sh --fights` |
 | Alleen de routes door de levels testen, met een lijst van waar elke robot verschijnt: het deel om te draaien terwijl je aan een level bouwt (25 seconden) | `tools/selftest.sh --routes` |
+| Samen spelen testen: het spel twee keer zonder venster, één host en één gast (35 seconden) | `tools/nettest.sh [--enemies=<thema>]` |
+| Een medespeler bekijken zoals een ander hem ziet (houding 1 richt, 2 loopt, 3 rent; de tiende kiest het wapen) | `tools/benchmark.sh --quick --spawn="res://scenes/puppet.tscn@1,0,-7.4,-90,1,2.2" --at="4.2,0.9,-7.4,90,0"` |
 | Het spel zelf bekijken zoals het gespeeld wordt, met HUD en menu: een screenshot na zoveel seconden. `--at` zet de speler ergens neer, `--eval` voert een regel script uit; de save blijft ongemoeid | `tools/godot.sh -- --play --snap=5 --at="-7,0,0.5,90,4"` of `--snap=4 --eval="Menu.show_end(27)"` |
 | Iets tonen wat een level verborgen houdt tot het spel het aanzet, zoals de lamp boven een uitgang | `tools/benchmark.sh --quick --show=Lamp --at="-7,1.7,0.5,90,4"` |
 | De robots van de route op hun post zetten, uitgeschakeld zoals de speler ze aantreft: om een standpunt te zien zoals het in het spel is, of om te meten wat het kost dat ze er staan | `tools/benchmark.sh --posted` |
@@ -321,7 +323,8 @@ Alle geluid werd bij het opstarten gesynthetiseerd uit ruis en een toon. Sinds 9
 - De begrenzer van Godot komt na een ingreep nooit helemaal terug (0,2 dB van elke 3 dB blijft staan). Daarom blijft de mix eronder en hoort hij alleen bij uitschieters in te grijpen.
 - De vuursnelheid wordt afgerond op hele frames: op 60 fps vuurt de pistoolmitrailleur 720 in plaats van 900 schoten per minuut en de karabijn 600 in plaats van 620 (nagerekend, niet in het spel gemeten).
 - Elk wapen heeft drie tot vijf takes.
-- De vijanden hebben geen stem, er is geen omgevingsgeluid, geen muziek en geen geluid van een schot dat langs je heen gaat.
+- Robots hebben geen stem en de stemmen van personages zijn gesynthetiseerd; er is geen omgevingsgeluid, geen muziek en geen geluid van een schot dat langs je heen gaat.
+- De galm kent het ketelhuis en de doorgang van de fabriek niet: daar klinkt het als in de hal.
 
 ## Vijanden die mensen kunnen zijn
 
@@ -642,3 +645,55 @@ Een deel van de test dat op een scriptfout halverwege ophoudt, telde tot nu toe 
 - Wat een vijand achterlaat, valt een stap naast hem; er wordt alleen gekeken of daar geen muur staat. Op de rand van de tussenvloer kan het naar beneden vallen.
 - Personages duiken niet weg en hebben geen eigen stem voor het nieuwe. Het eindscherm noemt ze nog robots.
 - Het geluidswerk dat in de hoofdmap in bewerking is, raakt `scripts/sfx.gd` op dezelfde plek als de nieuwe geluiden hier; samenvoegen vraagt daar handwerk.
+
+## Samen spelen
+
+Het spel is met meer spelers over het netwerk te spelen: samen de route door de levels, van de start naar de uitgang. Eén speler host, de anderen joinen op zijn adres. Gebouwd op 10 oktober 2026 op de branch `multiplayer`, bovenop de route en de personages; het werk aan de gevechten en aan het geluid liep op dat moment nog op eigen branches en zit er niet in.
+
+**Wat er staat**
+
+- **Hosten en joinen vanuit het menu.** "Play together" op het titelscherm: een naam, "Host a game" met een levelkeuze, en een adres met "Join the game at that address". Wie joint terwijl er al gespeeld wordt, komt binnen bij het laatste checkpoint en vindt het level zoals het er staat: wat is opgeruimd, wat is ontploft, waar de robots zijn. Het pauzemenu van de host laat zien op welke adressen de anderen binnenkomen. Naam en adres worden onthouden in `user://net.cfg`.
+- **Een menu zet het spel niet stil** als je samen speelt: het level loopt door achter het menu.
+- **De ander is een soldaat.** Elke medespeler staat in het level als een van de vijf soldaten uit de cast, op het skelet en met de bewegingen van de vijanden die mensen zijn (`scripts/humanoid_rig.gd`), met in zijn handen het wapen dat hij draagt (`scenes/models/<wapen>_held.scn`) en zijn naam boven zijn hoofd. Hij loopt in de maat van zijn snelheid, richt waar de speler kijkt, laat zijn wapen zakken als die rent, vuurt, deinst terug als hij geraakt wordt en valt als hij doodgaat. Welke soldaat het is volgt uit het nummer van de speler, dus iedereen ziet dezelfde.
+- **De regels van samen.** Een zone begint als de eerste speler hem binnenloopt; een checkpoint dat één speler bereikt geldt voor allemaal, met munitie en granaten voor iedereen. Wie doodgaat staat vijf seconden later weer bij het laatste checkpoint. Liggen ze allemaal tegelijk, dan begint het level voor iedereen opnieuw vanaf dat checkpoint. Het level eindigt pas als iedereen die nog overeind staat bij de open uitgang is; dan gaat iedereen samen naar het volgende level. Een robot gaat af op de dichtstbijzijnde speler die nog staat, en laat de speler waar hij achteraan zit pas los als een ander duidelijk dichterbij is (een kwart). Kogels gaan door medespelers heen; een explosie niet, ook je eigen granaat niet.
+- **Alleen spelen is hetzelfde spel** met niemand erbij: er is één codepad. De checkpoints van een spel alleen worden door samen spelen niet aangeraakt.
+
+**Hoe het werkt**
+
+- **De host beslist over de wereld, elke machine over haar eigen speler.** Bij de host lopen de robots, de schade, de explosies en de route. Beweging en schieten doet elke machine zelf, zodat die zo direct zijn als alleen: ze vertelt de anderen dertig keer per seconde waar haar speler is, en vraagt de host om schade aan wat ze raakte. De host vertelt twintig keer per seconde waar de robots zijn. Dat neemt elke machine op haar woord: prima onder vrienden, niet geschikt voor openbare servers. Voor openbare servers moet de host ook beweging en treffers narekenen, en dat is een andere opzet van `scripts/player.gd` en `scripts/weapons.gd`.
+- **Beslissen en laten zien zijn uit elkaar gehaald.** Waar een script iets besliste en het meteen liet zien, staat het laten zien nu in een eigen functie (`_show_...`) die via `Net.show` op elke machine draait: het schot van een robot, een treffer, een dood, het begin van een zone, een checkpoint, een explosie, een vat dat vlam vat. Een gast draait de beslissingen niet; een robot gaat daar alleen waar de host zegt dat hij is, en zijn rig doet de rest zelf.
+- **Alles loopt via één node**, `scripts/net.gd` (autoload `Net`), die op elke machine bestaat welk level er ook geladen is, en een bericht bij een node bezorgt aan de hand van zijn pad. Wat een level tijdens het spel aanmaakt, moet daarom overal dezelfde naam krijgen: de robots heten naar hun zone en hun plaats daarin. Een gast die het level nog aan het laden is, krijgt niets tot hij zich meldt; dan krijgt hij eerst de stand van het level.
+- **Wat een schot raakte wordt op elke machine opnieuw opgezocht**, met een korte straal rond het eindpunt. Zo krijgt elke machine de inslag die bij haar eigen ondergrond hoort, zonder dat het effect zelf over de lijn gaat.
+- **Een granaat** vliegt op elke machine apart; hij ontploft waar die van de werper ligt.
+- **Elke machine houdt de health van haar eigen speler bij.** Een robot van de host die een ander raakt, of een explosie, geeft dat door aan de machine van die speler.
+- **De verbinding** is ENet over UDP-poort 24565, rechtstreeks. Op hetzelfde netwerk werkt dat zo. Van buitenaf moet de host die poort op zijn router doorsturen naar zijn computer en zijn publieke adres doorgeven. Twee machines spelen alleen samen als ze dezelfde `VERSION` in `scripts/net.gd` hebben; die gaat omhoog bij alles wat verandert aan wat er over de lijn gaat of aan hoe een level is opgebouwd.
+
+**Getest**
+
+`tools/nettest.sh` start het spel twee keer op deze machine, zonder venster, en laat beide via het menu gaan zoals een speler: de een host de fabriek, de ander joint op 127.0.0.1. Elke kant controleert haar deel van hetzelfde verhaal, samen 58 controles: binnenkomen in een level waar al een robot ligt, elkaar zien lopen, een robot die de gast doodschiet en die bij de host valt, een robot van de host die de gast kiest en raakt, een granaat en een vat die bij beiden afgaan, doodgaan en weer opstaan, van wapen wisselen, de uitgang die op beiden wacht, samen naar het depot, allebei dood en opnieuw beginnen, weggaan, terugkomen in een level dat inmiddels voorbij een checkpoint is, en de host die weggaat. Drie keer achter elkaar gedraaid, drie keer geslaagd, ook met soldaten als vijand. De selftest van het spel alleen geeft dezelfde 103 controles als ervoor.
+
+**Wat de test onderweg vond**
+
+- Wie binnenkwam in een level dat voorbij een checkpoint was, zette de robots van de opgeruimde zones niet neer, en telde de rest dus anders dan de host: elke robot was bij de gast een andere dan de host bedoelde. Robots hebben nu een nummer dat uit hun zone en hun plaats daarin volgt.
+
+**Nog open**
+
+- **Alleen getest op één machine**, zonder vertraging en zonder verlies. Hoe het voelt over een echt netwerk, met 30 tot 100 ms ertussen, heeft niemand gezien, en ook niet met twee vensters naast elkaar gespeeld: de test kijkt naar wat er gebeurt, niet naar hoe het eruitziet.
+- **De Windows-build heeft nog nooit gedraaid**, en de Mac-build alleen zonder venster. Zie "De download voor vrienden".
+- **Port forwarding moet met de hand.** Geen UPnP, geen relay, geen uitnodigingslink.
+- **De gevechten zijn samen maar half te zien.** Sinds 10 oktober 2026 staan de gevechten, het geluid en samen spelen op één branch. De host beslist alles en een gast ziet wat er al was: alarm, treffers, opladen, schoten, slagen en sterven. Wat de gevechten erbij brachten is alleen op de host te zien en te horen: de plaat die een schot tegenhoudt en van de arm valt, de rugzak die brandt en ontploft, bukken en de roep van een robot die omloopt of vlucht. Welke grunt een plaat draagt wordt per machine geloot en is dus bij een gast een andere dan bij de host. Wat een robot achterlaat valt op elke machine apart, uit wat de speler daar tekortkomt; de moeilijkheid van de host telt voor de robots, die van de gast voor wat hij vindt. De netwerktest slaagt, maar kijkt naar geen van deze dingen; het is uit de code afgeleid, niet met twee machines bekeken.
+- **Met het thema soldaten lijken medespelers op vijanden**; alleen de naam boven het hoofd onderscheidt ze.
+- Een medespeler bukt en slidet niet zichtbaar (zijn botsvorm en ooghoogte wel), herlaadt niet zichtbaar en wisselt van wapen door een nieuw figuur te worden: één frame, geen beweging.
+- De HUD toont niet hoe het met de anderen gaat en er is geen chat.
+- Geen deathmatch. Daarvoor moeten spelers elkaar kunnen raken (de straal van een schot slaat spelers nu over), verspreid opnieuw beginnen en moet er een stand zijn.
+- Stopt de host, dan is het spel voor iedereen voorbij: de gasten staan weer op het titelscherm met de melding waarom.
+- Wrakken, hulzen, brokstukken en kogelgaten zijn per machine verschillend, en een vat dat al weg was toen je binnenkwam heeft bij jou geen wrak.
+
+**De download voor vrienden**
+
+- `tools/export.sh` bouwt `build/GraphicsFPS-windows.zip` (365 MB) en `build/GraphicsFPS-macos.zip` (387 MB, voor Intel en Apple Silicon), elk met `tools/LEESMIJ.txt` erin: hoe je het start, meedoet en host. De instellingen staan in `export_presets.cfg`; `build/` staat niet in git. Van de export-templates van Godot 4.7.2 zijn alleen die voor Windows en macOS opgehaald (231 MB van de 1,28 GB).
+- **Getest:** de gebouwde Mac-app speelt, twee keer gestart zonder venster, de hele netwerktest (58 controles), ook met soldaten als vijand. Er zit dus in wat het spel nodig heeft, de tabellen met thema's inbegrepen (`*.json` gaat apart mee, want het zijn geen resources). Met een venster heeft de build niet gedraaid, en de Windows-build helemaal niet.
+- **De Mac-build komt uit een kopie van het project**, `build/src`. Godot exporteert alleen voor Apple Silicon als elke textuur ook als ETC2/ASTC is geïmporteerd, en pakt daarna dezelfde texturen in als voor Windows. In het project zelf zou die instelling elke import en elke lightmap-bake alle texturen een tweede keer laten omzetten, dus staat hij alleen in de kopie aan.
+- **Het duurt lang.** Het script deed er de eerste keer 20 minuten over, met alle cores: beide exports importeerden alles opnieuw. Of een tweede keer sneller gaat, zoals de bedoeling van de kopie is, is niet gemeten.
+- **Niet ondertekend.** Windows waarschuwt bij het starten en een Mac weigert de eerste keer; `LEESMIJ.txt` zegt hoe je erdoor komt. Zonder waarschuwing kost een Apple Developer-account.
+- Er is nog geen plek waar de zips staan, en het spel heeft geen eigen icoon.

@@ -4,8 +4,11 @@ extends CanvasLayer
 ##
 ## The title screen sits on top of the loaded level, which stays paused and
 ## inert behind it as a backdrop. Pass --play to skip straight into the game.
+##
+## "Play together" hosts a game or joins one, see net.gd. A game with others
+## does not stop for a menu: the level plays on behind it.
 
-enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END }
+enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER }
 
 const LEVELS: Array[Dictionary] = [
 	{"name": "Factory", "scene": "res://scenes/factory.tscn"},
@@ -31,18 +34,24 @@ var _time := 0.0
 ## What the end screen has to say about the run that just finished.
 var _end_kills := 0
 var _end_run := {}
+## True while the level being chosen is one to host.
+var _hosting := false
+## What the screen to play together has to say: how joining is going.
+var _together_note := ""
 
 
 func _ready() -> void:
 	layer = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_enabled = not Benchmark.active and not SelfTest.active
+	_enabled = (not Benchmark.active and not SelfTest.active) or NetTest.active
 	_build()
 	if not _enabled:
 		return
 	get_tree().scene_changed.connect(_on_scene_changed)
 	if not Input.get_connected_joypads().is_empty():
 		_device = DEVICES.find("Controller")
+	Net.entering.connect(_on_entering)
+	Net.left.connect(_on_left)
 	if "--play" in OS.get_cmdline_user_args():
 		_show(Screen.NONE)
 	else:
@@ -82,7 +91,7 @@ func run_summary(run: Dictionary) -> PackedStringArray:
 
 ## True while the loaded level is only a backdrop for the title screen.
 func at_title() -> bool:
-	return _screen == Screen.TITLE or _screen == Screen.LEVELS or (
+	return _screen == Screen.TITLE or _screen == Screen.LEVELS or _screen == Screen.TOGETHER or (
 		(_screen == Screen.CONTROLS or _screen == Screen.SETTINGS) and _parent == Screen.TITLE
 	)
 
@@ -96,7 +105,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		Screen.PAUSE:
 			_show(Screen.NONE)
 		Screen.LEVELS:
-			_show(Screen.TITLE)
+			_show(Screen.TOGETHER if _hosting else Screen.TITLE)
+		Screen.TOGETHER:
+			_leave_together()
 		Screen.CONTROLS, Screen.SETTINGS:
 			_show(_parent)
 	get_viewport().set_input_as_handled()
@@ -119,7 +130,7 @@ func _show(screen: Screen) -> void:
 	for child in _column.get_children():
 		child.queue_free()
 	_root.visible = screen != Screen.NONE
-	get_tree().paused = screen != Screen.NONE
+	get_tree().paused = screen != Screen.NONE and not Net.active
 	_shade.color.a = 0.45 if screen == Screen.PAUSE or not at_title() else 0.0
 	if screen == Screen.END:
 		# The level went dark as the player left it.
@@ -138,22 +149,35 @@ func _show(screen: Screen) -> void:
 				if checkpoint.title:
 					text += ", %s" % (checkpoint.title as String).to_lower()
 				_button(text, _play.bind(checkpoint.level, false))
-			_button("New game", _show.bind(Screen.LEVELS))
+			_button("New game", _choose_level.bind(false))
+			_button("Play together", _show.bind(Screen.TOGETHER))
 			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
 			_button("Quit", get_tree().quit)
 		Screen.LEVELS:
-			_heading("New game", 44)
+			_heading("Host a game" if _hosting else "New game", 44)
 			for level in LEVELS:
-				_button(level.name, _play.bind(level.scene, true))
-			_button("Back", _show.bind(Screen.TITLE))
+				_button(level.name, _host.bind(level.scene) if _hosting else _play.bind(level.scene, true))
+			_button("Back", _show.bind(Screen.TOGETHER if _hosting else Screen.TITLE))
+		Screen.TOGETHER:
+			_heading("Play together", 44)
+			_field("Your name", Net.player_name, func(text: String) -> void: Net.player_name = text)
+			_button("Host a game", _choose_level.bind(true))
+			_field("Address", Net.address, func(text: String) -> void: Net.address = text)
+			_button("Join the game at that address", _join)
+			if _together_note:
+				_note(_together_note)
+			_button("Back", _leave_together)
 		Screen.PAUSE:
-			_heading("Paused", 44)
+			_heading("Playing together" if Net.active else "Paused", 44)
+			if Net.active:
+				_note(_company())
 			_button("Resume", _show.bind(Screen.NONE))
-			_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
+			if Net.is_host():
+				_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
 			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
-			_button("Quit to title", _quit_to_title)
+			_button("Leave the game" if Net.active else "Quit to title", _quit_to_title)
 		Screen.CONTROLS:
 			_heading("Controls", 44)
 			_controls()
@@ -181,12 +205,19 @@ func _show(screen: Screen) -> void:
 			_note("%d robots lie in pieces between here and the factory." % _end_kills)
 			for line in run_summary(_end_run):
 				_note(line)
-			_button("Play again", _play.bind(LEVELS[0].scene, true))
-			_button("Quit to title", _quit_to_title)
+			if Net.is_host():
+				_button("Play again", _play.bind(LEVELS[0].scene, true))
+			_button("Leave the game" if Net.active else "Quit to title", _quit_to_title)
 	_focus_first.call_deferred()
 
 
 func _play(scene: String, fresh: bool) -> void:
+	if Net.active:
+		# Together, where everybody goes is the host's to say, and what was
+		# saved of a game alone is left as it is.
+		_show(Screen.NONE)
+		Net.load_level(scene, "" if fresh else Net.session.at, 0 if fresh else Net.session.kills)
+		return
 	if fresh:
 		Save.clear()
 	_show(Screen.NONE)
@@ -194,8 +225,70 @@ func _play(scene: String, fresh: bool) -> void:
 
 
 func _quit_to_title() -> void:
+	Net.leave()
 	_show(Screen.TITLE)
 	get_tree().reload_current_scene()
+
+
+# --- Playing together ---------------------------------------------------------
+
+
+func _choose_level(to_host: bool) -> void:
+	_hosting = to_host
+	_show(Screen.LEVELS)
+
+
+func _host(scene: String) -> void:
+	if Net.host_game() != OK:
+		_together_note = "Port %d is taken. Is a game being hosted on this computer already?" % Net.port
+		_show(Screen.TOGETHER)
+		return
+	_together_note = ""
+	_play(scene, true)
+
+
+func _join() -> void:
+	if Net.join_game(Net.address) == OK:
+		_together_note = "Looking for a game at %s ..." % Net.address
+	else:
+		_together_note = "That is not an address. It looks like 192.168.1.20, or like 84.12.34.56:%d." % Net.PORT
+	_show(Screen.TOGETHER)
+
+
+func _leave_together() -> void:
+	Net.leave()
+	_together_note = ""
+	_show(Screen.TITLE)
+
+
+## The host takes everybody to a level, this machine included.
+func _on_entering(_scene: String) -> void:
+	_together_note = ""
+	_show(Screen.NONE)
+
+
+## The game this machine was in is over for it: the host left, or there was
+## none to be found.
+func _on_left(reason: String) -> void:
+	var playing := not at_title()
+	_together_note = reason
+	_show(Screen.TOGETHER)
+	if playing:
+		get_tree().reload_current_scene()
+
+
+## Who is in the game, and for a host how the others get in.
+func _company() -> String:
+	var names: Array[String] = []
+	for player: int in Net.players:
+		if player != Net.id():
+			names.append(Net.players[player].name)
+	var text := "With %s." % ", ".join(names) if names else "Nobody else is here yet."
+	if Net.is_host():
+		var addresses := Net.local_addresses()
+		text += "\nOn your own network others join at %s." % (" or ".join(addresses) if addresses else "this computer's address")
+		text += "\nFrom elsewhere: forward UDP port %d on your router to this\ncomputer and give them your public address." % Net.port
+	return text
 
 
 func _on_scene_changed() -> void:
@@ -303,6 +396,24 @@ func _note(text: String) -> void:
 	_column.add_child(gap)
 
 
+## A line to type in; `changed` is given the text as it is typed.
+func _field(label: String, text: String, changed: Callable) -> void:
+	var row := HBoxContainer.new()
+	var caption := Label.new()
+	caption.text = label
+	caption.custom_minimum_size.x = 160
+	row.add_child(caption)
+	var line := LineEdit.new()
+	line.text = text
+	line.max_length = 64
+	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.text_changed.connect(changed)
+	line.focus_entered.connect(func() -> void: caption.modulate = ACCENT)
+	line.focus_exited.connect(func() -> void: caption.modulate = Color.WHITE)
+	row.add_child(line)
+	_column.add_child(row)
+
+
 func _button(text: String, action: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
@@ -408,6 +519,7 @@ func _focusable(control: Control) -> void:
 
 func _focus_first() -> void:
 	for control in _column.find_children("*", "Control", true, false):
-		if control.focus_mode == Control.FOCUS_ALL and not control.is_queued_for_deletion():
+		# A menu opens on something to press, not on a line to type in.
+		if control.focus_mode == Control.FOCUS_ALL and not control is LineEdit and not control.is_queued_for_deletion():
 			control.grab_focus()
 			return

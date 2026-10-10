@@ -3,6 +3,7 @@ extends CharacterBody3D
 signal health_changed(health: float, max_health: float)
 signal damaged(amount: float)
 signal died
+signal revived
 
 const WALK_SPEED := 5.0
 const SPRINT_SPEED := 8.0
@@ -133,6 +134,22 @@ func take_damage(amount: float, _position := Vector3.ZERO, _direction := Vector3
 		_set_crouched(true)
 		died.emit()
 	return dead
+
+
+## Back on its feet at `pose`, as good as new: for a game with others, where
+## a death is not the end of the level.
+func revive(pose: Transform3D) -> void:
+	dead = false
+	health = MAX_HEALTH
+	_since_damage = 0.0
+	_trauma = 0.0
+	velocity = Vector3.ZERO
+	global_position = pose.origin
+	rotation = Vector3(0.0, pose.basis.get_euler().y, 0.0)
+	head.rotation.x = 0.0
+	_set_crouched(false)
+	health_changed.emit(health, MAX_HEALTH)
+	revived.emit()
 
 
 func _unhandled_input(event: InputEvent) -> void:

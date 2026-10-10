@@ -57,6 +57,8 @@ var _health_label := Label.new()
 var _pickup_label := Label.new()
 var _objective_label := Label.new()
 var _kills_label := Label.new()
+## Who came and who went, in a game with others.
+var _news_label := Label.new()
 var _banner := Label.new()
 var _crosshair := Crosshair.new()
 var _hitmarker := Hitmarker.new()
@@ -68,6 +70,8 @@ var _scope_mat := ShaderMaterial.new()
 var _curtain := ColorRect.new()
 var _hurt := 0.0
 var _health_ratio := 1.0
+var _fading: Tween
+var _news: Tween
 
 
 func _ready() -> void:
@@ -97,6 +101,10 @@ func _ready() -> void:
 	_place(_kills_label, Control.PRESET_TOP_RIGHT)
 	_kills_label.offset_top += 38
 	_kills_label.offset_bottom += 38
+	_news_label.modulate.a = 0.0
+	_place(_news_label, Control.PRESET_TOP_LEFT)
+	_news_label.offset_top += 30
+	_news_label.offset_bottom += 30
 
 	_ammo_label.add_theme_font_size_override("font_size", 40)
 	_ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -162,6 +170,8 @@ func _bind() -> void:
 	_player.health_changed.connect(_on_health_changed)
 	_player.damaged.connect(func(amount: float) -> void: _hurt = minf(_hurt + amount / 25.0, 1.0))
 	_player.died.connect(_show_banner.bind("YOU DIED", Color(1, 0.3, 0.25), 10.0))
+	_player.revived.connect(_show_banner.bind("", Color.WHITE, 0.0))
+	Net.said.connect(_on_news)
 	_player.weapons.ammo_changed.connect(_on_ammo_changed)
 	_player.weapons.hit_confirmed.connect(_on_hit_confirmed)
 	_player.weapons.grenades_changed.connect(_on_grenades_changed)
@@ -264,9 +274,22 @@ func _on_finished(_next: String, fade: float) -> void:
 	create_tween().tween_property(_curtain, "modulate:a", 1.0, fade)
 
 
+func _on_news(text: String) -> void:
+	_news_label.text = text
+	_news_label.modulate.a = 1.0
+	if _news:
+		_news.kill()
+	_news = create_tween()
+	_news.tween_interval(4.0)
+	_news.tween_property(_news_label, "modulate:a", 0.0, 0.6)
+
+
 func _show_banner(text: String, color: Color, hold: float) -> void:
 	_banner.text = text
 	_banner.modulate = color
-	var tween := create_tween()
-	tween.tween_interval(hold)
-	tween.tween_property(_banner, "modulate:a", 0.0, 0.6)
+	# One banner at a time: a later one is not faded out by an earlier one.
+	if _fading:
+		_fading.kill()
+	_fading = create_tween()
+	_fading.tween_interval(hold)
+	_fading.tween_property(_banner, "modulate:a", 0.0, 0.6)

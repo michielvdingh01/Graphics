@@ -43,6 +43,7 @@ var _flame: Node3D
 @onready var _fx: Node = get_node("/root/Fx")
 @onready var _sfx: Node = get_node("/root/Sfx")
 @onready var _blast: Node = get_node("/root/Blast")
+@onready var _net: Node = get_node("/root/Net")
 
 
 func _ready() -> void:
@@ -70,7 +71,7 @@ func take_damage(amount: float, hit_position: Vector3, _direction: Vector3) -> b
 	if health > 0.0:
 		return false
 	if not _alight:
-		_ignite(hit_position)
+		_net.show(self, &"_ignite", [hit_position])
 	# Twice what it takes to hole it does not leave it time to burn.
 	if health < -_tuning.health:
 		_fuse = minf(_fuse, randf_range(0.08, 0.22))
@@ -79,7 +80,8 @@ func take_damage(amount: float, hit_position: Vector3, _direction: Vector3) -> b
 
 func _physics_process(delta: float) -> void:
 	_fuse -= delta
-	if _fuse <= 0.0:
+	# When it goes off is for the host to say.
+	if _fuse <= 0.0 and _net.is_host():
 		explode()
 
 
@@ -106,16 +108,29 @@ func _ignite(hole: Vector3) -> void:
 
 ## Goes off, there and then.
 func explode() -> void:
+	if gone:
+		return
+	var middle := _middle()
+	_net.show(self, &"vanish")
+	_blast.explode(middle, _tuning.radius, _tuning.damage, _tuning.size, self)
+	if _tuning.burns > 0.0:
+		_blast.burn(global_position, _tuning.fire, _tuning.burns)
+
+
+## Leaves the level, and a hulk behind. `quietly` is for one that went off
+## before whoever looks at it now was there: it is simply not there.
+func vanish(quietly := false) -> void:
 	gone = true
 	set_physics_process(false)
 	collision_layer = 0
 	if is_instance_valid(_flame):
 		_flame.queue_free()
-	var middle := _middle()
-	_blast.explode(middle, _tuning.radius, _tuning.damage, _tuning.size, self)
-	if _tuning.burns > 0.0:
-		_blast.burn(global_position, _tuning.fire, _tuning.burns)
-	_leave_hulk()
+	if quietly:
+		var prop := get_node_or_null(model) as Node3D
+		if prop:
+			prop.visible = false
+	else:
+		_leave_hulk()
 	queue_free()
 
 
