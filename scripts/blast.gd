@@ -59,7 +59,10 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 		# Things are thrown outwards and a little up, off the floor.
 		var away := (offset.normalized() + Vector3.UP * 0.4).normalized()
 		var player := body.is_in_group("player")
-		if body.has_method("take_damage"):
+		# A blast is not a bullet: no plate in front of somebody stops it.
+		if body.has_method("take_blast"):
+			body.take_blast(damage * strength, middle, away * 2.5)
+		elif body.has_method("take_damage"):
 			body.take_damage(damage * strength * (PLAYER_SHARE if player else 1.0), middle, away * 2.5)
 		if body is CharacterBody3D:
 			body.velocity += away * PUSH * strength
@@ -103,6 +106,20 @@ func _physics_process(delta: float) -> void:
 ## A scene change takes its fires with it.
 func clear() -> void:
 	_burning.clear()
+
+
+## True if the floor at `position` is on fire, or within `margin` of it.
+func burning(position: Vector3, margin := 0.0) -> bool:
+	for patch in _burning:
+		var offset: Vector3 = position - patch.at
+		if absf(offset.y) < 1.5 and Vector2(offset.x, offset.z).length() < patch.radius + margin:
+			return true
+	return false
+
+
+## The patches of floor that are on fire: {at, radius, left} each.
+func fires() -> Array[Dictionary]:
+	return _burning
 
 
 ## The point of a body a blast is measured to.

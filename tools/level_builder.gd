@@ -5,9 +5,20 @@ extends SceneTree
 ## A level is described in code by overriding _describe() and written to
 ## scenes/levels/ as merged meshes (lightmapped "static", probe-lit "detail"
 ## in blocks and unshadowed "glass"), one static body, the props placed from
-## assets/models/, a body of its own for each prop that can explode, and the
-## lights, decals and reflection probes that belong to the building. The scene that uses it holds everything that is tuned by
-## hand: environment, sun, lightmap, spawns and benchmark views.
+## assets/models/, a body of its own for each prop that can explode, the
+## lights, decals and reflection probes that belong to the building, and the
+## route through it: where the player starts, the zones that are fought over,
+## the checkpoints and the exit. A part of the building that the game moves,
+## such as the shutter at the exit, is a body of its own with its own mesh.
+## The scene that uses it holds everything that is tuned by hand: environment,
+## sun, lightmap and benchmark views.
+##
+## A level that is more than one space cuts itself into zones with zone():
+## everything is then filed under the zone it stands in, each zone gets meshes,
+## a lightmap and a place in the scene of its own, and scripts/zones.gd draws
+## only the zones that can be seen from where the camera is. That is what
+## lets a level grow: what a frame costs depends on what is in sight, not on
+## how much there is.
 
 const OUT_DIR := "res://scenes/levels/"
 ## Lightmap texel size in metres. Imported models get the same value through
@@ -59,8 +70,21 @@ var _lights: Node3D
 var _decals: Node3D
 var _props: Node3D
 var _explosives: Node3D
-## Body the next collider goes into instead of the level's own, see _explosive().
+## Body the next collider goes into instead of the level's own, see
+## _explosive() and _build_into().
 var _into: StaticBody3D
+## Parts of the level that the game moves: body -> [zone, kind of mesh].
+var _movers := {}
+## The one that is being built, or null.
+var _moving: AnimatableBody3D
+## Holds the route through the level, in the order it is described.
+var _route: Node3D
+## Zones the level is cut into, by name and in the order they were declared:
+## {node, contents, bounds, sees}.
+var _zones := {}
+## Zone that everything goes into whatever its position, see in_zone(); null
+## files things by where they stand.
+var _zone_forced: Variant = null
 ## Model id -> {path, scene, box}; scene and box are filled in on first use.
 var _models := {}
 ## Glowing material -> its copy for a lamp that is off.
@@ -118,19 +142,26 @@ func _build() -> void:
 	_add(_explosives, _root)
 
 	_describe()
+	_check_route()
 
-	var kinds := {}
-	for key: String in _tools:
-		kinds[key.get_slice("/", 0)] = true
-	# Detail comes in as many meshes as it has blocks; clear out last time's.
+	# The meshes come in as many files as there are zones and blocks of detail;
+	# clear out last time's.
 	var folder := DirAccess.open(OUT_DIR)
 	for file in folder.get_files():
-		if file.begins_with(_level_name() + "_detail"):
+		if file.begins_with(_level_name() + "_") and file.get_extension() == "res":
 			folder.remove(file)
-	var names := kinds.keys()
-	names.sort()
-	for kind: String in names:
-		_commit(kind, kind.replace(" ", "_"))
+	var zone_names: Array = [""]
+	zone_names.append_array(_zones.keys())
+	for zone_name: String in zone_names:
+		var kinds := {}
+		for key: String in _tools:
+			if key.begins_with(zone_name + "|"):
+				kinds[key.get_slice("|", 1).get_slice("/", 0)] = true
+		var names := kinds.keys()
+		names.sort()
+		for kind: String in names:
+			_commit(zone_name, kind)
+	_finish_zones()
 	var scene := PackedScene.new()
 	scene.pack(_root)
 	var err := ResourceSaver.save(scene, OUT_DIR + _level_name() + "_level.tscn")
@@ -147,21 +178,202 @@ func _describe() -> void:
 	pass
 
 
+# --- Zones --------------------------------------------------------------------
+# A level of more than one space is cut into zones before anything is built.
+
+
+## Declares a zone: a part of the level that is drawn as a whole or not at
+## all. Whatever is built inside one of the boxes of `bounds` from here on
+## belongs to it. `sees` names the zones that can be seen from inside it,
+## through a doorway or over a wall; it works both ways, so one side naming
+## the other is enough. A zone has to be closed by its own walls, floor and
+## roof, because its lightmap is baked with nothing else around it.
+func zone(zone_name: String, bounds: Array[AABB], sees: Array[String] = []) -> void:
+	var node := Node3D.new()
+	node.name = "Zone" + zone_name.to_pascal_case()
+	node.add_to_group("level_zone", true)
+	_add(node, _root)
+	# What is switched off as one when the zone is out of sight; the shell
+	# stays, to keep casting its shadow.
+	var contents := Node3D.new()
+	contents.name = "Contents"
+	_add(contents, node)
+	_zones[zone_name] = {"node": node, "contents": contents, "bounds": bounds, "sees": sees.duplicate()}
+
+
+## Files what is built from here on under that zone wherever it stands, or
+## under none for an empty name: for what straddles zones or surrounds them.
+## by_position() goes back to filing by position.
+func in_zone(zone_name: String) -> void:
+	_zone_forced = zone_name
+
+
+func by_position() -> void:
+	_zone_forced = null
+
+
+## Closes a doorway while the lightmap of the zone on that side of it is
+## baked, with a black panel that is never drawn: `at` is the middle of the
+## panel and has to lie inside the zone. Without one, daylight that the
+## neighbouring zone would have kept out comes in through the opening.
+func bake_blocker(at: Vector3, size: Vector3) -> void:
+	var zone_name := _zone_at(at)
+	if zone_name == "":
+		push_error("bake_blocker: %s lies in no zone" % at)
+		return
+	var black := StandardMaterial3D.new()
+	black.albedo_color = Color.BLACK
+	var panel := MeshInstance3D.new()
+	panel.name = "Blocker"
+	panel.mesh = BoxMesh.new()
+	panel.mesh.size = size
+	panel.mesh.add_uv2 = true
+	panel.mesh.material = black
+	panel.position = at
+	panel.visible = false
+	panel.add_to_group("bake_blocker", true)
+	_add(panel, _zones[zone_name].node)
+
+
+## Dust in the air of a space: specks that only show where light falls on
+## them, so in the beams of the sun and under the lamps.
+func dust(volume: AABB, amount: int) -> void:
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.15, 0.85, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color.WHITE, Color.WHITE, Color(1, 1, 1, 0)])
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	var drift := ParticleProcessMaterial.new()
+	drift.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	drift.emission_box_extents = volume.size * 0.5
+	drift.spread = 180.0
+	drift.initial_velocity_min = 0.01
+	drift.initial_velocity_max = 0.05
+	drift.gravity = Vector3(0, -0.003, 0)
+	drift.scale_min = 0.6
+	drift.scale_max = 1.6
+	drift.color_ramp = ramp
+	drift.turbulence_enabled = true
+	drift.turbulence_noise_strength = 0.15
+	drift.turbulence_noise_scale = 3.0
+	drift.turbulence_influence_min = 0.02
+	drift.turbulence_influence_max = 0.06
+	var speck := ShaderMaterial.new()
+	speck.shader = load("res://shaders/dust.gdshader")
+	speck.set_shader_parameter("brightness", 0.35)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.009, 0.009)
+	quad.material = speck
+	var node := GPUParticles3D.new()
+	node.name = "Dust"
+	node.position = volume.get_center()
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.amount = amount
+	node.lifetime = 30.0
+	node.preprocess = 30.0
+	node.randomness = 1.0
+	node.visibility_aabb = AABB(-volume.size * 0.5 - Vector3.ONE * 0.5, volume.size + Vector3.ONE)
+	node.process_material = drift
+	node.draw_pass_1 = quad
+	var zone_name := _zone_at(node.position)
+	_add(node, _zones[zone_name].contents if zone_name else _root)
+
+
+## Name of the zone a point lies in, or empty for none.
+func _zone_at(at: Vector3) -> String:
+	if _zone_forced != null:
+		return _zone_forced
+	for zone_name: String in _zones:
+		for box: AABB in _zones[zone_name].bounds:
+			if box.has_point(at):
+				return zone_name
+	return ""
+
+
+## The node that the lights, the decals or the props of a zone go under: the
+## one of the zone that `at` lies in, or the level's own.
+func _group(group: String, at: Vector3) -> Node3D:
+	var zone_name := _zone_at(at)
+	if zone_name == "":
+		return _root.get_node(group)
+	var contents: Node3D = _zones[zone_name].contents
+	if not contents.has_node(group):
+		var node := Node3D.new()
+		node.name = group
+		_add(node, contents)
+	return contents.get_node(group)
+
+
+## Gives every zone a lightmap of its own and writes down what the game needs
+## to know to switch zones on and off.
+func _finish_zones() -> void:
+	if _zones.is_empty():
+		return
+	for zone_name: String in _zones:
+		var info: Dictionary = _zones[zone_name]
+		var node: Node3D = info.node
+		# Whoever names a zone is seen from it in turn.
+		var sees: Array[String] = info.sees.duplicate()
+		for other: String in _zones:
+			if zone_name in _zones[other].sees and other not in sees:
+				sees.append(other)
+		for other in sees:
+			if not _zones.has(other):
+				push_error("Zone '%s' sees '%s', which does not exist" % [zone_name, other])
+		node.set_meta(&"zone", zone_name)
+		node.set_meta(&"bounds", info.bounds)
+		node.set_meta(&"sees", PackedStringArray(sees))
+		if not node.has_node("Static"):
+			continue
+		var whole: AABB = info.bounds[0]
+		for box: AABB in info.bounds:
+			whole = whole.merge(box)
+		var lightmap := LightmapGI.new()
+		lightmap.name = "LightmapGI"
+		lightmap.quality = LightmapGI.BAKE_QUALITY_HIGH
+		lightmap.bounces = 4
+		lightmap.directional = true
+		# Probes for what moves through the zone, about as far apart in a small
+		# zone as in a large one.
+		var cells := whole.get_longest_axis_size() / 1.3
+		lightmap.generate_probes_subdiv = (
+			LightmapGI.GENERATE_PROBES_SUBDIV_32 if cells > 16.0
+			else LightmapGI.GENERATE_PROBES_SUBDIV_16 if cells > 8.0
+			else LightmapGI.GENERATE_PROBES_SUBDIV_8 if cells > 4.0
+			else LightmapGI.GENERATE_PROBES_SUBDIV_4
+		)
+		# The bake overwrites this file; until the first one it holds nothing.
+		var path := "res://scenes/%s_%s.lmbake" % [_level_name(), zone_name]
+		if not ResourceLoader.exists(path):
+			ResourceSaver.save(LightmapGIData.new(), path)
+		lightmap.light_data = load(path)
+		_add(lightmap, node)
+	_root.set_script(load("res://scripts/zones.gd"))
+
+
 # --- Prefabs -----------------------------------------------------------------
 
 
 ## Wall along X (or Z) at a fixed position on the other axis. Openings are
-## [from, to, bottom, top] along the wall.
+## [from, to, bottom, top] along the wall; one may sit above another, as a
+## window over a door.
 func wall(mat: String, along_x: bool, fixed: float, thickness: float, a0: float, a1: float, y0: float, y1: float, openings: Array) -> void:
-	var sorted := openings.duplicate()
-	sorted.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
-	var cursor := a0
-	for o: Array in sorted:
-		_wall_piece(mat, along_x, fixed, thickness, cursor, o[0], y0, y1)
-		_wall_piece(mat, along_x, fixed, thickness, o[0], o[1], y0, o[2])
-		_wall_piece(mat, along_x, fixed, thickness, o[0], o[1], o[3], y1)
-		cursor = o[1]
-	_wall_piece(mat, along_x, fixed, thickness, cursor, a1, y0, y1)
+	# Between two edges of openings the wall is the same all the way along:
+	# solid from the bottom up, but for the openings over that stretch.
+	var edges: Array[float] = [a0, a1]
+	for o: Array in openings:
+		edges.append(clampf(o[0], a0, a1))
+		edges.append(clampf(o[1], a0, a1))
+	edges.sort()
+	for i in edges.size() - 1:
+		var middle := (edges[i] + edges[i + 1]) * 0.5
+		var over := openings.filter(func(o: Array) -> bool: return o[0] < middle and middle < o[1])
+		over.sort_custom(func(a: Array, b: Array) -> bool: return a[2] < b[2])
+		var y := y0
+		for o: Array in over:
+			_wall_piece(mat, along_x, fixed, thickness, edges[i], edges[i + 1], y, o[2])
+			y = maxf(y, o[3])
+		_wall_piece(mat, along_x, fixed, thickness, edges[i], edges[i + 1], y, y1)
 
 
 func _wall_piece(mat: String, along_x: bool, fixed: float, thickness: float, a0: float, a1: float, y0: float, y1: float) -> void:
@@ -378,18 +590,33 @@ func pallet(at: Vector3, yaw: float, stack: int) -> void:
 
 ## Roller shutter `size.x` wide and `size.y` high, seen from the side `normal`
 ## points to. `center` is the middle of its curtain; the roll sits in a hood
-## above that.
-func roller_door(center: Vector3, normal: Vector3, size: Vector2) -> void:
+## above that. With `opens` it is the door of the level's exit: the curtain
+## is then a body of its own, in the group "exit_door", that the game rolls
+## up by its "rise" when the exit opens; "front" is the side the player
+## comes to it from. Such a door has to hang in a doorway, inside the
+## thickness of a wall that goes on above it: that wall is what hides the
+## curtain as it goes up.
+func roller_door(center: Vector3, normal: Vector3, size: Vector2, opens := false) -> void:
 	var xf := Transform3D(Basis(Vector3.UP.cross(normal), Vector3.UP, normal), center)
 	var half := size * 0.5
+	var curtain: AnimatableBody3D = null
+	if opens:
+		curtain = _mover("Shutter", center)
+		curtain.add_to_group("exit_door", true)
+		curtain.set_meta(&"rise", size.y - 0.15)
+		curtain.set_meta(&"front", normal)
+	_build_into(curtain)
 	# The slats only face the room, so a plate behind them keeps the daylight out.
 	_local_box("steel", xf, Vector3(0, 0, -0.04), Vector3(size.x, size.y, 0.03))
 	corrugated("roof", xf * Transform3D(Basis(Vector3.BACK, PI * 0.5), Vector3.ZERO), Vector2(size.y - 0.1, size.x), 0.095, 0.014, NO_COLLIDE)
+	_build_into(null)
 	for side: float in [-1.0, 1.0]:
 		_local_box("dark_steel", xf, Vector3(side * (half.x - 0.03), 0, 0.03), Vector3(0.1, size.y, 0.1), NO_COLLIDE)
+	_build_into(curtain)
 	_local_box("dark_steel", xf, Vector3(0, -half.y + 0.06, 0.02), Vector3(size.x - 0.16, 0.1, 0.05), NO_COLLIDE)
 	_local_box("rubber", xf, Vector3(0, -half.y + 0.008, 0.02), Vector3(size.x - 0.16, 0.016, 0.03), DETAIL | NO_COLLIDE)
 	_local_box("bare_steel", xf, Vector3(0, -half.y + 0.07, 0.055), Vector3(0.22, 0.03, 0.02), NO_COLLIDE)
+	_build_into(null)
 	rounded_box("steel", xf * Transform3D(Basis(), Vector3(0, half.y + 0.21, 0.17)), Vector3(size.x + 0.3, 0.42, 0.42), 0.05, NO_COLLIDE)
 	# Hand chain, hanging in a loop from the end of the hood.
 	var chain := half.x - 0.18
@@ -647,7 +874,7 @@ func lamp(at: Vector3, hang_y: float, on: bool, shadows: bool) -> void:
 	light.spot_attenuation = 1.2
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
-	_add(light, _lights)
+	_add(light, _group("Lights", light.position))
 
 
 ## Bare bulb in a cage under the mezzanine.
@@ -663,7 +890,7 @@ func bulb(at: Vector3, shadows: bool) -> void:
 	light.omni_attenuation = 1.3
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
-	_add(light, _lights)
+	_add(light, _group("Lights", light.position))
 
 
 ## Fluorescent ceiling fixture; `reach` is how far its light carries.
@@ -683,7 +910,7 @@ func tube(at: Vector3, along_x: bool, on: bool, shadows := true, reach := 7.5) -
 	light.omni_attenuation = 1.4
 	light.shadow_enabled = shadows
 	light.light_bake_mode = Light3D.BAKE_DYNAMIC
-	_add(light, _lights)
+	_add(light, _group("Lights", light.position))
 
 
 func probe(probe_name: String, center: Vector3, size: Vector3, origin: Vector3) -> void:
@@ -696,7 +923,8 @@ func probe(probe_name: String, center: Vector3, size: Vector3, origin: Vector3) 
 	node.enable_shadows = true
 	node.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 	node.max_distance = 60.0
-	_add(node, _root)
+	var zone_name := _zone_at(center)
+	_add(node, _zones[zone_name].contents if zone_name else _root)
 
 
 ## Places a model from assets/models/ with the centre of its base at the
@@ -713,7 +941,7 @@ func prop(model: String, xf: Transform3D, scale := 1.0, dynamic := false, pose :
 	var node: Node3D = info.scene.instantiate()
 	node.name = model.to_pascal_case()
 	node.transform = xf * Transform3D(Basis.from_scale(Vector3.ONE * scale) * pose, -base * scale)
-	_add(node, _props)
+	_add(node, _group("Props", xf.origin))
 	if dynamic:
 		# Overrides on the nodes inside an instanced scene are only saved for
 		# an editable instance.
@@ -816,7 +1044,7 @@ func _decal(texture: String, xf: Transform3D, size: Vector3, tint: Color) -> voi
 	node.distance_fade_enabled = true
 	node.distance_fade_begin = 35.0
 	node.distance_fade_length = 10.0
-	_add(node, _decals)
+	_add(node, _group("Decals", xf.origin))
 
 
 ## Sets aside the part of the floor (x and z) that floor_line() and the others
@@ -871,6 +1099,45 @@ func floor_hatch(area: Rect2, color := PAINT_YELLOW, stripe := 0.15) -> void:
 	_fill(area, color, stripe)
 
 
+## Arrow on the floor, `length` long with its middle at `at` (x and z), that
+## points along `heading`: the way a lane is driven or an aisle is walked.
+func floor_arrow(at: Vector2, heading: Vector2, color := PAINT_YELLOW, length := 1.8) -> void:
+	var along := heading.normalized()
+	var across := Vector2(-along.y, along.x)
+	var tip := length * 0.5
+	var neck := tip - length * 0.4
+	var shaft := length * 0.075
+	var barb := length * 0.24
+	var outline := PackedVector2Array()
+	for corner: Vector2 in [
+		Vector2(-tip, -shaft), Vector2(neck, -shaft), Vector2(neck, -barb), Vector2(tip, 0.0),
+		Vector2(neck, barb), Vector2(neck, shaft), Vector2(-tip, shaft),
+	]:
+		outline.append(at + along * corner.x + across * corner.y)
+	_fill_outline(outline, color)
+
+
+## Paints the inside of an outline on the floor (x and z).
+func _fill_outline(outline: PackedVector2Array, color: Color) -> void:
+	var low := outline[0]
+	var high := outline[0]
+	for corner in outline:
+		low = low.min(corner)
+		high = high.max(corner)
+	var from := Vector2i(((low - _paint_area.position) * PAINT_SCALE).floor())
+	var to := Vector2i(((high - _paint_area.position) * PAINT_SCALE).ceil())
+	for y in range(maxi(from.y, 1), mini(to.y, _paint.get_height() - 1)):
+		for x in range(maxi(from.x, 1), mini(to.x, _paint.get_width() - 1)):
+			# How much of this pixel lies inside, from nine points in it.
+			var cover := 0.0
+			for i in 9:
+				var sample := Vector2(x + (i % 3 + 0.5) / 3.0, y + (i / 3 + 0.5) / 3.0) / PAINT_SCALE + _paint_area.position
+				if Geometry2D.is_point_in_polygon(sample, outline):
+					cover += 1.0 / 9.0
+			if cover > _paint.get_pixel(x, y).a:
+				_paint.set_pixel(x, y, Color(color.r, color.g, color.b, cover))
+
+
 ## Paints a rectangle of floor, solid or in diagonal stripes of `color` with
 ## `between` in the gaps.
 func _fill(area: Rect2, color: Color, stripe := 0.0, between := Color(0, 0, 0, 0)) -> void:
@@ -893,6 +1160,178 @@ func _fill(area: Rect2, color: Color, stripe := 0.0, between := Color(0, 0, 0, 0
 					cover *= inside
 			if cover > _paint.get_pixel(x, y).a:
 				_paint.set_pixel(x, y, Color(paint.r, paint.g, paint.b, cover))
+
+
+# --- Route -------------------------------------------------------------------
+# The way through a level, played by scripts/game.gd in the order it is
+# described here: the start, then zones and checkpoints as the player comes
+# to them, then the exit.
+
+
+## Where the player stands when the level begins, looking towards `look`.
+func route_start(at: Vector3, look: Vector3) -> void:
+	var node := Marker3D.new()
+	node.name = "Start"
+	node.transform = _pose(at, look)
+	_add(node, _route_node())
+
+
+## A part of the level that robots hold. They appear when the player walks
+## into `area`, each at its own spot, and the zone is cleared when the last of
+## them is down. `title` is what the HUD calls the place, as in "Clear the
+## corridor". `enemies` lists [kind, position], with "grunt", "rusher" or
+## "heavy" for a kind.
+func route_zone(id: String, title: String, area: AABB, enemies: Array) -> void:
+	var node := _route_area("Zone", id, title, area, "route_zone")
+	for enemy: Array in enemies:
+		var spawn := Marker3D.new()
+		spawn.name = (enemy[0] as String).capitalize()
+		spawn.position = (enemy[1] as Vector3) - node.position
+		spawn.set_meta(&"kind", enemy[0])
+		spawn.add_to_group("enemy_spawn", true)
+		_add(spawn, node)
+
+
+## A place to carry on from after a death or a restart of the game: `at`,
+## looking towards `look`. It counts once the player is inside `area` with
+## every zone described before it cleared, so it has to lie outside the zones
+## that come after it.
+func route_checkpoint(id: String, title: String, at: Vector3, look: Vector3, area: AABB) -> void:
+	var node := _route_area("Checkpoint", id, title, area, "route_checkpoint")
+	var pose := Marker3D.new()
+	pose.name = "Respawn"
+	pose.transform = node.transform.affine_inverse() * _pose(at, look)
+	_add(pose, node)
+
+
+## The way out, open once every zone is cleared; `title` is what the HUD then
+## says. `next` names the level it leads to; without one the game ends here.
+## With `lamp`, a lamp at that spot on a wall facing `lamp_normal` comes on
+## when the exit opens.
+func route_exit(title: String, area: AABB, next := "", lamp := Vector3.INF, lamp_normal := Vector3.ZERO) -> void:
+	var node := _route_area("Exit", "", title, area, "route_exit")
+	node.set_meta(&"next", next)
+	if lamp == Vector3.INF:
+		return
+	# A bulkhead fitting: the housing is part of the building, what lights up
+	# is a node of its own for the game to switch on.
+	var xf := Transform3D(Basis.looking_at(-lamp_normal), lamp)
+	rounded_box("dark_steel", xf * Transform3D(Basis(), Vector3(0, 0, 0.04)), Vector3(0.62, 0.3, 0.08), 0.02, DETAIL | NO_COLLIDE)
+	var glow := StandardMaterial3D.new()
+	glow.albedo_color = Color(0.05, 0.2, 0.08)
+	glow.emission_enabled = true
+	glow.emission = Color(0.25, 1.0, 0.45)
+	glow.emission_energy_multiplier = 5.0
+	var lens := MeshInstance3D.new()
+	lens.name = "Lamp"
+	lens.mesh = BoxMesh.new()
+	lens.mesh.size = Vector3(0.5, 0.2, 0.05)
+	lens.mesh.material = glow
+	lens.transform = node.transform.affine_inverse() * xf * Transform3D(Basis(), Vector3(0, 0, 0.1))
+	lens.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lens.visible = false
+	_add(lens, node)
+	var light := OmniLight3D.new()
+	light.name = "Light"
+	light.position = Vector3(0, -0.3, 0.9)
+	light.light_color = Color(0.45, 1.0, 0.6)
+	light.light_energy = 4.0
+	light.omni_range = 8.0
+	light.omni_attenuation = 1.3
+	light.light_bake_mode = Light3D.BAKE_DISABLED
+	_add(light, lens)
+
+
+func _route_node() -> Node3D:
+	if _route == null:
+		_route = Node3D.new()
+		_route.name = "Route"
+		_add(_route, _root)
+	return _route
+
+
+## One step of the route with a box the player walks into; it only sees the
+## player.
+func _route_area(kind: String, id: String, title: String, area: AABB, group: String) -> Area3D:
+	var node := Area3D.new()
+	node.name = kind + id.to_pascal_case()
+	node.position = area.get_center()
+	node.collision_layer = 0
+	node.collision_mask = 0b10
+	node.monitorable = false
+	node.set_meta(&"id", id)
+	node.set_meta(&"title", title)
+	node.add_to_group(group, true)
+	_add(node, _route_node())
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = area.size
+	_add(shape, node)
+	return node
+
+
+## Standing at `at` and facing `look`, level with the ground.
+func _pose(at: Vector3, look: Vector3) -> Transform3D:
+	return Transform3D(Basis.looking_at(Vector3(look.x - at.x, 0.0, look.z - at.z)), at)
+
+
+## The box a zone, checkpoint or exit was given.
+func _area_of(node: Area3D) -> AABB:
+	var size: Vector3 = (node.get_child(0) as CollisionShape3D).shape.size
+	return AABB(node.position - size * 0.5, size)
+
+
+## Catches a route that cannot be played as described.
+func _check_route() -> void:
+	if _route == null:
+		return
+	var steps := _route.get_children()
+	var zones := steps.filter(func(step: Node) -> bool: return step.is_in_group("route_zone"))
+	var start := _route.get_node_or_null("Start") as Marker3D
+	if start == null or _route.get_node_or_null("Exit") == null:
+		push_error("Route: needs a start and an exit")
+		return
+	for zone: Area3D in zones:
+		if _area_of(zone).has_point(start.position):
+			push_error("Route: the player starts inside zone '%s'" % zone.get_meta(&"id"))
+		if zone.get_child_count() < 2:
+			push_error("Route: zone '%s' has no enemies" % zone.get_meta(&"id"))
+	for step in steps:
+		if not step.is_in_group("route_checkpoint"):
+			continue
+		var at: Vector3 = (step as Area3D).transform * (step.get_node("Respawn") as Marker3D).position
+		for zone: Area3D in zones:
+			if zone.get_index() > step.get_index() and _area_of(zone).has_point(at):
+				push_error("Route: checkpoint '%s' lies inside zone '%s', which comes after it" % [step.get_meta(&"id"), zone.get_meta(&"id")])
+	print("Route: %d zones, %d checkpoints" % [zones.size(), steps.size() - zones.size() - 2])
+
+
+# --- Moving parts --------------------------------------------------------------
+# Most of a level is merged into a few meshes and one body. What the game has
+# to move is kept apart.
+
+
+## A part of the level that the game moves: a body of its own at `at`, in the
+## zone it stands in. What is built between _build_into(body) and
+## _build_into(null) becomes its mesh and its colliders. The mesh gets a patch
+## of lightmap like the rest of the building, and keeps it as it moves.
+func _mover(mover_name: String, at: Vector3) -> AnimatableBody3D:
+	var zone_name := _zone_at(at)
+	var body := AnimatableBody3D.new()
+	body.name = mover_name
+	body.position = at
+	# With the shell of its zone, which is never switched off: it keeps the
+	# sun out as the walls do.
+	_add(body, _zones[zone_name].node if zone_name else _root)
+	_movers[body] = [zone_name, "mover " + String(body.name).to_snake_case()]
+	return body
+
+
+## Builds what follows into that moving part, or into the level again for null.
+func _build_into(body: AnimatableBody3D) -> void:
+	_moving = body
+	_into = body
 
 
 # --- Geometry builders -------------------------------------------------------
@@ -1389,8 +1828,12 @@ func _up_along(direction: Vector3) -> Basis:
 	return Basis(x, y, x.cross(y))
 
 
-## The surface a piece of geometry at `at` goes into.
+## The surface a piece of geometry at `at` goes into: that of its zone, its
+## kind and its material.
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	if _moving:
+		return _tool_named("%s|%s/%s" % [_movers[_moving][0], _movers[_moving][1], mat])
+	var zone_name := _zone_at(at)
 	var kind := "glass" if flags & GLASS else ("detail" if flags & DETAIL else "static")
 	if kind == "detail":
 		# A mesh without a lightmap takes its indirect light from the probes at
@@ -1401,11 +1844,11 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 		elif _detail_inside.has_point(at):
 			# What sits in or on a wall belongs to the block on the inside of it.
 			at = at.clamp(_detail_inside.position + Vector3.ONE, _detail_inside.end - Vector3.ONE)
-		else:
-			return _tool_named("detail far/" + mat)
+		elif zone_name == "":
+			return _tool_named("|detail far/" + mat)
 		var block := Vector3i((at / _detail_block + Vector3(0.5, 0, 0)).floor())
 		kind = "detail %d %d %d" % [block.x, block.y, block.z]
-	return _tool_named(kind + "/" + mat)
+	return _tool_named("%s|%s/%s" % [zone_name, kind, mat])
 
 
 func _tool_named(key: String) -> SurfaceTool:
@@ -1483,10 +1926,11 @@ func _add(node: Node, parent: Node) -> void:
 		node.owner = _root
 
 
-## Merges every surface of one kind into a single mesh instance, saved under
-## `stem`.
-func _commit(kind: String, stem: String) -> void:
-	var keys := _tools.keys().filter(func(key: String) -> bool: return key.begins_with(kind + "/"))
+## Merges every surface of one kind in one zone (or in none, for an empty
+## name) into a single mesh instance with a file of its own.
+func _commit(zone_name: String, kind: String) -> void:
+	var prefix := "%s|%s/" % [zone_name, kind]
+	var keys := _tools.keys().filter(func(key: String) -> bool: return key.begins_with(prefix))
 	keys.sort()
 	var mesh := ArrayMesh.new()
 	var triangles := 0
@@ -1497,10 +1941,12 @@ func _commit(kind: String, stem: String) -> void:
 		st.set_material(_material(key.get_slice("/", 1)))
 		st.commit(mesh)
 		triangles += mesh.surface_get_array_index_len(mesh.get_surface_count() - 1) / 3
-	if kind == "static":
+	var mover: AnimatableBody3D = _movers.find_key([zone_name, kind])
+	if kind == "static" or mover:
 		var err := mesh.lightmap_unwrap(Transform3D(), TEXEL)
 		print("Lightmap unwrap: ", error_string(err), ", size hint ", mesh.lightmap_size_hint)
-	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), stem]
+	var stem := kind.replace(" ", "_")
+	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), stem if zone_name == "" else zone_name + "_" + stem]
 	ResourceSaver.save(mesh, path, ResourceSaver.FLAG_COMPRESS)
 	mesh.take_over_path(path)
 	var instance := MeshInstance3D.new()
@@ -1514,6 +1960,19 @@ func _commit(kind: String, stem: String) -> void:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_:
 			instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
-	_add(instance, _root)
-	_root.move_child(instance, 0)
-	print("%s: %d surfaces, %d triangles" % [kind, mesh.get_surface_count(), triangles])
+	if mover:
+		instance.name = "Mesh"
+		instance.gi_mode = GeometryInstance3D.GI_MODE_STATIC
+		instance.transform = mover.transform.affine_inverse()
+		_add(instance, mover)
+	elif zone_name == "":
+		_add(instance, _root)
+		_root.move_child(instance, 0)
+	elif kind == "static":
+		# The shell stays beside the rest of the zone, see zone().
+		_add(instance, _zones[zone_name].node)
+		_zones[zone_name].node.move_child(instance, 0)
+	else:
+		_add(instance, _zones[zone_name].contents)
+		_zones[zone_name].contents.move_child(instance, 0)
+	print("%s%s: %d surfaces, %d triangles" % [zone_name + " " if zone_name else "", kind, mesh.get_surface_count(), triangles])

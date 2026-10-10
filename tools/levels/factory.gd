@@ -1,6 +1,7 @@
 extends "res://tools/level_builder.gd"
-## The factory hall: hall with crane and mezzanine, plus an annex with a
-## corridor and two rooms. Build with: tools/build_level.sh factory
+## The factory: the hall with its crane and mezzanine, an annex with a
+## corridor and two rooms, and behind the annex the boiler house, reached
+## through a passage with a bend in it. Build with: tools/build_level.sh factory
 
 # Hall dimensions (interior faces).
 const HX := 20.0
@@ -24,6 +25,15 @@ const BRASS := "brass"
 const RED := "enamel_red"
 ## Walls of the annex: plaster with a painted dado.
 const WALL := "plaster_dado"
+# The boiler house (interior faces) and the passage to it.
+const BX0 := 29.4
+const BX1 := 41.4
+const BZ0 := -26.5
+const BZ1 := -14.5
+const BOILER_H := 7.0
+const PASSAGE_H := 3.0
+## Where the boiler stands.
+const BOILER := Vector3(36.0, 0, -22.0)
 
 
 func _level_name() -> String:
@@ -32,21 +42,66 @@ func _level_name() -> String:
 
 func _describe() -> void:
 	_detail_inside = AABB(Vector3(-HX - 0.5, 0, -HZ - 0.5), Vector3(HX * 2.0 + 12.0, RIDGE + 1.0, HZ * 2.0 + 1.0))
+	# Four zones in a row. The hall and the annex look into each other through
+	# two doorways; the passage has a bend in it, so that neither the annex and
+	# the boiler house nor the passage and the hall are ever in sight of each
+	# other. The selftest checks that with rays.
+	zone("hall", [AABB(Vector3(-HX - 0.6, -1.0, -HZ - 0.6), Vector3(HX * 2.0 + 1.1, 13.0, HZ * 2.0 + 1.2))], ["annex"])
+	zone("annex", [AABB(Vector3(HX + 0.5, -1.0, -HZ - 0.4), Vector3(10.45, 5.0, HZ + 2.85))], ["passage"])
+	zone("passage", [
+		AABB(Vector3(23.3, -1.0, -18.6), Vector3(2.8, 4.6, 6.2)), AABB(Vector3(26.1, -1.0, -18.6), Vector3(2.9, 4.6, 2.8)),
+	], ["boiler"])
+	zone("boiler", [AABB(Vector3(BX0 - 0.4, -1.0, BZ0 - 0.4), Vector3(BX1 - BX0 + 0.8, BOILER_H + 1.5, BZ1 - BZ0 + 0.8))])
 	_shell()
 	_roof()
 	_mezzanine()
 	_crane()
 	_hall_props()
 	_annex()
+	_passage()
+	_boiler_house()
 	_clutter()
+	# The yard and the skyline surround every zone and belong to none.
+	in_zone("")
 	_exterior()
+	by_position()
 	_probes()
 	_dirt()
 	_floor_paint()
+	_route_through()
+
+
+## In by the yard door of the boiler house, through the passage into the
+## annex, down its corridor, the length of the hall and out by the loading
+## door in the west wall.
+func _route_through() -> void:
+	route_start(Vector3(40.2, 0, -17.1), Vector3(30.0, 0, -17.1))
+	# Two behind the boiler, and one that comes running out of the passage.
+	route_zone("boiler", "the boiler house", AABB(Vector3(BX0, 0, BZ0), Vector3(9.2, BOILER_H, BZ1 - BZ0)), [
+		["grunt", Vector3(36.2, 0, -25.2)], ["grunt", Vector3(33.6, 0, -25.2)], ["rusher", Vector3(24.7, 0, -14.4)],
+	])
+	route_checkpoint("passage", "Passage", Vector3(27.6, 0, -17.2), Vector3(24.0, 0, -17.2), AABB(Vector3(23.5, 0, -18.4), Vector3(5.5, PASSAGE_H, 6.0)))
+	# Two come out of the locker room and one in from the hall.
+	route_zone("annex", "the annex", AABB(Vector3(20.56, 0, -12.0), Vector3(9.94, 3.4, 6.7)), [
+		["grunt", Vector3(27.5, 0, -2.6)], ["grunt", Vector3(25.8, 0, -0.6)], ["rusher", Vector3(18.6, 0, -1.2)],
+	])
+	route_checkpoint("corridor", "Corridor", Vector3(22.0, 0, -9.0), Vector3(19.0, 0, -9.0), AABB(Vector3(20.56, 0, -12.0), Vector3(2.94, 3.4, 14.0)))
+	route_zone("hall", "the hall", AABB(Vector3(0.0, 0, -HZ), Vector3(HX, EAVES, HZ * 2.0)), [
+		["grunt", Vector3(7.0, 0, -1.5)], ["grunt", Vector3(3.6, 0, 10.0)], ["grunt", Vector3(1.5, 0, -6.5)], ["rusher", Vector3(5.6, 0, -8.6)],
+	])
+	route_checkpoint("hall", "Hall", Vector3(2.5, 0, 0.0), Vector3(-5.0, 0, 0.0), AABB(Vector3(0.0, 0, -HZ), Vector3(4.0, 4.0, HZ * 2.0)))
+	# The last of them hold the way out: one on the deck, one in front of the door.
+	route_zone("loading_bay", "the loading bay", AABB(Vector3(-HX, 0, -HZ), Vector3(HX, EAVES, HZ * 2.0)), [
+		["grunt", Vector3(-10.3, 0, 6.2)], ["grunt", Vector3(-16.3, 0, 10.2)], ["grunt", Vector3(-15.0, DECK_Y, -8.2)],
+		["rusher", Vector3(-13.5, 0, -9.0)], ["rusher", Vector3(-17.2, 0, -10.2)], ["heavy", Vector3(-17.5, 0, 0.5)],
+	])
+	# Out is out: the level ends a step beyond the door, in the yard.
+	route_exit("Leave by the loading door", AABB(Vector3(-HX - 4.5, -0.3, -4.0), Vector3(3.0, 4.5, 8.0)), "depot", Vector3(-HX, 5.6, 0.0), Vector3.RIGHT)
 
 
 func _shell() -> void:
-	box("floor", Vector3(5.2, -0.25, -0.1), Vector3(52.4, 0.5, 25.8))
+	box("floor", Vector3(-0.25, -0.25, -0.1), Vector3(41.5, 0.5, 25.8))
+	dust(AABB(Vector3(-HX, 0.2, -HZ), Vector3(HX * 2.0, 8.0, HZ * 2.0)), 4000)
 
 	# South wall: tall windows the evening sun comes through.
 	var south: Array = []
@@ -63,9 +118,10 @@ func _shell() -> void:
 		_mullions(Vector3(x, 6.2, -HZ - 0.25), 3.0, 1.6, true, 1.0)
 	wall("brick", true, -HZ - 0.25, 0.5, -HX - 0.5, HX + 0.5, 0.0, EAVES, north)
 
-	# West wall with the closed loading door.
+	# West wall with the loading door, which is the way out and stays shut
+	# until the hall is cleared.
 	wall("brick", false, -HX - 0.25, 0.5, -HZ, HZ, 0.0, EAVES, [[-2.5, 2.5, 0.0, 5.0]])
-	roller_door(Vector3(-HX - 0.26, 2.29, 0.0), Vector3.RIGHT, Vector2(5.0, 4.58))
+	roller_door(Vector3(-HX - 0.26, 2.29, 0.0), Vector3.RIGHT, Vector2(5.0, 4.58), true)
 	for z in [-2.6, 2.6]:
 		box("steel", Vector3(-HX - 0.05, 2.6, z), Vector3(0.2, 5.2, 0.2))
 	box("steel", Vector3(-HX - 0.05, 5.1, 0.0), Vector3(0.2, 0.25, 5.4))
@@ -78,6 +134,11 @@ func _shell() -> void:
 	box("concrete", Vector3(HX + 0.15, 2.94, 7.0), Vector3(0.7, 0.12, 5.3))
 	box("steel", Vector3(HX + 0.25, 2.68, -9.0), Vector3(0.56, 0.16, 2.4))
 	box("steel", Vector3(HX + 0.25, 3.08, -1.5), Vector3(0.56, 0.16, 3.4))
+	# Each doorway is shut on both sides while a lightmap is baked, right where
+	# the two zones meet: a strip of floor beyond the panel would lie in the sun.
+	for x: float in [HX + 0.49, HX + 0.51]:
+		bake_blocker(Vector3(x, 1.35, -9.0), Vector3(0.02, 2.7, 2.2))
+		bake_blocker(Vector3(x, 1.55, -1.5), Vector3(0.02, 3.1, 3.2))
 
 	# Gable ends.
 	var gable := PackedVector2Array([Vector2(-HZ - 0.5, EAVES), Vector2(HZ + 0.5, EAVES), Vector2(0, RIDGE)])
@@ -400,8 +461,9 @@ func _hall_props() -> void:
 
 ## Storage tank of three welded courses under a dished head, on a concrete
 ## plinth. Seen from above, the manhole faces `yaw_deg` (0 looks along +Z) and
-## the outlet and the caged ladder sit that many degrees round from it.
-func _tank(at: Vector3, yaw_deg: float, outlet_deg: float, ladder_deg := NAN) -> void:
+## the outlet and the caged ladder sit that many degrees round from it. The
+## line from its head runs north to a header at `header_z`.
+func _tank(at: Vector3, yaw_deg: float, outlet_deg: float, ladder_deg := NAN, header_z := HEADER_Z) -> void:
 	var shell := "tank"
 	var r := 1.25
 	var facing := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
@@ -490,7 +552,7 @@ func _tank(at: Vector3, yaw_deg: float, outlet_deg: float, ladder_deg := NAN) ->
 	_turned(RUST, Vector3(0, 4.84, 0), Vector3.UP, PackedVector2Array([
 		Vector2(0.15, 0), Vector2(0.15, 0.2), Vector2(0.25, 0.2), Vector2(0.25, 0.23), Vector2(0, 0.23),
 	]), 20)
-	var run := HEADER_Z - at.z
+	var run := header_z - at.z
 	_line(RUST, [
 		Vector3(0, 4.95, 0), Vector3(0, 5.06, 0), Vector3(0, 5.21, -0.04), Vector3(0, 5.32, -0.15),
 		Vector3(0, 5.36, -0.3), Vector3(0, 5.36, -0.7), Vector3(0, 5.36, run),
@@ -837,7 +899,8 @@ func _annex() -> void:
 	var z0 := -HZ
 	var z1 := 2.0
 	var height := 3.4
-	wall(WALL, true, z0 - 0.2, 0.4, x0, x1 + 0.4, 0.0, height, [])
+	box("floor", Vector3(25.7, -0.25, -5.0), Vector3(10.4, 0.5, 14.8))
+	wall(WALL, true, z0 - 0.2, 0.4, x0, x1 + 0.4, 0.0, height, [[23.9, 25.5, 0.0, 2.2]])
 	wall(WALL, false, x1 + 0.2, 0.4, z0, z1, 0.0, height, [])
 	wall(WALL, true, z1 + 0.2, 0.4, x0, x1 + 0.4, 0.0, height, [[25.5, 29.0, 1.1, 2.6]])
 	_mullions(Vector3(27.25, 1.85, z1 + 0.2), 3.5, 1.5, true, 0.875)
@@ -850,6 +913,10 @@ func _annex() -> void:
 	wall(WALL, true, -5.2, 0.2, 23.7, x1, 0.0, height, [])
 	_door(-9.0, 95.0, 166.0, "1")
 	_door(-2.0, 100.0, 168.0, "2")
+	# The door to the passage, in the north wall of the storeroom: its leaves
+	# stand open against the walls of the passage.
+	_doorway(Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(24.7, 0, z0 - 0.2)), 0.4, 97.0, 86.0)
+	bake_blocker(Vector3(24.7, 1.15, z0 - 0.39), Vector3(1.8, 2.3, 0.02))
 	_corridor_services(z0, z1, height)
 	_notice_board(Vector3(x0 + 0.06, 1.62, -4.4))
 
@@ -882,26 +949,36 @@ func _annex() -> void:
 ## are how far the north leaf and the south leaf have swung. The plate on the
 ## corridor wall carries `number`.
 func _door(z: float, north_deg: float, south_deg: float, number: String) -> void:
-	var wall_x := 23.6
+	_doorway(Transform3D(Basis(), Vector3(23.6, 0, z)), 0.2, north_deg, south_deg, number)
+
+
+## Double steel doors in a doorway 1.6 m wide. `frame` stands on the floor in
+## the middle of the wall, with the wall along its Z and its X pointing the
+## way the leaves swing; `thick` is how thick the wall is. The angles are how
+## far the leaf on the -Z side and the one on the +Z side have swung, 0 for
+## shut. With a `number`, a plate beside the door on the other side carries it.
+func _doorway(frame: Transform3D, thick: float, first_deg: float, second_deg: float, number := "") -> void:
 	var half := 0.8
 	var top := 2.2
 	# A frame of folded steel lines the opening, a little proud of the wall.
 	for side: float in [-1.0, 1.0]:
-		box("door", Vector3(wall_x, top * 0.5, z + side * (half - 0.025)), Vector3(0.26, top, 0.05), Vector3.ZERO, NO_COLLIDE)
-	box("door", Vector3(wall_x, top - 0.025, z), Vector3(0.26, 0.05, half * 2.0 - 0.1), Vector3.ZERO, NO_COLLIDE)
-	var thick := 0.045
+		_local_box("door", frame, Vector3(0, top * 0.5, side * (half - 0.025)), Vector3(thick + 0.06, top, 0.05), NO_COLLIDE)
+	_local_box("door", frame, Vector3(0, top - 0.025, 0), Vector3(thick + 0.06, 0.05, half * 2.0 - 0.1), NO_COLLIDE)
+	var leaf := 0.045
 	for side: float in [-1.0, 1.0]:
-		var swing := deg_to_rad(north_deg if side < 0.0 else south_deg)
+		var swing := deg_to_rad(first_deg if side < 0.0 else second_deg)
 		# From the hinge to the free edge: along the wall when the leaf is shut.
 		var along := Vector3(sin(swing), 0.0, -side * cos(swing))
 		# The hinges sit on the outside of the frame, so that an open leaf
 		# stands clear of the doorway: the way through is no wider than the
 		# robots need.
-		var hinge := Vector3(wall_x + 0.13 + thick * 0.5, 0.0, z + side * (half + thick * 0.5 + 0.003))
-		_leaf(Transform3D(Basis(along, Vector3.UP, along.cross(Vector3.UP)), hinge), half - 0.055, thick)
-	var plate := Vector3(wall_x - 0.1, 1.62, z + half + 0.24)
-	box("bare_steel", plate - Vector3(0.002, 0, 0), Vector3(0.004, 0.13, 0.17), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	label(number, plate - Vector3(0.004, 0, 0), Vector3.LEFT, 0.09, Color(0.04, 0.04, 0.04), 0.01)
+		var hinge := Vector3(thick * 0.5 + 0.03 + leaf * 0.5, 0.0, side * (half + leaf * 0.5 + 0.003))
+		_leaf(frame * Transform3D(Basis(along, Vector3.UP, along.cross(Vector3.UP)), hinge), half - 0.055, leaf)
+	if number == "":
+		return
+	var plate := Vector3(-thick * 0.5, 1.62, half + 0.24)
+	_local_box("bare_steel", frame, plate - Vector3(0.002, 0, 0), Vector3(0.004, 0.13, 0.17), DETAIL | NO_COLLIDE)
+	label(number, frame * (plate - Vector3(0.004, 0, 0)), frame.basis * Vector3.LEFT, 0.09, Color(0.04, 0.04, 0.04), 0.01)
 
 
 ## One leaf of a steel door. `leaf` has the foot of its hinge edge for origin,
@@ -1029,11 +1106,350 @@ func _notice_board(at: Vector3) -> void:
 		_box("enamel_red" if i % 3 == 0 else "bare_steel", xf * Transform3D(Basis(), Vector3(0.003, paper.y * 0.5 - 0.015, 0)), Vector3(0.005, 0.009, 0.009), small)
 
 
+## The way from the storeroom to the boiler house: north out of the annex,
+## then east. With the bend in it, nobody in the annex looks into the boiler
+## house or the other way round, so only one of the two is ever drawn.
+func _passage() -> void:
+	var height := PASSAGE_H
+	# Two legs, each 2.4 m wide: north from the storeroom, then east.
+	box("floor", Vector3(24.7, -0.25, -15.5), Vector3(2.8, 0.5, 6.2))
+	box("floor", Vector3(27.55, -0.25, -17.2), Vector3(2.9, 0.5, 2.8))
+	box("concrete", Vector3(24.7, height + 0.125, -15.5), Vector3(2.8, 0.25, 6.2))
+	box("concrete", Vector3(27.55, height + 0.125, -17.2), Vector3(2.9, 0.25, 2.8))
+	wall(WALL, false, 23.4, 0.2, -18.6, -12.4, 0.0, height, [])
+	wall(WALL, true, -18.5, 0.2, 23.5, 29.0, 0.0, height, [])
+	wall(WALL, false, 26.0, 0.2, -15.8, -12.4, 0.0, height, [])
+	wall(WALL, true, -15.9, 0.2, 25.9, 29.0, 0.0, height, [])
+	# Shut at both ends while its lightmap is baked, and the boiler house at
+	# its side of the door.
+	bake_blocker(Vector3(24.7, 1.55, -12.41), Vector3(2.6, 3.1, 0.02))
+	bake_blocker(Vector3(28.99, 1.55, -17.2), Vector3(0.02, 3.1, 2.6))
+	bake_blocker(Vector3(29.01, 1.15, -17.1), Vector3(0.02, 2.3, 1.8))
+
+	tube(Vector3(24.7, height - 0.08, -14.2), false, true, true, 5.0)
+	tube(Vector3(27.4, height - 0.08, -17.2), true, true, true, 4.5)
+	# Conduit along the ceiling from one fitting to the next, and a pipe that
+	# follows the passage round the corner above head height.
+	var small := DETAIL | NO_COLLIDE
+	hose("galvanised", PackedVector3Array([
+		Vector3(24.3, height - 0.03, -12.5), Vector3(24.3, height - 0.03, -17.0), Vector3(24.45, height - 0.03, -17.6), Vector3(25.1, height - 0.03, -17.75), Vector3(28.9, height - 0.03, -17.75),
+	]), 0.012, small, 6)
+	hose("pipe", PackedVector3Array([
+		Vector3(23.62, 2.45, -12.5), Vector3(23.62, 2.45, -17.7), Vector3(23.7, 2.45, -18.15), Vector3(24.2, 2.45, -18.28), Vector3(28.95, 2.45, -18.28),
+	]), 0.05, NO_COLLIDE, 10)
+	for at: Vector3 in [Vector3(23.62, 2.45, -13.6), Vector3(23.62, 2.45, -16.0), Vector3(25.8, 2.45, -18.28), Vector3(28.2, 2.45, -18.28)]:
+		box("dark_steel", at + Vector3(0, 0.07, 0), Vector3(0.14, 0.03, 0.14), Vector3.ZERO, small)
+	# Nothing stands in the way through: what there is, is in the far corner.
+	place("korean_fire_extinguisher_01", Vector3(23.7, 0, -17.6), 90)
+	place("cardboard_box_01", Vector3(24.0, 0, -18.1), 25)
+	drop("plastic_broom", Vector3(25.8, 0, -13.4), -90)
+
+
+## The boiler house: a tall room of brick under a concrete roof, with the
+## boiler along its north side, the feed tank and its pumps by the west wall
+## and the switchgear on the south wall. Its windows face north and east, so
+## the evening sun never comes in; what light there is comes from two lamps
+## and the fire.
+func _boiler_house() -> void:
+	var mid := Vector3((BX0 + BX1) * 0.5, 0, (BZ0 + BZ1) * 0.5)
+	var wide := BX1 - BX0
+	var deep := BZ1 - BZ0
+	box("floor", mid + Vector3(0, -0.25, 0), Vector3(wide + 0.8, 0.5, deep + 0.8))
+	box("concrete", mid + Vector3(0, BOILER_H + 0.15, 0), Vector3(wide + 0.8, 0.3, deep + 0.8))
+	# West wall with the door to the passage, east wall with the door to the
+	# yard, which is shut, and a window over the boiler's flue end.
+	wall("brick", false, BX0 - 0.2, 0.4, BZ0 - 0.4, BZ1 + 0.4, 0.0, BOILER_H, [[-17.9, -16.3, 0.0, 2.2]])
+	wall("brick", false, BX1 + 0.2, 0.4, BZ0 - 0.4, BZ1 + 0.4, 0.0, BOILER_H, [[-17.9, -16.3, 0.0, 2.2], [-21.5, -18.5, 4.4, 6.2]])
+	wall("brick", true, BZ0 - 0.2, 0.4, BX0, BX1, 0.0, BOILER_H, [[31.5, 38.5, 4.4, 6.2]])
+	wall("brick", true, BZ1 + 0.2, 0.4, BX0, BX1, 0.0, BOILER_H, [])
+	_mullions(Vector3(35.0, 5.3, BZ0 - 0.2), 7.0, 1.8, true, 1.0)
+	_mullions(Vector3(BX1 + 0.2, 5.3, -20.0), 3.0, 1.8, false, 1.0)
+	box("concrete", Vector3(35.0, 4.34, BZ0 - 0.1), Vector3(7.3, 0.12, 0.6))
+	box("concrete", Vector3(BX1 + 0.1, 4.34, -20.0), Vector3(0.6, 0.12, 3.3))
+	_doorway(Transform3D(Basis(), Vector3(BX0 - 0.2, 0, -17.1)), 0.4, 108.0, 163.0)
+	_doorway(Transform3D(Basis(Vector3.UP, PI), Vector3(BX1 + 0.2, 0, -17.1)), 0.4, 0.0, 0.0)
+	# Steel behind the panes of the yard door: nobody looks in from outside.
+	box("door", Vector3(BX1 + 0.3, 1.1, -17.1), Vector3(0.04, 2.2, 1.6), Vector3.ZERO, NO_COLLIDE)
+	_collide_box(Transform3D(Basis(), Vector3(BX1 + 0.2, 1.1, -17.1)), Vector3(0.4, 2.2, 1.6), "metal")
+	# Concrete plinth along the walls and beams under the roof.
+	for z: float in [BZ0 + 0.04, BZ1 - 0.04]:
+		box("concrete", Vector3(mid.x, 0.5, z), Vector3(wide, 1.0, 0.08), Vector3.ZERO, NO_COLLIDE)
+	for x: float in [BX0 + 0.04, BX1 - 0.04]:
+		box("concrete", Vector3(x, 0.5, -22.2), Vector3(0.08, 1.0, 8.6), Vector3.ZERO, NO_COLLIDE)
+		box("concrete", Vector3(x, 0.5, -15.4), Vector3(0.08, 1.0, 1.8), Vector3.ZERO, NO_COLLIDE)
+	for x: float in [32.4, 35.4, 38.4]:
+		box("concrete", Vector3(x, BOILER_H - 0.25, mid.z), Vector3(0.3, 0.5, deep), Vector3.ZERO, NO_COLLIDE)
+	dust(AABB(Vector3(BX0, 0.2, BZ0), Vector3(wide, BOILER_H - 0.6, deep)), 1400)
+
+	_boiler(BOILER)
+	# The feed tank stands in the corner behind the boiler, its two pumps by
+	# the west wall; the line from the pumps crosses to the boiler overhead.
+	var tank := Vector3(39.85, 0, -25.0)
+	_tank(tank, 25, -115, NAN, BZ0 + 0.25)
+	var facing := Basis(Vector3.UP, deg_to_rad(25.0))
+	label("T3", tank + Vector3(0, 3.0, 0) + facing * Vector3(0, 0, 1.25), facing * Vector3.BACK, 0.5, Color(0.06, 0.06, 0.06), 0.2)
+	var pumps: Array[float] = [-23.4, -21.7]
+	for z in pumps:
+		_pump(Vector3(29.97, 0, z), 0)
+	_m = Transform3D()
+	for z in pumps:
+		# Suction comes up out of the floor, the discharge goes up the wall.
+		_line(RUST, [Vector3(29.97, -0.05, z + 1.15), Vector3(29.97, 0.25, z + 1.1), Vector3(29.97, 0.44, z + 0.95), Vector3(29.97, 0.44, z + 0.7)], 0.05, 8)
+		_line(RUST, [Vector3(29.97, 1.0, z + 0.39), Vector3(29.97, 2.4, z + 0.39), Vector3(30.05, 2.65, z + 0.39), Vector3(30.5, 2.7, z + 0.39)], 0.045, 8)
+		_flange(RUST, Vector3(29.97, 1.6, z + 0.39), Vector3.UP, 0.045)
+	_line(RUST, [
+		Vector3(30.5, 2.7, -23.1), Vector3(30.5, 2.7, -21.2), Vector3(30.65, 2.7, -20.9), Vector3(31.2, 2.7, -20.8),
+		Vector3(33.2, 2.7, -20.8), Vector3(33.75, 2.6, -20.85), Vector3(33.95, 2.3, -21.0),
+	], 0.045, 8)
+	_flange(RUST, Vector3(32.2, 2.7, -20.8), Vector3.RIGHT, 0.045)
+	# The header on the north wall that the tank is filled from.
+	_bar(RUST, Vector3(38.75, 5.36, BZ0 + 0.25), Vector3(BX1 - 0.02, 5.36, BZ0 + 0.25), 0.14, 16)
+	_bar(RUST, Vector3(38.71, 5.36, BZ0 + 0.25), Vector3(38.75, 5.36, BZ0 + 0.25), 0.25, 20)
+	_flange(RUST, Vector3(40.8, 5.36, BZ0 + 0.25), Vector3.RIGHT, 0.14)
+
+	# Switchgear and a board of gauges on the south wall, a cupboard beside them.
+	cabinets(Vector3(37.6, 0, BZ1 - 0.5), 180)
+	_gauge_board(Vector3(34.6, 1.75, BZ1), Vector3.FORWARD)
+	cupboard("machine", Vector3(32.2, 0, BZ1 - 0.32), 180, Vector3(0.98, 1.9, 0.6))
+	tube(Vector3(35.4, 2.75, BZ1 - 0.3), true, true, true, 5.5)
+	for x: float in [-0.5, 0.5]:
+		box("steel", Vector3(35.4 + x, 2.79, BZ1 - 0.11), Vector3(0.04, 0.04, 0.22), Vector3.ZERO, NO_COLLIDE)
+
+	# Two lamps hang from the beams; the one over the way through still works.
+	lamp(Vector3(33.6, 6.1, -18.2), BOILER_H, true, true)
+	lamp(Vector3(38.3, 6.1, -18.6), BOILER_H, false, false)
+	# And a bulb on the east wall, or the corner with the tank would be black.
+	bulb(Vector3(BX1 - 0.25, 3.4, -23.0), true)
+	# What stands about: fuel for the burner, crates, the things of whoever
+	# looked after the boiler.
+	for at: Vector3 in [Vector3(32.5, 0, -19.3), Vector3(33.15, 0, -18.95), Vector3(40.9, 0, -19.5)]:
+		fuel(at)
+	barrel(Vector3(40.9, 0, -20.3))
+	barrel(Vector3(40.3, 0, -20.6))
+	crates(Vector3(37.0, 0, -19.3), 2)
+	pallet(Vector3(33.7, 0, -15.3), 4.0, 3)
+	barrel(Vector3(29.9, 0, -15.1))
+	place("metal_jerrycan", Vector3(29.75, 0, -20.5), 30)
+	place("metal_jerrycan", Vector3(29.8, 0, -20.05), -50)
+	place("tool_cart", Vector3(40.4, 0, -22.4), 80)
+	place("wooden_ladder", Vector3(41.0, 0, -15.6), 90, true)
+	place("korean_fire_extinguisher_01", Vector3(BX0 + 0.2, 0, -18.4), 90)
+	place("korean_fire_extinguisher_01", Vector3(BX1 - 0.2, 0, -18.4), -90)
+	mount("fire_alarm", Vector3(BX0, 1.4, -18.9), 90, true)
+	place("plastic_monobloc_chair_01", Vector3(35.0, 0, -15.6), 170)
+	drop("oil_tin", Vector3(30.7, 0, -20.6), 80)
+	place("trashbag", Vector3(39.9, 0, -15.0), 40)
+	prop("water_manhole_cover", Transform3D(Basis(), Vector3(34.6, -0.055, -19.4)))
+
+
+## Fire-tube boiler lying on two saddles: the burner at its west end, the
+## smokebox and the flue up through the roof at the other. `at` is the middle
+## of its footprint.
+func _boiler(at: Vector3) -> void:
+	_m = Transform3D(Basis(), at)
+	var r := 1.3
+	var half := 2.8
+	var axis := 1.95
+	var shell := "tank"
+	_collide_box(_m * Transform3D(Basis(), Vector3(0.35, 1.65, 0)), Vector3(half * 2.0 + 0.9, 3.3, r * 2.0 + 0.1), "metal")
+	_collide_box(_m * Transform3D(Basis(), Vector3(-half - 0.6, 1.5, 0.1)), Vector3(1.0, 1.3, 1.3), "metal")
+
+	# A plinth, the saddles, the shell with its dished end and the straps
+	# round the lagging.
+	_plate("concrete", Vector3(0, 0.1, 0), Vector3(half * 2.0 + 0.5, 0.2, 2.5))
+	for x: float in [-1.8, 1.8]:
+		_block(IRON, Vector3(x, 0.62, 0), Vector3(0.36, 0.84, 2.3), 0.03)
+	_turned(shell, Vector3(-half, axis, 0), Vector3.RIGHT, PackedVector2Array([
+		Vector2(r, 0), Vector2(r, half * 2.0 - 0.3), Vector2(r - 0.04, half * 2.0 - 0.16), Vector2(r - 0.16, half * 2.0 - 0.06),
+		Vector2(r - 0.4, half * 2.0 + 0.02), Vector2(0.5, half * 2.0 + 0.09), Vector2(0, half * 2.0 + 0.11),
+	]), 48, true)
+	for x: float in [-2.25, -0.75, 0.75, 2.25]:
+		_turned(BARE, Vector3(x - 0.035, axis, 0), Vector3.RIGHT, PackedVector2Array([
+			Vector2(r, 0), Vector2(r + 0.012, 0), Vector2(r + 0.012, 0.07), Vector2(r, 0.07),
+		]), 48)
+
+	# The front: a plate bolted round its rim, the furnace door low down with
+	# the burner on it, gauges above.
+	var front := Vector3(-half, axis, 0)
+	_turned(IRON, front, Vector3.LEFT, PackedVector2Array([
+		Vector2(r + 0.05, -0.06), Vector2(r + 0.05, 0.06), Vector2(r - 0.02, 0.1), Vector2(0, 0.1),
+	]), 48)
+	_bolt_circle(front + Vector3(-0.1, 0, 0), Vector3.LEFT, r - 0.12, 24)
+	var door := front + Vector3(-0.1, -0.5, 0)
+	_turned(IRON, door, Vector3.LEFT, PackedVector2Array([
+		Vector2(0.52, 0), Vector2(0.52, 0.07), Vector2(0.46, 0.1), Vector2(0.22, 0.1),
+	]), 32)
+	_bolt_circle(door + Vector3(-0.07, 0, 0), Vector3.LEFT, 0.49, 10)
+	for y: float in [-0.25, 0.25]:
+		_block(IRON, door + Vector3(-0.07, y, 0.56), Vector3(0.1, 0.09, 0.16), 0.02)
+	_turned(BLUE, door + Vector3(-0.08, 0, 0), Vector3.LEFT, PackedVector2Array([
+		Vector2(0.22, 0), Vector2(0.22, 0.28), Vector2(0.28, 0.34), Vector2(0.28, 0.82), Vector2(0.22, 0.88), Vector2(0, 0.88),
+	]), 24)
+	# The fan that blows it, with its motor, beside the burner.
+	var fan := door + Vector3(-0.62, 0.08, 0.36)
+	_turned(BLUE, fan, Vector3.BACK, PackedVector2Array([Vector2(0, 0), Vector2(0.34, 0), Vector2(0.34, 0.2), Vector2(0, 0.2)]), 24)
+	_motor(BLUE, fan + Vector3(0, 0, 0.2), Vector3.BACK, 0.13, 0.36, false)
+	_block(BLUE, fan + Vector3(0.0, 0.42, 0.1), Vector3(0.3, 0.26, 0.2), 0.03)
+	_block(IRON, fan + Vector3(0.0, 0.57, 0.1), Vector3(0.32, 0.04, 0.22), 0.008)
+	_line(RUBBER, [fan + Vector3(0, 0.1, 0.42), fan + Vector3(0.05, -0.2, 0.5), fan + Vector3(0.3, -0.62, 0.45), fan + Vector3(0.62, -0.7, 0.3)], 0.014)
+	# Fuel line down the front to the floor.
+	_line(RUST, [door + Vector3(-0.5, -0.28, -0.1), door + Vector3(-0.5, -0.4, -0.5), door + Vector3(-0.42, -0.9, -0.85), door + Vector3(-0.42, -1.5, -0.9)], 0.025, 8)
+	_gauge(front + Vector3(-0.1, 0.72, -0.34), Vector3.LEFT, 0.11)
+	_gauge(front + Vector3(-0.1, 0.72, 0.34), Vector3.LEFT, 0.09)
+	# The water level, in a glass between two cocks.
+	for y: float in [0.2, 0.62]:
+		_bar(BARE, front + Vector3(-0.08, y, 0.86), front + Vector3(-0.22, y, 0.86), 0.016, 8)
+		_block(BRASS, front + Vector3(-0.22, y, 0.86), Vector3(0.05, 0.07, 0.05), 0.012)
+	_bar(BARE, front + Vector3(-0.22, 0.2, 0.86), front + Vector3(-0.22, 0.62, 0.86), 0.011, 8)
+	_block(BRASS, front + Vector3(-0.103, 0.3, -0.8), Vector3(0.006, 0.2, 0.3), 0.003)
+	wall_decal("warning_1", _m * (front + Vector3(-0.105, 0.72, 0.0)), Vector3.LEFT, 0.22, 0.22, Color.WHITE, 0.04)
+	# Where the fire shows: a port in the furnace door, and the slots of the
+	# air register round the burner.
+	_part = DETAIL | NO_COLLIDE
+	_turned(BRASS, door + Vector3(-0.1, 0.34, -0.2), Vector3.LEFT, PackedVector2Array([Vector2(0.06, 0), Vector2(0.06, 0.02), Vector2(0.045, 0.02)]), 16)
+	_turned("emissive_warm", door + Vector3(-0.1, 0.34, -0.2), Vector3.LEFT, PackedVector2Array([Vector2(0.045, 0.012), Vector2(0, 0.012)]), 16)
+	for i in 6:
+		var turn := Basis(Vector3.RIGHT, TAU * (i + 0.5) / 6.0)
+		_local_box("emissive_warm", _m * Transform3D(turn, door + Vector3(-0.46, 0, 0)), Vector3(0, 0.283, 0), Vector3(0.12, 0.004, 0.08), DETAIL | NO_COLLIDE)
+	_part = NO_COLLIDE
+
+	# On top: a manhole, two safety valves and the stop valve the steam main
+	# leaves by, which runs up and off through the south wall.
+	var top := axis + r - 0.02
+	_turned(shell, Vector3(-1.5, top, 0), Vector3.UP, PackedVector2Array([
+		Vector2(0.3, 0), Vector2(0.3, 0.16), Vector2(0.37, 0.16), Vector2(0.37, 0.2), Vector2(0, 0.2),
+	]), 32)
+	_bolt_circle(Vector3(-1.5, top + 0.2, 0), Vector3.UP, 0.335, 12)
+	for x: float in [1.0, 1.55]:
+		_turned(BRASS, Vector3(x, top, 0), Vector3.UP, PackedVector2Array([
+			Vector2(0.07, 0), Vector2(0.07, 0.2), Vector2(0.1, 0.2), Vector2(0.1, 0.34), Vector2(0.05, 0.4), Vector2(0.05, 0.52), Vector2(0, 0.52),
+		]), 16)
+		_lever(Vector3(x, top + 0.52, 0), Vector3.UP, Vector3.BACK, 0.3)
+	var stop := Vector3(-0.2, top + 0.5, 0)
+	_turned(RUST, Vector3(-0.2, top, 0), Vector3.UP, PackedVector2Array([
+		Vector2(0.11, 0), Vector2(0.11, 0.3), Vector2(0.2, 0.3), Vector2(0.2, 0.33), Vector2(0, 0.33),
+	]), 20)
+	_block(IRON, stop, Vector3(0.36, 0.38, 0.36), 0.06)
+	_bar(BARE, stop + Vector3(0, 0, 0.16), stop + Vector3(0, 0, 0.5), 0.018)
+	_handwheel(stop + Vector3(0, 0, 0.46), Vector3.BACK, 0.2)
+	var main := 5.85
+	var south := BZ1 - at.z
+	_line(RUST, [
+		stop + Vector3(0, 0.15, 0), Vector3(-0.2, main - 0.5, 0), Vector3(-0.2, main - 0.15, 0.12), Vector3(-0.2, main, 0.45), Vector3(-0.2, main, south + 0.1),
+	], 0.11, 14)
+	for z: float in [2.6, 5.4]:
+		_flange(RUST, Vector3(-0.2, main, z), Vector3.BACK, 0.11)
+	for z: float in [1.6, 4.4, 7.0]:
+		_part = DETAIL | NO_COLLIDE
+		_bar(IRON, Vector3(-0.2, main + 0.11, z), Vector3(-0.2, BOILER_H - at.y, z), 0.008, 6)
+		_part = NO_COLLIDE
+
+	# The smokebox at the back and the flue out of it.
+	_block(IRON, Vector3(half + 0.42, axis + 0.1, 0), Vector3(0.72, 2.3, 2.1), 0.1)
+	_block(IRON, Vector3(half + 0.79, axis - 0.2, 0), Vector3(0.03, 0.9, 0.7), 0.01)
+	_lever(Vector3(half + 0.805, axis - 0.2, 0.2), Vector3.RIGHT, Vector3.DOWN, 0.16)
+	var flue := BOILER_H - at.y - (axis + 1.2)
+	_turned("galvanised", Vector3(half + 0.42, axis + 1.2, 0), Vector3.UP, PackedVector2Array([Vector2(0.36, 0), Vector2(0.36, flue)]), 24)
+	for y: float in [0.5, 1.7, 2.9]:
+		_turned("galvanised", Vector3(half + 0.42, axis + 1.2 + y, 0), Vector3.UP, PackedVector2Array([
+			Vector2(0.36, 0), Vector2(0.385, 0), Vector2(0.385, 0.05), Vector2(0.36, 0.05),
+		]), 24)
+
+	# Blow-down from the bottom, through a valve and into the floor.
+	_line(RUST, [Vector3(-1.1, 0.75, r - 0.1), Vector3(-1.1, 0.6, r + 0.2), Vector3(-1.1, 0.45, r + 0.4), Vector3(-1.1, -0.05, r + 0.42)], 0.045, 10)
+	_block(IRON, Vector3(-1.1, 0.5, r + 0.37), Vector3(0.16, 0.16, 0.16), 0.03)
+	_handwheel(Vector3(-1.1, 0.5, r + 0.5), Vector3.BACK, 0.08)
+	# What it is called, on the side the room sees it from.
+	label("K1", _m * Vector3(0.75, axis + 0.25, r), Vector3.BACK, 0.5, Color(0.06, 0.06, 0.06), 0.25)
+	var plate := Vector3(-1.5, axis + 0.1, r + 0.02)
+	_block(BRASS, plate, Vector3(0.3, 0.2, 0.006), 0.003)
+
+	# The fire, as far as it lights the floor in front of the burner.
+	var glow := OmniLight3D.new()
+	glow.name = "Fire"
+	glow.position = _m * (door + Vector3(-1.15, 0.1, 0.0))
+	glow.light_color = Color(1.0, 0.5, 0.2)
+	glow.light_energy = 2.2
+	glow.omni_range = 4.5
+	glow.omni_attenuation = 1.4
+	glow.light_bake_mode = Light3D.BAKE_DYNAMIC
+	_add(glow, _group("Lights", glow.position))
+
+
+## Centrifugal pump with its motor on one base: the motor behind, the casing
+## with its inlet in front and its outlet pointing up. `at` is the middle of
+## the base and `yaw_deg` the way the inlet faces (0 looks along +Z).
+func _pump(at: Vector3, yaw_deg: float) -> void:
+	_m = Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	_collide_box(_m * Transform3D(Basis(), Vector3(0, 0.42, 0)), Vector3(0.6, 0.84, 1.5), "metal")
+	_plate("concrete", Vector3(0, 0.06, 0), Vector3(0.74, 0.12, 1.62))
+	_block(IRON, Vector3(0, 0.15, 0), Vector3(0.5, 0.06, 1.46), 0.01)
+	var shaft := 0.44
+	_motor(BLUE, Vector3(0, shaft, -0.68), Vector3.BACK, 0.17, 0.56)
+	# A guard over the coupling, the bearing housing, and the casing.
+	_block(YELLOW, Vector3(0, shaft, -0.01), Vector3(0.26, 0.26, 0.2), 0.06)
+	_turned(GREEN, Vector3(0, shaft, 0.09), Vector3.BACK, PackedVector2Array([
+		Vector2(0, 0), Vector2(0.1, 0), Vector2(0.1, 0.2), Vector2(0.2, 0.2), Vector2(0.27, 0.24), Vector2(0.27, 0.36),
+		Vector2(0.2, 0.4), Vector2(0.09, 0.4), Vector2(0.09, 0.52), Vector2(0, 0.52),
+	]), 24)
+	_block(GREEN, Vector3(0, 0.26, 0.19), Vector3(0.2, 0.2, 0.12), 0.02)
+	_flange(RUST, Vector3(0, shaft, 0.6), Vector3.BACK, 0.07)
+	_bar(RUST, Vector3(0, shaft + 0.2, 0.39), Vector3(0, shaft + 0.56, 0.39), 0.055)
+	_flange(RUST, Vector3(0, shaft + 0.5, 0.39), Vector3.UP, 0.055)
+	_bolt_circle(Vector3(0, shaft, 0.33), Vector3.FORWARD, 0.235, 8)
+
+
+## Pressure gauge: a brass case with a white dial and a hand. `at` lies on the
+## surface it sits on and `out` is the normal of that surface.
+func _gauge(at: Vector3, out: Vector3, radius: float) -> void:
+	_turned(BRASS, at, out, PackedVector2Array([
+		Vector2(radius, 0), Vector2(radius, 0.04), Vector2(radius * 0.88, 0.045), Vector2(radius * 0.88, 0.03),
+	]), 20)
+	var part := _part
+	_part = DETAIL | NO_COLLIDE
+	_turned("paper", at, out, PackedVector2Array([Vector2(radius * 0.88, 0.03), Vector2(0, 0.03)]), 20)
+	var plane := _up_along(out)
+	var hand := (plane.x * 0.6 + plane.z * 0.8) * radius * 0.6
+	_bar(IRON, at + out * 0.034 - hand * 0.2, at + out * 0.034 + hand, radius * 0.035, 4)
+	_bar(IRON, at + out * 0.03, at + out * 0.04, radius * 0.1, 8)
+	_part = part
+
+
+## Board of gauges with the pipes that come up to them; `at` is the middle of
+## its back on a wall that faces `out`.
+func _gauge_board(at: Vector3, out: Vector3) -> void:
+	_m = Transform3D()
+	var across := Vector3.UP.cross(out)
+	var size := Vector2(1.7, 0.9)
+	_block(GREEN, at + out * 0.02, Vector3(size.x, size.y, 0.04) if absf(out.z) > 0.5 else Vector3(0.04, size.y, size.x), 0.008)
+	for i in 5:
+		var spot := at + out * 0.04 + across * (i - 2.0) * 0.32 + Vector3(0, 0.12 if i % 2 == 0 else 0.16, 0)
+		_gauge(spot, out, 0.11 if i % 2 == 0 else 0.085)
+		var foot := at + out * 0.06 + across * (i - 2.0) * 0.32
+		_bar(BARE, foot + Vector3(0, -0.02, 0), foot + Vector3(0, -size.y * 0.5 - 0.25 - i * 0.02, 0), 0.008, 6)
+	for i in 3:
+		var knob := at + out * 0.04 + across * (i - 1.0) * 0.4 + Vector3(0, -0.28, 0)
+		_block(IRON, knob + out * 0.012, Vector3(0.09, 0.12, 0.024) if absf(out.z) > 0.5 else Vector3(0.024, 0.12, 0.09), 0.006)
+		_bar(RED if i == 1 else BARE, knob + out * 0.024, knob + out * 0.05, 0.022, 10)
+
+
 func _exterior() -> void:
 	box("floor", Vector3(5, -0.55, 0), Vector3(160, 1.0, 160), Vector3.ZERO, DETAIL)
 	# Yard wall and a skyline so the windows do not look out on nothing.
 	box("brick", Vector3(5, 1.6, 34), Vector3(110, 3.2, 0.5), Vector3.ZERO, DETAIL)
-	box("brick", Vector3(-50, 1.6, 0), Vector3(0.5, 3.2, 68), Vector3.ZERO, DETAIL)
+	# The west wall has the gate of the yard in it, straight across from the
+	# loading door: what the player sees when that door goes up.
+	for side: float in [-1.0, 1.0]:
+		box("brick", Vector3(-50, 1.6, side * 19.0), Vector3(0.5, 3.2, 30.0), Vector3.ZERO, DETAIL)
+		box("concrete", Vector3(-50, 1.9, side * 3.7), Vector3(0.7, 3.8, 0.7), Vector3.ZERO, DETAIL)
+		box("concrete", Vector3(-50, 3.86, side * 3.7), Vector3(0.9, 0.12, 0.9), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	# The apron in front of the loading door, level with the floor of the hall,
+	# with a post either side of the door to keep lorries off the frame.
+	box("concrete", Vector3(-HX - 5.0, -0.03, 0.0), Vector3(8.0, 0.06, 9.0), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	for z: float in [-3.1, 3.1]:
+		cylinder("steel_yellow", Vector3(-HX - 1.3, 0, z), 0.09, 1.0, DETAIL)
+	container("container_red", Vector3(-HX - 7.5, 0, -8.0), true, DETAIL)
+	container("container_grey", Vector3(-HX - 11.0, 0, 9.5), false, DETAIL)
 	box("brick", Vector3(60, 1.6, 0), Vector3(0.5, 3.2, 68), Vector3.ZERO, DETAIL)
 	box("brick", Vector3(5, 1.6, -34), Vector3(110, 3.2, 0.5), Vector3.ZERO, DETAIL)
 	box("brick", Vector3(34, 5, 52), Vector3(26, 10, 16), Vector3.ZERO, DETAIL | NO_COLLIDE)
@@ -1041,6 +1457,8 @@ func _exterior() -> void:
 	box("concrete", Vector3(52, 7, 14), Vector3(14, 14, 20), Vector3.ZERO, DETAIL | NO_COLLIDE)
 	cylinder("brick", Vector3(42, 0, 50), 2.2, 38.0, DETAIL | NO_COLLIDE, Vector3.ZERO, 1.4, 20)
 	container("container_blue", Vector3(38, 0, 9), false, DETAIL)
+	# The stack of the boiler house, where its flue comes through the roof.
+	cylinder("steel", Vector3(BOILER.x + 3.22, BOILER_H + 0.3, BOILER.z), 0.4, 9.0, DETAIL | NO_COLLIDE, Vector3.ZERO, 0.36, 16)
 
 
 func _probes() -> void:
@@ -1048,6 +1466,8 @@ func _probes() -> void:
 	probe("Corridor", Vector3(22.0, 1.7, -5.0), Vector3(3.0, 3.4, 14.0), Vector3.ZERO)
 	probe("RoomA", Vector3(27.1, 1.7, -8.65), Vector3(6.8, 3.4, 6.7), Vector3(0, 0, 0.8))
 	probe("RoomB", Vector3(27.1, 1.7, -1.55), Vector3(6.8, 3.4, 7.1), Vector3.ZERO)
+	probe("Passage", Vector3(25.0, 1.5, -15.8), Vector3(3.4, 3.0, 5.2), Vector3(-0.3, 0, 1.0))
+	probe("Boiler", Vector3((BX0 + BX1) * 0.5, BOILER_H * 0.5, (BZ0 + BZ1) * 0.5), Vector3(BX1 - BX0, BOILER_H, BZ1 - BZ0), Vector3(-1.5, -1.5, 2.5))
 
 
 func _dirt() -> void:
@@ -1086,6 +1506,20 @@ func _dirt() -> void:
 	wall_decal("grime", Vector3(23.46, 0.5, -5.0), Vector3.LEFT, 13.0, 1.0)
 	floor_decal("stain_2", Vector3(22.0, 0, -8.5), Vector2(2.2, 3.5))
 	floor_decal("stain_1", Vector3(27.5, 0, -8.0), Vector2(3.0, 3.0), 45)
+	# The boiler house: rain under its windows, soot and oil on its floor.
+	for x: float in [32.8, 35.3, 37.6]:
+		wall_decal(_pick("leak"), Vector3(x, 2.9, BZ0 + 0.04), Vector3.BACK, 1.5, 3.2)
+	wall_decal(_pick("leak"), Vector3(BX1 - 0.04, 2.9, -19.6), Vector3.LEFT, 1.6, 3.2)
+	wall_decal("grime", Vector3(35.4, 0.7, BZ1 - 0.1), Vector3.FORWARD, 11.0, 1.4)
+	wall_decal("grime", Vector3(35.4, 0.7, BZ0 + 0.1), Vector3.BACK, 11.0, 1.4)
+	wall_decal("grime", Vector3(BX0 + 0.1, 0.7, -22.5), Vector3.RIGHT, 7.5, 1.4)
+	wall_decal("grime", Vector3(BX1 - 0.1, 0.7, -22.0), Vector3.LEFT, 8.5, 1.4)
+	floor_decal("stain_1", Vector3(32.0, 0, -21.6), Vector2(3.6, 3.0), 30)
+	floor_decal("stain_2", Vector3(30.6, 0, -22.4), Vector2(2.6, 3.4), 80)
+	floor_decal("stain_1", Vector3(36.5, 0, -18.2), Vector2(4.0, 3.2), 150)
+	floor_decal("stain_2", Vector3(39.4, 0, -22.4), Vector2(2.4, 2.4), 10)
+	wall_decal("grime", Vector3(23.52, 0.5, -15.4), Vector3.RIGHT, 5.8, 1.0)
+	floor_decal("stain_2", Vector3(26.8, 0, -17.2), Vector2(3.0, 1.8), 5)
 
 
 ## What makes the place look as if people worked here until yesterday: fire
@@ -1131,9 +1565,23 @@ func _clutter() -> void:
 
 ## Lines from when the hall was in use: an aisle from the loading door to the
 ## annex with a branch to the stairs, borders around the machines, bays along
-## the south wall and hatching where nothing was to be put down.
+## the south wall and hatching where nothing was to be put down. Arrows down
+## the aisle point the way out, which is the way the route goes.
 func _floor_paint() -> void:
-	floor_paint_area(Rect2(-HX, -HZ, HX * 2.0, HZ * 2.0))
+	floor_paint_area(Rect2(-HX, BZ0 - 0.5, BX1 + 0.5 + HX, HZ - BZ0 + 0.5))
+	for x: float in [16.5, 12.6, 1.5, -5.5, -12.5]:
+		floor_arrow(Vector2(x, 1.2 if x == 12.6 else 0.0), Vector2.LEFT)
+	# The way in from the boiler house: across it, round the bend in the
+	# passage, out of the storeroom into the corridor and through the nearer
+	# doorway to the aisle.
+	for at: Vector2 in [Vector2(38.2, -17.1), Vector2(32.6, -17.1), Vector2(27.4, -17.2), Vector2(22.0, -9.0), Vector2(17.4, -9.0)]:
+		floor_arrow(at, Vector2.LEFT)
+	floor_arrow(Vector2(24.7, -14.6), Vector2.DOWN)
+	floor_arrow(Vector2(15.0, -5.6), Vector2(-0.6, 0.8))
+	floor_frame(Rect2(BOILER.x - 4.2, BOILER.z - 1.75, 8.1, 3.5), PAINT_YELLOW, 0.16, PAINT_BLACK)
+	floor_frame(Rect2(29.5, -24.5, 1.0, 3.9), PAINT_YELLOW, 0.16, PAINT_BLACK)
+	floor_hatch(Rect2(BX1 - 2.4, -18.1, 2.3, 2.0))
+	floor_frame(Rect2(BX1 - 2.4, -18.1, 2.3, 2.0))
 	floor_line(Vector2(-16.2, 2.2), Vector2(19.95, 2.2))
 	floor_line(Vector2(-16.2, -2.2), Vector2(3.3, -2.2))
 	floor_line(Vector2(6.7, -2.2), Vector2(19.95, -2.2))

@@ -18,6 +18,10 @@ extends Node
 ## letting it run; several are separated by semicolons, a fifth number scales
 ## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride, 3 shot to pieces,
 ## 4 firing.
+## Poses 5, 6 and 7 are mid-stride to its right, to its left and backwards, 8
+## is the moment before it attacks and 9 the moment it is hit. --enemies=<theme>
+## chooses who the enemies are, see scripts/enemy_themes.gd. --animate keeps
+## what was spawned moving on the spot, to measure what it costs to show.
 ## --shoot=0.02 fires a shot along the view and shows it that many seconds
 ## later: the flash of the weapon in view, the tracer and what the bullet does
 ## to whatever it hits. --shoot=0.3,6,4 fires six shots within four degrees.
@@ -32,6 +36,30 @@ extends Node
 ## view, six degrees wide, to show what the effects cost while they are all
 ## going off. --barrage=1 does the same with an explosion and its fire that
 ## many times a second, nine metres ahead of every view.
+## --only=zones,dust limits --profile to those effects, to measure one thing
+## several times over instead of everything once.
+## --warmup=0 starts measuring a view that many frames after the camera got
+## there instead of after 120. With 0 the slowest frame of a view includes
+## whatever arriving there cost, such as the zones that had to be switched on.
+## --show=Lamp makes a node of that name visible that a level keeps hidden
+## until the game switches it on, such as the lamp over an exit; several are
+## separated by commas.
+## --posted stands the robots of the level's route at their posts, switched
+## off, as the player finds them: to see a view as it is in the game, or to
+## measure what it costs that they stand there.
+## --exit shows the way out of the level as it is once every zone is cleared:
+## the lamp over it on and its door rolled up.
+## --awake=x,y,z is for measuring a fight: it stands the player at that spot,
+## unseen and beyond hurting, and switches on every robot of the route at
+## once. They come for the player from wherever they are posted, take cover
+## and shoot. Give it a --warmup of a few hundred frames, so that they have
+## arrived, and compare with --posted, where the same robots stand still.
+## --snap=3 is for looking at the game itself instead of at a level: without
+## --benchmark, and with --play to skip the title screen, it lets the game run
+## as it is played, saves one screenshot after that many seconds and quits.
+## --at stands the player at that pose first, and each --eval="..." runs a
+## line of script one second in, with Menu, Save, game and player to call:
+## --eval="Menu.show_end(12)" shows the end screen. The save file is left alone.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -41,10 +69,13 @@ const COVERED_TIMEOUT := 60.0
 
 ## True for a benchmark run; gameplay systems check this and stay out of the way.
 var active := false
+## True for a --snap run, which plays the game but keeps no progress.
+var snapping := false
 
 var _resolution := DEFAULT_RESOLUTION
 var _scene := ""
 var _profile := false
+var _animate := false
 var _off := PackedStringArray()
 var _at := PackedStringArray()
 var _spawn := PackedStringArray()
@@ -62,6 +93,13 @@ var _eye: Camera3D
 var _random := RandomNumberGenerator.new()
 var _warmup_frames := 120
 var _measure_frames := 600
+var _snap := -1.0
+var _only := PackedStringArray()
+var _show := PackedStringArray()
+var _eval := PackedStringArray()
+var _posted := false
+var _exit := false
+var _awake := PackedFloat64Array()
 
 
 func _ready() -> void:
@@ -72,6 +110,9 @@ func _ready() -> void:
 		_warmup_frames = 90
 		_measure_frames = 30
 	_profile = "--profile" in args
+	_posted = "--posted" in args
+	_exit = "--exit" in args
+	_animate = "--animate" in args
 	for arg in args:
 		if arg.begins_with("--res="):
 			var parts := arg.get_slice("=", 1).split("x")
@@ -100,6 +141,21 @@ func _ready() -> void:
 			_firefight = arg.get_slice("=", 1).to_float()
 		elif arg.begins_with("--barrage="):
 			_barrage = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--only="):
+			_only = arg.get_slice("=", 1).split(",")
+		elif arg.begins_with("--warmup="):
+			_warmup_frames = arg.get_slice("=", 1).to_int()
+		elif arg.begins_with("--show="):
+			_show = arg.get_slice("=", 1).split(",")
+		elif arg.begins_with("--awake="):
+			_awake = arg.get_slice("=", 1).split_floats(",")
+		elif arg.begins_with("--snap="):
+			_snap = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--eval="):
+			_eval.append(arg.trim_prefix("--eval="))
+	snapping = not active and _snap >= 0.0
+	if snapping:
+		_snapshot.call_deferred()
 	if active:
 		_run.call_deferred()
 
@@ -136,6 +192,20 @@ func _run() -> void:
 			node.scale = Vector3.ONE * numbers[4]
 		if numbers.size() > 5 and node.has_method("preview"):
 			node.preview(numbers[5])
+		if _animate:
+			node.process_mode = Node.PROCESS_MODE_INHERIT
+			node.set_physics_process(false)
+	if (_posted or not _awake.is_empty()) and tree.current_scene.has_method("post_robots"):
+		tree.current_scene.post_robots()
+	if _awake.size() >= 3 and player and tree.current_scene.has_method("post_robots"):
+		# The player is there to be found and shot at, and does nothing.
+		player.process_mode = Node.PROCESS_MODE_INHERIT
+		player.global_position = Vector3(_awake[0], _awake[1], _awake[2])
+		player.health = 1e9
+		for zone: RefCounted in tree.current_scene.zones:
+			tree.current_scene._start(zone)
+	if _exit and tree.current_scene.has_method("_open_exit"):
+		tree.current_scene._open_exit(false)
 	if not _blast.is_empty():
 		# It reads the floor off the colliders, which a level has a frame late.
 		await tree.physics_frame
@@ -164,6 +234,9 @@ func _run() -> void:
 			nearest.take_damage(nearest.health, at, Vector3.DOWN)
 	if _hold >= 0.0:
 		Fx.advance(_hold)
+	for node_name in _show:
+		for node in tree.current_scene.find_children(node_name, "Node3D", true, false):
+			node.visible = true
 	# What is seen through a telescopic sight is drawn by the HUD.
 	var aimed := _weapon.size() > 1 and _weapon[1] >= 1.0
 	for hud in tree.get_nodes_in_group("hud"):
@@ -268,12 +341,45 @@ func _run() -> void:
 		"scene": tree.current_scene.scene_file_path,
 		"resolution": [_resolution.x, _resolution.y],
 		"settings": Settings.summary(),
+		"enemies": Settings.enemy_theme,
 		"off": _off,
 		"views": views,
 	}
 	var file := FileAccess.open(out_dir.path_join("results.json"), FileAccess.WRITE)
 	file.store_string(JSON.stringify(report, "\t"))
 	file.close()
+	print("Saved to ", out_dir)
+	tree.quit()
+
+
+## Lets the game run for a moment and saves what is on screen then.
+func _snapshot() -> void:
+	var tree := get_tree()
+	await tree.process_frame
+	if _scene:
+		tree.change_scene_to_file(_scene)
+		await tree.scene_changed
+	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+	get_window().content_scale_size = _resolution
+	var player: Node3D = tree.get_first_node_in_group("player")
+	if not _at.is_empty():
+		var numbers := _at[0].split_floats(",")
+		player.global_position = Vector3(numbers[0], numbers[1], numbers[2])
+		player.rotation_degrees = Vector3(0.0, numbers[3], 0.0)
+		player.head.rotation_degrees.x = numbers[4]
+	await tree.create_timer(minf(1.0, _snap), true, false, true).timeout
+	for line in _eval:
+		var expression := Expression.new()
+		if expression.parse(line, ["Menu", "Save", "game", "player"]) != OK:
+			push_error("--eval: %s" % expression.get_error_text())
+			continue
+		expression.execute([Menu, Save, tree.current_scene, player], self)
+	await tree.create_timer(maxf(_snap - 1.0, 0.05), true, false, true).timeout
+	await RenderingServer.frame_post_draw
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
+	var out_dir := ProjectSettings.globalize_path("res://benchmark/results/" + stamp)
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	get_viewport().get_texture().get_image().save_png(out_dir.path_join("snap.png"))
 	print("Saved to ", out_dir)
 	tree.quit()
 
@@ -366,6 +472,15 @@ func _profile_targets() -> Dictionary:
 		var node := scene.find_child(part, true, false)
 		if node:
 			targets[part.to_lower()] = [[node, "visible"]]
+	# In a level that is cut into zones, every zone has such parts of its own,
+	# and "zones" is drawing only the zones in sight: off draws all of them.
+	var level := scene.get_node_or_null("Level")
+	if level and "culling" in level:
+		targets["zones"] = [[level, "culling"]]
+		for part: String in ["Props", "Decals", "Glass", "Dust"]:
+			targets[part.to_lower()] = []
+			for node in level.find_children(part, "Node3D", true, false):
+				targets[part.to_lower()].append([node, "visible"])
 	return targets
 
 
@@ -377,6 +492,8 @@ func _profile_view(label: String) -> Dictionary:
 	var targets := _profile_targets()
 	for effect: String in targets:
 		if effect in _off:
+			continue
+		if not _only.is_empty() and effect not in _only:
 			continue
 		var on_ms := await _average_ms(label)
 		var before := []

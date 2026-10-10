@@ -21,7 +21,11 @@ extends Resource
 
 @export_group("Ammo")
 @export var mag_size := 30
+## The most that is carried in reserve. A level starts with less than this,
+## see weapons.gd.
 @export var reserve_ammo := 120
+## Never runs out of reserve: what is always there to fall back on.
+@export var bottomless := false
 @export var reload_time := 1.8
 ## Loaded one round at a time, each taking `reload_time / mag_size`, instead
 ## of by the magazine; a shot interrupts it.

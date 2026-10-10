@@ -1,40 +1,82 @@
 extends Node
-## Checkpoint storage: the level and wave the player last reached, kept in
-## user://save.cfg so both a death and a restart of the game resume there.
-## Benchmark and self-test runs never read or write it.
+## Checkpoint storage: the level and the place in it the player last reached,
+## kept in user://save.cfg so both a death and a restart of the game resume
+## there. A checkpoint is named by the id the level gives it; what was cleared
+## on the way to it follows from where it lies on the route, so that is not
+## stored. A benchmark or --snap run never reads or writes it, and a
+## self-test run keeps a file of its own.
 
 const PATH := "user://save.cfg"
+const SELFTEST_PATH := "user://selftest_save.cfg"
 
-## Empty when there is nothing to resume; otherwise {level, wave, kills}.
+## What a run is measured by, see `stats`.
+const STATS: Array[String] = ["seconds", "shots", "hits", "headshots", "deaths"]
+
+## Empty when there is nothing to resume; otherwise {level, at, title, kills},
+## with an empty `at` for the start of the level.
 var checkpoint := {}
+## What the run has come to since "New game": seconds played, shots fired,
+## shots that hit, headshots and deaths. It goes into the file with every
+## checkpoint and with every death, and clear() starts it again.
+var stats := {}
 
+var _path := PATH
 var _persistent := true
 
 
 func _ready() -> void:
-	_persistent = not Benchmark.active and not SelfTest.active
-	if not _persistent:
-		return
+	_persistent = not Benchmark.active and not Benchmark.snapping
+	if SelfTest.active:
+		# Starts from nothing, whatever an earlier run left behind.
+		_path = SELFTEST_PATH
+		clear()
+	reload()
+
+
+## Reads the file again, as a restart of the game would.
+func reload() -> void:
+	checkpoint = {}
+	_reset_stats()
 	var file := ConfigFile.new()
-	if file.load(PATH) != OK:
+	if not _persistent or file.load(_path) != OK:
 		return
+	for key in STATS:
+		stats[key] = float(file.get_value("stats", key, 0.0))
 	var level: String = file.get_value("checkpoint", "level", "")
 	if ResourceLoader.exists(level):
 		checkpoint = {
 			"level": level,
-			"wave": int(file.get_value("checkpoint", "wave", 1)),
+			"at": str(file.get_value("checkpoint", "at", "")),
+			"title": str(file.get_value("checkpoint", "title", "")),
 			"kills": int(file.get_value("checkpoint", "kills", 0)),
 		}
 
 
-func store(level: String, wave: int, kills: int) -> void:
-	checkpoint = {"level": level, "wave": wave, "kills": kills}
+func store(level: String, at: String, title: String, kills: int) -> void:
+	checkpoint = {"level": level, "at": at, "title": title, "kills": kills}
 	_write()
 
 
 func clear() -> void:
 	checkpoint = {}
+	_reset_stats()
 	_write()
+
+
+## Adds to one of the things a run is measured by.
+func tally(what: String, by := 1.0) -> void:
+	stats[what] = stats.get(what, 0.0) + by
+
+
+## Writes what there is to the file now, instead of at the next checkpoint.
+func flush() -> void:
+	_write()
+
+
+func _reset_stats() -> void:
+	stats = {}
+	for key in STATS:
+		stats[key] = 0.0
 
 
 ## The checkpoint for the given level scene, or an empty dictionary.
@@ -48,4 +90,6 @@ func _write() -> void:
 	var file := ConfigFile.new()
 	for key: String in checkpoint:
 		file.set_value("checkpoint", key, checkpoint[key])
-	file.save(PATH)
+	for key: String in stats:
+		file.set_value("stats", key, stats[key])
+	file.save(_path)

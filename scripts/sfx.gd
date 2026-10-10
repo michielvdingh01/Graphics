@@ -39,6 +39,7 @@ const LEVELS := {
 
 # name: [length s, noise gain, noise decay, noise lowpass 0..1,
 #        tone gain, tone Hz, tone pitch drop, tone decay, drive]
+# and, for a voice: seconds it takes to swell, and the rate in Hz of a growl in it.
 const SOUNDS := {
 	&"enemy_alert": [0.12, 0.0, 1.0, 1.0, 0.5, 1200.0, -3.0, 15.0, 1.0],
 	&"dry_fire": [0.04, 0.3, 120.0, 1.0, 0.3, 1800.0, 0.0, 150.0, 1.0],
@@ -52,6 +53,30 @@ const SOUNDS := {
 	&"casing": [0.07, 0.12, 90.0, 1.0, 0.45, 3400.0, 3.0, 55.0, 1.0],
 	&"pin": [0.05, 0.3, 90.0, 1.0, 0.4, 2400.0, 0.0, 90.0, 1.0],
 	&"throw": [0.22, 0.5, 10.0, 0.07, 0.0, 100.0, 0.0, 1.0, 1.5],
+	&"human_step": [0.09, 0.5, 50.0, 0.12, 0.35, 85.0, 22.0, 55.0, 1.4],
+	&"human_alert": [0.26, 0.2, 10.0, 0.6, 0.9, 330.0, 2.2, 6.0, 3.5, 0.02],
+	&"human_hurt": [0.18, 0.3, 14.0, 0.4, 0.9, 210.0, 4.0, 10.0, 3.0, 0.01],
+	&"human_death": [0.7, 0.3, 5.0, 0.35, 0.9, 230.0, 2.6, 3.6, 3.0, 0.03],
+	&"zombie_alert": [0.6, 0.45, 3.5, 0.25, 0.8, 110.0, 0.6, 3.0, 4.0, 0.12, 38.0],
+	&"zombie_hurt": [0.3, 0.45, 8.0, 0.25, 0.8, 130.0, 2.0, 7.0, 4.0, 0.02, 45.0],
+	&"zombie_death": [0.9, 0.45, 3.0, 0.2, 0.8, 120.0, 1.6, 2.6, 4.0, 0.05, 32.0],
+	&"swing": [0.2, 0.9, 10.0, 0.3, 0.0, 100.0, 0.0, 1.0, 1.2, 0.06],
+	&"body_fall": [0.25, 0.8, 18.0, 0.07, 0.9, 55.0, 8.0, 16.0, 2.2],
+	# What a robot says of what it is about to do: the whine before a burst,
+	# for each kind its own, the call of one that goes round the player and
+	# the alarm of one that runs from something.
+	&"enemy_charge": [0.4, 0.0, 1.0, 1.0, 0.45, 520.0, -2.4, 2.5, 1.0, 0.25],
+	&"heavy_charge": [0.75, 0.25, 2.0, 0.2, 0.5, 110.0, -1.5, 1.5, 1.6, 0.4],
+	&"rusher_charge": [0.26, 0.3, 8.0, 1.0, 0.5, 1500.0, -1.8, 6.0, 1.8, 0.05],
+	&"enemy_flank": [0.3, 0.0, 1.0, 1.0, 0.5, 760.0, 3.2, 7.0, 1.0, 0.01, 11.0],
+	&"enemy_alarm": [0.42, 0.0, 1.0, 1.0, 0.55, 1900.0, 0.0, 3.0, 1.0, 0.01, 14.0],
+	# A shot the plate of a grunt stops, and the plate coming off.
+	&"shield_block": [0.2, 0.5, 30.0, 1.0, 0.55, 980.0, 0.6, 16.0, 1.6],
+	&"shield_break": [0.45, 0.8, 9.0, 0.7, 0.5, 520.0, 2.5, 7.0, 2.2],
+	# Something picked up off the floor.
+	&"pickup_ammo": [0.1, 0.35, 50.0, 1.0, 0.5, 1050.0, -2.5, 26.0, 1.0],
+	&"pickup_health": [0.24, 0.0, 1.0, 1.0, 0.5, 620.0, -3.2, 9.0, 1.0],
+	&"pickup_grenade": [0.1, 0.4, 40.0, 0.6, 0.5, 430.0, -2.0, 24.0, 1.4],
 }
 
 var _streams := {}
@@ -203,6 +228,10 @@ func _synthesise(p: Array) -> AudioStreamWAV:
 		lowpassed += p[3] * (randf_range(-1.0, 1.0) - lowpassed)
 		phase += TAU * p[5] * exp(-t * p[6]) / RATE
 		var sample: float = p[1] * lowpassed * exp(-t * p[2]) + p[4] * sin(phase) * exp(-t * p[7])
+		if p.size() > 9:
+			sample *= minf(1.0, t / p[9])
+		if p.size() > 10:
+			sample *= 0.6 + 0.4 * sin(TAU * p[10] * t)
 		# Soft clip for punch, and fade the last 5 ms so the tail never clicks.
 		sample = tanh(sample * p[8]) * minf(1.0, (length - t) * 200.0)
 		data.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 29000.0))

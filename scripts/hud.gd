@@ -1,6 +1,8 @@
 extends CanvasLayer
 
 const MARGIN := 28
+## Seconds a level takes to come up out of black.
+const FADE_IN := 0.7
 
 
 class Crosshair:
@@ -48,7 +50,13 @@ var _ammo_label := Label.new()
 var _weapon_label := Label.new()
 var _grenades := Grenades.new()
 var _health_bar := ProgressBar.new()
-var _score_label := Label.new()
+## A mark on the health bar at what comes back by itself, the health as a
+## number, and a line for what was just picked up.
+var _regen_mark := ColorRect.new()
+var _health_label := Label.new()
+var _pickup_label := Label.new()
+var _objective_label := Label.new()
+var _kills_label := Label.new()
 var _banner := Label.new()
 var _crosshair := Crosshair.new()
 var _hitmarker := Hitmarker.new()
@@ -56,10 +64,10 @@ var _vignette := ColorRect.new()
 var _vignette_mat := ShaderMaterial.new()
 var _scope := ColorRect.new()
 var _scope_mat := ShaderMaterial.new()
+## Over everything else: black while a level comes in or goes out.
+var _curtain := ColorRect.new()
 var _hurt := 0.0
 var _health_ratio := 1.0
-var _wave := 0
-var _kills := 0
 
 
 func _ready() -> void:
@@ -80,8 +88,15 @@ func _ready() -> void:
 	_place(_vignette, Control.PRESET_FULL_RECT, 0)
 
 	_place(_fps_label, Control.PRESET_TOP_LEFT)
-	_place(_score_label, Control.PRESET_TOP_RIGHT)
-	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# What there is to do, where the wave number used to be.
+	_objective_label.add_theme_font_size_override("font_size", 26)
+	_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_place(_objective_label, Control.PRESET_TOP_RIGHT)
+	_kills_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_kills_label.modulate.a = 0.75
+	_place(_kills_label, Control.PRESET_TOP_RIGHT)
+	_kills_label.offset_top += 38
+	_kills_label.offset_bottom += 38
 
 	_ammo_label.add_theme_font_size_override("font_size", 40)
 	_ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -99,6 +114,21 @@ func _ready() -> void:
 	_health_bar.max_value = 1.0
 	_health_bar.value = 1.0
 	_place(_health_bar, Control.PRESET_BOTTOM_LEFT)
+	_regen_mark.color = Color(1, 1, 1, 0.85)
+	_regen_mark.size = Vector2(2, 20)
+	_regen_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_health_bar.add_child(_regen_mark)
+	_health_label.add_theme_font_size_override("font_size", 26)
+	_place(_health_label, Control.PRESET_BOTTOM_LEFT)
+	_health_label.offset_left += 272
+	_health_label.offset_right += 272
+	_health_label.offset_top += 8
+	_health_label.offset_bottom += 8
+	_pickup_label.add_theme_font_size_override("font_size", 24)
+	_pickup_label.modulate.a = 0.0
+	_place(_pickup_label, Control.PRESET_BOTTOM_LEFT)
+	_pickup_label.offset_top -= 30
+	_pickup_label.offset_bottom -= 30
 
 	_banner.add_theme_font_size_override("font_size", 56)
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -107,6 +137,11 @@ func _ready() -> void:
 
 	_place(_crosshair, Control.PRESET_CENTER, 0)
 	_place(_hitmarker, Control.PRESET_CENTER, 0)
+
+	_curtain.color = Color.BLACK
+	_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(_curtain, Control.PRESET_FULL_RECT, 0)
+	create_tween().tween_property(_curtain, "modulate:a", 0.0, FADE_IN)
 	_bind.call_deferred()
 
 
@@ -132,9 +167,14 @@ func _bind() -> void:
 	_player.weapons.grenades_changed.connect(_on_grenades_changed)
 	_on_grenades_changed(_player.weapons.grenades)
 	var game := get_tree().get_first_node_in_group("game")
-	game.wave_started.connect(_on_wave_started)
+	game.objective_changed.connect(_on_objective_changed)
 	game.kills_changed.connect(_on_kills_changed)
-	_update_score()
+	game.checkpoint_reached.connect(func(_title: String) -> void: _show_banner("CHECKPOINT", Color.WHITE, 1.2))
+	game.finished.connect(_on_finished.bind(game.EXIT_FADE))
+	game.picked_up.connect(_on_picked_up)
+	_on_health_changed(_player.health, _player.MAX_HEALTH)
+	_on_objective_changed(game.objective, 0)
+	_on_kills_changed(game.kills)
 
 
 func _process(delta: float) -> void:
@@ -177,13 +217,27 @@ func _process(delta: float) -> void:
 
 
 func _on_health_changed(health: float, max_health: float) -> void:
-	_health_ratio = health / max_health
+	_health_ratio = clampf(health / max_health, 0.0, 1.0)
 	_health_bar.value = _health_ratio
+	_health_label.text = "%d" % ceili(_health_ratio * max_health)
+	# What is under the mark comes back by itself; the rest has to be found.
+	var regen_to: float = Settings.rules().regen_to / max_health
+	_regen_mark.position = Vector2(_health_bar.custom_minimum_size.x * regen_to - 1.0, -3.0)
+	_health_label.modulate = Color(1, 0.45, 0.35) if _health_ratio <= regen_to else Color.WHITE
 
 
+## The reserve is -1 for a weapon that never runs out.
 func _on_ammo_changed(_weapon_name: String, mag: int, reserve: int) -> void:
-	_ammo_label.text = "%d / %d" % [mag, reserve]
-	_ammo_label.modulate = Color(1, 0.4, 0.3) if mag == 0 else Color.WHITE
+	_ammo_label.text = "%d / %s" % [mag, "∞" if reserve < 0 else str(reserve)]
+	_ammo_label.modulate = Color(1, 0.4, 0.3) if mag == 0 else (Color(1, 0.8, 0.4) if reserve == 0 else Color.WHITE)
+
+
+func _on_picked_up(text: String, tint: Color) -> void:
+	_pickup_label.text = text
+	_pickup_label.modulate = tint
+	var tween := create_tween()
+	tween.tween_interval(1.1)
+	tween.tween_property(_pickup_label, "modulate:a", 0.0, 0.5)
 
 
 func _on_grenades_changed(count: int) -> void:
@@ -197,19 +251,17 @@ func _on_hit_confirmed(headshot: bool, killed: bool) -> void:
 	_hitmarker.queue_redraw()
 
 
-func _on_wave_started(wave: int) -> void:
-	_wave = wave
-	_update_score()
-	_show_banner("WAVE %d" % wave, Color.WHITE, 1.5)
+func _on_objective_changed(text: String, hostiles: int) -> void:
+	_objective_label.text = text if hostiles == 0 else "%s  ·  %d left" % [text, hostiles]
 
 
 func _on_kills_changed(kills: int) -> void:
-	_kills = kills
-	_update_score()
+	_kills_label.text = "Kills %d" % kills
 
 
-func _update_score() -> void:
-	_score_label.text = "Wave %d\nKills %d" % [_wave, _kills]
+## The screen goes dark as the player walks out of the level.
+func _on_finished(_next: String, fade: float) -> void:
+	create_tween().tween_property(_curtain, "modulate:a", 1.0, fade)
 
 
 func _show_banner(text: String, color: Color, hold: float) -> void:

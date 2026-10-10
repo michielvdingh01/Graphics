@@ -72,6 +72,8 @@
 		{"id": "text_10_t", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "10 t", "height": 128, "seed": 50, "use": "safe working load on the crane"},
 		{"id": "text_t1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T1", "height": 128, "seed": 51, "use": "tank number"},
 		{"id": "text_t2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T2", "height": 128, "seed": 52, "use": "tank number"},
+		{"id": "text_t3", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T3", "height": 128, "seed": 81, "use": "number of the feed tank in the boiler house"},
+		{"id": "text_k1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "K1", "height": 128, "seed": 82, "use": "boiler number"},
 		{"id": "text_kldu_482316_7", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "KLDU 482316 7", "height": 128, "seed": 53, "use": "container number"},
 		{"id": "text_trnu_207745_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "TRNU 207745 2", "height": 128, "seed": 54, "use": "container number"},
 		{"id": "text_mbcu_931580_4", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "MBCU 931580 4", "height": 128, "seed": 55, "use": "container number"},
@@ -128,6 +130,9 @@
 		{"id": "explosion", "type": "sound", "source": "kenney_scifi", "license": "CC0", "files": "Audio/explosionCrunch_*.ogg", "punch": 3.0, "drive": 2.0, "layers": [{"source": "firearms", "files": "Prepared SFX Library/Nova/O_21P.wav", "split": true, "tight": true, "length": 0.06}], "glue": [2.0, 2.0], "use": "barrels, gas bottles, jerrycans and grenades going off: a rumble with the bang of a shotgun at its front"},
 		{"id": "enemy_death", "type": "sound", "source": "kenney_scifi", "license": "CC0", "files": "Audio/lowFrequency_explosion_*.ogg", "takes": 4, "drive": 1.5, "layers": [{"source": "kenney_impact", "files": "Audio/impactPlate_heavy_*.ogg", "gain": -3}, {"source": "kenney_impact", "files": "Audio/impactMetal_heavy_*.ogg", "gain": -6, "delay": 60}], "glue": [1.5, 2.0], "use": "a robot blowing apart: a low boom with steel plate and metal coming down in it"},
 		{"id": "vent", "type": "sound", "source": "kenney_scifi", "license": "CC0", "files": "Audio/thrusterFire_*.ogg", "length": 2.0, "drive": 1.5, "use": "the flame out of a holed barrel or gas bottle"},
-		{"id": "robot_step", "type": "sound", "source": "metal_steps", "license": "CC0", "files": "metal_steps_*.wav", "takes": 8, "drive": 3.0, "use": "a robot's steps"}
+		{"id": "robot_step", "type": "sound", "source": "metal_steps", "license": "CC0", "files": "metal_steps_*.wav", "takes": 8, "drive": 3.0, "use": "a robot's steps"},
+		{"id": "blood_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood", "size": [256, 256], "seed": 121, "use": "blood on the floor or the wall behind somebody who is shot"},
+		{"id": "blood_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood", "size": [256, 256], "seed": 122, "use": "blood on the floor or the wall behind somebody who is shot"},
+		{"id": "blood_pool", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood_pool", "size": [512, 512], "seed": 123, "use": "blood that runs out from under a body"}
 	]
 }

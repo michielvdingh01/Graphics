@@ -19,8 +19,16 @@ const LOADOUT: Array[WeaponData] = [
 	preload("res://weapons/marksman.tres"),
 ]
 const GRENADE := preload("res://scenes/grenade.tscn")
-## Grenades carried at the start of every wave.
+## The most grenades that are carried, and how many a level starts with.
 const GRENADES := 3
+const START_GRENADES := 2
+## The reserve a weapon starts a level with, in magazines. What it can hold
+## is in its data; the difference has to be picked up off the floor.
+const START_MAGS := 2
+## What a can of ammunition holds: this many magazines for the weapon in
+## hand and for each of the others.
+const CAN_MAGS := 1.0
+const CAN_MAGS_OTHERS := 0.34
 ## A throw: how long the left hand is away from the weapon, the fraction of
 ## that after which the grenade leaves it, and the speed it leaves at in m/s.
 const THROW_TIME := 0.55
@@ -101,7 +109,7 @@ class Viewmodel:
 
 ## 0 at the hip, 1 fully aimed down sights.
 var ads_blend := 0.0
-var grenades := GRENADES
+var grenades := START_GRENADES
 
 var _index := 0
 var _pending := 0
@@ -151,7 +159,7 @@ func _ready() -> void:
 		_rig.add_child(model)
 		_models.append(Viewmodel.new(model))
 		_mags.append(data.mag_size)
-		_reserves.append(data.reserve_ammo)
+		_reserves.append(_start_reserve(data))
 	_models[_index].root.visible = true
 	_build_fill()
 	_emit_ammo.call_deferred()
@@ -213,13 +221,62 @@ func preview(index: int, aim := 0.0, reload := 0.0) -> void:
 	_animate_viewmodel(current(), 0.0)
 
 
-## Tops up reserve ammo for every weapon and the grenades, e.g. between waves.
-func refill() -> void:
+## Brings whatever has run low back up to what a level starts with: the
+## reserve of every weapon and the grenades. What is over that is kept.
+func resupply() -> void:
 	for i in LOADOUT.size():
-		_reserves[i] = LOADOUT[i].reserve_ammo
-	grenades = GRENADES
+		_reserves[i] = maxi(_reserves[i], _start_reserve(LOADOUT[i]))
+	grenades = maxi(grenades, START_GRENADES)
 	grenades_changed.emit(grenades)
 	_emit_ammo()
+
+
+## Takes what a can of ammunition holds: most for the weapon in hand, some
+## for the others. False if nothing of it fitted.
+func add_ammo() -> bool:
+	var took := false
+	for i in LOADOUT.size():
+		var data := LOADOUT[i]
+		if data.bottomless:
+			continue
+		var rounds := ceili(data.mag_size * (CAN_MAGS if i == _pending else CAN_MAGS_OTHERS))
+		var fits := mini(rounds, data.reserve_ammo - _reserves[i])
+		if fits > 0:
+			_reserves[i] += fits
+			took = true
+	if took:
+		_emit_ammo()
+	return took
+
+
+## True if a can of ammunition would not be wasted: some weapon has room.
+func ammo_room() -> bool:
+	for i in LOADOUT.size():
+		if not LOADOUT[i].bottomless and _reserves[i] < LOADOUT[i].reserve_ammo:
+			return true
+	return false
+
+
+## One more grenade. False if no more can be carried.
+func add_grenade() -> bool:
+	if grenades >= GRENADES:
+		return false
+	grenades += 1
+	grenades_changed.emit(grenades)
+	return true
+
+
+## How short of ammunition the weapon in hand is: 0 with the reserve a level
+## starts with or more, 1 with none. One that never runs out is never short.
+func ammo_lack() -> float:
+	var data := LOADOUT[_pending]
+	if data.bottomless:
+		return 0.0
+	return clampf(1.0 - float(_reserves[_pending]) / _start_reserve(data), 0.0, 1.0)
+
+
+func _start_reserve(data: WeaponData) -> int:
+	return mini(data.mag_size * START_MAGS, data.reserve_ammo)
 
 
 func _input(event: InputEvent) -> void:
@@ -324,24 +381,28 @@ func _fire(data: WeaponData) -> void:
 		if hit:
 			end = hit.position
 			var target: Object = hit.collider
-			# A robot shows a hit itself, and sounds like the steel it is;
-			# anything else is part of the level, even if it can be damaged,
-			# like a fuel barrel.
+			# An enemy shows a hit itself; anything else is part of the level,
+			# even if it can be damaged, like a fuel barrel. Both sound like
+			# what they are made of.
 			var robot := target.has_method("is_headshot")
+			var surface := Fx.surface_of(hit)
 			if not robot:
-				Fx.strike(hit.position, hit.normal, direction, Fx.surface_of(hit), data.pellets > 1)
+				Fx.strike(hit.position, hit.normal, direction, surface, data.pellets > 1)
 			if not struck.has(target):
 				struck[target] = true
-				Fx.thud(end, "metal" if robot else Fx.surface_of(hit))
+				Fx.thud(end, surface)
 			if target.has_method("take_damage"):
 				var distance := origin.distance_to(end)
 				var falloff := remap(distance, data.falloff_start, data.falloff_end, 1.0, data.min_damage_scale)
 				var amount := data.damage * clampf(falloff, data.min_damage_scale, 1.0)
-				if robot and target.is_headshot(end):
+				var head: bool = robot and target.is_headshot(end)
+				if head:
 					amount *= data.headshot_multiplier
-					headshot = true
-				any_hit = any_hit or robot
 				killed = target.take_damage(amount, end, direction) or killed
+				# A shot that the plate on its arm stopped is no hit.
+				if robot and not target.deflected:
+					any_hit = true
+					headshot = headshot or head
 		# One pellet in three of a load of shot is enough to show where it went.
 		if i % 3 == 0:
 			Fx.tracer(muzzle, end)
@@ -364,7 +425,11 @@ func _fire(data: WeaponData) -> void:
 		_locked = 1.0
 
 	Sfx.play(data.shot_sound)
+	Save.tally("shots")
 	if any_hit:
+		Save.tally("hits")
+		if headshot:
+			Save.tally("headshots")
 		Sfx.play(&"kill" if killed else (&"headshot" if headshot else &"hit"), -10.0)
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()
@@ -436,7 +501,8 @@ func _update_reload() -> void:
 		while _reload_stage < _shells_to_load and _reload_left > SHELL_TAIL and elapsed > SHELL_LEAD + (_reload_stage + 0.55) * each:
 			_reload_stage += 1
 			_mags[_index] += 1
-			_reserves[_index] -= 1
+			if not data.bottomless:
+				_reserves[_index] -= 1
 			Sfx.play(&"reload", -3.0)
 			_emit_ammo()
 		if _reload_left <= 0.0:
@@ -453,7 +519,8 @@ func _update_reload() -> void:
 	if _reload_left <= 0.0:
 		var needed := mini(data.mag_size - _mags[_index], _reserves[_index])
 		_mags[_index] += needed
-		_reserves[_index] -= needed
+		if not data.bottomless:
+			_reserves[_index] -= needed
 		_reload_left = 0.0
 		_emit_ammo()
 
@@ -497,8 +564,9 @@ func _switch_to(index: int) -> void:
 	Sfx.play(&"switch", -6.0)
 
 
+## The reserve goes out as -1 for a weapon that never runs out.
 func _emit_ammo() -> void:
-	ammo_changed.emit(current().display_name, _mags[_index], _reserves[_index])
+	ammo_changed.emit(current().display_name, _mags[_index], -1 if current().bottomless else _reserves[_index])
 
 
 func _animate_viewmodel(data: WeaponData, delta: float) -> void:

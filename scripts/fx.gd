@@ -27,6 +27,9 @@ const CLOCK_SPAN := 600.0
 
 const HOLE_VARIANTS := {"concrete": 2, "metal": 2, "wood": 2, "soft": 1}
 const SCORCH_VARIANTS := 2
+const BLOOD_VARIANTS := 2
+## Splashes and pools of blood that stay; the oldest makes way.
+const MAX_STAINS := 24
 const DECALS := "res://assets/decals/"
 
 ## Seconds the effects have been running. Bursts are timed against this.
@@ -49,6 +52,11 @@ var _flame: ArrayMesh
 ## Surface -> one [albedo, normal, orm, emission] per variant of its hole.
 var _hole_textures := {}
 var _scorch_textures: Array[Texture2D] = []
+var _blood_textures: Array[Texture2D] = []
+var _pool_texture: Texture2D
+## What makes blood shine: no occlusion, hardly any roughness, no metal.
+var _wet: ImageTexture
+var _stains: Array[Decal] = []
 var _holes: Array[Decal] = []
 ## What is freed once `time` passes a moment: [node, moment].
 var _expiring: Array[Array] = []
@@ -94,6 +102,12 @@ func _ready() -> void:
 		_hole_textures[surface] = variants
 	for i in SCORCH_VARIANTS:
 		_scorch_textures.append(load("%sscorch_%d.png" % [DECALS, i + 1]))
+	for i in BLOOD_VARIANTS:
+		_blood_textures.append(load("%sblood_%d.png" % [DECALS, i + 1]))
+	_pool_texture = load(DECALS + "blood_pool.png")
+	var wet := Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
+	wet.fill(Color(1.0, 0.22, 0.0))
+	_wet = ImageTexture.create_from_image(wet)
 
 	var brass: Material = load("res://materials/brass.tres")
 	for mesh: CylinderMesh in [_casing_mesh, _shell_mesh, _shell_head]:
@@ -244,6 +258,33 @@ func robot_hit(position: Vector3, incoming: Vector3, tint := Color(1.0, 0.5, 0.1
 	flash(position - incoming * 0.1, tint.lerp(Color.WHITE, 0.3), 1.0, 3.0, 0.07)
 
 
+## A shot lands on flesh: blood out of the back of the wound, the way the
+## shot was going, a little out of the front, and now and then a splash on
+## the floor or the wall behind.
+func blood(position: Vector3, incoming: Vector3) -> void:
+	var floor_y := floor_below(position)
+	var through := Transform3D(_up_along((incoming + Vector3.UP * 0.2).normalized()), position)
+	_burst(_chips, through, 3.0, {&"floor_y": floor_y, &"tint": Color(0.3, 0.008, 0.008), &"size": 0.028, &"slender": 2.0, &"speed": 3.4, &"spread": 0.5, &"amount": randf_range(0.5, 1.0)})
+	_burst(_puffs, through, 0.45, {&"tint": Color(0.36, 0.015, 0.015, 0.6), &"speed": 1.8, &"spread": 0.5, &"size": Vector2(0.03, 0.22), &"life": 0.4, &"rise": -0.4, &"amount": 0.6})
+	var back := Transform3D(_up_along((Vector3.UP * 0.4 - incoming).normalized()), position)
+	_burst(_chips, back, 3.0, {&"floor_y": floor_y, &"tint": Color(0.3, 0.008, 0.008), &"size": 0.02, &"slender": 2.0, &"speed": 2.0, &"spread": 0.6, &"amount": 0.3})
+	if randf() < 0.5:
+		var beyond := position + (incoming + Vector3.DOWN * 0.35).normalized() * 3.0
+		var hit := get_viewport().find_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(position, beyond, WORLD))
+		if hit:
+			_stain(_blood_textures.pick_random(), Transform3D(_up_along(hit.normal), hit.position), randf_range(0.25, 0.5))
+
+
+## Blood runs out from under a body that lies at `position`.
+func blood_pool(position: Vector3) -> void:
+	var floor_y := floor_below(position + Vector3.UP * 0.3, 2.5)
+	if floor_y < position.y - 2.5:
+		return
+	var pool := _stain(_pool_texture, Transform3D(Basis(), Vector3(position.x, floor_y, position.z)), 0.3)
+	var across := randf_range(0.9, 1.3)
+	pool.create_tween().tween_property(pool, "size", Vector3(across, 0.2, across), 5.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
 ## A robot blows up around `position`: a flash, a ball of fire, a shower of
 ## sparks, smoke that hangs about and soot on the floor below.
 func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
@@ -364,11 +405,12 @@ func clear() -> void:
 	for entry: Array in _expiring:
 		if is_instance_valid(entry[0]):
 			entry[0].queue_free()
-	for decal in _holes:
+	for decal in _holes + _stains:
 		if is_instance_valid(decal):
 			decal.queue_free()
 	_expiring.clear()
 	_holes.clear()
+	_stains.clear()
 
 
 ## Spent case thrown from a weapon that points along `basis`: it tumbles,
@@ -517,6 +559,22 @@ func _hole(surface: String, frame: Transform3D, across: float) -> Decal:
 	_holes = _holes.filter(is_instance_valid)
 	while _holes.size() > MAX_HOLES:
 		_holes.pop_front().queue_free()
+	return decal
+
+
+## A mark of blood `across` metres wide on the surface `frame` stands on,
+## turned about at random. The oldest makes way once there are MAX_STAINS.
+func _stain(texture: Texture2D, frame: Transform3D, across: float) -> Decal:
+	var decal := Decal.new()
+	decal.texture_albedo = texture
+	decal.texture_orm = _wet
+	decal.size = Vector3(across, 0.2, across)
+	decal.transform = frame.rotated_local(Vector3.UP, randf() * TAU)
+	_keep(decal)
+	_stains.append(decal)
+	_stains = _stains.filter(is_instance_valid)
+	while _stains.size() > MAX_STAINS:
+		_stains.pop_front().queue_free()
 	return decal
 
 

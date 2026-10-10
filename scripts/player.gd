@@ -39,6 +39,9 @@ const SHAKE_DECAY := 1.3
 const SHAKE_ANGLE := 0.055
 
 const MAX_HEALTH := 100.0
+## Health comes back by itself after this long without a hit, but only up to
+## what the difficulty allows (Settings.rules().regen_to): the rest has to be
+## picked up off the floor, see heal().
 const REGEN_DELAY := 4.0
 const REGEN_RATE := 20.0
 
@@ -105,6 +108,15 @@ func add_recoil(pitch: float, yaw: float) -> void:
 ## Rattles the view: 1 is an explosion at arm's length. It settles by itself.
 func shake(amount: float) -> void:
 	_trauma = minf(_trauma + amount, 1.0)
+
+
+## Mends the player by `amount`. False if there was nothing to mend.
+func heal(amount: float) -> bool:
+	if dead or health >= MAX_HEALTH:
+		return false
+	health = minf(health + amount, MAX_HEALTH)
+	health_changed.emit(health, MAX_HEALTH)
+	return true
 
 
 func take_damage(amount: float, _position := Vector3.ZERO, _direction := Vector3.ZERO) -> bool:
@@ -217,8 +229,9 @@ func _physics_process(delta: float) -> void:
 	_was_on_floor = is_on_floor()
 
 	_since_damage += delta
-	if _since_damage > REGEN_DELAY and health < MAX_HEALTH:
-		health = minf(health + REGEN_RATE * delta, MAX_HEALTH)
+	var regen_to: float = Settings.rules().regen_to
+	if _since_damage > REGEN_DELAY and health < regen_to:
+		health = minf(health + REGEN_RATE * delta, regen_to)
 		health_changed.emit(health, MAX_HEALTH)
 
 
