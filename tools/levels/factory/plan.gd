@@ -43,16 +43,20 @@ func _level_name() -> String:
 ## Lays the plan down before anything is built: the zones, and the floor that
 ## carries paint.
 func _plan() -> void:
+	# The factory was built and baked when all of a level threw the same dice.
+	# With dice of its own for every file, each crate would lie differently
+	# and all four zones would have to be baked again.
+	_shared_dice = true
 	_detail_inside = AABB(Vector3(-HX - 0.5, 0, -HZ - 0.5), Vector3(HX * 2.0 + 12.0, RIDGE + 1.0, HZ * 2.0 + 1.0))
 	# Four zones in a row. The hall and the annex look into each other through
 	# two doorways; the passage has a bend in it, so that neither the annex and
 	# the boiler house nor the passage and the hall are ever in sight of each
-	# other. The selftest checks that with rays.
-	zone("hall", [AABB(Vector3(-HX - 0.6, -1.0, -HZ - 0.6), Vector3(HX * 2.0 + 1.1, 13.0, HZ * 2.0 + 1.2))], ["annex"])
-	zone("annex", [AABB(Vector3(HX + 0.5, -1.0, -HZ - 0.4), Vector3(10.45, 5.0, HZ + 2.85))], ["passage"])
+	# other. The builder finds that out for itself.
+	zone("hall", [AABB(Vector3(-HX - 0.6, -1.0, -HZ - 0.6), Vector3(HX * 2.0 + 1.1, 13.0, HZ * 2.0 + 1.2))])
+	zone("annex", [AABB(Vector3(HX + 0.5, -1.0, -HZ - 0.4), Vector3(10.45, 5.0, HZ + 2.85))])
 	zone("passage", [
 		AABB(Vector3(23.3, -1.0, -18.6), Vector3(2.8, 4.6, 6.2)), AABB(Vector3(26.1, -1.0, -18.6), Vector3(2.9, 4.6, 2.8)),
-	], ["boiler"])
+	])
 	zone("boiler", [AABB(Vector3(BX0 - 0.4, -1.0, BZ0 - 0.4), Vector3(BX1 - BX0 + 0.8, BOILER_H + 1.5, BZ1 - BZ0 + 0.8))])
 	floor_paint_area(Rect2(-HX, BZ0 - 0.5, BX1 + 0.5 + HX, HZ - BZ0 + 0.5))
 

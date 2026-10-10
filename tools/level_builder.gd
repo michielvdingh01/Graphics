@@ -62,6 +62,12 @@ const PAINT_SCALE := 40.0
 const PAINT_YELLOW := Color(0.8, 0.57, 0.06)
 const PAINT_WHITE := Color(0.76, 0.76, 0.72)
 const PAINT_BLACK := Color(0.035, 0.035, 0.035)
+## Lines of sight between zones, see _find_sightlines(): from how many spots
+## in a zone they are looked for at most, and how far apart the points of a
+## zone lie that they are looked for to. scripts/selftest.gd checks with the
+## same two numbers.
+const LOOKOUTS := 150
+const SIGHT_GRID := 1.5
 
 var _tools := {}
 ## Size of the blocks that probe-lit detail is cut into, see _tool(). A level
@@ -117,6 +123,12 @@ var _part := NO_COLLIDE
 ## The other files of the level that have built a share of it, by name; see
 ## build().
 var _files := {}
+## Whether those files throw the dice of the level, one after the other,
+## instead of their own. With its own, what is added to one zone leaves the
+## crates and the broken panes of every other zone as they were, and their
+## lightmaps with them. A level sets this only to come out as it did before
+## files had dice of their own.
+var _shared_dice := false
 
 
 func _init() -> void:
@@ -128,9 +140,10 @@ func _init() -> void:
 	_fuel_rng.seed = 59
 
 
-## Builds what this file describes and writes it out; tools/build.gd calls it.
-func run() -> void:
-	_build()
+## Builds what this file describes and writes it out; tools/build.gd calls
+## it, and waits for it: a level takes a few frames, see _find_sightlines().
+func make() -> void:
+	await _build()
 
 
 ## Builds what _describe() describes and writes it out. This one makes a
@@ -156,6 +169,10 @@ func _build() -> void:
 
 	_describe()
 	_check_route()
+	# Better no level than one whose zones do not know what they can see.
+	if not await _find_sightlines():
+		push_error("The lines of sight between the zones were not worked out: nothing is written")
+		return
 
 	# The meshes come in as many files as there are zones and blocks of detail;
 	# clear out last time's.
@@ -199,6 +216,7 @@ func _describe() -> void:
 func build(file: String, method := &"_describe") -> void:
 	if not _files.has(file):
 		_files[file] = (load("res://tools/levels/%s/%s.gd" % [_level_name(), file]) as GDScript).new()
+		_files[file]._seed_dice("%s/%s" % [_level_name(), file])
 	var other: RefCounted = _files[file]
 	_hand_over(self, other)
 	other.call(method)
@@ -206,11 +224,22 @@ func build(file: String, method := &"_describe") -> void:
 
 
 ## Gives `to` everything `from` has built so far and the state it builds
-## with: every variable the two have in common.
+## with: every variable the two have in common, but for the dice, which each
+## keeps to itself unless the level shares them.
 func _hand_over(from: RefCounted, to: RefCounted) -> void:
 	for property: Dictionary in from.get_property_list():
 		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name in to:
-			to.set(property.name, from.get(property.name))
+			var value: Variant = from.get(property.name)
+			if value is RandomNumberGenerator and not _shared_dice:
+				continue
+			to.set(property.name, value)
+
+
+## Gives this file dice of its own, that fall the same way on every build.
+func _seed_dice(of: String) -> void:
+	var dice: Array[RandomNumberGenerator] = [_rng, _glass_rng, _decal_rng, _prop_rng, _clutter_rng, _fuel_rng]
+	for i in dice.size():
+		dice[i].seed = hash("%s/%d" % [of, i])
 
 
 # --- Zones --------------------------------------------------------------------
@@ -219,10 +248,12 @@ func _hand_over(from: RefCounted, to: RefCounted) -> void:
 
 ## Declares a zone: a part of the level that is drawn as a whole or not at
 ## all. Whatever is built inside one of the boxes of `bounds` from here on
-## belongs to it. `sees` names the zones that can be seen from inside it,
-## through a doorway or over a wall; it works both ways, so one side naming
-## the other is enough. A zone has to be closed by its own walls, floor and
-## roof, because its lightmap is baked with nothing else around it.
+## belongs to it. Which zones can be seen from inside it, through a doorway
+## or over a wall, the builder works out for itself once everything stands,
+## see _find_sightlines(). `sees` names zones to draw along with it besides:
+## for what has no collider to be found by, say. It works both ways, so one
+## side naming the other is enough. A zone has to be closed by its own walls,
+## floor and roof, because its lightmap is baked with nothing else around it.
 func zone(zone_name: String, bounds: Array[AABB], sees: Array[String] = []) -> void:
 	var node := Node3D.new()
 	node.name = "Zone" + zone_name.to_pascal_case()
@@ -312,6 +343,119 @@ func dust(volume: AABB, amount: int) -> void:
 	node.draw_pass_1 = quad
 	var zone_name := _zone_at(node.position)
 	_add(node, _zones[zone_name].contents if zone_name else _root)
+
+
+## Works out which zones are in sight of each other, in a level of more than
+## one. The colliders of the level are stood in a world and a navmesh is baked
+## from them as the game does it; from where somebody can stand in one zone,
+## standing and crouching, it looks at points all through each of the others.
+## One line that nothing stops, and the two are drawn together. Windows count
+## as holes: nothing that has no collider stops a look. What is found is added
+## to what zone() was told.
+##
+## scripts/selftest.gd looks for the same lines in the running game, where a
+## zone is switched off, and fails on the first it finds.
+##
+## True when it got to the end.
+func _find_sightlines() -> bool:
+	if _zones.size() < 2:
+		return true
+	var began := Time.get_ticks_msec()
+	var tree := Engine.get_main_loop() as SceneTree
+	# A stand-in for every body of the level, in the order the game finds
+	# them in: the level itself is not in a tree, and has scripts on it that
+	# are the game's to run.
+	var stand_in := Node3D.new()
+	for body: StaticBody3D in _root.find_children("*", "StaticBody3D", true, false):
+		var copy := StaticBody3D.new()
+		var at: Node3D = body
+		while at != _root:
+			copy.transform = at.transform * copy.transform
+			at = at.get_parent()
+		copy.collision_layer = body.collision_layer
+		for child in body.get_children():
+			var collider := child as CollisionShape3D
+			if collider:
+				var shape := CollisionShape3D.new()
+				shape.shape = collider.shape
+				shape.transform = collider.transform
+				copy.add_child(shape)
+		stand_in.add_child(copy)
+	tree.root.add_child(stand_in)
+	var navmesh := NavigationMesh.new()
+	navmesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	navmesh.geometry_collision_mask = 1
+	var source := NavigationMeshSourceGeometryData3D.new()
+	NavigationServer3D.parse_source_geometry_data(navmesh, source, stand_in)
+	NavigationServer3D.bake_from_source_geometry_data(navmesh, source)
+	if navmesh.get_polygon_count() == 0:
+		push_error("Sight: there is nowhere to stand in this level")
+		stand_in.free()
+		return false
+	# The bodies are in the world a frame after they are in the tree.
+	await tree.physics_frame
+	await tree.physics_frame
+	var space := stand_in.get_world_3d().direct_space_state
+	var ray := PhysicsRayQueryParameters3D.create(Vector3.ZERO, Vector3.ZERO, 1)
+
+	# Where eyes can be: over every corner and every middle of the navmesh, a
+	# share of them if there are many.
+	var corners := navmesh.get_vertices()
+	var spots := PackedVector3Array(corners)
+	for i in navmesh.get_polygon_count():
+		var middle := Vector3.ZERO
+		var polygon := navmesh.get_polygon(i)
+		for corner in polygon:
+			middle += corners[corner]
+		spots.append(middle / polygon.size())
+	var eyes := {}
+	var insides := {}
+	for zone_name: String in _zones:
+		var boxes: Array[AABB] = _zones[zone_name].bounds
+		var mine := PackedVector3Array()
+		for spot in spots:
+			if boxes.any(func(box: AABB) -> bool: return box.has_point(spot + Vector3.UP * 0.5)):
+				mine.append(spot)
+		var looks := PackedVector3Array()
+		for i in range(0, mine.size(), maxi(1, ceili(float(mine.size()) / LOOKOUTS))):
+			ray.from = mine[i] + Vector3.UP
+			ray.to = mine[i] + Vector3.DOWN * 2.0
+			var ground := space.intersect_ray(ray)
+			var feet: Vector3 = ground.position if ground else mine[i]
+			looks.append(feet + Vector3.UP * 1.6)
+			looks.append(feet + Vector3.UP * 0.95)
+		eyes[zone_name] = looks
+		# What there is to see of a zone: points all through it.
+		var points := PackedVector3Array()
+		for box in boxes:
+			var inner := box.grow(-0.6)
+			var counts := Vector3i((inner.size / SIGHT_GRID).ceil()).maxi(1)
+			for x in counts.x + 1:
+				for y in counts.y + 1:
+					for z in counts.z + 1:
+						points.append(inner.position + inner.size * Vector3(x, y, z) / Vector3(counts))
+		insides[zone_name] = points
+
+	var looked := 0
+	var found := PackedStringArray()
+	for from: String in _zones:
+		for to: String in _zones:
+			if to == from or to in _zones[from].sees or from in _zones[to].sees:
+				continue
+			for eye: Vector3 in eyes[from]:
+				ray.from = eye
+				for point: Vector3 in insides[to]:
+					ray.to = point
+					looked += 1
+					if space.intersect_ray(ray).is_empty():
+						_zones[from].sees.append(to)
+						found.append("%s and %s" % [from, to])
+						break
+				if to in _zones[from].sees:
+					break
+	stand_in.free()
+	print("Sight: %s; %d looks in %.1f s" % [", ".join(found) if found else "no zone sees another", looked, (Time.get_ticks_msec() - began) / 1000.0])
+	return true
 
 
 ## Name of the zone a point lies in, or empty for none.
