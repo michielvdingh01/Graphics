@@ -1,21 +1,26 @@
 extends CanvasLayer
-## Title screen, pause menu and settings, built in code like the HUD.
+## Title screen, pause menu, controls and settings, built in code like the HUD.
 ##
 ## The title screen sits on top of the loaded level, which stays paused and
 ## inert behind it as a backdrop. Pass --play to skip straight into the game.
 
-enum Screen { NONE, TITLE, LEVELS, PAUSE, SETTINGS }
+enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS }
 
 const LEVELS: Array[Dictionary] = [
 	{"name": "Factory", "scene": "res://scenes/factory.tscn"},
 	{"name": "Depot", "scene": "res://scenes/depot.tscn"},
 ]
+## What the controls screen can be read for. A trackpad gets its own sheet: it
+## cannot hold a right click and click at once, and its scroll is not a wheel.
+const DEVICES: Array[String] = ["Mouse and keyboard", "Trackpad and keyboard", "Controller"]
 const ACCENT := Color(1.0, 0.62, 0.25)
 const COLUMN_WIDTH := 520
 
 var _screen := Screen.NONE
-## The screen the settings were opened from.
-var _settings_parent := Screen.TITLE
+## The screen the controls or the settings were opened from.
+var _parent := Screen.TITLE
+## Index into DEVICES of the controls on show.
+var _device := 0
 var _enabled := false
 var _root := Control.new()
 var _shade := ColorRect.new()
@@ -32,6 +37,8 @@ func _ready() -> void:
 	if not _enabled:
 		return
 	get_tree().scene_changed.connect(_on_scene_changed)
+	if not Input.get_connected_joypads().is_empty():
+		_device = DEVICES.find("Controller")
 	if "--play" in OS.get_cmdline_user_args():
 		_show(Screen.NONE)
 	else:
@@ -48,7 +55,7 @@ func is_open() -> bool:
 ## True while the loaded level is only a backdrop for the title screen.
 func at_title() -> bool:
 	return _screen == Screen.TITLE or _screen == Screen.LEVELS or (
-		_screen == Screen.SETTINGS and _settings_parent == Screen.TITLE
+		(_screen == Screen.CONTROLS or _screen == Screen.SETTINGS) and _parent == Screen.TITLE
 	)
 
 
@@ -62,8 +69,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_show(Screen.NONE)
 		Screen.LEVELS:
 			_show(Screen.TITLE)
-		Screen.SETTINGS:
-			_show(_settings_parent)
+		Screen.CONTROLS, Screen.SETTINGS:
+			_show(_parent)
 	get_viewport().set_input_as_handled()
 
 
@@ -78,8 +85,8 @@ func _process(delta: float) -> void:
 
 
 func _show(screen: Screen) -> void:
-	if screen == Screen.SETTINGS:
-		_settings_parent = _screen
+	if screen == Screen.CONTROLS or screen == Screen.SETTINGS:
+		_parent = _screen
 	_screen = screen
 	for child in _column.get_children():
 		child.queue_free()
@@ -99,6 +106,7 @@ func _show(screen: Screen) -> void:
 				var text := "Continue  ·  %s, wave %d" % [_level_name(checkpoint.level), checkpoint.wave]
 				_button(text, _play.bind(checkpoint.level, false))
 			_button("New game", _show.bind(Screen.LEVELS))
+			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
 			_button("Quit", get_tree().quit)
 		Screen.LEVELS:
@@ -110,8 +118,13 @@ func _show(screen: Screen) -> void:
 			_heading("Paused", 44)
 			_button("Resume", _show.bind(Screen.NONE))
 			_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
+			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
 			_button("Quit to title", _quit_to_title)
+		Screen.CONTROLS:
+			_heading("Controls", 44)
+			_controls()
+			_button("Back", _show.bind(_parent))
 		Screen.SETTINGS:
 			_heading("Settings", 44)
 			_choice("Quality", "quality", Settings.QUALITY_NAMES)
@@ -127,7 +140,7 @@ func _show(screen: Screen) -> void:
 			_slider("Stick sensitivity", "stick_sensitivity", 0.2, 3.0, 0.05, "%.2f")
 			_toggle("Invert Y", "invert_y")
 			_slider("Volume", "volume", 0.0, 1.0, 0.05, "%.0f%%", 100.0)
-			_button("Back", _show.bind(_settings_parent))
+			_button("Back", _show.bind(_parent))
 	_focus_first.call_deferred()
 
 
@@ -293,6 +306,46 @@ func _slider(label: String, key: String, from: float, to: float, step: float, fo
 	slider.focus_entered.connect(func() -> void: caption.modulate = ACCENT)
 	slider.focus_exited.connect(func() -> void: caption.modulate = Color.WHITE)
 	_column.add_child(row)
+
+
+## A button that steps through DEVICES, and under it what does what on the one shown.
+func _controls() -> void:
+	# Mac keyboards call the Alt key Option.
+	var alt := "Option" if OS.get_name() == "macOS" else "Alt"
+	# Ctrl crouches as well, but is left out: macOS turns a click with Ctrl held
+	# into a right click, so firing from a crouch would aim instead.
+	var lines: Array[Array] = [
+		["Move", "W A S D", "W A S D", "Left stick"],
+		["Look", "Mouse", "Trackpad", "Right stick"],
+		["Sprint", "Hold Shift", "Hold Shift", "Click left stick"],
+		["Jump", "Space", "Space", "A"],
+		["Crouch", "Hold C", "Hold C", "Hold B"],
+		["Slide", "C while sprinting", "C while sprinting", "B while sprinting"],
+		["Fire", "Left click", "Click", "RT"],
+		["Aim", "Hold right click", "Hold " + alt, "Hold LT"],
+		["Reload", "R", "R", "X"],
+		["Grenade", "G", "G", "Y"],
+		["Switch weapon", "1 to 5, or scroll", "1 to 5", "LB and RB"],
+		["Pause", "Esc", "Esc", "Start"],
+	]
+	var button := _button("", func() -> void: _device = (_device + 1) % DEVICES.size())
+	var inputs: Array[Label] = []
+	for line in lines:
+		var row := HBoxContainer.new()
+		var caption := Label.new()
+		caption.text = line[0]
+		caption.custom_minimum_size.x = 240
+		caption.modulate.a = 0.6
+		row.add_child(caption)
+		inputs.append(Label.new())
+		row.add_child(inputs[-1])
+		_column.add_child(row)
+	var refresh := func() -> void:
+		button.text = "Playing with  ·  %s" % DEVICES[_device]
+		for i in lines.size():
+			inputs[i].text = lines[i][_device + 1]
+	button.pressed.connect(refresh)
+	refresh.call()
 
 
 ## Makes hovering with the mouse and stepping with a controller the same thing.
