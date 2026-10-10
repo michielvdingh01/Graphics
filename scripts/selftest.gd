@@ -347,6 +347,14 @@ func _handling() -> void:
 	_check("music plays on its own bus", music_bus > 0 and Sfx._music.playing and Sfx._music.bus == Sfx.MUSIC and Sfx.music_playing() == &"test")
 	Settings.put("music", 0.5)
 	_check("and has a slider of its own", is_equal_approx(AudioServer.get_bus_volume_db(music_bus), linear_to_db(0.5)))
+	# From the title screen into a level the menu asks for the level's piece
+	# twice in a row, which once left the theme playing.
+	Sfx.music(Menu.THEME, 0.0)
+	Sfx.music(&"level1and2", 0.1, Menu.LEVEL_MUSIC_DB)
+	Sfx.music(&"level1and2", 0.1, Menu.LEVEL_MUSIC_DB)
+	await _wait(Sfx.CHANGE_TIME + 0.6)
+	_check("the theme makes way for the music of the level", Sfx._music.playing and Sfx._music.stream.resource_path.contains("level1and2")
+		and absf(Sfx._music.volume_db - Menu.LEVEL_MUSIC_DB) < 0.5)
 	Sfx.music(&"a piece nobody has written", 0.1)
 	await _wait(0.5)
 	_check("a piece there is no file for is silence", not Sfx._music.playing and Sfx.music_playing() == &"")

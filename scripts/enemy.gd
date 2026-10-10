@@ -353,7 +353,7 @@ func take_damage(amount: float, hit_position: Vector3, direction: Vector3) -> bo
 		deflected = true
 		_shield -= amount
 		_rig.block(hit_position, direction)
-		Sfx.play_at(&"shield_block", hit_position, -2.0)
+		Sfx.play_at(&"shield_block", hit_position, -6.0)
 		if _shield <= 0.0:
 			_lose_shield(direction)
 		return false

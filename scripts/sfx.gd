@@ -77,9 +77,6 @@ const SOUNDS := {
 	&"rusher_charge": [0.26, 0.3, 8.0, 1.0, 0.5, 1500.0, -1.8, 6.0, 1.8, 0.05],
 	&"enemy_flank": [0.3, 0.0, 1.0, 1.0, 0.5, 760.0, 3.2, 7.0, 1.0, 0.01, 11.0],
 	&"enemy_alarm": [0.42, 0.0, 1.0, 1.0, 0.55, 1900.0, 0.0, 3.0, 1.0, 0.01, 14.0],
-	# A shot the plate of a grunt stops, and the plate coming off.
-	&"shield_block": [0.2, 0.5, 30.0, 1.0, 0.55, 980.0, 0.6, 16.0, 1.6],
-	&"shield_break": [0.45, 0.8, 9.0, 0.7, 0.5, 520.0, 2.5, 7.0, 2.2],
 }
 
 var _streams := {}
@@ -92,6 +89,8 @@ var _fade: Tween
 var _music: AudioStreamPlayer
 var _piece := &""
 var _music_fade: Tween
+## True while the piece that plays is dying away to make room for _piece.
+var _changing := false
 
 
 func _ready() -> void:
@@ -145,7 +144,10 @@ func _physics_process(_delta: float) -> void:
 func music(piece: StringName, seconds := 0.5, db := 0.0) -> void:
 	var busy := _music != null and _music.playing
 	if busy and piece == _piece:
-		_swell(db, seconds)
+		# Asked for again while the piece before it is still dying away: it
+		# is on its way, and a fade started now would call that off.
+		if not _changing:
+			_swell(db, seconds)
 		return
 	for kind in PIECE_KINDS:
 		var path := PIECES + String(piece) + kind
@@ -154,6 +156,7 @@ func music(piece: StringName, seconds := 0.5, db := 0.0) -> void:
 		if busy:
 			_piece = piece
 			_swell(-60.0, CHANGE_TIME)
+			_changing = true
 			_music_fade.tween_callback(_start_music.bind(piece, load(path), seconds, db))
 		else:
 			_start_music(piece, load(path), seconds, db)
@@ -164,6 +167,7 @@ func music(piece: StringName, seconds := 0.5, db := 0.0) -> void:
 ## Lets the music die away over that many seconds.
 func stop_music(seconds := 1.5) -> void:
 	_piece = &""
+	_changing = false
 	if _music == null or not _music.playing:
 		return
 	_swell(-60.0, seconds)
@@ -185,6 +189,7 @@ func _start_music(piece: StringName, stream: AudioStream, seconds := 0.0, db := 
 	if stream.get(&"loop") != null:
 		stream.set(&"loop", true)
 	_piece = piece
+	_changing = false
 	_music.stream = stream
 	_music.volume_db = -60.0 if seconds > 0.0 else db
 	_music.play()
