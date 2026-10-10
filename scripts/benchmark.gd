@@ -18,6 +18,10 @@ extends Node
 ## letting it run; several are separated by semicolons, a fifth number scales
 ## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride, 3 shot to pieces,
 ## 4 firing.
+## Poses 5, 6 and 7 are mid-stride to its right, to its left and backwards, 8
+## is the moment before it attacks and 9 the moment it is hit. --enemies=<theme>
+## chooses who the enemies are, see scripts/enemy_themes.gd. --animate keeps
+## what was spawned moving on the spot, to measure what it costs to show.
 ## --shoot=0.02 fires a shot along the view and shows it that many seconds
 ## later: the flash of the weapon in view, the tracer and what the bullet does
 ## to whatever it hits. --shoot=0.3,6,4 fires six shots within four degrees.
@@ -66,6 +70,7 @@ var snapping := false
 var _resolution := DEFAULT_RESOLUTION
 var _scene := ""
 var _profile := false
+var _animate := false
 var _off := PackedStringArray()
 var _at := PackedStringArray()
 var _spawn := PackedStringArray()
@@ -101,6 +106,7 @@ func _ready() -> void:
 	_profile = "--profile" in args
 	_posted = "--posted" in args
 	_exit = "--exit" in args
+	_animate = "--animate" in args
 	for arg in args:
 		if arg.begins_with("--res="):
 			var parts := arg.get_slice("=", 1).split("x")
@@ -178,6 +184,9 @@ func _run() -> void:
 			node.scale = Vector3.ONE * numbers[4]
 		if numbers.size() > 5 and node.has_method("preview"):
 			node.preview(numbers[5])
+		if _animate:
+			node.process_mode = Node.PROCESS_MODE_INHERIT
+			node.set_physics_process(false)
 	if _posted and tree.current_scene.has_method("post_robots"):
 		tree.current_scene.post_robots()
 	if _exit and tree.current_scene.has_method("_open_exit"):
@@ -317,6 +326,7 @@ func _run() -> void:
 		"scene": tree.current_scene.scene_file_path,
 		"resolution": [_resolution.x, _resolution.y],
 		"settings": Settings.summary(),
+		"enemies": Settings.enemy_theme,
 		"off": _off,
 		"views": views,
 	}

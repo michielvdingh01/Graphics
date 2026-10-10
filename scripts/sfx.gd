@@ -8,6 +8,7 @@ const RATE := 22050
 
 # name: [length s, noise gain, noise decay, noise lowpass 0..1,
 #        tone gain, tone Hz, tone pitch drop, tone decay, drive]
+# and, for a voice: seconds it takes to swell, and the rate in Hz of a growl in it.
 const SOUNDS := {
 	&"rifle_shot": [0.30, 1.0, 22.0, 0.55, 0.9, 160.0, 18.0, 20.0, 3.0],
 	&"pistol_shot": [0.22, 1.0, 30.0, 0.75, 0.7, 220.0, 22.0, 28.0, 2.5],
@@ -38,6 +39,15 @@ const SOUNDS := {
 	&"pin": [0.05, 0.3, 90.0, 1.0, 0.4, 2400.0, 0.0, 90.0, 1.0],
 	&"throw": [0.22, 0.5, 10.0, 0.07, 0.0, 100.0, 0.0, 1.0, 1.5],
 	&"bounce": [0.07, 0.5, 60.0, 0.4, 0.5, 620.0, 12.0, 60.0, 1.5],
+	&"human_step": [0.09, 0.5, 50.0, 0.12, 0.35, 85.0, 22.0, 55.0, 1.4],
+	&"human_alert": [0.26, 0.2, 10.0, 0.6, 0.9, 330.0, 2.2, 6.0, 3.5, 0.02],
+	&"human_hurt": [0.18, 0.3, 14.0, 0.4, 0.9, 210.0, 4.0, 10.0, 3.0, 0.01],
+	&"human_death": [0.7, 0.3, 5.0, 0.35, 0.9, 230.0, 2.6, 3.6, 3.0, 0.03],
+	&"zombie_alert": [0.6, 0.45, 3.5, 0.25, 0.8, 110.0, 0.6, 3.0, 4.0, 0.12, 38.0],
+	&"zombie_hurt": [0.3, 0.45, 8.0, 0.25, 0.8, 130.0, 2.0, 7.0, 4.0, 0.02, 45.0],
+	&"zombie_death": [0.9, 0.45, 3.0, 0.2, 0.8, 120.0, 1.6, 2.6, 4.0, 0.05, 32.0],
+	&"swing": [0.2, 0.9, 10.0, 0.3, 0.0, 100.0, 0.0, 1.0, 1.2, 0.06],
+	&"body_fall": [0.25, 0.8, 18.0, 0.07, 0.9, 55.0, 8.0, 16.0, 2.2],
 }
 
 var _streams := {}
@@ -83,6 +93,10 @@ func _synthesise(p: Array) -> AudioStreamWAV:
 		lowpassed += p[3] * (randf_range(-1.0, 1.0) - lowpassed)
 		phase += TAU * p[5] * exp(-t * p[6]) / RATE
 		var sample: float = p[1] * lowpassed * exp(-t * p[2]) + p[4] * sin(phase) * exp(-t * p[7])
+		if p.size() > 9:
+			sample *= minf(1.0, t / p[9])
+		if p.size() > 10:
+			sample *= 0.6 + 0.4 * sin(TAU * p[10] * t)
 		# Soft clip for punch, and fade the last 5 ms so the tail never clicks.
 		sample = tanh(sample * p[8]) * minf(1.0, (length - t) * 200.0)
 		data.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 29000.0))

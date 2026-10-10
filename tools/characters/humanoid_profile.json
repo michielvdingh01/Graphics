@@ -1,0 +1,677 @@
+{
+	"bones": [
+		{
+			"group": "Body",
+			"name": "Root",
+			"parent": "",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "Hips",
+			"parent": "Root",
+			"position": [
+				0.0,
+				0.75,
+				0.0
+			],
+			"required": true,
+			"tail": "Spine"
+		},
+		{
+			"group": "Body",
+			"name": "Spine",
+			"parent": "Hips",
+			"position": [
+				0.0,
+				0.85,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "Chest",
+			"parent": "Spine",
+			"position": [
+				0.0,
+				0.95,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "UpperChest",
+			"parent": "Chest",
+			"position": [
+				0.0,
+				1.05,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "Neck",
+			"parent": "UpperChest",
+			"position": [
+				0.0,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": "Head"
+		},
+		{
+			"group": "Body",
+			"name": "Head",
+			"parent": "Neck",
+			"position": [
+				0.0,
+				1.25,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Face",
+			"name": "LeftEye",
+			"parent": "Head",
+			"position": [
+				0.05,
+				1.4,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Face",
+			"name": "RightEye",
+			"parent": "Head",
+			"position": [
+				-0.05,
+				1.4,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Face",
+			"name": "Jaw",
+			"parent": "Head",
+			"position": [
+				0.0,
+				1.3,
+				0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftShoulder",
+			"parent": "UpperChest",
+			"position": [
+				0.05,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftUpperArm",
+			"parent": "LeftShoulder",
+			"position": [
+				0.1,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftLowerArm",
+			"parent": "LeftUpperArm",
+			"position": [
+				0.35,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftHand",
+			"parent": "LeftLowerArm",
+			"position": [
+				0.6,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": "LeftMiddleProximal"
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftThumbMetacarpal",
+			"parent": "LeftHand",
+			"position": [
+				0.625,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftThumbProximal",
+			"parent": "LeftThumbMetacarpal",
+			"position": [
+				0.66009,
+				1.15,
+				0.04981
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftThumbDistal",
+			"parent": "LeftThumbProximal",
+			"position": [
+				0.69518,
+				1.15,
+				0.07462
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftIndexProximal",
+			"parent": "LeftHand",
+			"position": [
+				0.675,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftIndexIntermediate",
+			"parent": "LeftIndexProximal",
+			"position": [
+				0.725,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftIndexDistal",
+			"parent": "LeftIndexIntermediate",
+			"position": [
+				0.75,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftMiddleProximal",
+			"parent": "LeftHand",
+			"position": [
+				0.675,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftMiddleIntermediate",
+			"parent": "LeftMiddleProximal",
+			"position": [
+				0.75,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftMiddleDistal",
+			"parent": "LeftMiddleIntermediate",
+			"position": [
+				0.775,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftRingProximal",
+			"parent": "LeftHand",
+			"position": [
+				0.675,
+				1.15,
+				-0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftRingIntermediate",
+			"parent": "LeftRingProximal",
+			"position": [
+				0.725,
+				1.15,
+				-0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftRingDistal",
+			"parent": "LeftRingIntermediate",
+			"position": [
+				0.75,
+				1.15,
+				-0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftLittleProximal",
+			"parent": "LeftHand",
+			"position": [
+				0.65,
+				1.15,
+				-0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftLittleIntermediate",
+			"parent": "LeftLittleProximal",
+			"position": [
+				0.7,
+				1.15,
+				-0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "LeftHand",
+			"name": "LeftLittleDistal",
+			"parent": "LeftLittleIntermediate",
+			"position": [
+				0.725,
+				1.15,
+				-0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightShoulder",
+			"parent": "UpperChest",
+			"position": [
+				-0.05,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightUpperArm",
+			"parent": "RightShoulder",
+			"position": [
+				-0.1,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightLowerArm",
+			"parent": "RightUpperArm",
+			"position": [
+				-0.35,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightHand",
+			"parent": "RightLowerArm",
+			"position": [
+				-0.6,
+				1.15,
+				0.0
+			],
+			"required": true,
+			"tail": "RightMiddleProximal"
+		},
+		{
+			"group": "RightHand",
+			"name": "RightThumbMetacarpal",
+			"parent": "RightHand",
+			"position": [
+				-0.625,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightThumbProximal",
+			"parent": "RightThumbMetacarpal",
+			"position": [
+				-0.66009,
+				1.15,
+				0.04981
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightThumbDistal",
+			"parent": "RightThumbProximal",
+			"position": [
+				-0.69518,
+				1.15,
+				0.07462
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightIndexProximal",
+			"parent": "RightHand",
+			"position": [
+				-0.675,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightIndexIntermediate",
+			"parent": "RightIndexProximal",
+			"position": [
+				-0.725,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightIndexDistal",
+			"parent": "RightIndexIntermediate",
+			"position": [
+				-0.75,
+				1.15,
+				0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightMiddleProximal",
+			"parent": "RightHand",
+			"position": [
+				-0.675,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightMiddleIntermediate",
+			"parent": "RightMiddleProximal",
+			"position": [
+				-0.75,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightMiddleDistal",
+			"parent": "RightMiddleIntermediate",
+			"position": [
+				-0.775,
+				1.15,
+				0.0
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightRingProximal",
+			"parent": "RightHand",
+			"position": [
+				-0.675,
+				1.15,
+				-0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightRingIntermediate",
+			"parent": "RightRingProximal",
+			"position": [
+				-0.725,
+				1.15,
+				-0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightRingDistal",
+			"parent": "RightRingIntermediate",
+			"position": [
+				-0.75,
+				1.15,
+				-0.025
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightLittleProximal",
+			"parent": "RightHand",
+			"position": [
+				-0.65,
+				1.15,
+				-0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightLittleIntermediate",
+			"parent": "RightLittleProximal",
+			"position": [
+				-0.7,
+				1.15,
+				-0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "RightHand",
+			"name": "RightLittleDistal",
+			"parent": "RightLittleIntermediate",
+			"position": [
+				-0.725,
+				1.15,
+				-0.05
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftUpperLeg",
+			"parent": "Hips",
+			"position": [
+				0.1,
+				0.75,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftLowerLeg",
+			"parent": "LeftUpperLeg",
+			"position": [
+				0.1,
+				0.375,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftFoot",
+			"parent": "LeftLowerLeg",
+			"position": [
+				0.1,
+				0.0,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "LeftToes",
+			"parent": "LeftFoot",
+			"position": [
+				0.1,
+				0.0,
+				0.15
+			],
+			"required": false,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightUpperLeg",
+			"parent": "Hips",
+			"position": [
+				-0.1,
+				0.75,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightLowerLeg",
+			"parent": "RightUpperLeg",
+			"position": [
+				-0.1,
+				0.375,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightFoot",
+			"parent": "RightLowerLeg",
+			"position": [
+				-0.1,
+				0.0,
+				0.0
+			],
+			"required": true,
+			"tail": ""
+		},
+		{
+			"group": "Body",
+			"name": "RightToes",
+			"parent": "RightFoot",
+			"position": [
+				-0.1,
+				0.0,
+				0.15
+			],
+			"required": false,
+			"tail": ""
+		}
+	],
+	"godot": "4.7.2-stable (official)"
+}
