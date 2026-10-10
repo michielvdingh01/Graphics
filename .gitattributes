@@ -1,0 +1,5 @@
+# Lightmaps are large and change as a whole with every bake: they are kept
+# with Git LFS, so that the history holds a pointer to each instead of the
+# file. Needs git-lfs (brew install git-lfs, then git lfs install --local).
+scenes/*.exr filter=lfs diff=lfs merge=lfs -text
+scenes/*.lmbake filter=lfs diff=lfs merge=lfs -text
