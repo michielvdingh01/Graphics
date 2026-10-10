@@ -212,6 +212,7 @@ func _show(screen: Screen) -> void:
 			_toggle("Fullscreen", "fullscreen")
 			_toggle("Show fps", "show_fps")
 			_slider("Field of view", "fov", 60.0, 110.0, 1.0, "%.0f°")
+			_slider("View motion", "view_motion", 0.0, Settings.MAX_VIEW_MOTION, 0.05, "%.0f%%", 100.0)
 			_slider("Mouse sensitivity", "mouse_sensitivity", 0.2, 3.0, 0.05, "%.2f")
 			_slider("Stick sensitivity", "stick_sensitivity", 0.2, 3.0, 0.05, "%.2f")
 			_toggle("Invert Y", "invert_y")

@@ -2,8 +2,18 @@ extends CharacterBody3D
 
 signal health_changed(health: float, max_health: float)
 signal damaged(amount: float)
+## The player was hit for `amount`, and from where: `bearing` points from the
+## player towards whoever or whatever did it, level with the floor and one
+## long, in the axes of the world. It is zero for a hit that came from no side
+## in particular: a fire underfoot, a blast overhead.
+signal hit_from(amount: float, bearing: Vector3)
+## Back on the floor after a fall. `hardness` is 0 for a step down and 1 for a
+## fall that makes the knees give as far as they go.
+signal landed(hardness: float)
 signal died
 signal revived
+
+const SPRING := preload("res://scripts/spring.gd")
 
 const WALK_SPEED := 5.0
 const SPRINT_SPEED := 8.0
@@ -30,17 +40,60 @@ const SLIDE_EYE := 0.8
 
 const SPRINT_FOV_KICK := 5.0
 const SLIDE_FOV_KICK := 9.0
+## The most that shots widen the field of view, in degrees, and how fast that
+## goes again, per second: most of it within a tenth of a second.
+const FOV_PUNCH_MAX := 1.5
+const FOV_PUNCH_FADE := 25.0
 const MOUSE_SENSITIVITY := 0.002
 ## Radians per second at full stick deflection.
 const STICK_SPEED := 3.6
 const MAX_PITCH := deg_to_rad(89.0)
 const RECOIL_SNAP := 30.0
 const RECOIL_RETURN := 7.0
+## Metres of floor from one footfall to the next.
 const STEP_DISTANCE := 2.4
+## Head bob at walking speed: how far the eye rises and falls with every step
+## and sways towards the foot that carries the weight, in metres, and how far
+## the head rolls with that sway and nods with the step, in radians. Small on
+## purpose: it is there to be felt, not seen.
+const BOB_HEIGHT := 0.014
+const BOB_SWAY := 0.006
+const BOB_ROLL := 0.0035
+const BOB_NOD := 0.002
+## How much more there is of it at a sprint than at a walk, and how fast it
+## comes and goes, per second, so that it never starts or stops with a jolt.
+const BOB_SPRINT := 1.6
+const BOB_FADE := 8.0
+## The share of its rise and sway that is left over the sights. Its roll and
+## its nod go altogether there, so that the sights hold still.
+const BOB_AIMED := 0.2
+## Landing, the knees give: the fall speed in m/s that is taken without, the
+## metres the eye dips for every m/s over that, the most it dips, and the
+## seconds after touching down at which it is lowest.
+const LAND_SPARE := 2.0
+const LAND_DIP := 0.025
+const LAND_DIP_MAX := 0.16
+const LAND_TIME := 0.07
+## Being hit knocks the head aside: by this many radians for a hit of HIT_FULL
+## damage or more and by less for less, furthest after HIT_TIME seconds. For a
+## hit from the front or the back, HIT_NOD of it throws the head back or
+## forward. Over the sights HIT_AIMED of it is left.
+const HIT_KICK := 0.017
+const HIT_FULL := 40.0
+const HIT_TIME := 0.06
+const HIT_NOD := 0.5
+const HIT_AIMED := 0.5
+## A hit of this much damage or more rattles the view as well: by HIT_TRAUMA
+## for one of HIT_FULL, see shake().
+const HARD_HIT := 20.0
+const HIT_TRAUMA := 0.3
 ## How fast the view settles after an explosion, per second, and how far it
-## is thrown about at worst, in radians.
+## is thrown about at worst: turned, in radians, moved, in metres, and widened,
+## in degrees of the field of view.
 const SHAKE_DECAY := 1.3
 const SHAKE_ANGLE := 0.055
+const SHAKE_SHIFT := 0.015
+const SHAKE_FOV := 2.0
 
 const MAX_HEALTH := 100.0
 ## Health comes back by itself after this long without a hit, but only up to
@@ -58,11 +111,14 @@ var _crouched := false
 var _sliding := false
 var _slide_cooldown := 0.0
 var _eye_height := STAND_EYE
-var _land_dip := 0.0
+## How far the knees have given after a landing, in metres, on its y.
+var _land := SPRING.new(LAND_TIME)
 var _tilt := 0.0
 var _fall_speed := 0.0
 var _was_on_floor := true
-var _step_distance := 0.0
+## See stride() and bob_weight().
+var _stride := 0.0
+var _bob_weight := 0.0
 var _since_damage := 0.0
 var _recoil_target := Vector3.ZERO
 var _recoil := Vector3.ZERO
@@ -70,6 +126,12 @@ var _recoil := Vector3.ZERO
 var _sprint_latched := false
 var _trauma := 0.0
 var _shake_time := 0.0
+## How a hit has knocked the head aside: pitch on its x and roll on its z.
+var _knock := SPRING.new(HIT_TIME)
+## The field of view without what a shot or a blast adds to it for a moment,
+## and what shots add to it, in degrees.
+var _fov := 80.0
+var _fov_punch := 0.0
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -79,6 +141,7 @@ var _shake_time := 0.0
 
 
 func _ready() -> void:
+	_fov = camera.fov
 	if not Menu.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -104,9 +167,31 @@ func is_sprinting() -> bool:
 	)
 
 
+## Where the player is in their stride: a whole number at every footfall and
+## one more for every step, back at 0 after 2. From 0 to 1 the right foot
+## carries the weight, from 1 to 2 the left. The bob of the view, that of the
+## weapon and the sound of a step all go by this one number, which is what
+## makes the view dip on the sound.
+func stride() -> float:
+	return _stride
+
+
+## How much of a walk there is to show: 0 standing still, in the air, sliding
+## or dead, 1 at walking speed and BOB_SPRINT at a sprint. It gets there over
+## a few tenths of a second, so that what goes by it never snaps.
+func bob_weight() -> float:
+	return _bob_weight
+
+
 ## Kicks the camera by the given angles in radians; it settles back by itself.
 func add_recoil(pitch: float, yaw: float) -> void:
 	_recoil_target += Vector3(pitch, yaw, yaw * 0.5)
+
+
+## Widens the field of view by `degrees` for a moment, as a shot does: the
+## jolt of it, without moving the aim.
+func punch_fov(degrees: float) -> void:
+	_fov_punch = minf(_fov_punch + degrees, FOV_PUNCH_MAX)
 
 
 ## Rattles the view: 1 is an explosion at arm's length. It settles by itself.
@@ -123,14 +208,18 @@ func heal(amount: float) -> bool:
 	return true
 
 
-func take_damage(amount: float, _position := Vector3.ZERO, _direction := Vector3.ZERO) -> bool:
+## `direction` is the way whatever hit was travelling: from whoever fired it
+## towards the player.
+func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.ZERO) -> bool:
 	if dead:
 		return false
 	health = maxf(health - amount, 0.0)
 	_since_damage = 0.0
-	add_recoil(randf_range(-0.01, 0.02), randf_range(-0.015, 0.015))
+	var bearing := _bearing(direction)
+	_knock_head(amount, bearing)
 	Sfx.play(&"hurt", -4.0)
 	damaged.emit(amount)
+	hit_from.emit(amount, bearing)
 	health_changed.emit(health, MAX_HEALTH)
 	if health <= 0.0:
 		dead = true
@@ -146,6 +235,9 @@ func revive(pose: Transform3D) -> void:
 	health = MAX_HEALTH
 	_since_damage = 0.0
 	_trauma = 0.0
+	_fov_punch = 0.0
+	_knock.settle()
+	_land.settle()
 	velocity = Vector3.ZERO
 	global_position = pose.origin
 	rotation = Vector3(0.0, pose.basis.get_euler().y, 0.0)
@@ -165,7 +257,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Turns the view by the given yaw and pitch in radians at the base field of view.
 func _look(amount: Vector2) -> void:
 	# Scale with zoom so aiming down sights keeps the same on-screen feel.
-	amount *= camera.fov / Settings.fov
+	amount *= _fov / Settings.fov
 	if Settings.invert_y:
 		amount.y = -amount.y
 	rotate_y(-amount.x)
@@ -237,15 +329,11 @@ func _physics_process(delta: float) -> void:
 	_fall_speed = velocity.y
 	move_and_slide()
 
-	if is_on_floor():
-		if not _was_on_floor and _fall_speed < -2.0:
-			_land_dip = clampf(-_fall_speed * 0.03, 0.0, 0.3)
-			Sfx.play(&"land", -6.0)
-		if not _sliding:
-			_step_distance += Vector2(velocity.x, velocity.z).length() * delta
-			if _step_distance > STEP_DISTANCE:
-				_step_distance = 0.0
-				Sfx.play(&"footstep", -16.0 if _crouched else -10.0)
+	if is_on_floor() and not _was_on_floor and _fall_speed < -LAND_SPARE:
+		var dip := minf((-_fall_speed - LAND_SPARE) * LAND_DIP, LAND_DIP_MAX)
+		_land.push(Vector3(0.0, dip, 0.0))
+		landed.emit(dip / LAND_DIP_MAX)
+		Sfx.play(&"land", -6.0)
 	_was_on_floor = is_on_floor()
 
 	_since_damage += delta
@@ -270,31 +358,105 @@ func _process(delta: float) -> void:
 	elif _crouched:
 		eye = CROUCH_EYE
 	_eye_height = lerpf(_eye_height, eye, 1.0 - exp(-12.0 * delta))
-	_land_dip = lerpf(_land_dip, 0.0, 1.0 - exp(-9.0 * delta))
-	head.position.y = _eye_height - _land_dip
+	head.position.y = _eye_height
 
 	_recoil_target = _recoil_target.lerp(Vector3.ZERO, 1.0 - exp(-RECOIL_RETURN * delta))
 	_recoil = _recoil.lerp(_recoil_target, 1.0 - exp(-RECOIL_SNAP * delta))
+
+	# From here on the view moves by itself, on a head that stays where the
+	# player holds it: that is what enemies aim at, and its pitch is what
+	# others are sent. All of it goes by the one setting.
+	var motion: float = Settings.view_motion
+	var aim := smoothstep(0.0, 1.0, weapons.ads_blend)
+	var bob := _walk(delta) * motion
+	var steady := lerpf(1.0, BOB_AIMED, aim)
+	var side := sin(PI * _stride)
+	var lift := -cos(TAU * _stride)
 	# Lean into strafes a little, and more during a slide.
 	var sideways := velocity.dot(global_basis.x)
-	var tilt := -sideways * 0.004 + (0.07 if _sliding else 0.0) + (0.5 if dead else 0.0)
+	var tilt := (-sideways * 0.004 + (0.07 if _sliding else 0.0)) * motion + (0.5 if dead else 0.0)
 	_tilt = lerpf(_tilt, tilt, 1.0 - exp(-10.0 * delta))
 	_trauma = maxf(_trauma - SHAKE_DECAY * delta, 0.0)
 	_shake_time += delta
+	var shaken := _trauma * _trauma * motion
 	var rattle := Vector3(
 		sin(_shake_time * 53.0) + sin(_shake_time * 31.7 + 1.3),
 		sin(_shake_time * 47.0 + 2.1) + sin(_shake_time * 27.1),
 		sin(_shake_time * 41.0 + 0.7) + sin(_shake_time * 23.3 + 4.0)
-	) * (_trauma * _trauma * SHAKE_ANGLE * 0.5)
-	camera.rotation = _recoil + Vector3(0.0, 0.0, _tilt) + rattle
+	) * (shaken * SHAKE_ANGLE * 0.5)
+	var jolt := Vector3(
+		sin(_shake_time * 44.0 + 0.9) + sin(_shake_time * 29.3 + 2.6),
+		sin(_shake_time * 50.0 + 3.3) + sin(_shake_time * 25.9 + 1.1),
+		sin(_shake_time * 37.0 + 5.2) + sin(_shake_time * 21.7)
+	) * (shaken * SHAKE_SHIFT * 0.5)
+	_land.step(delta)
+	_knock.step(delta)
+	camera.position = (
+		Vector3(side * BOB_SWAY, lift * BOB_HEIGHT, 0.0) * (bob * steady)
+		+ Vector3.DOWN * (minf(_land.at.y, LAND_DIP_MAX) * motion)
+		+ jolt
+	)
+	camera.rotation = (
+		_recoil + Vector3(0.0, 0.0, _tilt) + rattle
+		+ Vector3(lift * BOB_NOD, 0.0, -side * BOB_ROLL) * (bob * (1.0 - aim))
+		+ _knock.at * motion
+	)
 
 	var fov: float = Settings.fov
 	if _sliding:
-		fov += SLIDE_FOV_KICK
+		fov += SLIDE_FOV_KICK * motion
 	elif is_sprinting() and velocity.length() > WALK_SPEED + 0.5:
-		fov += SPRINT_FOV_KICK
+		fov += SPRINT_FOV_KICK * motion
 	fov = lerpf(fov, weapons.ads_fov(), smoothstep(0.0, 1.0, weapons.ads_blend))
-	camera.fov = lerpf(camera.fov, fov, 1.0 - exp(-14.0 * delta))
+	# What a shot or a blast adds comes on top of this: put through the same
+	# easing, a punch that is over in a tenth of a second would never show.
+	_fov = lerpf(_fov, fov, 1.0 - exp(-14.0 * delta))
+	camera.fov = _fov + _fov_punch * motion + shaken * SHAKE_FOV * _fov / Settings.fov
+	# It fades after it has been shown: the first frame of a punch is all of it.
+	_fov_punch *= exp(-FOV_PUNCH_FADE * delta)
+
+
+## Moves the stride on by what was walked in `delta` seconds, sounds a step at
+## every footfall and returns how much of a walk there is to show, see
+## bob_weight(). A stride is only ever paused, never started afresh: a bob
+## that began again from nothing with every first step would be a jolt.
+func _walk(delta: float) -> float:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	var walking := not dead and not _sliding and is_on_floor()
+	if walking:
+		var foot := floorf(_stride)
+		_stride += speed * delta / STEP_DISTANCE
+		if floorf(_stride) > foot:
+			Sfx.play(&"footstep", -16.0 if _crouched else -10.0)
+		_stride = fposmod(_stride, 2.0)
+	var weight := minf(speed / WALK_SPEED, BOB_SPRINT) if walking else 0.0
+	_bob_weight = lerpf(_bob_weight, weight, 1.0 - exp(-BOB_FADE * delta))
+	return _bob_weight
+
+
+## Where a hit came from, given the way it was travelling: a direction level
+## with the floor and one long, or zero if it came from above, from below or
+## from nowhere, as a fire underfoot does.
+func _bearing(direction: Vector3) -> Vector3:
+	var back := -direction.normalized()
+	var level := Vector3(back.x, 0.0, back.z)
+	return level.normalized() if level.length() > 0.2 else Vector3.ZERO
+
+
+## Knocks the head aside, away from where a hit came from: mostly a roll,
+## which leaves the aim where it was, and for a hit from the front a little
+## back. One that came from no side rolls it half as far, either way. This
+## takes the place of a kick of the aim by chance, as large for a graze as for
+## a blow: being hit should say from where, not spoil the next shot.
+func _knock_head(amount: float, bearing: Vector3) -> void:
+	var size := clampf(amount / HIT_FULL, 0.1, 1.0) * HIT_KICK * lerpf(1.0, HIT_AIMED, weapons.ads_blend)
+	if bearing == Vector3.ZERO:
+		_knock.push(Vector3(0.0, 0.0, size * (0.5 if randf() < 0.5 else -0.5)))
+	else:
+		var from := global_basis.inverse() * bearing
+		_knock.push(Vector3(-from.z * HIT_NOD, 0.0, from.x) * size)
+	if amount >= HARD_HIT:
+		shake(minf(amount / HIT_FULL, 1.0) * HIT_TRAUMA)
 
 
 func _start_slide() -> void:
