@@ -609,7 +609,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 |---|---|---|---|
 | 1. Bouwdoos | De bouwstenen uit de fabriek naar een gedeelde bibliotheek, en een level in één bestand per zone met vaste deurposities | De fabriek komt er byte voor byte gelijk uit | Klaar, zie hieronder |
 | 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na. Zie hieronder |
-| 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | |
+| 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | Klaar zonder streamen: het proeflevel haalt het zo. Zie hieronder |
 | 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | |
 | 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | |
 
@@ -617,7 +617,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 
 - **Groter betekent een langere route door veel ruimtes**, met af en toe een ommuurd buitenterrein. Een open wereld past niet binnen de marge van 10 fps op deze laptop.
 - **De fabriek is het proefterrein** voor stap 1 tot 3; het grote level wordt nieuw gebouwd.
-- **Lightmaps gaan uit git**, naar Git LFS. Dat is een installatie en die is nog niet gedaan: eerst vragen.
+- **Lightmaps gaan uit git**, naar Git LFS. Dat is op 10 oktober 2026 gedaan: `git-lfs` 3.8.0 via Homebrew, alleen voor deze repository aangezet (`git lfs install --local`). De `.exr` en `.lmbake` in `scenes/` staan vanaf die commit als verwijzing in de geschiedenis; wat ervoor ligt is niet herschreven. Een verse checkout krijgt de echte bestanden. Er is nog niets naar GitHub gepusht; hoeveel LFS-opslag daar beschikbaar is, is niet nagekeken.
 
 **Hoe de graphics op niveau blijven**, vanaf stap 2:
 
@@ -657,6 +657,8 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | Nagaan dat een wijziging aan de bouwer of de bouwdoos verder niets heeft veranderd | `tools/build_check.py` |
 | Een level zone voor zone bekijken en horen wat elke zone kost en mist | `tools/zone_sheet.py factory`, of met `--check` zonder beelden; `--posted` zet de robots op hun post |
 | Bakken wat er na een wijziging gebakken moet worden | `tools/bake_lightmaps.sh`, zie stap 2 |
+| Meten wat een level kost om te laden en vast te houden | `tools/level_cost.sh factory` |
+| Een proeflevel maken van vijf kopieën van een level, om aan te meten | `tools/proof_level.sh`, dan `tools/zone_sheet.py proof` of `tools/level_cost.sh proof` |
 
 **Nog open**
 
@@ -724,6 +726,55 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 - Een handtekening ziet geen gewijzigd materiaal, geen gewijzigde textuur en geen opnieuw geïmporteerd model. Daarna: `tools/bake_lightmaps.sh --all`.
 - Het keurmerk kijkt niet naar grote kale vlakken: het telt alleen of er in een zone een decal ligt. De gang van de fabriek heeft er twee en is toch kaal, zoals op het blad te zien is.
 - De standpunten staan in de hoeken van een zone, en dat is niet altijd waar de speler binnenkomt. Het uitzicht vanaf de deur waar de route een zone binnenkomt ontbreekt nog.
+
+### Stap 3: gemeten in plaats van gestreamd
+
+Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. Voordat daar iets voor gebouwd is, is gemeten wat een level van vijf fabrieken kost. Het haalt de framerate en het geheugen zonder streamen. Wat er wel te halen viel, lag ergens anders.
+
+**Wat er staat**
+
+- **`tools/level_cost.sh [level]`** laadt een level in een lege scène en zegt hoe lang dat duurt en wat het aan geheugen bijzet, met de lightmaps één voor één.
+- **`tools/proof_level.sh [level] [kopieën]`** maakt van een gebouwd en gebakken level een proeflevel: de fabriek vijf keer, als één level van twintig zones en tachtig robots. De kopieën staan 300 m uit elkaar, te ver om elkaar te zien of te beschaduwen, en delen hun meshes en lightmaps met de eerste. De twee scènes die het schrijft staan niet in git.
+- **Het levelbestand is dertig keer kleiner.** De bouwer plaatste modellen zonder Godot te vertellen hoe ze oorspronkelijk waren. Van elk model waarvan hij daarna iets binnenin veranderde, om het door de probes te laten belichten, werd de hele mesh in het level opgeslagen: 46 meshes, 7,4 van de 7,7 MB van de fabriek. Geplaatst zoals de editor het doet (`GEN_EDIT_STATE_INSTANCE` in `prop`) wordt alleen opgeslagen wat het level veranderde.
+- **Wat in een uitgeschakelde zone beweegt, wordt niet meer getekend.** Het rolluik van een uitgang hangt bij de schil van zijn zone, en die schil blijft staan om schaduw te werpen. Het rolluik zelf bleef daarbij gewoon zichtbaar. `scripts/zones.gd` laat het nu, net als de schil, alleen nog schaduw werpen.
+
+**Gemeten** op 10 oktober 2026, terwijl de laptop in gebruik was
+
+| | De fabriek | Het proeflevel: vijf fabrieken |
+|---|---|---|
+| Zones, nodes | 4, 1317 | 20, 6510 |
+| Het levelbestand | 0,25 MB, gelezen in 46 ms | 1,12 MB, gelezen in 196 ms |
+| Het level laden zonder beeld, alles | 0,25 tot 0,47 s | 0,40 tot 0,67 s |
+| Navmesh bakken bij het laden | 66 tot 73 ms, 612 veelhoeken | 375 ms, 3068 veelhoeken |
+| Texturen op de videokaart | 870 MB | 870 MB |
+| Meshes en andere buffers | 66 MB | 71 MB |
+| Geheugen van de engine zelf | 57 MB | 76 MB |
+| Lightmaps op de videokaart | 25 MB (hal 16, aanbouw 4, ketelhuis 4, gang 1) | dezelfde 25 MB, gedeeld; eigen lightmaps zouden 125 MB zijn |
+| De tien standpunten van de fabriek | 454 tot 1647 tekenopdrachten | in kopie 1 tot op de driehoek hetzelfde, alle tien |
+| Framerate in die standpunten, 1440p met FSR 2 op 67% | 68 tot 81 fps | 68 tot 80 fps |
+| Met de robots op hun post (16 en 80), mediaan | 73,5 fps | 74,3 fps |
+
+- **Het geheugen zit in wat elk level deelt.** De 870 MB aan texturen zijn die van de materialen en de modellen, en die groeien niet mee met het level. Per fabriek aan nieuwe ruimtes komt er 25 MB aan lightmaps bij, plus de eigen meshes. Het proeflevel deelt zijn meshes en lightmaps, dus een echt level van die omvang ligt hoger dan wat hier gemeten is: 100 MB aan lightmaps erbij en hooguit 260 MB aan meshes (vier keer alle buffers die de fabriek nu heeft), op een totaal van ruim 1 GB.
+- **Het laden van een level groeit met zijn omvang, maar het is weinig.** Het bestand en het navmesh van het proeflevel kosten samen 0,6 s. Dat de fabriek eerst 1,4 s nodig had, kwam door de meshkopieën: 1,2 s daarvan was het lezen van die tekst. De fabriek laadt nu in een kwart tot een halve seconde, en het depot in 0,05 tot 0,07 s in plaats van 0,6 tot 0,7.
+- **Wat een beeld kost, hangt niet af van hoeveel zones er zijn.** In elk van de tien standpunten tekent het level van twintig zones precies evenveel als de fabriek alleen.
+- **De lightmaps zijn op schijf groot en op de videokaart klein.** De hal is 44,7 MB als `.exr` en 16 MB gecomprimeerd in het geheugen.
+
+**Afwijkingen van het plan**
+
+- **Er wordt niet gestreamd.** Het zou geheugen en laadtijd besparen die er niet zijn, en het raakt alles wat nu van het hele level uitgaat: het navmesh, de verkenning van dekking, de robots op hun post.
+- **De grote vlakken hebben geen grovere lightmap gekregen.** Dat scheelt naar schatting een vijfde van de baktijd en de bestandsgrootte van de hal, en vraagt een bake van alles en een oordeel op het oog. Met LFS is de bestandsgrootte geen probleem meer; de 1:50 van de hal blijft staan.
+
+**Onderweg gevonden**
+
+- **De zon tekent mee wat binnen bereik van zijn schaduw staat.** Met de kopieën eerst 130 m uit elkaar kostten twee standpunten 25 en 38 tekenopdrachten en 60 duizend driehoeken meer dan in de fabriek alleen: de schil van de hal van de buurkopie, één keer getekend voor de schaduw. Dat is in een echt level ook zo: elke schil binnen het bereik van de zonneschaduw (70 m) telt mee, of zijn zone nu aan staat of niet.
+- **De getallen op een zone worden gedeeld door elke kopie van de scène.** De standpunten van de kopieën stonden eerst allemaal 1300 m verderop, de som van alle verschuivingen: het aanpassen van de ene kopie paste ze allemaal aan.
+- **Meten terwijl er gespeeld wordt, halveert de cijfers.** Eén run van het contactblad gaf 32 tot 37 fps in elk standpunt, ook in een lege gang. Het script zegt het nu als zelfs het lichtste standpunt tekortschiet. Tekenopdrachten en driehoeken hebben daar geen last van.
+- Door het rolluik staan er in het blad van de fabriek sindsdien vijf tekenopdrachten minder bij de twee standpunten waar het in beeld viel terwijl de hal uit stond: gang 2 (510) en ketelhuis 1 (656).
+
+**Nog open**
+
+- Het proeflevel is gekopieerd en niet gebouwd: wat de bouwer zelf aan twintig zones kost (de zichtlijnen, zie stap 2) is er niet mee gemeten, en evenmin een level waarin de zones aan elkaar grenzen.
+- De 870 MB aan texturen is het grootste wat een level in het geheugen heeft. Dat is geen vraag van levelgrootte, maar wel de eerste plek om te kijken als het geheugen ooit krap wordt.
 
 ## Gevechten: dekking, beurten en schaarste
 
