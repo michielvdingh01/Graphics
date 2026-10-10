@@ -814,6 +814,7 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 - Daarna is de inrichting van de vleugel nog veranderd, dus ook de vier lightmaps die er lagen klopten niet meer. Ze zijn weggehaald: de vleugel heeft geen lightmaps.
 - **`tools/bake_lightmaps.sh` weigert sindsdien te bakken zolang er een andere Godot op de GPU zit**, tenzij met `--anyway`. Een bake wil de GPU voor zichzelf.
 - `tools/build.gd` laat Godot niet meer eindeloos draaien als een bouwer op een fout stukloopt: na vier minuten stopt het met een melding. Dat gebeurde hier drie keer.
+- **Niet uitgezocht is wat de oorzaak was.** De andere Godot kan de GPU hebben vastgezet, of er zelf het slachtoffer van zijn geweest: het vastlopen begon precies toen de bake aan de ketelruimte toekwam, dus het kan ook aan die ruimte liggen. Een half uur later hingen beide processen er nog, en een poging om het spel te starten liep op dezelfde manier vast. Bak de ketelruimte na een herstart eerst alleen (`tools/bake_lightmaps.sh res://scenes/wing.tscn plant`), met niets anders op de GPU.
 
 **Werkwijze**
 
