@@ -17,6 +17,9 @@ signal exit_opened
 ## The player has left by the exit; `next` is the level that follows, or
 ## empty when this was the last one.
 signal finished(next: String)
+## The player has picked something up: what the HUD says of it, and in what
+## colour.
+signal picked_up(text: String, tint: Color)
 
 const GRUNT := preload("res://scenes/enemy.tscn")
 const RUSHER := preload("res://scenes/enemy_rusher.tscn")
@@ -33,6 +36,22 @@ const EXIT_FADE := 0.9
 ## lamp over it has come on it starts.
 const DOOR_TIME := 3.2
 const DOOR_DELAY := 0.5
+const PICKUP := preload("res://scripts/pickup.gd")
+## Health the player has at least after reaching a checkpoint, and after
+## carrying on from one: dying is never the better way to get there.
+const CHECKPOINT_HEALTH := 75.0
+## What an enemy leaves behind, per kill, as shares of one thing: a cell
+## that mends [always, per unit of health the player lacks, for a kill from
+## close by, from a heavy], a can of ammunition [always, per unit the weapon
+## in hand is short], a grenade [always, from a heavy]. The shares add up
+## over the kills and something is left each time one is full, so what there
+## is to find follows what the player needs and nothing is left to chance.
+## Settings.rules().drops scales all of it.
+const LEAVES_CELL: Array[float] = [0.2, 0.9, 0.3, 1.0]
+const LEAVES_CAN: Array[float] = [0.3, 0.8]
+const LEAVES_GRENADE: Array[float] = [0.12, 1.0]
+## A kill from closer than this counts as one from close by.
+const CLOSE := 8.0
 
 
 ## A part of the level that is fought over.
@@ -75,6 +94,8 @@ var exit_open := false
 var _checkpoint := -1
 var _finished := false
 var _playing := false
+## How much of a cell, a can and a grenade the kills so far have come to.
+var _due: Array[float] = [0.0, 0.5, 0.0]
 
 @onready var nav_region: NavigationRegion3D = $NavigationRegion3D
 @onready var player: CharacterBody3D = $Player
@@ -169,6 +190,9 @@ func _resume() -> void:
 					if zone.order < checkpoints[i].order:
 						zone.started = true
 						zone.cleared = true
+				# As the checkpoint left the player, and no better.
+				player.health = CHECKPOINT_HEALTH
+				player.health_changed.emit.call_deferred(player.health, player.MAX_HEALTH)
 	elif exit:
 		# The start of a level is the first place to carry on from.
 		Save.store(scene_file_path, "", "", kills)
@@ -268,9 +292,36 @@ func _process(delta: float) -> void:
 		Save.tally("seconds", delta)
 
 
+## What an enemy that has gone down leaves for the player: see LEAVES_CELL.
+func _leave_behind(enemy: Node3D) -> void:
+	var drops: float = Settings.rules().drops
+	var heavy := 1.0 if enemy.get("role") == "heavy" else 0.0
+	var lack := 1.0 - clampf(player.health / player.MAX_HEALTH, 0.0, 1.0)
+	var close := 1.0 if enemy.global_position.distance_to(player.global_position) < CLOSE else 0.0
+	_due[PICKUP.Kind.HEALTH] += (LEAVES_CELL[0] + LEAVES_CELL[1] * lack + LEAVES_CELL[2] * close + LEAVES_CELL[3] * heavy) * drops
+	_due[PICKUP.Kind.AMMO] += (LEAVES_CAN[0] + LEAVES_CAN[1] * player.weapons.ammo_lack()) * drops
+	_due[PICKUP.Kind.GRENADE] += (LEAVES_GRENADE[0] + LEAVES_GRENADE[1] * heavy) * drops
+	for kind in _due.size():
+		while _due[kind] >= 1.0:
+			_due[kind] -= 1.0
+			leave(kind, enemy.global_position + Vector3.UP * 0.9)
+
+
+## Leaves one thing for the player to pick up at `at`: a cell, a can or a
+## grenade, as a PICKUP.Kind.
+func leave(kind: int, at: Vector3) -> Node3D:
+	var pickup: Node3D = PICKUP.new()
+	pickup.kind = kind
+	pickup.position = at
+	pickup.taken.connect(func(_kind: int) -> void: picked_up.emit(pickup.label(), pickup.tint()))
+	add_child(pickup)
+	return pickup
+
+
 func _on_enemy_died(enemy: Node3D, zone: Zone) -> void:
 	# One that is shot down where it stood still has to fall.
 	enemy.process_mode = Node.PROCESS_MODE_INHERIT
+	_leave_behind(enemy)
 	kills += 1
 	kills_changed.emit(kills)
 	zone.alive -= 1
@@ -300,7 +351,10 @@ func _on_checkpoint_entered(body: Node3D, index: int) -> void:
 			return
 	_checkpoint = index
 	Save.store(scene_file_path, checkpoint.id, checkpoint.title, kills)
-	player.weapons.refill()
+	# Not a full refill: whatever has run low comes back up to what a level
+	# starts with, and so does the player.
+	player.weapons.resupply()
+	player.heal(maxf(CHECKPOINT_HEALTH - player.health, 0.0))
 	Sfx.play(&"reload_end", -4.0)
 	checkpoint_reached.emit(checkpoint.title)
 

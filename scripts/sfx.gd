@@ -59,6 +59,10 @@ const SOUNDS := {
 	# A shot the plate of a grunt stops, and the plate coming off.
 	&"shield_block": [0.2, 0.5, 30.0, 1.0, 0.55, 980.0, 0.6, 16.0, 1.6],
 	&"shield_break": [0.45, 0.8, 9.0, 0.7, 0.5, 520.0, 2.5, 7.0, 2.2],
+	# Something picked up off the floor.
+	&"pickup_ammo": [0.1, 0.35, 50.0, 1.0, 0.5, 1050.0, -2.5, 26.0, 1.0],
+	&"pickup_health": [0.24, 0.0, 1.0, 1.0, 0.5, 620.0, -3.2, 9.0, 1.0],
+	&"pickup_grenade": [0.1, 0.4, 40.0, 0.6, 0.5, 430.0, -2.0, 24.0, 1.4],
 }
 
 var _streams := {}

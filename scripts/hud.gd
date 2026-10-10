@@ -50,6 +50,11 @@ var _ammo_label := Label.new()
 var _weapon_label := Label.new()
 var _grenades := Grenades.new()
 var _health_bar := ProgressBar.new()
+## A mark on the health bar at what comes back by itself, the health as a
+## number, and a line for what was just picked up.
+var _regen_mark := ColorRect.new()
+var _health_label := Label.new()
+var _pickup_label := Label.new()
 var _objective_label := Label.new()
 var _kills_label := Label.new()
 var _banner := Label.new()
@@ -109,6 +114,21 @@ func _ready() -> void:
 	_health_bar.max_value = 1.0
 	_health_bar.value = 1.0
 	_place(_health_bar, Control.PRESET_BOTTOM_LEFT)
+	_regen_mark.color = Color(1, 1, 1, 0.85)
+	_regen_mark.size = Vector2(2, 20)
+	_regen_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_health_bar.add_child(_regen_mark)
+	_health_label.add_theme_font_size_override("font_size", 26)
+	_place(_health_label, Control.PRESET_BOTTOM_LEFT)
+	_health_label.offset_left += 272
+	_health_label.offset_right += 272
+	_health_label.offset_top += 8
+	_health_label.offset_bottom += 8
+	_pickup_label.add_theme_font_size_override("font_size", 24)
+	_pickup_label.modulate.a = 0.0
+	_place(_pickup_label, Control.PRESET_BOTTOM_LEFT)
+	_pickup_label.offset_top -= 30
+	_pickup_label.offset_bottom -= 30
 
 	_banner.add_theme_font_size_override("font_size", 56)
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -151,6 +171,8 @@ func _bind() -> void:
 	game.kills_changed.connect(_on_kills_changed)
 	game.checkpoint_reached.connect(func(_title: String) -> void: _show_banner("CHECKPOINT", Color.WHITE, 1.2))
 	game.finished.connect(_on_finished.bind(game.EXIT_FADE))
+	game.picked_up.connect(_on_picked_up)
+	_on_health_changed(_player.health, _player.MAX_HEALTH)
 	_on_objective_changed(game.objective, 0)
 	_on_kills_changed(game.kills)
 
@@ -195,13 +217,27 @@ func _process(delta: float) -> void:
 
 
 func _on_health_changed(health: float, max_health: float) -> void:
-	_health_ratio = health / max_health
+	_health_ratio = clampf(health / max_health, 0.0, 1.0)
 	_health_bar.value = _health_ratio
+	_health_label.text = "%d" % ceili(_health_ratio * max_health)
+	# What is under the mark comes back by itself; the rest has to be found.
+	var regen_to: float = Settings.rules().regen_to / max_health
+	_regen_mark.position = Vector2(_health_bar.custom_minimum_size.x * regen_to - 1.0, -3.0)
+	_health_label.modulate = Color(1, 0.45, 0.35) if _health_ratio <= regen_to else Color.WHITE
 
 
+## The reserve is -1 for a weapon that never runs out.
 func _on_ammo_changed(_weapon_name: String, mag: int, reserve: int) -> void:
-	_ammo_label.text = "%d / %d" % [mag, reserve]
-	_ammo_label.modulate = Color(1, 0.4, 0.3) if mag == 0 else Color.WHITE
+	_ammo_label.text = "%d / %s" % [mag, "∞" if reserve < 0 else str(reserve)]
+	_ammo_label.modulate = Color(1, 0.4, 0.3) if mag == 0 else (Color(1, 0.8, 0.4) if reserve == 0 else Color.WHITE)
+
+
+func _on_picked_up(text: String, tint: Color) -> void:
+	_pickup_label.text = text
+	_pickup_label.modulate = tint
+	var tween := create_tween()
+	tween.tween_interval(1.1)
+	tween.tween_property(_pickup_label, "modulate:a", 0.0, 0.5)
 
 
 func _on_grenades_changed(count: int) -> void:
