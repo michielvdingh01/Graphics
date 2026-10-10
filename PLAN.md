@@ -177,7 +177,7 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 - **Brandstofvaten, gasflessen en jerrycans** zijn geen decor meer. Het rode vat met de explosiesticker (een van de drie vatmodellen), de gasfles en de jerrycan gaan de lucht in als erop geschoten wordt. Een gat erin steekt ze eerst aan: langs een vat of een jerrycan likt een vlam omhoog, uit een gasfles komt een steekvlam. Na één tot twee seconden ontploffen ze. Dat is lang genoeg om weg te komen, of om een robot erlangs te zien lopen. Meer schade, of een ontploffing ernaast, laat ze meteen afgaan, dus wat bij elkaar staat gaat achter elkaar de lucht in. Een verdwaald schot van een robot steekt ze net zo goed aan. De blauwe en grijze vaten doen niets.
 - **De klap** doet schade die afneemt met de afstand (150 in het hart van een vat, niets meer op 6,5 m), gooit robots, de speler en losse stukken weg en schudt het beeld. Wie achter een muur, een container of een betonblok staat, krijgt niets: de klap kijkt op drie hoogtes of hij je kan zien, dus half achter dekking is de helft van de schade. De speler krijgt de helft van wat een robot krijgt, zodat een vergissing te overleven is. Een robot die door een klap kapot gaat, valt in stukken uiteen die van de klap weg vliegen.
 - **Wat er overblijft.** Het vat zelf vliegt zwartgeblakerd en gedeukt de lucht in en blijft liggen waar het neerkomt. De brandstof brandt nog zeven seconden na op de vloer en doet schade aan wie erin staat, robot of speler. Op de vloer blijft een roetvlek achter.
-- **Handgranaten.** Drie stuks, bij elk checkpoint aangevuld, met G of Y op de controller. De linkerhand laat het wapen los, wat een herlaadbeurt afbreekt; de granaat stuitert, rolt en gaat na 2,2 seconden af met dezelfde klap als een vat. Het model is in code gebouwd (`tools/models/props.gd`) en de HUD toont hoeveel er nog zijn.
+- **Handgranaten.** Twee om mee te beginnen en hooguit drie, met G of Y op de controller. Een checkpoint vult ze aan tot twee en een heavy laat er een achter (zie Gevechten). De linkerhand laat het wapen los, wat een herlaadbeurt afbreekt; de granaat stuitert, rolt en gaat na 2,2 seconden af met dezelfde klap als een vat. Het model is in code gebouwd (`tools/models/props.gd`) en de HUD toont hoeveel er nog zijn.
 - **Waar ze staan.** `fuel` in de levelbouwer zet een rood vat neer. In de fabriek staan er negen: langs het rijpad waar de robots overheen komen, aan de kop van de containers, in een laadvak en één op de tussenvloer. In het depot acht, waar de gangpaden tussen de containers kruisen en op het perron. Daarnaast de gasflessen en jerrycans die er al stonden.
 - **Hoe het eruitziet.** Een explosie is een lichtflits, een drukgolf die een derde seconde lang het beeld erachter vervormt (`shaders/shockwave.gdshader`), een vuurbal die van witgeel via oranje tot roet uitbrandt, een ring van stof die over de vloer wegschiet, vonken en brokstukken. Vuurbal en rook zijn dezelfde zachte bollen als het stof van een inslag, maar ze branden: het heetst waar ze het dikst zijn, en de dunne randen gaan het eerst uit, zodat het vuur opbreekt in de rook die het achterlaat. Vuur dat blijft branden is een eigen shader (`shaders/flames.gdshader`): bollen vlam die van de grond opstijgen, onderweg tot een punt worden uitgerekt en uitbranden, en onderaan opnieuw beginnen, elk in zijn eigen ritme. Met een lange reikwijdte en een hoog tempo is dezelfde shader de steekvlam van een gasfles. Het licht van een vuur flakkert en neemt af zoals dat van een echte vlam, zodat het bij het vuur blijft.
 - **Hoe het werkt.** De levelbouwer geeft elk model dat kan ontploffen een eigen botsvorm met `scripts/explosive.gd` erop, in plaats van een vorm in het ene grote lichaam van het level; alleen zo kan het uit het level verdwijnen. Het model houdt zijn stukje lightmap, het wrak is een kopie die door de probes wordt belicht waar het ook terechtkomt. `scripts/blast.gd` doet de schade, het wegslingeren en de kettingreactie; wat er te zien is, is van `Fx.explosion` en `Fx.fire`. Een blast zoekt alleen op de lagen van speler, robots, losse stukken en explosieven, want het level zelf is één lichaam met duizenden vormen.
@@ -209,7 +209,7 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 | Alleen de lightmap van de zones bakken die veranderd zijn (de fabriek heeft er een per zone; het ketelhuis duurt een halve minuut) | `tools/bake_lightmaps.sh res://scenes/factory.tscn boiler,passage` |
 | Wapens, vijanden of de granaat opnieuw genereren uit `tools/models/<naam>.gd` | `tools/build_model.sh weapons`, `enemies` of `props` |
 | Een wapen bekijken zoals de speler het vasthoudt (nummer in de loadout vanaf 0; `,1` erachter is gericht, `,0,0.4` is 40% van het herladen) | `tools/benchmark.sh --quick --weapon=2 --at="2,1.7,3,-120,0"` |
-| Een model of een vijand in een level neerzetten om te bekijken (x,y,z,draaiing,schaal,houding: 1 richt, 2 loopt, 3 ligt in stukken, 4 vuurt) | `tools/benchmark.sh --quick --spawn="res://scenes/enemy_heavy.tscn@-2,0,-1,-100,1,1" --at="2.5,1.7,3,90,-4"` |
+| Een model of een vijand in een level neerzetten om te bekijken (x,y,z,draaiing,schaal,houding: 1 richt, 2 loopt, 3 ligt in stukken, 4 vuurt, 10 met de plaat voor zich, 11 weggedoken, 12 met een brandend pack) | `tools/benchmark.sh --quick --spawn="res://scenes/enemy_heavy.tscn@-2,0,-1,-100,1,1" --at="2.5,1.7,3,90,-4"` |
 | Een schot bekijken op een exact moment erna (seconden, aantal schoten, spreiding in graden): vlam, tracer en inslag | `tools/benchmark.sh --quick --weapon=0 --shoot=0.01 --at="6.3,1.5,-2.5,-90,-3"` of `--shoot=0.2,4,5` |
 | Een ontploffende robot bekijken op een exact moment erna | `tools/benchmark.sh --quick --hold=0.4 --spawn="res://scenes/enemy.tscn@0,0,1.5,-100,1,3" --at="4,1.7,2.5,80,-18"` |
 | Een explosie bekijken op een exact moment erna (x,y,z, dan de grootte en de breedte van het vuur dat blijft branden) | `tools/benchmark.sh --quick --blast="8,0.45,2,1,1.2" --hold=0.3 --at="14,1.7,6,56,-8"` |
@@ -221,6 +221,7 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 | Een run zonder bepaalde effecten, om screenshots te vergelijken | `tools/benchmark.sh --off=ssil,glow` |
 | Screenshots vanaf een eigen standpunt (x,y,z,draaiing,helling; meerdere gescheiden door `;`) | `tools/benchmark.sh --quick --at="-11,1.7,-6,20,-5"` |
 | Gameplay en beide levels testen (headless) | `tools/selftest.sh` |
+| Alleen testen wat de vijanden in een gevecht doen en wat er te vinden is (50 seconden). Met `--map` erbij de dekking in de fabriek als plattegrond, met `--trace` wat één grunt van stap tot stap doet | `tools/selftest.sh --fights` |
 | Alleen de routes door de levels testen, met een lijst van waar elke robot verschijnt: het deel om te draaien terwijl je aan een level bouwt (25 seconden) | `tools/selftest.sh --routes` |
 | Het spel zelf bekijken zoals het gespeeld wordt, met HUD en menu: een screenshot na zoveel seconden. `--at` zet de speler ergens neer, `--eval` voert een regel script uit; de save blijft ongemoeid | `tools/godot.sh -- --play --snap=5 --at="-7,0,0.5,90,4"` of `--snap=4 --eval="Menu.show_end(27)"` |
 | Iets tonen wat een level verborgen houdt tot het spel het aanzet, zoals de lamp boven een uitgang | `tools/benchmark.sh --quick --show=Lamp --at="-7,1.7,0.5,90,4"` |
@@ -357,8 +358,7 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 
 **Nog open**
 
-- Vaten komen niet terug: wat is opgeblazen, is weg tot je doodgaat of het level opnieuw begint. Na een herstart bij een checkpoint staan ze er allemaal weer, ook in het deel dat al is opgeruimd. Granaten krijg je bij elk checkpoint opnieuw.
-- Robots weten niets van vuur en granaten: ze lopen door een brand heen en blijven naast een brandend vat staan. Dat maakt de vaten nu vooral een wapen van de speler.
+- Vaten komen niet terug: wat is opgeblazen, is weg tot je doodgaat of het level opnieuw begint. Na een herstart bij een checkpoint staan ze er allemaal weer, ook in het deel dat al is opgeruimd. Een checkpoint vult de granaten aan tot twee.
 - Door een wrak loop je heen, en een schot gaat erdoor: het botst alleen met het level. Waar een vat stond, houdt het navmesh een gat.
 - Vuur slaat niet over op kisten of pallets, en de klap van een explosie beweegt geen props: alles wat een lightmap heeft, staat vast.
 - De granaat is in de hand niet te zien; alleen de arm die hem gooit beweegt.
@@ -376,7 +376,7 @@ Een level had geen begin en geen eind: waves verschenen op willekeurige punten e
 
 - **De route staat in het levelbestand**, naast de geometrie (`_route_through` in `tools/levels/<naam>.gd`): `route_start`, `route_zone`, `route_checkpoint` en `route_exit`, in de volgorde waarin de speler ze tegenkomt. De levelbouwer zet ze in de levelscène onder `Route` en `scripts/game.gd` speelt wat daar staat. Route en gebouw veranderen zo samen: wie een muur verzet, verzet in hetzelfde bestand het spawnpunt erachter. De bouwer weigert een route zonder start of uitgang, een start die in een zone ligt en een checkpoint dat in een latere zone ligt. De met de hand geplaatste spawnpunten in `scenes/factory.tscn` en `scenes/depot.tscn` zijn weg.
 - **Zones.** De robots die een zone opsomt staan er vanaf het laden, elk op zijn eigen post, met het gezicht naar waar de speler vandaan komt. Ze staan uit: ze zien niets en bewegen niet. Het gevecht om een zone begint wanneer de speler de zone binnenloopt of op een van zijn robots schiet; dan gaan ze allemaal aan. De zone is opgeruimd als de laatste ligt. Er verschijnt dus niets meer uit het niets: wat je straks tegenkomt, zie je al staan. Ze staan uit omdat een robot die aan staat op de speler afgaat zodra hij hem ziet, tot op 45 m; in de hal zou dan elk gevecht tegelijk beginnen. Waar de speler het level begint of bij een checkpoint verdergaat, staat er geen dichterbij dan 14 m in het zicht: dezelfde afstand die de waves aanhielden.
-- **Checkpoints.** Een checkpoint is een plek met een gebied eromheen. Het telt zodra de speler in dat gebied staat, er geen gevecht loopt en alle zones die ervoor liggen zijn opgeruimd. Na een dood of een herstart van het spel sta je er weer, met wat ervoor ligt opgeruimd en met volle reservemunitie en granaten. De save bevat daarom alleen het level en de naam van het checkpoint: wat is opgeruimd, volgt uit waar het op de route ligt. Het begin van een level is het eerste checkpoint.
+- **Checkpoints.** Een checkpoint is een plek met een gebied eromheen. Het telt zodra de speler in dat gebied staat, er geen gevecht loopt en alle zones die ervoor liggen zijn opgeruimd. Na een dood of een herstart van het spel sta je er weer, met wat ervoor ligt opgeruimd, met 75 health en met de reserve en de granaten waarmee een level begint (zie Gevechten). De save bevat daarom alleen het level en de naam van het checkpoint: wat is opgeruimd, volgt uit waar het op de route ligt. Het begin van een level is het eerste checkpoint.
 - **De uitgang** gaat open wanneer elke zone is opgeruimd. Boven de deur springt een groene lamp aan, die ook de mist kleurt, en een halve seconde later rolt de deur in ruim drie seconden omhoog. De laaddeur van de fabriek geeft uit op het voorterrein, met recht ertegenover de poort in de muur. Deur 3 van het depot geeft toegang tot een kale gang het magazijn in, verlicht van achteren. Het level eindigt een stap voorbij de deur: daar gaat het beeld op zwart en komt het volgende level op. De zones mogen in elke volgorde: wie in het depot de oostelijke oprit neemt, staat eerder op het perron, maar de deur blijft dicht tot ook het terrein is opgeruimd.
 - **Een deur die beweegt** is een onderdeel van het level dat apart is gehouden (`roller_door` met `opens` in de levelbouwer). Het rolluik is dan een eigen lichaam met een eigen mesh en een eigen stukje lightmap, in plaats van deel van de ene grote mesh en het ene grote lichaam van het level; `scripts/game.gd` schuift het omhoog. Het hangt in een deuropening, in de dikte van de muur, en die muur onttrekt het aan het zicht als het omhoog gaat. In het depot hingen de roldeuren tegen de muur; alle vijf hangen nu in een deuropening, zodat deur 3 er niet anders uitziet dan de rest. De hal van de fabriek en het depot zijn daarvoor opnieuw gebakken (1:48 en 2:08); de lightmap van het depot is er 48,0 MB door geworden, van 45,7.
 - **De fabriek** (16 robots): binnen door de buitendeur van het ketelhuis (twee grunts achter de ketel, een rusher die de gang uit komt rennen), door de gang met de knik het magazijn in en de gang van de aanbouw op (twee grunts uit de kleedkamer, een rusher uit de hal), de hal in (drie grunts en een rusher) en door naar het westelijke deel (drie grunts, twee rushers en een heavy voor de laaddeur). Checkpoints in de gang naar het ketelhuis, in de gang van de aanbouw en halverwege de hal.
@@ -423,7 +423,6 @@ Over alle standpunten van beide levels, drie ronden om en om, lag het verschil t
 
 - Een robot die uit staat, komt alleen in actie als de speler zijn zone binnenloopt of op een robot van die zone schiet. Staat hij in het zicht terwijl er in de zone ernaast wordt gevochten, dan staat hij erbij. Vanaf waar je de containerrijen van het depot binnenloopt staat er zo één op het perron in het zicht, op 21 m; vanaf de deur van de aanbouw staat er in de hal geen robot van het westelijke deel meer in het zicht. Verderop in een zone kan dat anders zijn: de selftest kijkt alleen vanaf waar een zone wordt binnengelopen.
 - Aan een robot is niet te zien dat hij uit staat: zijn vizier gloeit zoals altijd en hij staat in de houding waarin hij ook stilstaat als hij aan is. Een eigen houding en een gedoofd vizier horen bij het model, dus bij `scripts/enemy_rig.gd`.
-- Het spel leest van een robot ook `health` en `max_health`, om te zien dat er op hem geschoten is. Dat is meer dan de afspraak over vijanden noemt (het signaal `died`, `alert()`, `dead` en de groep `enemy`).
 - De zon is gebakken. Als de laaddeur omhoog gaat zie je het voorterrein in de avondzon, maar op de vloer van de hal valt geen zonlicht naar binnen.
 - De deur heeft geen eigen geluid: bij de lamp en als hij boven is klinkt `clang`. Achter de laaddeur ligt een leeg voorterrein met twee containers; meer dan een seconde zie je er niet van.
 - Wie doorrent, stapelt gevechten: elke zone waar je doorheen loopt gaat aan, en de robots lopen de speler het hele level door achterna.
@@ -492,3 +491,90 @@ In het ketelhuis is dat 7 fps: zonder zones werd daar de hele hal achter de muur
 - De selftest kijkt of je *in* een zone kunt kijken, niet of je zijn buitenkant ziet. Vanaf de tussenvloer zou de dakrand van het ketelhuis door de bovenramen van de hal te zien kunnen zijn; die wordt daar niet getekend.
 - Het depot is niet in zones geknipt: het is één terrein onder de open lucht.
 - De ketel, de pompen en het leidingwerk zijn gebouwd in code, zoals de machines in de hal.
+
+## Gevechten: dekking, beurten en schaarste
+
+De branch `gevecht` voegt eerst `looproute` (de route) en `speelbaar` (de personages) samen en bouwt daarop. Tot hier liep elke vijand op de speler af, stapte ervoor heen en weer en schoot zodra zijn eigen klok afliep; health kwam vanzelf volledig terug en elk checkpoint vulde alle munitie aan. Een gevecht vroeg dus niets van de speler behalve raak schieten. Nu vechten de vijanden vanuit dekking en om beurten, en moet de speler wat hij nodig heeft bij de wrakken halen.
+
+**Wat de vijanden doen**
+
+- **Dekking.** `scripts/squad.gd` (autoload `Squad`) zoekt bij het laden van een level de dekking op: over het navmesh van de zones om de meter een plek, en waar op kniehoogte iets naast staat wordt die plek bewaard en ertegenaan geschoven. In de fabriek zijn dat 530 plekken. Een vijand die dekking neemt (`takes_cover`, de grunt) vraagt er een die hem voor de speler verbergt. Dat wordt dan pas nagekeken, met lijnen van de ogen van de speler naar zijn hoofd en zijn borst, in het midden en op beide schouders: een plek op de rand van wat hem dekt verbergt de helft van wie er staat. Achter iets hoogs staat hij en schiet hij van een stap opzij; achter iets laags duikt een robot weg en komt hij overeind om te schieten. Hij verkast als de speler om hem heen is gekomen (0,7 s in het zicht), dichterbij is dan 4 m, als hij er 7 tot 12 s heeft gezeten of twee keer voor niets is uitgekomen. Vindt hij niets, dan doet hij wat hij altijd deed.
+- **Beurten.** Wie wil aanvallen vraagt een beurt, en er zijn er maar zoveel tegelijk (op Normal twee), met een pauze van een seconde na elke aanval voordat de volgende mag. Wie het langst wacht gaat voor. De rest wacht in dekking of verplaatst zich. Wie slaat in plaats van schiet (de rusher) heeft geen beurt nodig. Een groep van vijf grunts viel in de test 11 tot 15 keer aan in 12 seconden, nooit met meer dan twee tegelijk; zonder pauze was dat 20 tot 26 keer.
+- **Omtrekken.** Van een groep van drie of meer gaat er één (op Hard twee) om de speler heen: hij kiest dekking opzij van waar de rest staat, tot 22 m lopen, en geeft dat aan met een eigen roep.
+- **Gevaar.** Wat op ontploffen staat meldt zichzelf (groep `hazard`, methode `danger()`): een granaat, een brandend vat, het brandende pack van een heavy. Wie binnen het bereik staat laat na 0,3 tot 0,6 s alles vallen en rent naar een plek buiten het bereik, of naar een plek waar iets tussen hem en de klap staat. Om een brand op de vloer loopt hij heen, en staat hij erin dan loopt hij er de kortste weg uit. De heavy trekt zich er niets van aan (`heeds_danger`). De granaat is daarmee vooral iets om grunts uit hun dekking te jagen: met de volle 2,2 seconden kwam een grunt in de test 7 m weg, zonder schade.
+- **De plaat van de grunt.** De robotgrunt droeg een plaatje op zijn linkerarm dat niets deed. Het is nu een plaat van 50 bij 57 cm (onderdeel `Shield` in `tools/models/enemies.gd`) die hij voor zijn romp houdt zodra hij van de speler weet, en die van voren elk schot tussen heup en hals tegenhoudt (0,8 tot 1,37 m). Hoofd en benen steken erbuiten, van opzij en van achteren is hij open, en een explosie gaat er dwars doorheen. Het eerste schot op een grunt die nog niets weet, komt aan. Een tegengehouden schot geeft geen hitmarker, wel vonken, een eigen klank en een oplichtende plaat. Na 80 schade vliegt de plaat van zijn arm en staat hij 0,9 s te wankelen. Op Normal draagt de helft van de grunts er een; dat is te zien voordat het gevecht begint.
+- **Het pack van de heavy.** De munitie op zijn rug is een gele trommel met lampen geworden (onderdeel `Pack`). Een schot erin van achteren telt anderhalf keer. Na 70 schade spuit er een vlam uit, en 1,3 seconde later ontploft het: 140 schade in het hart, niets meer op 5 m, ook voor de robots ernaast. De heavy draait daarvoor traag (2,4 rad/s tegen 8), schiet alleen op wat binnen 45 graden voor hem staat en houdt midden in een salvo op als de speler verder om hem heen is.
+- **Wat je hoort.** Vóór een salvo een oplopende toon, voor grunt, rusher en heavy een eigen; een roep van wie omtrekt; een alarm van wie wegrent. Gesynthetiseerd, zoals de rest in deze branch.
+- **Personages** (soldaten, zombies, clowns) hebben hetzelfde brein: wie schiet neemt staand dekking, wacht zijn beurt af en vlucht. Ze duiken niet weg, dragen geen plaat en geen pack, en zeggen niets van het nieuwe.
+
+**Wat er te halen valt**
+
+- **Health komt vanzelf terug tot 35** (Normal), na vier seconden zonder treffer. De rest zit in cellen die de vijanden achterlaten: 25 per stuk. Op de healthbalk staat een streep bij 35 en ernaast het getal, rood zolang je onder de streep zit.
+- **Munitie.** Een wapen begint een level met twee magazijnen reserve in plaats van met alles wat het kan dragen (de karabijn 60 van de 150). Een blik munitie geeft een magazijn voor het wapen in de hand en een derde voor elk ander. Het pistool raakt nooit op (`bottomless`): er is altijd iets om mee te schieten.
+- **Wat een vijand achterlaat** volgt wat de speler mist, zonder toeval (`LEAVES_CELL`, `LEAVES_CAN` en `LEAVES_GRENADE` in `scripts/game.gd`). Elke kill telt een deel van een cel, een blik en een granaat op, en er valt iets zodra een deel vol is. Voor een cel: 0,2 per kill, plus 0,9 maal het deel van zijn health dat de speler mist, plus 0,3 voor een kill van binnen 8 m; een heavy laat er altijd een achter, en een granaat. Voor een blik: 0,3 plus 0,8 maal hoe ver de reserve van het wapen in de hand is gezakt. Wie gewond en zonder kogels drie grunts van dichtbij neerhaalt, vindt drie cellen en drie blikken.
+- **Oprapen** is eroverheen lopen (`scripts/pickup.gd`); de laatste meters komt het naar je toe. Wat je niet kunt gebruiken blijft liggen. Na 40 seconden is het weg, de laatste 6 knippert het. Elk gloeit in zijn eigen kleur, zodat het in een donkere hal te vinden is, en linksonder staat even wat je kreeg.
+- **Een checkpoint** vult niet meer alles aan: de reserve van elk wapen en de granaten komen terug tot waarmee een level begint, health tot 75. Wie bij een checkpoint verdergaat na een dood krijgt precies dat, zodat doodgaan nooit de betere weg is.
+
+**Moeilijkheid en wat een run opleverde**
+
+- De moeilijkheid is één tabel, `RULES` in `scripts/settings.gd`, te kiezen in het instellingenscherm:
+
+| | Easy | Normal | Hard |
+|---|---|---|---|
+| Vijanden die tegelijk aanvallen | 1 | 2 | 3 |
+| Pauze na een aanval | 1,2 s | 1,0 s | 0,5 s |
+| Wie om de speler heen gaat | 1 | 1 | 2 |
+| Grunts met een plaat | 30% | 50% | 75% |
+| Schade van een vijand | 0,6× | 1× | 1,35× |
+| Hoe lang een aanval wordt aangekondigd | 1,3× | 1× | 0,8× |
+| Health die vanzelf terugkomt | tot 50 | tot 35 | tot 25 |
+| Wat vijanden achterlaten | 1,4× | 1× | 0,75× |
+
+- Het eindscherm zegt naast het aantal vijanden hoe lang het duurde, hoe vaak je doodging, hoeveel schoten raak waren en hoeveel in het hoofd. Dat wordt bijgehouden in `Save.stats` en gaat bij elk checkpoint en elke dood het savebestand in.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| Alleen de gevechten en de voorraden testen | `tools/selftest.sh --fights` |
+| De gevonden dekking als plattegrond (`c` laag, `C` hoog), of één grunt van stap tot stap | `tools/selftest.sh --fights --map` of `--trace` |
+| De plaat, het wegduiken en het pack bekijken | `tools/benchmark.sh --quick --spawn="res://scenes/enemy.tscn@-2,0,-1.2,-100,1,10;res://scenes/enemy.tscn@-2,0,0.6,-100,1,11;res://scenes/enemy_heavy.tscn@-2,0,2.8,80,1,1" --at="1.6,1.5,0.8,90,-6"` |
+| Meten wat een gevecht kost: alle robots van de route tegelijk aan, tegen een speler op die plek | `tools/benchmark.sh --awake=12,0,4 --warmup=400 --at="15,1.6,8,68,0"`, naast dezelfde run met `--posted` |
+| Het spel met HUD bekijken, gewond en met iets om op te rapen | `tools/godot.sh -- --play --snap=3.2 --at="12,0,4,90,-14" --eval="player.take_damage(70.0)" --eval="game.leave(0, Vector3(8.6,0.9,3.2))"` |
+| De robots opnieuw bouwen, of de cel en het blik | `tools/build_model.sh enemies` of `props` |
+
+**Wat de selftest ervan controleert** (136 controles, was 103; de test van de personages 26):
+
+- dat een grunt naar dekking rent en daar van hoofd tot borst niet te zien is, eruit komt om te schieten als het zijn beurt is en teruggaat;
+- dat van vijf grunts er nooit meer dan het toegestane aantal tegelijk aanvalt, dat ze wel aanvallen, en dat er één omtrekt en niet meer;
+- dat een grunt wegrent van een granaat aan zijn voeten en dat overleeft, en uit een brand loopt;
+- de plaat: het eerste schot op een grunt die niets weet komt aan, daarna houdt de plaat van voren tegen, niet op hoofd, benen of rug en niet bij een explosie; een tegengehouden schot geeft geen hitmarker; genoeg schoten slaan de plaat eraf;
+- het pack: van voren alleen schade, van achteren meer schade en brand, en dan de klap die de heavy en de grunt ernaast meeneemt;
+- dat health tot 35 terugkomt en niet verder, dat het pistool niet opraakt, dat kills cellen en blikken achterlaten voor wie ze nodig heeft, dat oprapen werkt en een cel blijft liggen bij wie niets mankeert, en wat een checkpoint aanvult;
+- dat de moeilijkheid de tabel volgt en dat een run wordt gemeten en samengevat.
+
+Een deel van de test dat op een scriptfout halverwege ophoudt, telde tot nu toe als geslaagd: wat niet meer werd nagekeken, faalde ook niet. De test houdt nu bij welke delen hun einde hebben gehaald en faalt voor elk dat ontbreekt.
+
+**Wat het kost**
+
+- Het opzoeken van de dekking: 44 ms voor de fabriek, één keer, terwijl het beeld uit zwart opkomt. Het navmesh van een level is vooral het terrein eromheen (24 duizend plekken); er wordt alleen in de zones gekeken (1569 plekken).
+- Een keer dekking zoeken: 0,3 tot 0,4 ms, hooguit 1 ms. Vijf grunts in gevecht doen dat samen 10 keer in 12 seconden.
+- Een heel gevecht: gemeten op 10 oktober 2026 op 1440p met FSR 2 op 67%, vanaf de oostkant van de hal, met alle zestien robots van de fabriek tegelijk aan en op de speler af (`--awake`) tegen dezelfde zestien roerloos op hun post (`--posted`), twee keer om en om terwijl de laptop zwaar in gebruik was (load 5 tot 6): 71,6 en 74,2 fps roerloos, 70,1 en 67,3 fps in gevecht. Dat is 2 tot 7 fps voor zestien robots; een zone heeft er hooguit zes. De 1% low liep in die runs uiteen van 46 tot 67 fps, in beide soorten; daar is niets uit af te lezen.
+- De grunt is met zijn plaat 9,4 duizend driehoeken in 17 onderdelen, de heavy met zijn pack 8,7 duizend in 19. De cel en het blik zijn 1,1 en 1,5 duizend, met elk een licht zonder schaduw.
+
+**Onderweg gevonden**
+
+- Het navmesh zweeft tot een halve meter boven de vloer. De dekkingsplekken lagen daardoor te hoog en een "lage" dekking werd op heuphoogte gemeten. Elke plek wordt nu met een straal op de vloer gezet.
+- Een schot dat de plaat tegenhoudt kost de robot geen health, en het spel zag aan zijn health dat er op hem geschoten was. Een zone begon dus niet als je op een plaat schoot. Een vijand meldt nu zelf dat hij geraakt is (signaal `disturbed`), wat ook het open punt uit de route oplost dat het spel te veel van een robot las.
+- De test van de personages ging nog uit van waves en faalde op de samengevoegde branch op drie punten. Hij speelt nu het eerste gevecht van de route.
+
+**Nog open**
+
+- **Het is niet gespeeld.** Alles hierboven is nagekeken met tests en screenshots. Of een gevecht leuk is, te makkelijk of te moeilijk, kan ik niet beoordelen. De getallen zijn een eerste gok: de tabel hierboven, de 80 van de plaat, de 70 en 1,3 s van het pack, de twee magazijnen reserve, de 25 van een cel en de aandelen in `LEAVES_*`. Ze staan elk op één plek.
+- De nieuwe geluiden heeft niemand gehoord.
+- Een grunt met een plaat die achter iets laags overeind komt, laat van voren alleen zijn hoofd zien. Dat is zo bedoeld (het hoofd, de plaat eraf schieten, eromheen of een granaat), maar het kan in de praktijk te taai zijn.
+- De dekking wordt één keer opgezocht. Een vat dat is ontploft telde al niet mee, maar een deur die opengaat of een wrak dat ergens neerkomt verandert er niets aan.
+- Robots gooien zelf niets en schieten niet blind om je in dekking te houden. De rusher doet wat hij deed, behalve dat hij voor een granaat wegrent.
+- Wat een vijand achterlaat, valt een stap naast hem; er wordt alleen gekeken of daar geen muur staat. Op de rand van de tussenvloer kan het naar beneden vallen.
+- Personages duiken niet weg en hebben geen eigen stem voor het nieuwe. Het eindscherm noemt ze nog robots.
+- Het geluidswerk dat in de hoofdmap in bewerking is, raakt `scripts/sfx.gd` op dezelfde plek als de nieuwe geluiden hier; samenvoegen vraagt daar handwerk.
