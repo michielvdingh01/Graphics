@@ -173,6 +173,37 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 - **Een robot die kapot gaat** geeft een lichtflits, een vuurbal, een regen van vonken, rook die een paar seconden blijft hangen en roet op de vloer eronder (soort `scorch`). Een treffer op een robot geeft vonken en een lichtje.
 - **Hoe het werkt.** Vonken, scherven en rook komen in salvo's: één mesh van losse vierkantjes waarvan de shader voor elk deeltje uitrekent waar het is uit de tijd sinds het salvo begon, inclusief de stuit op de vloer (`shaders/fx_common.gdshaderinc`). Er wordt dus niets per frame gesimuleerd en een salvo kost het script niets terwijl het speelt. Stof en rook worden belicht zoals de rest van het level: donker in een donkere hoek, oplichtend in een zonnebundel. Alles loopt op één eigen klok (`Fx.time`), die stilstaat als het spel pauzeert en die voor een screenshot op een exact moment kan worden stilgezet.
 
+**Hoe het beeld meebeweegt**
+
+Tot 10 oktober 2026 stond de camera stil op het hoofd: lopen, landen en geraakt worden waren alleen te zien aan het wapen. Dat is nu anders, en alles is klein gehouden: het is er om te voelen, niet om te zien.
+
+- **Eén pas voor alles.** `stride()` in `scripts/player.gd` telt de passen: een heel getal bij elke voet die neerkomt, elke 2,4 m. Het deinen van de camera, dat van het wapen en het geluid van de stap hangen aan dat ene getal, zodat het beeld op zijn laagst is op het moment dat je de stap hoort. Het wapen deinde al, maar op zijn eigen klok: 1,2 keer per seconde tegen 2,1 stappen.
+- **Deinen.** Bij elke stap gaat het oog 14 mm op en neer en 6 mm opzij naar de voet die het gewicht draagt, met een rol van 0,2° en een knik van 0,12°. Rennend is het 1,6 keer zoveel, gebukt ruim de helft. Over het vizier blijft een vijfde van de beweging over en geen draaiing, zodat het vizier stilstaat. Het zit op de camera en niet op het hoofd: op het hoofd richten de vijanden, en de helling ervan gaat naar wie meespeelt.
+- **Landen.** De knieën veren: het oog zakt in 70 ms tot 88 mm na een gewone sprong en komt terug. Het zakte 142 mm in één frame.
+- **Terugslag.** Waar een schot heen gaat is niet veranderd (`add_recoil` en de getallen in `weapons/*.tres`). Wat erbij kwam, verplaatst het richtpunt niet: het wapen in beeld slaat terug op een veer die na 25 ms op zijn verst is en iets doorschiet, elk schot een beetje anders gerold en verschoven, en bij aanhoudend vuur klimt de loop schot na schot (de karabijn 4,8° na een seconde, tegen 2,6°). Van de terugslag was een kwart al weg voor het eerste beeld. Het gezichtsveld springt per schot even open, 0,39° bij de karabijn en 1,65° bij het pompgeweer, en de twee zware wapens laten het beeld 0,2 tot 0,3° rammelen. Over het vizier slaat het wapen niet verder terug dan het deed.
+- **Het wapen heeft gewicht.** Het loopt een tiende stap achter op de camera, blijft tot 2° achter bij een draai (ook met de stick, die het eerst niet bewoog), sleept na bij optrekken en stoppen, hangt achter bij springen en vallen, zakt bij een landing en ademt als je stilstaat.
+- **Geraakt worden heeft een richting.** `take_damage` kreeg de richting van het schot al mee en deed er niets mee: het beeld schokte een willekeurige kant op, gemiddeld 0,4° in helling en draaiing, even hard voor een schampschot als voor een klap. Nu rolt het hoofd weg van de kant waar het vandaan kwam, 0,4° voor een schot van een grunt en 1° voor 40 schade, met voor een treffer van voren een knik naar achteren. Het richtpunt blijft vrijwel staan. Het signaal `hit_from` geeft de richting door; de HUD tekent er een zachte rode boog voor op een ring om het vizier, die 0,3 seconde staat, in 0,9 seconde vervaagt en meeschuift als je ernaartoe draait. Onder 30% health ademt de rode rand.
+- **Explosies** verschuiven het beeld nu ook (tot 12 mm) en trekken het gezichtsveld even open (tot 1,9°), naast het schudden dat er al was.
+- **Eén instelling, View motion** (0 tot 150%, `Settings.view_motion`). Op 0 staat de camera volkomen stil: geen deinen, geen overhellen, geen zakken, geen openspringen, geen schudden. Dat is de schakelaar tegen wagenziekte die shooters horen te hebben. Terugslag van het richtpunt, de zoom van het vizier en alles wat de HUD tekent blijven. Het wapen houdt op 0 een derde van zijn beweging: doodstil lijkt het kapot.
+- **Het instellingenscherm scrolt.** Het was 1067 van de 1080 beeldpunten hoog en met een regel erbij viel Back van het scherm. De instellingen staan nu in een lijst die meeschuift met wat de focus heeft, tussen een kop en een Back-knop die blijven staan.
+- **Hoe het werkt.** Alles wat veert gebruikt `scripts/spring.gd`: een stap is de exacte beweging van de veer over die tijd en geen schatting, zodat een duw er op 45 beelden per seconde hetzelfde uitziet als op 120. De getallen staan elk op één plek, bovenaan `scripts/player.gd` en `scripts/weapons.gd`.
+
+Gemeten op vaste 60 beelden per seconde, zonder scherm; "eerst" is de stand van 10 oktober voor deze wijziging:
+
+| | Eerst | Nu |
+|---|---|---|
+| Lopen: oog op en neer, opzij | 0 | ±14 mm, ±6 mm |
+| Lopen: knik, rol | 0 | ±0,12°, ±0,20° |
+| Rennen: oog, knik, rol | 0 | ±22 mm, ±0,18°, ±0,32° |
+| Lopen over het vizier: oog, draaiing | 0 | ±1,7 mm, 0 |
+| Landen na een sprong | 142 mm in één frame | 88 mm na 70 ms |
+| Schot met de karabijn: richtpunt, gezichtsveld, wapen terug | 0,67°, 0, 31 mm | 0,67°, +0,39°, 38 mm |
+| Schot met het pompgeweer: gezichtsveld, rammelen | 0, 0 | +1,65°, 0,2–0,3° |
+| Treffer van 7 van links | willekeurig, 0,39° gemiddeld | rol 0,41° |
+| Treffer van 40 van links | willekeurig, 0,39° gemiddeld | rol 0,96° |
+
+**Niemand heeft het gezien.** Het is gebouwd en gemeten zonder scherm: de getallen zeggen hoe ver iets beweegt, niet of het goed voelt. Ze zijn een eerste gok aan de kleine kant; met View motion is het geheel groter of kleiner te zetten zonder de code in te gaan.
+
 **Wat er ontploft**
 
 - **Brandstofvaten, gasflessen en jerrycans** zijn geen decor meer. Het rode vat met de explosiesticker (een van de drie vatmodellen), de gasfles en de jerrycan gaan de lucht in als erop geschoten wordt. Een gat erin steekt ze eerst aan: langs een vat of een jerrycan likt een vlam omhoog, uit een gasfles komt een steekvlam. Na één tot twee seconden ontploffen ze. Dat is lang genoeg om weg te komen, of om een robot erlangs te zien lopen. Meer schade, of een ontploffing ernaast, laat ze meteen afgaan, dus wat bij elkaar staat gaat achter elkaar de lucht in. Een verdwaald schot van een robot steekt ze net zo goed aan. De blauwe en grijze vaten doen niets.
@@ -192,6 +223,26 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 | Elke seconde een explosie | 64–66 fps | 60–61 fps | 17–20 ms |
 
   Dat is 1 tot 8 fps, voor iets wat in het spel een paar keer per gevecht gebeurt en niet elke seconde. De traagste frame van zo'n run duurde 20 ms tegen 14 tot 16 normaal: de eerste explosie hapert niet. De benchmark drukt die traagste frame nu bij elke meting af.
+
+**Wat er kapot kan**
+
+- **Kisten en dozen.** Een stapel houten kisten is twee of drie kisten hoog, en elke kist heeft zijn eigen health: 110, wat vijf schoten met de karabijn is of één lading hagel van dichtbij. Een schot raakt de kist op de hoogte waar het aankomt. Een kist die het begeeft vliegt in planken uiteen, wat erop stond valt omlaag en komt met een bons neer, en de botsvorm van de stapel past meteen bij wat er nog staat: dekking wordt lager naarmate er meer in is geschoten. Een stapel die op een andere stapel staat komt mee omlaag. Een kartonnen doos houdt 30. Een klap van een vat of een granaat raakt alle kisten van een stapel tegelijk. Schoten van vijanden doen het ook, net als bij de vaten: wie lang achter een stapel blijft zitten, raakt hem kwijt. De fabriek heeft 38 stapels en 6 dozen, het depot 29 en 2.
+- **De planken** zijn de kist zelf: het model is één keer in tien stukken gesneden, per zijde in planken, en die vliegen als losse lichamen weg, de kant op van het schot of van de klap af. Ze blijven vijf tot zes seconden liggen en krimpen dan weg. Er liggen er nooit meer dan 48; breken er in één klap meer kisten dan dat toelaat, dan laat elke kist minder planken achter in plaats van sommige geen.
+- **Lampen.** De hallampen, de peertjes in hun kooi, de tl-buizen, de schijnwerpers van het depot en de lamp boven de draaibank gaan met één treffer uit, en ook door een klap. Het glas komt naar beneden met een regen van vonken, het licht hapert een kwart seconde en is weg, en van een hallamp of een schijnwerper spat het daarna nog een paar keer. Ook een hallamp die al uit was heeft glas om kapot te schieten. De fabriek heeft er 23, het depot 12. De lamp boven de uitgang en het vuur in de ketel horen er niet bij. Een lamp staat niemand in de weg en vijanden raken hem niet: alleen schoten van spelers en klappen vinden hem.
+- **Geluid.** Vijf opnames, gemengd uit pakketten die er al waren: `lamp_break`, `bulb_break`, `crate_break`, `box_break` en `crate_drop`. Door de bussen gemeten zitten ze tussen een inslag en een explosie in; een hallamp speelt op -3 dB, een kist op -4. Er is geen opname van karton: `box_break` is het dichtstbijzijnde. **Niemand heeft ze gehoord**: `tools/hear.py crate_break` en de rest.
+- **Hoe het werkt.** De levels zijn er niet voor herbouwd en niet opnieuw gebakken. `scripts/breakables.gd` loopt bij het laden door wat de levelbouwer heeft neergezet en geeft alles wat kapot kan een eigen lichaam onder `Level/Breakables`: `scripts/stack.gd` om een stapel, `scripts/lamp.gd` om een lamp. Het werkt daardoor op elk level dat de bouwer maakt. De botsvormen van de stapels verhuizen uit het ene lichaam van het level naar hun eigen (in de fabriek 44 van de 294), want alleen zo kunnen ze krimpen. Een model dat kapot is wordt verborgen en niet weggehaald, om dezelfde reden als bij de vaten: de lightmap zoekt het op bij zijn pad. Schoten en klappen vinden wat kapot kan op een eigen laag (6, `breakable`).
+- **Een lamp die uit is.** Alleen de hallamp is een eigen model: daar verdwijnt het glas en dooft het peertje. Bij de rest is wat gloeit een paar driehoeken in een mesh die de lamp met de halve hal deelt. Die worden bij het laden opgezocht, bij het licht waar ze het dichtst bij liggen, en krijgen een donkere kopie van zichzelf die vier millimeter ruimer is en pas te zien is als de lamp kapot is.
+- **Samen spelen.** De host beslist en laat het iedereen zien, zoals bij de vaten; wie later binnenkomt krijgt mee welke kisten weg zijn en welke lampen uit, zonder planken en zonder geluid. `VERSION` in `scripts/net.gd` is 3.
+- **De eerste keer haperde het vier seconden.** De eerste lamp die op deze laptop werd uitgeschoten hield het spel zo lang op: de renderer had nog nooit vallend glas, een lamp zonder glas of de planken van een kist getekend en maakte zich daar klaar voor op het moment dat ze in beeld kwamen. Godot telt zulke momenten: de eerste lamp kostte er twee tot drie, het eerste donkere peertje twee, de eerste kist twee. `Fx.rehearse()` tekent nu bij het laden alles één keer, zes frames lang, een meter voor de camera die op dat moment het beeld maakt en een duizendste zo groot, terwijl het beeld uit het zwart opkomt. Daarna kost breken er geen meer. De eerste versie hing het aan één camera, en dat was bij een level dat vanaf het titelscherm start die van het menu, die weg is voor er een frame getekend wordt: daar deed het dus niets. Dat kwam uit een review; de telling is daarna vanaf het titelscherm herhaald, voor en na. Het geldt meteen voor de splinters, de vonken en de rook van een eerste schot op een muur.
+- **Wat het kost.** Zolang er niets kapot gaat: niets. Het opzoeken bij het laden duurt 7 ms in de fabriek en 4 in het depot, en de eerste keer 33 ms doordat de kist en de doos dan in stukken worden gesneden. Een kist breken kost 0,3 ms. Gemeten op 10 oktober 2026, om en om met de stand ervoor:
+
+| | Ervoor | Erna |
+|---|---|---|
+| Fabriek, 1440p met FSR 2 op 67% | 69,4–76,4 fps | 69,3–76,4 fps |
+| Zoals Michiel speelt: 3456×2160, Ultra, MetalFX Spatial | 46,6–51,4 fps | 46,5–51,4 fps |
+| Elke seconde een explosie, die nu ook kisten breekt | 63,2–66,6 fps, traagste frame 17,0–17,6 ms | 62,8–66,9 fps, 17,0–17,7 ms |
+
+- **De dekking van de vijanden** is op deze branch gevoelig voor elke verandering aan de botsvormen van het level (zie "Dekking die aan het laatste cijfer hing" in de worktree `brave-bose-91ce03`, niet gecommit). Stapels uit dat lichaam halen is zo'n verandering. In alle runs van de selftest bleven vijf van de vijf grunts vanuit dekking vechten; dat is een uitkomst, geen garantie, tot die fix erin zit.
 
 **Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
 
@@ -224,11 +275,14 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 | Een run zonder bepaalde effecten, om screenshots te vergelijken | `tools/benchmark.sh --off=ssil,glow` |
 | Screenshots vanaf een eigen standpunt (x,y,z,draaiing,helling; meerdere gescheiden door `;`) | `tools/benchmark.sh --quick --at="-11,1.7,-6,20,-5"` |
 | Gameplay en beide levels testen (headless) | `tools/selftest.sh` |
+| Alleen testen hoe het beeld meebeweegt, of alleen wat er kapot kan (elk een paar seconden na het laden) | `tools/selftest.sh --view` of `--breaks` |
 | Alleen testen wat de vijanden in een gevecht doen en wat er te vinden is (50 seconden). Met `--map` erbij de dekking in de fabriek als plattegrond, met `--trace` wat één grunt van stap tot stap doet | `tools/selftest.sh --fights` |
 | Alleen de routes door de levels testen, met een lijst van waar elke robot verschijnt: het deel om te draaien terwijl je aan een level bouwt (25 seconden) | `tools/selftest.sh --routes` |
 | Samen spelen testen: het spel twee keer zonder venster, één host en één gast (35 seconden) | `tools/nettest.sh [--enemies=<thema>]` |
 | Een medespeler bekijken zoals een ander hem ziet (houding 1 richt, 2 loopt, 3 rent; de tiende kiest het wapen) | `tools/benchmark.sh --quick --spawn="res://scenes/puppet.tscn@1,0,-7.4,-90,1,2.2" --at="4.2,0.9,-7.4,90,0"` |
 | Het spel zelf bekijken zoals het gespeeld wordt, met HUD en menu: een screenshot na zoveel seconden. `--at` zet de speler ergens neer, `--eval` voert een regel script uit; de save blijft ongemoeid | `tools/godot.sh -- --play --snap=5 --at="-7,0,0.5,90,4"` of `--snap=4 --eval="Menu.show_end(27)"` |
+| Iets kapot laten gaan en kijken wat ervan overblijft. Stapels en lampen heten `Stack0`, `Lamp0` en zo verder onder `Level/Breakables`; `take_blast` breekt een hele stapel en zet een lamp uit. De regel wordt na één seconde uitgevoerd, het beeld is van `--snap` seconden na de start | `tools/godot.sh -- --play --snap=3 --at="1.2,0,-0.8,-22,-4" --eval='game.get_node("Level/Breakables/Stack10").take_blast(1000.0, Vector3(0,0,0), Vector3(-0.6,1,0.3))'` |
+| De geluiden van breken horen | `tools/hear.py lamp_break`, `bulb_break`, `crate_break`, `box_break` of `crate_drop` |
 | Iets tonen wat een level verborgen houdt tot het spel het aanzet, zoals de lamp boven een uitgang | `tools/benchmark.sh --quick --show=Lamp --at="-7,1.7,0.5,90,4"` |
 | De robots van de route op hun post zetten, uitgeschakeld zoals de speler ze aantreft: om een standpunt te zien zoals het in het spel is, of om te meten wat het kost dat ze er staan | `tools/benchmark.sh --posted` |
 | De uitgang tonen zoals hij is als alles is opgeruimd: de lamp aan en de deur omhoog | `tools/benchmark.sh --quick --exit --at="-7,1.7,0.5,90,4"` |
@@ -420,7 +474,7 @@ Acht poppen kosten dus 0,2 ms meer dan acht robots, bevroren en in beweging. Bev
 
 - **Menu.** Titelscherm over het geladen level, levelkeuze, pauzemenu (Esc of Start) en een instellingenscherm. Alles is met muis, toetsenbord en controller te bedienen. `--play` slaat het titelscherm over.
 - **Besturing.** Het titelscherm en het pauzemenu hebben een scherm Controls, met een knop die wisselt tussen muis, trackpad en controller. Voor de trackpad is er één toets bij gekomen: richten met Option (Alt), omdat een trackpad niet tegelijk een rechterklik kan vasthouden en klikken. Wapens wissel je daar met 1 tot 5, want scrollen met twee vingers is voor Godot geen muiswiel. Het scherm noemt C voor bukken en niet Ctrl: macOS maakt van een klik met Ctrl ingedrukt een rechterklik, dus gebukt vuren zou richten worden. Niet op een echte trackpad geprobeerd.
-- **Instellingen**, bewaard in `user://settings.cfg`: kwaliteit (Low tot Ultra), upscaler, renderschaal, V-Sync, fullscreen, fps-teller, gezichtsveld, muis- en stickgevoeligheid, Y-as omkeren en volume. Een kwaliteitsniveau zet alleen effecten uit die het level zelf aan heeft staan.
+- **Instellingen**, bewaard in `user://settings.cfg`: kwaliteit (Low tot Ultra), upscaler, renderschaal, V-Sync, fullscreen, fps-teller, gezichtsveld, beeldbeweging (View motion, zie "Hoe het beeld meebeweegt"), muis- en stickgevoeligheid, Y-as omkeren en volume. Een kwaliteitsniveau zet alleen effecten uit die het level zelf aan heeft staan.
 - **Upscaling.** Bilinear, FSR 1, FSR 2 en op Apple-hardware MetalFX Spatial. Een speler begint met MetalFX Spatial (elders FSR 1) en een renderschaal die zichzelf instelt. Zie "Fullscreen op een Retina-scherm" hieronder, ook voor waarom MetalFX Temporal niet meer in het menu staat.
 - **Springen** is kort: 0,9 m hoog en na twee derde seconde weer op de grond (was 1,2 m en een hele seconde). De speler valt daarvoor 1,65 keer zo snel als de rest van de wereld (`GRAVITY_SCALE` in `scripts/player.gd`).
 - **Controller.** Linkerstick lopen, rechterstick kijken, RT vuren, LT richten, A springen, B bukken en sliden, X herladen, Y granaat, LB en RB wapen wisselen, linkerstick indrukken sprinten, Start pauze. Niet getest met een fysieke controller.
@@ -497,10 +551,17 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 
 - Vaten komen niet terug: wat is opgeblazen, is weg tot je doodgaat of het level opnieuw begint. Na een herstart bij een checkpoint staan ze er allemaal weer, ook in het deel dat al is opgeruimd. Een checkpoint vult de granaten aan tot twee.
 - Door een wrak loop je heen, en een schot gaat erdoor: het botst alleen met het level. Waar een vat stond, houdt het navmesh een gat.
-- Vuur slaat niet over op kisten of pallets, en de klap van een explosie beweegt geen props: alles wat een lightmap heeft, staat vast.
+- Vuur slaat niet over op kisten of pallets. Een klap breekt kisten en dozen, maar beweegt geen andere props: wat een lightmap heeft, staat vast.
+- Wat kapot is laat sporen na in het gebakken licht: van een lamp die uit is blijft het licht staan dat via de muren kwam, en van een kist die weg is de gebakken schaduw op de vloer.
+- De vijanden weten niet dat een stapel weg is: de plek erachter blijft op hun kaart van dekking staan tot ze er gezien worden, en het navmesh houdt er een gat. Kisten en lampen komen net als de vaten pas terug bij een herstart.
+- Niet kapot te schieten: de kleine kisten op de stellingen, pallets, banden, cementzakken, tl-buizen die al uit waren en ramen. Vijanden schieten wel kisten stuk, maar geen lampen.
+- Terwijl kisten omlaag vallen (een kwart seconde) staat hun botsvorm al waar ze neerkomen: een schot op de kist die nog in de lucht hangt gaat erdoorheen.
+- Een kogel die rakelings langs gaat is niet te horen en niet te voelen: er is geen opname van.
+- Hoe het beeld meebeweegt en hoe breken eruitziet en klinkt, heeft nog niemand gespeeld of gehoord.
 - De granaat is in de hand niet te zien; alleen de arm die hem gooit beweegt.
 - Een schot in een plas spat niet op: of een punt nat is, weet alleen de vloershader. Ramen hebben geen botsvorm, dus een schot gaat er zonder spoor doorheen.
 - Een stelling heeft één doos als botsvorm; een schot tussen de planken door geeft daarom vonken in de lucht ervoor.
+- Selftests van verschillende checkouts delen één savebestand (`user://selftest_save.cfg`) en laten elkaar falen als ze tegelijk draaien, steeds vanaf "a restart carries on from that checkpoint". Eén tegelijk, of elk met `HOME` naar een eigen map.
 - De selftest meet "enemies approach" in echte tijd en faalde één keer op die stap toen de laptop zwaar belast was; drie herhalingen daarna slaagden.
 - Geen instelbare toetsen en geen aim assist voor de controller.
 - De HUD schaalt niet mee op hoge resoluties; de tekst is daar klein.
