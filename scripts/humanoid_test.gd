@@ -303,7 +303,7 @@ func _run() -> void:
 	# The setting in the menu steps through the themes.
 	Menu._show(Menu.Screen.SETTINGS)
 	var chooser: Button = null
-	for control: Control in Menu._column.get_children():
+	for control: Control in Menu._column.find_children("*", "Button", true, false):
 		if control is Button and (control as Button).text.begins_with("Enemies"):
 			chooser = control
 	chooser.pressed.emit()

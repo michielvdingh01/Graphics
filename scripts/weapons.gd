@@ -19,6 +19,7 @@ const LOADOUT: Array[WeaponData] = [
 	preload("res://weapons/marksman.tres"),
 ]
 const GRENADE := preload("res://scenes/grenade.tscn")
+const SPRING := preload("res://scripts/spring.gd")
 ## The most grenades that are carried, and how many a level starts with.
 const GRENADES := 3
 const START_GRENADES := 2
@@ -79,6 +80,94 @@ const MAG_DROP := 0.32
 ## Loading one shell at a time: seconds before the first and after the last.
 const SHELL_LEAD := 0.35
 const SHELL_TAIL := 0.3
+
+# How the weapon in view moves in the hands of whoever carries it. All of it
+# is only drawn: none of it changes where a shot goes.
+
+## A shot kicks the weapon back on a spring: the seconds after the shot at
+## which it is furthest back, and how much of its swing it loses, so that it
+## comes forward a little past where it was held before it settles. By chance
+## it also rolls and shifts sideways, at most this many radians and metres,
+## so that no two shots look alike. Over the sights it kicks KICK_AIMED as
+## far, which is about what was ever drawn of it there before it was a spring:
+## the sights should jump no further off what they are held on than they did.
+const KICK_TIME := 0.025
+const KICK_DAMPING := 0.6
+const KICK_ROLL := 0.015
+const KICK_SHIFT := 0.003
+const KICK_AIMED := 0.75
+## Shot after shot the muzzle climbs: by this share of the weapon's
+## kick_rotation for each, up to CLIMB_MAX of it. It stays up while the shots
+## keep coming, which is for CLIMB_HOLD seconds after the last, and then comes
+## down at CLIMB_BLEED per second: a quarter of a second and it is gone.
+const CLIMB_STEP := 0.085
+const CLIMB_MAX := 0.5
+const CLIMB_HOLD := 0.11
+const CLIMB_BLEED := 14.0
+## A shot widens the field of view for a moment, by this many degrees for
+## every degree it kicks the aim up, see Player.punch_fov(). A weapon that
+## kicks it up by HEAVY_RECOIL degrees or more, the shotgun and the marksman
+## rifle, rattles the view as well, by this much, see Player.shake().
+const SHOT_FOV := 0.35
+const HEAVY_RECOIL := 3.0
+const SHOT_TRAUMA := 0.3
+## The bob of a walk, at walking speed: metres to either side and half that
+## up and down, radians of roll with the sway and of pitch with the step. It
+## runs BOB_LAG of a step behind the bob of the view, as something with weight
+## that is carried along.
+const BOB_SIZE := 0.012
+const BOB_ROLL := 0.010
+const BOB_PITCH := 0.005
+const BOB_LAG := 0.1
+## Turning: the weapon points to where the view was SWAY_LAG seconds ago, at
+## most SWAY_MAX radians behind, and catches up at SWAY_RETURN per second. For
+## every radian it is behind it shifts SWAY_SHIFT metres the same way and
+## banks SWAY_BANK radians into the turn. Over the sights SWAY_AIMED of that
+## is left.
+const SWAY_LAG := 0.015
+const SWAY_MAX := 0.035
+const SWAY_RETURN := 10.0
+const SWAY_SHIFT := 0.2
+const SWAY_BANK := 0.6
+const SWAY_AIMED := 0.15
+## Its own weight: it catches up with a change of the carrier's speed at
+## TRAIL_RATE per second, and until it has it trails TRAIL_SHIFT metres for
+## every m/s it is behind, up to TRAIL_MAX m/s. It rolls TRAIL_ROLL radians
+## into a strafe for every m/s of it. Rising and falling it hangs back:
+## RISE_SHIFT metres and RISE_PITCH radians of muzzle for every m/s, up to
+## RISE_MAX m/s.
+const TRAIL_RATE := 9.0
+const TRAIL_SHIFT := 0.001
+const TRAIL_MAX := 12.0
+const TRAIL_ROLL := 0.003
+const RISE_SHIFT := 0.003
+const RISE_PITCH := 0.004
+const RISE_MAX := 6.0
+## Landing: the metres it drops and the radians its muzzle dips after the
+## hardest landing there is, the seconds after touching down at which it is
+## lowest, and how much of its swing it loses: it comes up a little past
+## where it was held.
+const LAND_DROP := 0.03
+const LAND_PITCH := 0.04
+const LAND_TIME := 0.1
+const LAND_DAMPING := 0.6
+## Held still it breathes: metres up and down and radians of muzzle, at this
+## many breaths a second.
+const BREATH_SIZE := 0.002
+const BREATH_PITCH := 0.0015
+const BREATH_RATE := 0.25
+## A hit knocks it away from the side the hit came from: by this many metres
+## for a hit of the player's HIT_FULL or more and by less for less, see
+## Player.hit_weight(), with this many radians of roll, furthest after
+## FLINCH_TIME seconds and swinging back a little past rest.
+const FLINCH_SHIFT := 0.008
+const FLINCH_ROLL := 0.03
+const FLINCH_TIME := 0.06
+const FLINCH_DAMPING := 0.6
+## The share of all this, the kick of a shot apart, that is left with
+## Settings.view_motion at zero. Not none: a weapon that is held dead still
+## looks broken, and it moves no more of the picture than itself.
+const STEADY_SHARE := 0.35
 
 
 ## The parts of one viewmodel that move, and where they rest.
@@ -142,9 +231,25 @@ var _thrown := true
 var _melee_left := 0.0
 var _landed := true
 var _bloom := 0.0
-var _kick := 0.0
-var _sway := Vector2.ZERO
-var _bob_time := 0.0
+## The kick of a shot: on its z the share of the weapon's own kick_back and
+## kick_rotation, on its x metres to the side and on its y radians of roll.
+var _kick := SPRING.new(KICK_TIME, KICK_DAMPING)
+## How far shot after shot has pushed the muzzle up, as a share of the
+## weapon's kick_rotation.
+var _climb := 0.0
+## How far the weapon lags a turn of the view, in radians of yaw and pitch,
+## and the yaw and pitch the view had a frame ago.
+var _lag := Vector2.ZERO
+var _facing := Vector2.ZERO
+## The carrier's velocity as far as the weapon has caught up with it, in the
+## carrier's own axes.
+var _trail := Vector3.ZERO
+## What a landing does to it: radians of pitch on its x, metres on its y.
+var _drop := SPRING.new(LAND_TIME, LAND_DAMPING)
+## Where a hit has knocked it to, in metres.
+var _flinch := SPRING.new(FLINCH_TIME, FLINCH_DAMPING)
+## Seconds into its breathing.
+var _breath := 0.0
 var _sprint_blend := 0.0
 ## 1 while the slide is held back on an empty magazine.
 var _locked := 0.0
@@ -160,6 +265,9 @@ var _smoke_due := false
 
 @onready var player: CharacterBody3D = owner
 @onready var camera: Camera3D = get_parent()
+## What the camera sits on: its pitch is where the player looks, without the
+## recoil and the shake that the camera adds to it.
+@onready var _head: Node3D = camera.get_parent()
 
 
 func _ready() -> void:
@@ -176,6 +284,9 @@ func _ready() -> void:
 		_reserves.append(_start_reserve(data))
 	_models[_index].root.visible = true
 	_build_fill()
+	player.hit_from.connect(_on_hit)
+	player.landed.connect(_on_landed)
+	_settle()
 	_emit_ammo.call_deferred()
 
 
@@ -233,6 +344,7 @@ func preview(index: int, aim := 0.0, reload := 0.0, blow := 0.0) -> void:
 		_start_reload()
 		_reload_left = _reload_total * (1.0 - reload)
 	_melee_left = MELEE_TIME * (1.0 - blow) if blow > 0.0 else 0.0
+	_settle()
 	_animate_viewmodel(current(), 0.0)
 
 
@@ -295,8 +407,6 @@ func _start_reserve(data: WeaponData) -> int:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and player.has_control():
-		_sway = (_sway - event.relative * 0.00005).limit_length(0.025)
 	_mend_ctrl_click(event)
 
 
@@ -454,7 +564,7 @@ func _fire(data: WeaponData) -> void:
 		deg_to_rad(data.recoil_yaw_deg) * recoil_scale * randf_range(-1.0, 1.0)
 	)
 	_bloom = minf(_bloom + data.bloom_per_shot_deg, data.bloom_max_deg)
-	_kick = 1.0
+	_kick_view(data)
 	flash()
 	_heat = minf(_heat + SHOT_HEAT * (2.5 if data.pellets > 1 else 1.0), 1.0)
 	_smoke_due = true
@@ -475,6 +585,20 @@ func _fire(data: WeaponData) -> void:
 		# there is to hear, and the HUD marks it.
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()
+
+
+## What a shot does to the picture, the aim apart: the weapon kicks back in
+## the hands, never twice alike, and climbs if more follow; the view widens for
+## a moment, less over the sights and not at all through a telescopic one;
+## and a heavy weapon rattles it, half as much over the sights.
+func _kick_view(data: WeaponData) -> void:
+	_kick.push(Vector3(randf_range(-KICK_SHIFT, KICK_SHIFT), randf_range(-KICK_ROLL, KICK_ROLL), 1.0))
+	_climb = minf(_climb + CLIMB_STEP, CLIMB_MAX)
+	var sights := lerpf(1.0, 0.5, ads_blend)
+	player.punch_fov(data.recoil_pitch_deg * SHOT_FOV * sights * (1.0 - scope_blend()))
+	if data.recoil_pitch_deg >= HEAVY_RECOIL:
+		# What a rattle shows goes by its square, so it is the root that halves it.
+		player.shake(SHOT_TRAUMA * sqrt(sights))
 
 
 ## Where the shots of the weapon in hand leave it.
@@ -679,15 +803,12 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
 	var grounded: bool = player.is_on_floor() and not player.is_sliding()
 
-	_kick = lerpf(_kick, 0.0, 1.0 - exp(-16.0 * delta))
-	_sway = _sway.lerp(Vector2.ZERO, 1.0 - exp(-9.0 * delta))
+	_kick.step(delta)
+	if _since_shot > CLIMB_HOLD:
+		_climb *= exp(-CLIMB_BLEED * delta)
 	var sprinting: bool = player.is_sprinting() and speed > 5.5 and grounded
 	_sprint_blend = lerpf(_sprint_blend, 1.0 if sprinting else 0.0, 1.0 - exp(-10.0 * delta))
-
-	if grounded:
-		_bob_time += delta * speed * 1.5
-	var bob_size := 0.012 * minf(speed / 5.0, 1.6) * (1.0 - 0.9 * aim) * float(grounded)
-	var bob := Vector3(cos(_bob_time * 0.5), -absf(sin(_bob_time * 0.5)), 0.0) * bob_size
+	var carried := _carry(aim, delta)
 
 	# The weapon dips out of view while it is being switched.
 	var lower := sin(PI * (1.0 - _switch_left / SWITCH_TIME)) if _switch_left > 0.0 else 0.0
@@ -720,17 +841,117 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	handling[0] += Vector3(-0.02, -0.07, 0.14) * _crowded
 	handling[1] += Vector3(0.95, 0.25, 0.0) * _crowded
 
-	var offset := data.hip_offset.lerp(data.ads_offset, aim)
-	offset += bob + Vector3(_sway.x, -_sway.y, 0.0) * (1.0 - 0.7 * aim)
-	offset += Vector3(-0.05 * _sprint_blend, -0.22 * lower - 0.03 * _sprint_blend, _kick * data.kick_back)
+	# Over the sights the kick is smaller and straighter and the muzzle climbs
+	# less, so that the sights stay close to what they are held on.
+	var kick := _kick.at
+	var askew := 1.0 - 0.7 * aim
+	var shove := kick.z * lerpf(1.0, KICK_AIMED, aim)
+	var offset := data.hip_offset.lerp(data.ads_offset, aim) + carried[0]
+	offset += Vector3(-0.05 * _sprint_blend + kick.x * askew, -0.22 * lower - 0.03 * _sprint_blend, shove * data.kick_back)
 	model.root.position = offset + handling[0]
-	model.root.rotation = data.hip_rotation_deg * (PI / 180.0) * (1.0 - aim) + handling[1] + Vector3(
-		_kick * data.kick_rotation * (1.0 - 0.5 * aim) - 0.9 * lower - 0.25 * _sprint_blend,
-		_sway.x * 2.0 + 0.5 * _sprint_blend,
-		_sway.x * 3.0
+	model.root.rotation = data.hip_rotation_deg * (PI / 180.0) * (1.0 - aim) + handling[1] + carried[1] + Vector3(
+		(shove * (1.0 - 0.5 * aim) + _climb * (1.0 - 0.8 * aim)) * data.kick_rotation - 0.9 * lower - 0.25 * _sprint_blend,
+		0.5 * _sprint_blend,
+		kick.y * askew
 	)
 	# Through a telescopic sight the weapon is not seen at all.
 	model.root.visible = scope_blend() < 0.5
+
+
+## How the weapon moves with whoever carries it, as [offset, rotation]: it
+## bobs with their stride, lags a turn of the view, trails a change of speed,
+## hangs back from a jump and a fall, dips on landing, flinches from a hit and
+## breathes when all else is still. `aim` is how far it is up at the eye,
+## where most of this makes way for the sights. Every part of it is nothing
+## at rest and stays where it is over a `delta` of no time at all, so that a
+## weapon posed for a picture sits where its data puts it.
+func _carry(aim: float, delta: float) -> Array[Vector3]:
+	var offset := Vector3.ZERO
+	var turn := Vector3.ZERO
+
+	# The bob of a walk, on the stride that the view and the footsteps go by.
+	var walk: float = player.bob_weight()
+	var stride: float = player.stride() - BOB_LAG
+	var side := sin(PI * stride)
+	var lift := -cos(TAU * stride)
+	var bob := walk * (1.0 - 0.9 * aim)
+	offset += Vector3(side * BOB_SIZE, lift * BOB_SIZE * 0.5, 0.0) * bob
+	turn += Vector3(lift * BOB_PITCH, 0.0, -side * BOB_ROLL) * bob
+
+	# A turn of the view, however it came about: mouse, stick or a look that
+	# was set. Half of what was turned is added before the weapon catches up
+	# over this frame and half after, which comes to the same lag at any frame
+	# rate; and a turn of any size in one frame is no more than SWAY_MAX.
+	var facing := Vector2(player.rotation.y, _head.rotation.x)
+	var turned := Vector2(angle_difference(_facing.x, facing.x), facing.y - _facing.y) * (SWAY_LAG * SWAY_RETURN * 0.5)
+	_facing = facing
+	_lag = ((_lag + turned) * exp(-SWAY_RETURN * delta) + turned).limit_length(SWAY_MAX)
+	var sway := _lag * lerpf(1.0, SWAY_AIMED, aim)
+	offset += Vector3(sway.x, -sway.y, 0.0) * SWAY_SHIFT
+	turn += Vector3(-sway.y, -sway.x, sway.x * SWAY_BANK)
+
+	# Its own weight against the carrier's: setting off, stopping, a strafe, a
+	# jump and a fall.
+	var moving: Vector3 = player.global_basis.inverse() * player.velocity
+	_trail = _trail.lerp(moving, 1.0 - exp(-TRAIL_RATE * delta))
+	var behind := (moving - _trail).limit_length(TRAIL_MAX)
+	var rise := clampf(_trail.y, -RISE_MAX, RISE_MAX)
+	var loose := 1.0 - 0.7 * aim
+	offset += Vector3(-behind.x * TRAIL_SHIFT, -rise * RISE_SHIFT, -behind.z * TRAIL_SHIFT) * loose
+	turn += Vector3(rise * RISE_PITCH, 0.0, -_trail.x * TRAIL_ROLL) * loose
+
+	_drop.step(delta)
+	offset.y += _drop.at.y * (1.0 - 0.5 * aim)
+	turn.x += _drop.at.x * (1.0 - 0.5 * aim)
+
+	_flinch.step(delta)
+	var flinch := _flinch.at * (1.0 - 0.6 * aim)
+	offset += flinch
+	turn.z -= flinch.x * (FLINCH_ROLL / FLINCH_SHIFT)
+
+	# Breathing, with a slower drift to the side so that it does not repeat
+	# itself breath for breath. Both start from nothing and come round again
+	# together after a hundred seconds.
+	_breath = fposmod(_breath + delta, 100.0)
+	var still := (1.0 - minf(walk * 2.0, 1.0)) * (1.0 - 0.6 * aim)
+	var breath := sin(TAU * BREATH_RATE * _breath) * still
+	offset += Vector3(sin(TAU * 0.16 * _breath) * 0.5 * still, breath, 0.0) * BREATH_SIZE
+	turn.x += breath * BREATH_PITCH
+
+	var own := lerpf(STEADY_SHARE, 1.0, Settings.view_motion)
+	return [offset * own, turn * own]
+
+
+## Brings everything that swings to rest, with the weapon held on where the
+## player now looks: for a picture of it, and to begin with. What is not the
+## weapon's own to bring to rest stays as it is: the stride and the speed of
+## whoever carries it, and with them the bob of a walk and the hold of a
+## sprint. A picture is taken of a player who stands still.
+func _settle() -> void:
+	_kick.settle()
+	_drop.settle()
+	_flinch.settle()
+	_climb = 0.0
+	_breath = 0.0
+	_lag = Vector2.ZERO
+	_facing = Vector2(player.rotation.y, _head.rotation.x)
+	_trail = player.global_basis.inverse() * player.velocity
+
+
+## A hit knocks the weapon away from the side it came from, and back for one
+## from the front. One that came from no side only makes it sag.
+func _on_hit(amount: float, bearing: Vector3) -> void:
+	var size: float = player.hit_weight(amount) * FLINCH_SHIFT
+	if bearing == Vector3.ZERO:
+		_flinch.push(Vector3(0.0, -0.4 * size, 0.0))
+		return
+	var from: Vector3 = player.global_basis.inverse() * bearing
+	_flinch.push(Vector3(-from.x, 0.0, -0.6 * from.z) * size)
+
+
+## The weapon drops and its muzzle dips as the player lands, see Player.landed.
+func _on_landed(hardness: float) -> void:
+	_drop.push(Vector3(-LAND_PITCH, -LAND_DROP, 0.0) * hardness)
 
 
 ## Moves whatever moves on the weapon itself: action, pump, magazine and the

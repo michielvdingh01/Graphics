@@ -19,7 +19,7 @@ const UPSCALER_NAMES: Array[String] = ["Bilinear", "FSR 1", "FSR 2", "MetalFX Sp
 const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "metalfx_temporal"]
 const KEYS: Array[String] = [
 	"quality", "upscaler", "auto_scale", "render_scale", "vsync", "fullscreen", "show_fps",
-	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume", "music",
+	"fov", "view_motion", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume", "music",
 	"enemy_theme", "difficulty",
 ]
 const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
@@ -61,6 +61,8 @@ const AUTO_PIXELS := 1920.0 * 1080.0
 ## The render scale goes from MIN_SCALE to 1 in steps of SCALE_STEP.
 const MIN_SCALE := 0.5
 const SCALE_STEP := 0.05
+## The most `view_motion` goes up to.
+const MAX_VIEW_MOTION := 1.5
 
 ## Index into QUALITY_NAMES.
 var quality := 2
@@ -74,6 +76,18 @@ var vsync := true
 var fullscreen := false
 var show_fps := true
 var fov := 80.0
+## How much the view moves by itself: 1 as the game was made, 0 for a camera
+## that holds perfectly still. It scales whatever moves the picture without the
+## player's doing: the bob of a walk, the lean into a strafe or a slide, the
+## dip of a landing, the widening of the view at a sprint, a slide, a shot or
+## a blast, the rattle of an explosion and the knock of a hit. This is the
+## accessibility setting that shooters offer against motion sickness, which is
+## why it goes all the way down to nothing. It leaves alone what is part of
+## playing: recoil of the aim, the zoom of the sights, the height of the eye,
+## and everything the HUD draws. The weapon in view keeps a third of its own
+## motion at zero: held dead still it looks broken, and it moves no more of
+## the picture than itself.
+var view_motion := 1.0
 var mouse_sensitivity := 1.0
 var stick_sensitivity := 1.0
 var invert_y := false
@@ -240,6 +254,7 @@ func _load() -> void:
 	difficulty = clampi(difficulty, 0, RULES.size() - 1)
 	upscaler = clampi(upscaler, 0, UPSCALER_NAMES.size() - 1) as Viewport.Scaling3DMode
 	render_scale = clampf(render_scale, MIN_SCALE, 1.0)
+	view_motion = clampf(view_motion, 0.0, MAX_VIEW_MOTION)
 	# The menu no longer offers MetalFX Temporal; FSR 2 does what it was chosen for.
 	if upscaler == Viewport.SCALING_3D_MODE_METALFX_TEMPORAL:
 		upscaler = Viewport.SCALING_3D_MODE_FSR2

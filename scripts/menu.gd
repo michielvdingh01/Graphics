@@ -23,6 +23,9 @@ const THEME := &"theme"
 ## How loud the music of a level plays: it is behind a fight, not in front.
 const LEVEL_MUSIC_DB := -9.0
 const COLUMN_WIDTH := 520
+## What a screen keeps clear above and below its column, in pixels: a list
+## that would not leave that much scrolls instead, see _list().
+const EDGE := 24
 
 var _screen := Screen.NONE
 ## The screen the controls or the settings were opened from.
@@ -33,6 +36,9 @@ var _enabled := false
 var _root := Control.new()
 var _shade := ColorRect.new()
 var _column := VBoxContainer.new()
+## Where the widgets of the screen that is being put together go: the column,
+## or a list in it that scrolls, see _list().
+var _into: Container = _column
 var _title_camera: Camera3D
 var _time := 0.0
 ## What the end screen has to say about the run that just finished.
@@ -132,6 +138,7 @@ func _show(screen: Screen) -> void:
 		_parent = _screen
 	_screen = screen
 	_score()
+	_into = _column
 	for child in _column.get_children():
 		child.queue_free()
 	_root.visible = screen != Screen.NONE
@@ -189,6 +196,10 @@ func _show(screen: Screen) -> void:
 			_button("Back", _show.bind(_parent))
 		Screen.SETTINGS:
 			_heading("Settings", 44)
+			# There are more settings than fit a screen that is no higher
+			# than 1080: they scroll, between a heading and a way back that
+			# stay where they are.
+			_list()
 			_choice("Difficulty", "difficulty", Settings.DIFFICULTY_NAMES)
 			_choice("Quality", "quality", Settings.QUALITY_NAMES)
 			# MetalFX only exists on Apple hardware, and of its two only the
@@ -201,11 +212,13 @@ func _show(screen: Screen) -> void:
 			_toggle("Fullscreen", "fullscreen")
 			_toggle("Show fps", "show_fps")
 			_slider("Field of view", "fov", 60.0, 110.0, 1.0, "%.0f°")
+			_slider("View motion", "view_motion", 0.0, Settings.MAX_VIEW_MOTION, 0.05, "%.0f%%", 100.0)
 			_slider("Mouse sensitivity", "mouse_sensitivity", 0.2, 3.0, 0.05, "%.2f")
 			_slider("Stick sensitivity", "stick_sensitivity", 0.2, 3.0, 0.05, "%.2f")
 			_toggle("Invert Y", "invert_y")
 			_slider("Volume", "volume", 0.0, 1.0, 0.05, "%.0f%%", 100.0)
 			_slider("Music", "music", 0.0, 1.0, 0.05, "%.0f%%", 100.0)
+			_into = _column
 			_button("Back", _show.bind(_parent))
 		Screen.END:
 			_heading("You made it out", 56)
@@ -405,10 +418,10 @@ func _heading(text: String, size: int) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", size)
-	_column.add_child(label)
+	_into.add_child(label)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
-	_column.add_child(gap)
+	_into.add_child(gap)
 
 
 ## A line of plain text between a heading and the buttons under it.
@@ -416,10 +429,10 @@ func _note(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.modulate.a = 0.8
-	_column.add_child(label)
+	_into.add_child(label)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
-	_column.add_child(gap)
+	_into.add_child(gap)
 	return label
 
 
@@ -438,7 +451,49 @@ func _field(label: String, text: String, changed: Callable) -> void:
 	line.focus_entered.connect(func() -> void: caption.modulate = ACCENT)
 	line.focus_exited.connect(func() -> void: caption.modulate = Color.WHITE)
 	row.add_child(line)
-	_column.add_child(row)
+	_into.add_child(row)
+
+
+## Starts a list in the column that scrolls where the screen is too low to
+## show all of it: every widget from here on goes into it, until `_into` is
+## the column again. On a screen that is high enough it is as high as what is
+## in it, and nothing about the column changes. Stepping through it with the
+## keys or a controller scrolls along with what has the focus, and so does
+## pointing at a line that is half in view.
+func _list() -> void:
+	var scroll := ScrollContainer.new()
+	scroll.follow_focus = true
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", _column.get_theme_constant("separation"))
+	scroll.add_child(list)
+	_column.add_child(scroll)
+	_into = list
+	var fit := _fit_list.bind(scroll, list)
+	# The window can change size with the list on show: one of the settings
+	# in it is whether the game fills the screen.
+	_root.resized.connect(fit)
+	scroll.tree_exited.connect(func() -> void: _root.resized.disconnect(fit))
+	fit.call_deferred()
+
+
+## Gives a list that scrolls the height of what is in it, or as much of that
+## as the rest of its screen leaves, and keeps what has the focus in view.
+func _fit_list(scroll: ScrollContainer, list: VBoxContainer) -> void:
+	var gap := _column.get_theme_constant("separation")
+	var taken := 2.0 * EDGE
+	for child: Control in _column.get_children():
+		if child != scroll and not child.is_queued_for_deletion():
+			taken += child.get_combined_minimum_size().y + gap
+	scroll.custom_minimum_size.y = minf(list.get_combined_minimum_size().y, _root.size.y - taken)
+	# The list is only laid out at its new height by the next frame, and the
+	# focus was given to its first line before that: scrolling to it any
+	# sooner goes by a list that has no height yet.
+	await get_tree().process_frame
+	var focused := get_viewport().gui_get_focus_owner()
+	if is_instance_valid(scroll) and focused and scroll.is_ancestor_of(focused):
+		scroll.ensure_control_visible(focused)
 
 
 func _button(text: String, action: Callable) -> Button:
@@ -447,7 +502,7 @@ func _button(text: String, action: Callable) -> Button:
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.pressed.connect(action)
 	_focusable(button)
-	_column.add_child(button)
+	_into.add_child(button)
 	return button
 
 
@@ -488,7 +543,7 @@ func _toggle(label: String, key: String) -> void:
 	toggle.button_pressed = Settings.get(key)
 	toggle.toggled.connect(func(on: bool) -> void: Settings.put(key, on))
 	_focusable(toggle)
-	_column.add_child(toggle)
+	_into.add_child(toggle)
 
 
 ## `display_scale` turns the stored value into the number shown, e.g. 0.8 into 80.
@@ -505,6 +560,9 @@ func _slider(label: String, key: String, from: float, to: float, step: float, fo
 	slider.value = Settings.get(key)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# The wheel is for a list that scrolls, not for whatever slider happens
+	# to be under the pointer on the way.
+	slider.scrollable = false
 	row.add_child(slider)
 	var readout := Label.new()
 	readout.custom_minimum_size.x = 80
@@ -518,7 +576,7 @@ func _slider(label: String, key: String, from: float, to: float, step: float, fo
 	)
 	slider.focus_entered.connect(func() -> void: caption.modulate = ACCENT)
 	slider.focus_exited.connect(func() -> void: caption.modulate = Color.WHITE)
-	_column.add_child(row)
+	_into.add_child(row)
 	return slider
 
 
@@ -553,7 +611,7 @@ func _controls() -> void:
 		row.add_child(caption)
 		inputs.append(Label.new())
 		row.add_child(inputs[-1])
-		_column.add_child(row)
+		_into.add_child(row)
 	var refresh := func() -> void:
 		button.text = "Playing with  ·  %s" % DEVICES[_device]
 		for i in lines.size():

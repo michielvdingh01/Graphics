@@ -3,17 +3,18 @@ extends Node
 ##
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
-## enemy types, explosives, grenades, settings and what can be shot to
-## pieces. Then it goes through every level along its route, from the start
-## to the exit and on into the next: that the route can be walked over the
-## navmesh, that every robot can reach the player from its post and none
-## stands close by and in view where the player appears or walks into its
-## zone, that the robots a zone lists wait at their posts until its fight
-## starts, that a checkpoint is still there after a restart of the game and
-## after a death, that the door at the exit is shut until the level is
-## cleared, and that every crate, box and lamp in it can be broken. Where a
-## level is cut into zones that are only drawn when they can be seen, it
-## looks for lines of sight into a zone from where that zone is switched off.
+## enemy types, explosives, grenades, settings, how the view moves and what
+## can be shot to pieces. Then it goes through every level along its route,
+## from the start to the exit and on into the next: that the route can be
+## walked over the navmesh, that every robot can reach the player from its
+## post and none stands close by and in view where the player appears or
+## walks into its zone, that the robots a zone lists wait at their posts
+## until its fight starts, that a checkpoint is still there after a restart
+## of the game and after a death, that the door at the exit is shut until
+## the level is cleared, and that every crate, box and lamp in it can be
+## broken. Where a level is cut into zones that are only drawn when they can
+## be seen, it looks for lines of sight into a zone from where that zone is
+## switched off.
 
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
@@ -70,10 +71,13 @@ func _run() -> void:
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
-	# --breaks leaves out everything but what can be shot to pieces.
-	if "--breaks" in OS.get_cmdline_user_args():
-		await _breakables()
-		_ran(["breakables"])
+	# --view leaves out everything but how the view moves, and --breaks
+	# everything but what can be shot to pieces.
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"]]:
+		if only[0] not in OS.get_cmdline_user_args():
+			continue
+		await (only[1] as Callable).call()
+		_ran([only[2]])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
@@ -81,9 +85,10 @@ func _run() -> void:
 		await _handling()
 		await _fights()
 		await _supplies()
+		await _view()
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
-		_ran(["handling", "fights", "supplies", "breakables"])
+		_ran(["handling", "fights", "supplies", "view", "breakables"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -731,6 +736,329 @@ func _supplies() -> void:
 	_check("a run is measured: time, shots, hits", run.seconds > 5.0 and run.shots > 0.0 and run.hits > 0.0 and run.hits <= run.shots)
 	_check("and summed up for the end screen", summary.size() == 2 and summary[0].begins_with("Time  12:34   ·   Deaths  2") and summary[1] == "Accuracy  41%   ·   Headshots  9")
 	_finished.append("supplies")
+
+
+## How the view moves, tried out on the runway of the factory: the bob of a
+## walk on the stride the footsteps go by, what a shot, a hit and a landing do
+## to it, the one setting that scales all of it, and the settings screen that
+## setting is on. What is checked is where the camera sits on the head and how
+## it is turned there: the head itself is where the player looks, and what the
+## enemies aim at.
+func _view() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var camera: Camera3D = player.camera
+	var hud: CanvasLayer = game.get_node("HUD")
+	var rifle: WeaponData = weapons.LOADOUT[0]
+	player.force_control = true
+	player.health = 1e6
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	var stand := func() -> void:
+		for action in ["move_forward", "move_right", "sprint", "crouch", "jump", "ads", "fire"]:
+			Input.action_release(action)
+		_move(player, RUNWAY)
+		player.rotation = Vector3(0, PI * 0.5, 0)
+		player.head.rotation.x = 0.0
+	stand.call()
+	await _wait(0.6)
+	_check("standing still, the camera sits dead level on the head", camera.position.length() < 0.0001 and camera.rotation.length() < 0.0001)
+
+	# A walk: once it has got going the eye rises and falls with every step,
+	# and it is lowest as the foot comes down, which is when the step sounds.
+	# The sound is listened for where it is made: for every step, how many
+	# frames of this walk the stride is past the footfall as it starts. That
+	# is one at most if it starts on the frame the foot comes down.
+	var steps: Array[float] = []
+	var hear := func(sound: Node) -> void:
+		if sound is AudioStreamPlayer and Sfx._streams[&"footstep"].has(sound.stream):
+			var frame: float = Vector2(player.velocity.x, player.velocity.z).length() * get_process_delta_time() / player.STEP_DISTANCE
+			steps.append(fposmod(player.stride(), 1.0) / frame)
+	Sfx.child_entered_tree.connect(hear)
+	Input.action_press("move_forward")
+	var walk := await _watch(player, 1.8)
+	Sfx.child_entered_tree.disconnect(hear)
+	var steady := walk.filter(func(frame: Array) -> bool: return frame[0] > 0.5)
+	var heights := steady.map(func(frame: Array) -> float: return frame[2].y)
+	var walk_swing: float = heights.max()
+	var off_step := 0.0
+	var dips := 0
+	for i in range(1, steady.size() - 1):
+		if heights[i] < heights[i - 1] and heights[i] <= heights[i + 1]:
+			dips += 1
+			off_step = maxf(off_step, absf(steady[i][1] - roundf(steady[i][1])))
+	print("    a walk: the eye goes from %.1f to %.1f mm, lowest %.3f of a step off the footfall at worst; %d steps sound, %.2f of a frame after the footfall at worst" % [
+		heights.min() * 1000.0, walk_swing * 1000.0, off_step, steps.size(), steps.max() if steps.size() > 0 else -1.0])
+	_check("walking, the eye rises and falls between 1 and 2 cm with every step", walk_swing > 0.01 and walk_swing < 0.02
+		and heights.min() < -0.01 and heights.min() > -0.02)
+	_check("and is lowest as the foot comes down", dips >= 2 and off_step < 0.05)
+	_check("which is the frame on which the step sounds", steps.size() >= 3 and steps.all(func(frames: float) -> bool: return frames < 1.001))
+
+	# The one setting: at nothing the camera does not move, whatever happens.
+	# The weapon in view keeps some of its bob, or it would look broken.
+	Settings.put("view_motion", 0.0)
+	stand.call()
+	Input.action_press("move_forward")
+	await tree.process_frame
+	await tree.process_frame
+	player.take_damage(40.0)
+	player.punch_fov(1.0)
+	var held := await _watch(player, 0.6)
+	var sways := held.map(func(frame: Array) -> float: return frame[6].x)
+	var level: float = held[0][4]
+	var still := func(frame: Array) -> bool: return frame[2].length() < 1e-7 and frame[3].length() < 1e-6 and absf(frame[4] - level) < 1e-4
+	_check("with view motion at 0 the camera holds still through a walk, a hard hit and a shot's punch", held.all(still))
+	_check("and the weapon in view still moves, a third as much", sways.max() - sways.min() > 0.002 and sways.max() - sways.min() < 0.01)
+	# And through what leans the view and widens it: a strafe at a sprint and a
+	# jump with its landing, then a slide. The player is turned an eighth so
+	# that forward and to the right together run down the runway.
+	var landings := [0]
+	var count := func(_hardness: float) -> void: landings[0] += 1
+	player.landed.connect(count)
+	stand.call()
+	player.rotation.y = PI * 0.75
+	for action in ["move_forward", "move_right", "sprint", "jump"]:
+		Input.action_press(action)
+	var leant := await _watch(player, 0.9)
+	var strafed: bool = player.is_sprinting() and player.velocity.dot(player.global_basis.x) > 4.0
+	Input.action_press("crouch")
+	leant.append_array(await _watch(player, 0.2))
+	player.landed.disconnect(count)
+	_check("nor does it lean or widen: through a strafe at a sprint, a landing and a slide", strafed and landings[0] == 1 and player.is_sliding()
+		and leant.all(still))
+	Settings.put("view_motion", 1.0)
+
+	stand.call()
+	Input.action_press("move_forward")
+	Input.action_press("sprint")
+	var sprint := await _watch(player, 0.9)
+	var sprint_swing: float = sprint.filter(func(frame: Array) -> bool: return frame[0] > 0.5).map(func(frame: Array) -> float: return frame[2].y).max()
+	_check("with it back at 1 it moves again, and more at a sprint than at a walk", sprint_swing > walk_swing * 1.3)
+
+	# Over the sights the camera may still rise and fall a little, but it
+	# does not turn: the sights hold on what they are held on.
+	stand.call()
+	Input.action_press("move_forward")
+	Input.action_press("ads")
+	var aimed := (await _watch(player, 0.9)).filter(func(frame: Array) -> bool: return frame[0] > 0.5)
+	var aimed_heights := aimed.map(func(frame: Array) -> float: return frame[2].y)
+	var aimed_swing: float = aimed_heights.max() - aimed_heights.min()
+	_check("walking with the sights up, the camera does not turn", weapons.ads_blend == 1.0 and aimed_swing > 0.0005 and aimed_swing < 0.005
+		and aimed.all(func(frame: Array) -> bool: return frame[3].length() < 0.0001))
+
+	# A jump: the knees give as the player comes down and straighten again,
+	# on the camera and not on the head that the enemies aim at.
+	stand.call()
+	await _wait(0.1)
+	Input.action_press("jump")
+	var jump := await _watch(player, 1.3)
+	Input.action_release("jump")
+	var dip: float = jump.map(func(frame: Array) -> float: return frame[2].y).min()
+	print("    a jump: the eye dips %.0f mm on landing" % (-dip * 1000.0))
+	_check("landing dips the view and it comes back", dip < -0.05 and dip > -0.12 and absf(jump[-1][2].y) < 0.002)
+	_check("and the head the camera sits on stays where it is all the while", jump.all(
+		func(frame: Array) -> bool: return absf(frame[7] - player.STAND_EYE) < 0.001))
+
+	# One shot of the rifle. What it does to the aim is what it did before
+	# the view learned to move: a kick of what its data says, of which the
+	# view showed 0.598 at its peak at 45 frames a second, 0.608 at 60, 0.624
+	# at 120 and 0.627 as fast as this test runs. Each frame is held against
+	# that recoil worked out here: nothing else may turn the camera of
+	# somebody who stands still. Next to it the field of view widens for a
+	# moment, and the weapon kicks back in the hands. How much of either kick
+	# a frame gets to show depends on how long the frame before it took: the
+	# bounds leave room for one of 50 ms, which shows 0.547 of the kick of the
+	# aim and 0.6 of that of the weapon, as on a machine that is busy.
+	weapons._mags[0] = rifle.mag_size
+	var wide: float = camera.fov
+	var held_at: Vector3 = weapons._models[0].root.position
+	Input.action_press("fire")
+	for i in 100:
+		if weapons._mags[0] < rifle.mag_size:
+			break
+		await tree.process_frame
+	Input.action_release("fire")
+	var kick: Vector3 = player._recoil_target
+	var due := kick
+	var aim: Vector3 = player._recoil
+	var stray := 0.0
+	var peak := 0.0
+	var punch := 0.0
+	var back := 0.0
+	var forward := 0.0
+	var since := 0.0
+	while since < 0.3:
+		# What the frame before this one left to be seen, and then what the
+		# recoil will have come to by the next.
+		stray = maxf(stray, (camera.rotation - aim).length())
+		peak = maxf(peak, camera.rotation.x)
+		punch = maxf(punch, camera.fov - wide)
+		var pushed: float = weapons._models[0].root.position.z - held_at.z
+		back = maxf(back, pushed)
+		forward = minf(forward, pushed)
+		var step := get_process_delta_time()
+		since += step
+		due = due.lerp(Vector3.ZERO, 1.0 - exp(-player.RECOIL_RETURN * step))
+		aim = aim.lerp(due, 1.0 - exp(-player.RECOIL_SNAP * step))
+		await tree.process_frame
+	var nominal := deg_to_rad(rifle.recoil_pitch_deg)
+	print("    a rifle shot: the aim is kicked %.2f° up, of which the view shows %.3f; it widens %.2f°; the weapon comes %.0f mm back and %.1f mm forward of where it was held" % [
+		rad_to_deg(kick.x), peak / kick.x, punch, back * 1000.0, -forward * 1000.0])
+	_check("a rifle shot kicks the aim by what its data says, as it did before", kick.x > nominal * 0.849 and kick.x < nominal * 1.151
+		and absf(kick.y) <= deg_to_rad(rifle.recoil_yaw_deg) and is_equal_approx(kick.z, kick.y * 0.5))
+	_check("and the view shows the same share of it, with nothing else turning the camera", peak / kick.x > 0.5 and peak / kick.x < 0.645 and stray < 1e-5)
+	_check("the shot widens the field of view for a moment, and it is back within 0.3 s", punch > 0.3 and punch < 0.5 and absf(camera.fov - wide) < 0.01)
+	_check("the weapon kicks back as far as its data says and swings a little past where it was held", back > rifle.kick_back * 0.5
+		and back < rifle.kick_back * 1.05 and forward < 0.0)
+
+	# A hit from the left: `direction` is the way the shot travels, so to the
+	# player's right. The head rolls away from it and the aim stays put, which
+	# here is where the shot just fired has left it; the HUD draws an arc on
+	# the left, which stays on whoever fired as the player turns to face them.
+	var bearings: Array[Vector3] = []
+	var note := func(_amount: float, bearing: Vector3) -> void: bearings.append(bearing)
+	player.hit_from.connect(note)
+	var to_right: Vector3 = player.global_basis.x
+	player.take_damage(7.0, player.global_position + Vector3.UP, to_right)
+	var rolled := 0.0
+	var turned := 0.0
+	for frame in await _watch(player, 0.12):
+		var knock: Vector3 = frame[3] - frame[5]
+		rolled = minf(rolled, knock.z)
+		turned = maxf(turned, Vector2(knock.x, knock.y).length())
+	_check("a hit says where it came from: a direction to the left of the player", bearings.size() == 1 and bearings[0].dot(-to_right) > 0.99)
+	_check("it rolls the head away from that side, by something to see, and leaves the aim alone", rolled < -0.004 and rolled > -0.009 and turned < 1e-5)
+	var arcs: Array[Vector2] = hud._hit_arcs.arcs
+	_check("the HUD draws an arc on the side the hit came from", arcs.size() == 1 and absf(arcs[0].x + PI * 0.5) < 0.02 and arcs[0].y > 0.4)
+	player.rotate_y(PI * 0.5)
+	await tree.process_frame
+	await tree.process_frame
+	_check("which stays on where it came from as the player turns to face it", arcs.size() == 1 and absf(arcs[0].x) < 0.02)
+	player.take_damage(7.0)
+	player.take_damage(7.0, Vector3.ZERO, to_right.rotated(Vector3.UP, deg_to_rad(10.0)))
+	await tree.process_frame
+	await tree.process_frame
+	var renewed := arcs.size()
+	player.take_damage(7.0, Vector3.ZERO, -to_right)
+	await tree.process_frame
+	await tree.process_frame
+	_check("a hit from no side draws none, one from the same side renews its arc, one from elsewhere adds one",
+		bearings.size() == 4 and bearings[1] == Vector3.ZERO and renewed == 1 and arcs.size() == 2)
+	player.hit_from.disconnect(note)
+
+	# The commonest hit there is, a grunt's shot from straight ahead: it has
+	# no side to roll the head away from, and still rolls it, half as far and
+	# either way, and throws it back by as much.
+	stand.call()
+	await _wait(0.3)
+	player._knock.settle()
+	player.take_damage(7.0, Vector3.ZERO, player.global_basis.z)
+	var thrown := Vector3.ZERO
+	for frame in await _watch(player, 0.12):
+		var knock: Vector3 = frame[3] - frame[5]
+		thrown = thrown.max(Vector3(knock.x, absf(knock.y), absf(knock.z)))
+	_check("a grunt's shot from straight ahead throws the head back and rolls it, each by a fifth of a degree", thrown.x > 0.002 and thrown.x < 0.0045
+		and thrown.z > 0.002 and thrown.z < 0.0045 and thrown.y < 1e-5)
+
+	# The weapon lags a turn of the view, but only so far, however sudden:
+	# the test itself turns the player a quarter circle in one frame. Posed
+	# for a picture of a player who stands still, it sits where its data puts
+	# it, whatever it swung with before.
+	var held_to := rifle.hip_rotation_deg * (PI / 180.0)
+	player.rotate_y(-PI * 0.5)
+	await tree.process_frame
+	await tree.process_frame
+	var lag: float = absf(weapons._models[0].root.rotation.y - held_to.y)
+	player.rotate_y(PI * 0.5)
+	weapons.preview(0)
+	_check("a sudden turn leaves the weapon behind, by no more than it may lag", lag > 0.005 and lag < weapons.SWAY_MAX + 0.001)
+	_check("posed for a picture, the weapon sits where its data puts it", weapons._models[0].root.position.is_equal_approx(rifle.hip_offset)
+		and weapons._models[0].root.rotation.is_equal_approx(held_to))
+	# Posed with its kick at its furthest, at the hip and then over the
+	# sights, where it comes less far back: the sights should stay near what
+	# they are held on.
+	var kicks: Array[float] = []
+	for sights: float in [0.0, 1.0]:
+		weapons.preview(0, sights)
+		weapons._kick.at = Vector3(0.0, 0.0, 1.0)
+		weapons._animate_viewmodel(rifle, 0.0)
+		kicks.append(weapons._models[0].root.position.z - rifle.hip_offset.lerp(rifle.ads_offset, sights).z)
+	weapons.preview(0)
+	_check("over the sights the weapon kicks less far back than at the hip", is_equal_approx(kicks[0], rifle.kick_back)
+		and kicks[1] > rifle.kick_back * 0.5 and kicks[1] < rifle.kick_back * 0.8)
+
+	# The settings screen has more on it than fits a screen of 1920 × 1080,
+	# which is as low as one gets: the list in it scrolls, and the way back
+	# stays in view.
+	var window := game.get_window()
+	var windowed := window.size
+	window.size = Vector2i(1920, 1080)
+	Menu._show(Menu.Screen.SETTINGS)
+	for i in 4:
+		await tree.process_frame
+	var column: Array[Node] = Menu._column.get_children()
+	var list: ScrollContainer = column.filter(func(child: Node) -> bool: return child is ScrollContainer)[0]
+	var heading: Control = column[0]
+	var back_button: Button = column[-1]
+	var top := heading.global_position.y
+	var bottom := back_button.global_position.y + back_button.size.y
+	var screen: float = Menu._root.size.y
+	# Down the list with the keys, as a controller steps through it too.
+	var stops := 0
+	var in_view := true
+	var focused := window.gui_get_focus_owner()
+	while focused and stops < 40:
+		stops += 1
+		var box := focused.get_global_rect()
+		var frame := list.get_global_rect() if list.is_ancestor_of(focused) else Rect2(0, 0, 1920, screen)
+		in_view = in_view and box.position.y > frame.position.y - 0.5 and box.end.y < frame.end.y + 0.5
+		for pressed: bool in [true, false]:
+			var key := InputEventAction.new()
+			key.action = "ui_down"
+			key.pressed = pressed
+			Input.parse_input_event(key)
+		await tree.process_frame
+		await tree.process_frame
+		if window.gui_get_focus_owner() == focused:
+			break
+		focused = window.gui_get_focus_owner()
+	var sliders := Menu._column.find_children("*", "HSlider", true, false)
+	var lines := Menu._column.find_children("*", "Control", true, false).filter(
+		func(control: Control) -> bool: return control.focus_mode == Control.FOCUS_ALL).size()
+	print("    the settings screen at 1920 × 1080: its column is %.0f px high, from %.0f to %.0f of %.0f, and the Back button ends at %.0f; the list in it shows %.0f of %.0f px; %d stops for the keys" % [
+		bottom - top, top, bottom, screen, bottom, list.size.y, list.get_child(0).size.y, stops])
+	_check("the settings screen fits a screen of 1920 × 1080, Back button and all", screen == 1080.0 and top >= 0.0 and bottom <= screen
+		and back_button.text == "Back")
+	_check("and stepping down it reaches every setting, each in view when its turn comes", stops == lines and in_view and focused == back_button)
+	_check("view motion is one of them, from 0 to 150 percent", Settings.KEYS.has("view_motion") and Settings.view_motion == 1.0
+		and sliders.any(func(slider: HSlider) -> bool: return slider.max_value == Settings.MAX_VIEW_MOTION))
+	Menu._show(Menu.Screen.NONE)
+	Sfx.stop_music(0.0)
+	window.size = windowed
+	await _wait(0.2)
+	_finished.append("view")
+
+
+## Follows the camera of `player` for `seconds`. Returns a line for every
+## frame that was drawn: the seconds since the start, the stride, where the
+## camera sits on the head, how it is turned there, its field of view, how
+## much of that turn is recoil, where the weapon in view is held, and how
+## high the head is that the camera sits on.
+func _watch(player: CharacterBody3D, seconds: float) -> Array[Array]:
+	var frames: Array[Array] = []
+	var clock := [0.0]
+	var note := func() -> void:
+		clock[0] += get_process_delta_time()
+		frames.append([clock[0], player.stride(), player.camera.position, player.camera.rotation, player.camera.fov, player._recoil,
+			player.weapons._models[player.weapons._index].root.position, player.head.position.y])
+	get_tree().process_frame.connect(note)
+	await _wait(seconds)
+	get_tree().process_frame.disconnect(note)
+	return frames
 
 
 ## Draws the cover the survey found on the floor the player stands on: `#`
