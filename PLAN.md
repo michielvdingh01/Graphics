@@ -208,8 +208,8 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 | Levelgeometrie opnieuw genereren uit `tools/levels/<naam>.gd` | `tools/build_level.sh factory` of `depot` |
 | Alle levels en modellen opnieuw bouwen en horen wat er anders uitkomt dan wat er in git staat; wat gelijk is gebleven wordt teruggezet | `tools/build_check.py`, of `tools/build_check.py factory` voor één level |
 | Een bouwsteen van dichtbij bekijken zonder een level te bakken: alles wat in code is opgebouwd staat naast elkaar in de showroom (`tools/levels/showroom.gd`) | `tools/build_level.sh showroom`, dan `tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-23,2.2,9,0,-5"` |
-| Lightmaps bakken (nodig na elke geometrie- of lichtwijziging, 2 minuten). De bake drukt op de knop van de editor zelf en zet daarvoor eerst de 3D-weergave voor | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
-| Alleen de lightmap van de zones bakken die veranderd zijn (de fabriek heeft er een per zone; het ketelhuis duurt een halve minuut) | `tools/bake_lightmaps.sh res://scenes/factory.tscn boiler,passage` |
+| Lightmaps bakken: alleen wat sinds de vorige bake veranderd is (de hal duurt twee minuten, het ketelhuis een halve). De bake drukt op de knop van de editor zelf en zet daarvoor eerst de 3D-weergave voor | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
+| Horen welke zones een bake nodig hebben, bepaalde zones bakken wat hun staat ook is, of alles | `tools/bake_lightmaps.sh --list`, `tools/bake_lightmaps.sh res://scenes/factory.tscn boiler,passage`, `tools/bake_lightmaps.sh --all` |
 | Wapens, vijanden of de granaat opnieuw genereren uit `tools/models/<naam>.gd` | `tools/build_model.sh weapons`, `enemies` of `props` |
 | Een wapen bekijken zoals de speler het vasthoudt (nummer in de loadout vanaf 0; `,1` erachter is gericht, `,0,0.4` is 40% van het herladen) | `tools/benchmark.sh --quick --weapon=2 --at="2,1.7,3,-120,0"` |
 | Een model of een vijand in een level neerzetten om te bekijken (x,y,z,draaiing,schaal,houding: 1 richt, 2 loopt, 3 ligt in stukken, 4 vuurt, 10 met de plaat voor zich, 11 weggedoken, 12 met een brandend pack) | `tools/benchmark.sh --quick --spawn="res://scenes/enemy_heavy.tscn@-2,0,-1,-100,1,1" --at="2.5,1.7,3,90,-4"` |
@@ -532,7 +532,7 @@ De marge is 10 fps op 1440p met FSR 2, en het spel gebruikt er 3 van. Een level 
 
 **Wat er staat**
 
-- **Zones in het levelbestand.** Een level somt bovenaan zijn zones op (`zone` in `tools/level_builder.gd`): een naam, de dozen die de zone vult en welke andere zones je er vandaan kunt zien. Alles wat daarna gebouwd wordt, komt bij de zone waarin het staat: muren, props, lampen, decals, reflectieprobes, stof. Het levelbestand zelf hoefde daar nauwelijks voor te veranderen; alleen de vloer, die onder alles door liep, is per zone gelegd. Wat buiten elke zone valt (het terrein en de skyline) hoort bij geen en is er altijd. Een level zonder zones komt eruit zoals voorheen: de meshes van het depot zijn byte voor byte gelijk gebleven.
+- **Zones in het levelbestand.** Een level somt bovenaan zijn zones op (`zone` in `tools/level_builder.gd`): een naam en de dozen die de zone vult. Welke andere zones je er vandaan kunt zien, stond er eerst met de hand bij; sinds 10 oktober 2026 rekent de bouwer dat zelf uit, zie "Grotere levels bouwen". Alles wat daarna gebouwd wordt, komt bij de zone waarin het staat: muren, props, lampen, decals, reflectieprobes, stof. Het levelbestand zelf hoefde daar nauwelijks voor te veranderen; alleen de vloer, die onder alles door liep, is per zone gelegd. Wat buiten elke zone valt (het terrein en de skyline) hoort bij geen en is er altijd. Een level zonder zones komt eruit zoals voorheen: de meshes van het depot zijn byte voor byte gelijk gebleven.
 - **Alleen wat in het zicht is, wordt getekend** (`scripts/zones.gd`, dat de bouwer aan de levelscène hangt). Elk frame kijkt het in welke zone de camera staat en zet de inhoud van alle zones uit, behalve die zone en de zones die hij als zichtbaar opgeeft. Het werkt op de camera en niet op de speler, dus ook in de benchmark en achter het titelscherm. De schil van een zone die uit staat (zijn gebakken muren, vloer en dak) blijft schaduw werpen: anders scheen de zon door de deuropeningen de buurzone in. Een robot hoort bij geen zone, maar wie in een zone staat die uit is, staat achter dezelfde muren en wordt ook niet getekend.
 - **Een lightmap per zone.** Elke zone heeft zijn eigen `LightmapGI` en zijn eigen bestand (`scenes/factory_<zone>.exr`). Een zone wordt gebakken met alleen zichzelf om zich heen, dus moet hij gesloten zijn met eigen muren, vloer en dak. De bake zet daarvoor zolang hij duurt een zwart paneel in elke deuropening (`bake_blocker`) en een kopie van de zon in de zone, want een bake kijkt alleen naar wat onder de ouder van zijn `LightmapGI` hangt. Wie een ruimte verandert, bakt alleen die ruimte.
 - **De selftest zoekt zichtlijnen.** Vanaf elke plek waar de speler kan staan trekt hij lijnen naar punten door elke zone die daar uit staat (ruim een miljoen in de fabriek) en faalt bij de eerste die nergens op stuit. Zo kan een zone niet ongemerkt wegvallen terwijl je hem kunt zien. Ter controle heb ik de aanbouw de gang laten vergeten: 840 zichtlijnen en een falende test.
@@ -608,7 +608,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | Stap | Wat | Waaraan je ziet dat het klaar is | Status |
 |---|---|---|---|
 | 1. Bouwdoos | De bouwstenen uit de fabriek naar een gedeelde bibliotheek, en een level in één bestand per zone met vaste deurposities | De fabriek komt er byte voor byte gelijk uit | Klaar, zie hieronder |
-| 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, navmesh per zone vooraf bakken, alleen gewijzigde zones opnieuw bakken | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | |
+| 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na; het contactblad en het keurmerk per zone komen nog. Zie hieronder |
 | 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | |
 | 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | |
 | 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | |
@@ -659,11 +659,48 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 **Nog open**
 
 - Of de robots dekking vinden hangt af van iets wat bij elke wijziging aan een level verschuift, zie hierboven. Dat moet robuust zijn vóór stap 2: daar verandert het navmesh, en in stap 5 komt er elke dag iets bij. Tot dan zegt een falende gevechtstest na een levelwijziging niets over die wijziging.
-- De volgorde in `tools/levels/factory.gd` ligt vast: de zones delen de reeksen willekeurige getallen waarmee kratten gedraaid en ruiten weggelaten worden. Een zone ertussen zetten verschuift die in de zones erna, en dan moeten die opnieuw gebakken worden. Een reeks per zone lost dat op en hoort bij stap 2, waar toch opnieuw gebakken wordt.
+- De volgorde in `tools/levels/factory.gd` ligt vast: de zones van de fabriek delen de reeksen willekeurige getallen waarmee kratten gedraaid en ruiten weggelaten worden. Een zone ertussen zetten verschuift die in de zones erna, en dan moeten die opnieuw gebakken worden. Sinds stap 2 heeft elk bestand van een level zijn eigen reeksen; de fabriek doet het nog op de oude manier, zie daar.
 - De werkbank, het leidingwerk van de gang, het prikbord en de kraan kunnen maar in één richting staan. Een ruimte met een eigen assenstelsel, waarin alles gebouwd wordt, hoort bij stap 4.
 - De kraan staat niet in de showroom: hij heeft een hal nodig om te overspannen.
 - Het depot is één bestand gebleven: het is één ruimte.
 - De deuropeningen staan in het plan als getallen; de lateien en de panelen die een opening tijdens het bakken afsluiten zijn daar nog met de hand van afgeleid.
+
+### Stap 2: automatisch wat handwerk was
+
+**Wat er staat**
+
+- **De bouwer rekent uit welke zones elkaar zien** (`_find_sightlines` in `tools/level_builder.gd`). Hij zet de botsvormen van het level in een wereld, bakt er een navmesh van zoals het spel dat doet, en kijkt vanaf waar iemand kan staan, staand en gebukt, naar punten door elke andere zone. Eén lijn die nergens op stuit en de twee zones worden samen getekend. Ramen tellen als gaten. Voor de fabriek vindt hij precies wat er met de hand stond: hal en aanbouw, aanbouw en gang, gang en ketelhuis. De lijsten zijn uit het plan van de fabriek gehaald en de scène is dezelfde gebleven. `zone` neemt nog wel namen aan van zones die er hoe dan ook bij getekend moeten worden. De selftest zoekt in het draaiende spel nog steeds naar dezelfde lijnen en faalt op de eerste; dat is nu de controle op de bouwer.
+- **Lukt het uitrekenen niet, dan wordt er niets weggeschreven.** Een level waarvan de zones niet weten wat ze zien, laat ruimtes wegvallen terwijl je ernaar kijkt. Dat gebeurde twee keer tijdens het bouwen hiervan, zonder foutmelding die de bouw stopte.
+- **`tools/bake_lightmaps.sh` bakt alleen wat veranderd is.** Van alles waar de bake van een zone naar kijkt wordt een handtekening gemaakt: de gebakken meshes van de zone (de bestanden zelf), de lampen, de geplaatste modellen, de panelen die de deuropeningen afsluiten, de instellingen van de bake, en uit de gespeelde scène de zon en de lucht. De handtekening waarmee een zone het laatst gebakken is staat in `scenes/<level>_bakes.json`, naast de lightmaps. Zonder argument bakt het script de zones waarvan de handtekening niet meer klopt; `--list` zegt alleen welke dat zijn, `--all` bakt alles, een naam bakt die zone, `--mark` neemt de lightmaps die er liggen voor geldig aan. Het depot, dat één lightmap heeft, telt als één geheel.
+- **Elk bestand van een level heeft zijn eigen toeval** (`_shared_dice` en `_seed_dice` in de levelbouwer). De kratten, de vaten en de ontbrekende ruiten van een zone hangen dan niet meer af van wat er in de zones ervoor is gebouwd, en hun lightmap dus ook niet. De fabriek deelt zijn reeksen nog, zoals hij gebouwd en gebakken is.
+
+**Gemeten** op 10 oktober 2026
+
+| | |
+|---|---|
+| De fabriek bouwen | 5,0 s, waarvan 2,1 s voor 1,2 miljoen zichtlijnen; het was 2,8 s |
+| Alle levels en modellen bouwen en vergelijken (`tools/build_check.py`) | 14 s; het was 12 s |
+| De gang bakken, van commando tot klaar | 16 s, waarvan 2,4 s de bake zelf en de rest het starten van de editor |
+| Aanbouw, ketelhuis en hal bakken | de bake zelf is 15 s, 32 s en 1:50 (gemeten op 9 oktober); met de 13 s van de editor erbij naar schatting 30 s, 45 s en 2 minuten |
+
+- **Wat een zone als veranderd telt.** Een tl-buis in de gang tien centimeter verplaatst: alleen de gang. Een vlek op de vloer van de aanbouw groter gemaakt (een decal): niets. Dikkere mist in `scenes/factory.tscn`: niets. Een fellere zon: alle vier.
+- **Twee bakes achter elkaar zijn byte voor byte gelijk.** De gang opnieuw gebakken geeft een bestand dat 33 bytes korter is dan het gecommitte, maar gedecodeerd is het beeld hetzelfde: geen texel verschilt. De lightmap die er lag was dus nog geldig, en hij is teruggezet. Voor de andere zones en het depot is dat aangenomen en niet nagebakken.
+- **Zones met eigen toeval staan los van elkaar.** Met de fabriek als proef op eigen reeksen gezet en een stapel kratten bijgezet in de hal: alleen de gebakken mesh van de hal verandert, die van aanbouw, gang en ketelhuis blijven byte voor byte gelijk.
+
+**Afwijking van het plan: het navmesh wordt niet vooraf gebakken.** Het bakken bij het laden duurt 65 tot 69 ms voor de fabriek en 116 tot 126 ms voor het depot. Een level van vijf keer die omvang is dan een halve seconde, achter een zwart beeld. Daar staat geen bestand per zone en geen wijziging aan het spel tegenover. De bouwer bakt er wel een, om te weten waar iemand kan staan, en gooit hem weer weg.
+
+**Onderweg gevonden**
+
+- **Een verse worktree hoeft niet zes minuten te importeren.** De editor importeerde in een nieuwe worktree alles opnieuw, ook met een gekopieerde `.godot`, omdat de uitgecheckte bestanden een nieuwe wijzigingstijd hebben. Wie elk bestand dat gelijk is aan dat in de hoofdmap de tijd van dat bestand geeft (`touch -r`), is in 9 seconden klaar.
+- `Engine.get_main_loop()` is leeg zolang de bouwer in de constructor van de `SceneTree` draait, en de root staat pas vanaf het eerste frame in de boom. `tools/build.gd` wacht daarom één frame.
+
+**Nog open**
+
+- **De hal haalt de minuut niet**: zijn bake duurt 1:50. Dat is één ruimte met een lightmap van 44,7 MB; korter kan alleen met een grovere lightmap op de grote kale vlakken, en dat is stap 3.
+- **De zichtlijnen groeien met het kwadraat van het aantal zones.** De fabriek kost 2,1 s voor zes paren die elkaar niet zien. Twintig zones zijn er ruim driehonderd, naar schatting twee minuten per bouw. Paren die elkaar wel zien zijn snel klaar: de eerste lijn is genoeg. Wat helpt: een uitkomst "ziet elkaar niet" blijft geldig zolang er alleen botsvormen bij komen, dus alleen na het weghalen of verplaatsen van iets hoeft alles opnieuw. Dat is nog niet gebouwd.
+- **De fabriek staat nog op gedeeld toeval.** Hem omzetten verlegt elke krat en vraagt een bake van alle vier de zones. Dat wacht tot het dekkingzoeken tegen zulke wijzigingen kan (zie stap 1).
+- Een handtekening ziet geen gewijzigd materiaal, geen gewijzigde textuur en geen opnieuw geïmporteerd model. Daarna: `tools/bake_lightmaps.sh --all`.
+- Het contactblad en het keurmerk per zone zijn er nog niet.
 
 ## Gevechten: dekking, beurten en schaarste
 
