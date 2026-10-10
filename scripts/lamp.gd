@@ -221,11 +221,14 @@ func _darken(mesh: MeshInstance3D) -> void:
 		if material == null:
 			continue
 		if _is_glass(material):
-			# What is left of a surface when every pixel of it is cut away.
+			# What is left of a surface that is wholly clear. Clear and not cut
+			# away: what is cut away pixel by pixel is still drawn, pixel by
+			# pixel, into the shadow of every lamp around it.
 			if _nothing == null:
 				_nothing = StandardMaterial3D.new()
 				_nothing.albedo_color = Color(0.0, 0.0, 0.0, 0.0)
-				_nothing.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+				_nothing.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				_nothing.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			mesh.set_surface_override_material(surface, _nothing)
 		elif material.emission_enabled:
 			# The bulb under the glass, as the level builder makes it for a

@@ -475,7 +475,13 @@ func _list() -> void:
 	# in it is whether the game fills the screen.
 	_root.resized.connect(fit)
 	scroll.tree_exited.connect(func() -> void: _root.resized.disconnect(fit))
-	fit.call_deferred()
+	# A screen can be taken away again before the frame it was shown in is
+	# over, as a test does: then there is no list left to fit.
+	var made := scroll.get_instance_id()
+	(func() -> void:
+		if is_instance_id_valid(made):
+			fit.call()
+	).call_deferred()
 
 
 ## Gives a list that scrolls the height of what is in it, or as much of that

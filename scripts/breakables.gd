@@ -78,21 +78,21 @@ func _ready() -> void:
 ## that stand on each other go into one body, since the upper one comes down
 ## when the lower one goes.
 func _adopt_stacks(level: Node3D) -> void:
-	var ground := level.get_node_or_null("Collision") as StaticBody3D
-	if ground == null:
-		return
-	# The box colliders that stand upright, by what they are made of.
+	# The box colliders that stand upright, by what they are made of. A level
+	# has one body called Collision; one that is put together from copies of
+	# a level has one in each copy.
 	var boxes := {}
-	for collider in ground.get_children():
-		if collider is CollisionShape3D and collider.shape is BoxShape3D and _upright(collider):
-			var box := Box.new()
-			box.node = collider
-			box.inverse = collider.global_transform.affine_inverse()
-			box.size = collider.shape.size
-			var surface: String = collider.get_meta(&"surface", "")
-			if not boxes.has(surface):
-				boxes[surface] = []
-			boxes[surface].append(box)
+	for ground: StaticBody3D in level.find_children("Collision", "StaticBody3D", true, false):
+		for collider in ground.get_children():
+			if collider is CollisionShape3D and collider.shape is BoxShape3D and _upright(collider):
+				var box := Box.new()
+				box.node = collider
+				box.inverse = collider.global_transform.affine_inverse()
+				box.size = collider.shape.size
+				var surface: String = collider.get_meta(&"surface", "")
+				if not boxes.has(surface):
+					boxes[surface] = []
+				boxes[surface].append(box)
 	var stacks: Array[Box] = []
 	for model: Node3D in level.find_children("*", "Node3D", true, false):
 		var folder := model.scene_file_path.get_base_dir().get_file()

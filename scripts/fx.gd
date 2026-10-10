@@ -24,7 +24,7 @@ const WORLD := 1
 ## How far below a lamp its glass and its sparks look for a floor, in metres.
 const LAMP_DROP := 14.0
 ## How many frames rehearse() draws for.
-const REHEARSAL := 4
+const REHEARSAL := 6
 ## The shaders keep time in single precision, which gets coarse after hours;
 ## past this many seconds the clock starts again as soon as nothing is playing.
 const CLOCK_SPAN := 600.0
@@ -324,14 +324,7 @@ func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 ## picture comes up out of black and not at the first shot. It is all drawn
 ## a metre in front of the camera, a thousandth of its size.
 func rehearse(extras: Array[MeshInstance3D] = []) -> void:
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
-		for extra in extras:
-			extra.free()
-		return
 	var stage := Node3D.new()
-	stage.position = Vector3(0.0, 0.0, -1.0)
-	stage.scale = Vector3.ONE * 0.001
 	for mesh: Mesh in [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]:
 		var burst := MeshInstance3D.new()
 		burst.mesh = mesh
@@ -343,11 +336,18 @@ func rehearse(extras: Array[MeshInstance3D] = []) -> void:
 		stage.add_child(burst)
 	for extra in extras:
 		stage.add_child(extra)
-	camera.add_child(stage)
+	add_child(stage)
+	# It goes wherever the picture is taken from, frame by frame, and not
+	# along with one camera: a level that is started from the title screen
+	# loads while the camera of the menu still stands, which is gone before a
+	# frame is drawn.
 	for i in REHEARSAL:
+		var camera := get_viewport().get_camera_3d()
+		stage.visible = camera != null
+		if camera:
+			stage.global_transform = camera.global_transform * Transform3D(Basis.from_scale(Vector3.ONE * 0.001), Vector3(0.0, 0.0, -1.0))
 		await get_tree().process_frame
-	if is_instance_valid(stage):
-		stage.queue_free()
+	stage.queue_free()
 
 
 ## Something of wood or cardboard comes apart around `position`: `matter` is
