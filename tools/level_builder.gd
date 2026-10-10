@@ -416,6 +416,7 @@ func _survey() -> bool:
 	for zone_name: String in _zones:
 		grounds[zone_name] = _zones[zone_name].bounds
 	var walked := _walked(navmesh)
+	_check_walkable(navmesh, walked)
 	var feet := {}
 	# Of those, the ones the player can get to: not the roof, not the top of
 	# a tank.
@@ -494,6 +495,44 @@ func _walked(navmesh: NavigationMesh) -> Dictionary:
 					seen[other] = true
 					todo.append(other)
 	return walked
+
+
+## Catches a route that cannot be walked: a robot posted where it cannot get
+## to the player from, or a checkpoint that cannot be reached. `walked` is
+## what _walked() found.
+func _check_walkable(navmesh: NavigationMesh, walked: Dictionary) -> void:
+	if _route == null:
+		return
+	var corners := navmesh.get_vertices()
+	for step: Node3D in _route.get_children():
+		for mark in step.get_children():
+			if not (mark.is_in_group("enemy_spawn") or mark.name == &"Respawn"):
+				continue
+			var spot: Vector3 = step.transform * (mark as Node3D).position
+			var stands := false
+			for p in navmesh.get_polygon_count():
+				if not walked.has(corners.size() + p):
+					continue
+				var outline := PackedVector2Array()
+				var height := 0.0
+				var polygon := navmesh.get_polygon(p)
+				for corner in polygon:
+					outline.append(Vector2(corners[corner].x, corners[corner].z))
+					height += corners[corner].y / polygon.size()
+				if absf(height - spot.y) > 1.5:
+					continue
+				# On the navmesh, or a step from it: the navmesh keeps half a
+				# metre from whatever stands on the floor.
+				var flat := Vector2(spot.x, spot.z)
+				stands = Geometry2D.is_point_in_polygon(flat, outline)
+				for i in outline.size():
+					if stands:
+						break
+					stands = Geometry2D.get_closest_point_to_segment(flat, outline[i], outline[(i + 1) % outline.size()]).distance_to(flat) < 1.0
+				if stands:
+					break
+			if not stands:
+				push_error("Route: %s of %s at %s cannot be walked to from the start" % [mark.name, step.name, spot])
 
 
 ## Works out which zones are in sight of each other: from where somebody can

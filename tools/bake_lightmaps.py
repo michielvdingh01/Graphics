@@ -6,6 +6,7 @@
     tools/bake_lightmaps.sh [scene] --all           every zone
     tools/bake_lightmaps.sh [scene] --list          say what needs a bake, and bake nothing
     tools/bake_lightmaps.sh [scene] --mark          take the lightmaps there are for up to date
+    tools/bake_lightmaps.sh [scene] --anyway        bake although another Godot is using the GPU
 
 The scene is the one that is played, res://scenes/factory.tscn when none is
 given. A level that is cut into zones has a lightmap for each; any other has
@@ -22,6 +23,12 @@ count: a bake does not look at them.
 
 What this cannot see: a material or a texture that changed, or a model that
 was imported anew. After that, bake with --all.
+
+A bake wants the GPU to itself. Next to another Godot that draws, the game
+being played or a benchmark of somebody else's, both have hung, and so has
+every Godot started after them until the laptop was restarted or the stuck
+one was gone. So this refuses to bake while there is one, unless told to
+with --anyway.
 """
 import hashlib
 import json
@@ -122,12 +129,23 @@ def units_of(scene):
     return name, zoned, units, record
 
 
+def drawing_godots():
+    """The other Godots on this laptop that use the GPU: (pid, how it was started)."""
+    found = []
+    for line in subprocess.run(["ps", "-axo", "pid=,args="], capture_output=True, text=True).stdout.splitlines():
+        pid, _, started = line.strip().partition(" ")
+        program = started.split(" --")[0].strip()
+        if (program.endswith("/Godot") or program == "(Godot)") and "--headless" not in started:
+            found.append((pid, started[:90]))
+    return found
+
+
 def main():
     args = sys.argv[1:]
     flags = {a for a in args if a.startswith("--")}
-    unknown = flags - {"--all", "--list", "--mark"}
+    unknown = flags - {"--all", "--list", "--mark", "--anyway"}
     if unknown:
-        sys.exit("Unknown option %s. Run it with --list, --all, --mark or the names of zones." % ", ".join(sorted(unknown)))
+        sys.exit("Unknown option %s. Run it with --list, --all, --mark, --anyway or the names of zones." % ", ".join(sorted(unknown)))
     args = [a for a in args if not a.startswith("--")]
     scene = "res://scenes/factory.tscn"
     if args and args[0].endswith(".tscn"):
@@ -163,6 +181,13 @@ def main():
         return 0
     for zone in wanted:
         print("%s %s: %s" % (name, zone, stale(zone) or "up to date, baked all the same"))
+    others = drawing_godots()
+    if others and "--anyway" not in flags:
+        print("Not baking: another Godot is using the GPU, and a bake next to one has hung both.")
+        for pid, started in others:
+            print("  %s  %s" % (pid, started))
+        print("Bake when it is gone, or pass --anyway.")
+        return 2
     env = dict(os.environ, BAKE_LIGHTMAPS=scene, BAKE_ZONES=",".join(wanted) if zoned else "")
     done = subprocess.run([os.path.join(ROOT, "tools/godot.sh"), "--editor"], env=env)
     if done.returncode != 0:

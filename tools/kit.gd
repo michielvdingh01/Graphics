@@ -1,4 +1,4 @@
-extends "res://tools/kit/fittings.gd"
+extends "res://tools/kit/rooms.gd"
 ## The kit: everything that is built in code and can stand in any level. A
 ## level extends this file, or its plan does.
 ##
@@ -12,6 +12,8 @@ extends "res://tools/kit/fittings.gd"
 ##   tools/kit/machines.gd    tank(), press(), lathe(), workbench(), crane()
 ##   tools/kit/plant.gd       boiler(), pump(), gauge_board()
 ##   tools/kit/fittings.gd    doorway(), corridor_services(), notice_board()
+##   tools/kit/rooms.gd       a level laid out as rooms: room(), door(),
+##                            window(), fight(), build_rooms()
 ##
 ## Something new goes into the drawer it belongs in, or into a new one at the
 ## end of the chain, which this file then extends. A piece takes where it
