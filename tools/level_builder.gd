@@ -1564,16 +1564,20 @@ func revolve(mat: String, xf: Transform3D, profile: PackedVector2Array, flags :=
 
 ## Hose, cable or bent pipe through `points`, curving smoothly from one to the
 ## next. It has no collider and no end caps, so both ends belong inside something.
-func hose(mat: String, points: PackedVector3Array, radius: float, flags := 0, segments := 8) -> void:
+## `taper`, if given, is how thick it is at each point, as a share of `radius`.
+func hose(mat: String, points: PackedVector3Array, radius: float, flags := 0, segments := 8, taper := PackedFloat32Array()) -> void:
 	var st := _tool(mat, flags, points[points.size() / 2])
 	var steps := 6
 	var path := PackedVector3Array()
+	var thick := PackedFloat32Array()
 	for i in points.size() - 1:
 		var before := points[maxi(i - 1, 0)]
 		var after := points[mini(i + 2, points.size() - 1)]
 		for step in steps:
 			path.append(points[i].cubic_interpolate(points[i + 1], before, after, float(step) / steps))
+			thick.append(radius if taper.is_empty() else radius * lerpf(taper[i], taper[i + 1], float(step) / steps))
 	path.append(points[points.size() - 1])
+	thick.append(radius if taper.is_empty() else radius * taper[taper.size() - 1])
 	# Carry one sideways direction along the path, turning it only as much as
 	# the path itself turns, so the rings do not twist against each other.
 	var heading := (path[1] - path[0]).normalized()
@@ -1596,7 +1600,7 @@ func hose(mat: String, points: PackedVector3Array, radius: float, flags := 0, se
 				var u1 := (s + 1) * TAU * radius / segments
 				_quad(
 					st,
-					[path[i - 1] + ring[s] * radius, path[i - 1] + ring[s + 1] * radius, path[i] + around[s + 1] * radius, path[i] + around[s] * radius],
+					[path[i - 1] + ring[s] * thick[i - 1], path[i - 1] + ring[s + 1] * thick[i - 1], path[i] + around[s + 1] * thick[i], path[i] + around[s] * thick[i]],
 					[ring[s], ring[s + 1], around[s + 1], around[s]],
 					[Vector2(u0, -run), Vector2(u1, -run), Vector2(u1, -run - length), Vector2(u0, -run - length)]
 				)
@@ -1749,8 +1753,8 @@ func _turned(mat: String, from: Vector3, axis: Vector3, profile: PackedVector2Ar
 
 
 ## Pipe, conduit or cable.
-func _line(mat: String, points: Array, radius: float, segments := 8) -> void:
-	hose(mat, _m * PackedVector3Array(points), radius, _part, segments)
+func _line(mat: String, points: Array, radius: float, segments := 8, taper := PackedFloat32Array()) -> void:
+	hose(mat, _m * PackedVector3Array(points), radius, _part, segments, taper)
 
 
 func _ring(mat: String, center: Vector3, axis: Vector3, radius: float, thickness: float) -> void:
