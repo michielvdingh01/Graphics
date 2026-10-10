@@ -608,7 +608,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | Stap | Wat | Waaraan je ziet dat het klaar is | Status |
 |---|---|---|---|
 | 1. Bouwdoos | De bouwstenen uit de fabriek naar een gedeelde bibliotheek, en een level in één bestand per zone met vaste deurposities | De fabriek komt er byte voor byte gelijk uit | Klaar, zie hieronder |
-| 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na; het contactblad en het keurmerk per zone komen nog. Zie hieronder |
+| 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na. Zie hieronder |
 | 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | |
 | 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | |
 | 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | |
@@ -655,6 +655,8 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | Een zone aan een level toevoegen | De zone en zijn deuropening in `tools/levels/<level>/plan.gd`, een bestand `tools/levels/<level>/<zone>.gd` dat het plan uitbreidt en `_describe` en `_route_through` heeft, en de naam in de twee lijsten in `tools/levels/<level>.gd` |
 | Een bouwsteen voor elk level maken | In de la van `tools/kit/` waar hij hoort, zonder iets van een level erin, en erbij in `tools/levels/showroom.gd` |
 | Nagaan dat een wijziging aan de bouwer of de bouwdoos verder niets heeft veranderd | `tools/build_check.py` |
+| Een level zone voor zone bekijken en horen wat elke zone kost en mist | `tools/zone_sheet.py factory`, of met `--check` zonder beelden; `--posted` zet de robots op hun post |
+| Bakken wat er na een wijziging gebakken moet worden | `tools/bake_lightmaps.sh`, zie stap 2 |
 
 **Nog open**
 
@@ -674,10 +676,13 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 - **`tools/bake_lightmaps.sh` bakt alleen wat veranderd is.** Van alles waar de bake van een zone naar kijkt wordt een handtekening gemaakt: de gebakken meshes van de zone (de bestanden zelf), de lampen, de geplaatste modellen, de panelen die de deuropeningen afsluiten, de instellingen van de bake, en uit de gespeelde scène de zon en de lucht. De handtekening waarmee een zone het laatst gebakken is staat in `scenes/<level>_bakes.json`, naast de lightmaps. Zonder argument bakt het script de zones waarvan de handtekening niet meer klopt; `--list` zegt alleen welke dat zijn, `--all` bakt alles, een naam bakt die zone, `--mark` neemt de lightmaps die er liggen voor geldig aan. Het depot, dat één lightmap heeft, telt als één geheel.
 - **Elk bestand van een level heeft zijn eigen toeval** (`_shared_dice` en `_seed_dice` in de levelbouwer). De kratten, de vaten en de ontbrekende ruiten van een zone hangen dan niet meer af van wat er in de zones ervoor is gebouwd, en hun lightmap dus ook niet. De fabriek deelt zijn reeksen nog, zoals hij gebouwd en gebakken is.
 
+- **Een contactblad en een keurmerk per zone** (`tools/zone_sheet.py`). De bouwer kiest per zone zelf een paar standpunten waar de speler kan komen, ver uit elkaar, meer in een grote zone, en kijkt vanaf elk de kant op waar de meeste vloer te zien is (`_find_views`); ze staan in de levelscène op de zone. Het script laat de benchmark vanaf elk een beeld maken op de instelling van het budget, 1440p met FSR 2 op 67%, en plakt ze op één blad met eronder wat dat standpunt kost. Een level zonder zones, zoals het depot, wordt bekeken waar er gevochten wordt. Per zone zegt het script of er een reflectieprobe hangt, een lamp brandt, een decal ligt en de lightmap nog klopt, en per standpunt of het binnen 2000 tekenopdrachten en 4 miljoen driehoeken blijft en 60 fps haalt. Met `--check` doet het alleen wat zonder GPU kan.
+
 **Gemeten** op 10 oktober 2026
 
 | | |
 |---|---|
+| Het contactblad van de fabriek: tien beelden, het blad en de tabel | 37 s |
 | De fabriek bouwen | 5,0 s, waarvan 2,1 s voor 1,2 miljoen zichtlijnen; het was 2,8 s |
 | Alle levels en modellen bouwen en vergelijken (`tools/build_check.py`) | 14 s; het was 12 s |
 | De gang bakken, van commando tot klaar | 16 s, waarvan 2,4 s de bake zelf en de rest het starten van de editor |
@@ -686,6 +691,23 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 - **Wat een zone als veranderd telt.** Een tl-buis in de gang tien centimeter verplaatst: alleen de gang. Een vlek op de vloer van de aanbouw groter gemaakt (een decal): niets. Dikkere mist in `scenes/factory.tscn`: niets. Een fellere zon: alle vier.
 - **Twee bakes achter elkaar zijn byte voor byte gelijk.** De gang opnieuw gebakken geeft een bestand dat 33 bytes korter is dan het gecommitte, maar gedecodeerd is het beeld hetzelfde: geen texel verschilt. De lightmap die er lag was dus nog geldig, en hij is teruggezet. Voor de andere zones en het depot is dat aangenomen en niet nagebakken.
 - **Zones met eigen toeval staan los van elkaar.** Met de fabriek als proef op eigen reeksen gezet en een stapel kratten bijgezet in de hal: alleen de gebakken mesh van de hal verandert, die van aanbouw, gang en ketelhuis blijven byte voor byte gelijk.
+
+**Wat het eerste blad liet zien**
+
+| Standpunt | Tekenopdrachten | Driehoeken | Fps in drie runs |
+|---|---|---|---|
+| Hal, vier standpunten | 454 tot 909 | 1,2 tot 2,4 miljoen | 66 tot 75 |
+| Aanbouw 1: uit de kleedkamer, door de gang, de hal in | 1647 | 3,2 miljoen | 73, 75, 76 |
+| Aanbouw 2: de gang | 474 | 0,8 miljoen | 69, 58, 75 |
+| Gang 1: naar de deur van het magazijn | 1311 | 3,2 miljoen | 73, 72, 73 |
+| Gang 2 | 515 | 0,9 miljoen | 78, 76, 79 |
+| Ketelhuis 1: achter de ketel | 661 | 0,9 miljoen | 79, 81, 81 |
+| Ketelhuis 2: vanaf de deur van de gang | 820 | 1,5 miljoen | 71, 65, 75 |
+
+- Tekenopdrachten en driehoeken komen in alle drie de runs tot op de driehoek gelijk uit. De framerate niet: de gang van de aanbouw gaf 69, 58 en 75 fps, met een 1% low van 20 in de middelste run, terwijl de laptop in gebruik was. Een standpunt dat onder de 60 uitkomt wordt daarom één keer opnieuw gemeten en de beste van de twee telt.
+- De zwaarste beelden zijn niet de grootste ruimte maar de doorkijkjes: uit de kleedkamer en uit de gang kijk je door een deur een volgende zone in, en die wordt dan helemaal getekend. Ze halen ruim 70 fps. De grenzen van het keurmerk liggen een marge boven dat zwaarste beeld; de fabriek is de maat.
+- Wat er op het oog opvalt, en waar het blad voor is: de kleedkamer is bijna zwart (de tl-buis daar is uit), de gang naar het ketelhuis is kaal, en achter de ketel is het donker.
+- Het depot: vier standpunten, 359 tot 447 tekenopdrachten, 0,8 tot 1,0 miljoen driehoeken, 67 tot 81 fps.
 
 **Afwijking van het plan: het navmesh wordt niet vooraf gebakken.** Het bakken bij het laden duurt 65 tot 69 ms voor de fabriek en 116 tot 126 ms voor het depot. Een level van vijf keer die omvang is dan een halve seconde, achter een zwart beeld. Daar staat geen bestand per zone en geen wijziging aan het spel tegenover. De bouwer bakt er wel een, om te weten waar iemand kan staan, en gooit hem weer weg.
 
@@ -700,7 +722,8 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 - **De zichtlijnen groeien met het kwadraat van het aantal zones.** De fabriek kost 2,1 s voor zes paren die elkaar niet zien. Twintig zones zijn er ruim driehonderd, naar schatting twee minuten per bouw. Paren die elkaar wel zien zijn snel klaar: de eerste lijn is genoeg. Wat helpt: een uitkomst "ziet elkaar niet" blijft geldig zolang er alleen botsvormen bij komen, dus alleen na het weghalen of verplaatsen van iets hoeft alles opnieuw. Dat is nog niet gebouwd.
 - **De fabriek staat nog op gedeeld toeval.** Hem omzetten verlegt elke krat en vraagt een bake van alle vier de zones. Dat wacht tot het dekkingzoeken tegen zulke wijzigingen kan (zie stap 1).
 - Een handtekening ziet geen gewijzigd materiaal, geen gewijzigde textuur en geen opnieuw geïmporteerd model. Daarna: `tools/bake_lightmaps.sh --all`.
-- Het contactblad en het keurmerk per zone zijn er nog niet.
+- Het keurmerk kijkt niet naar grote kale vlakken: het telt alleen of er in een zone een decal ligt. De gang van de fabriek heeft er twee en is toch kaal, zoals op het blad te zien is.
+- De standpunten staan in de hoeken van een zone, en dat is niet altijd waar de speler binnenkomt. Het uitzicht vanaf de deur waar de route een zone binnenkomt ontbreekt nog.
 
 ## Gevechten: dekking, beurten en schaarste
 
