@@ -352,6 +352,8 @@ Zes dingen die bij het spelen nep klonken. Dat was gespeeld op een stand zonder 
 - **Instelling.** Een eigen schuif "Music" naast "Volume", die de bus Music regelt.
 - **Later.** Dezelfde speler kan in een level zacht een tweede nummer draaien dat aanzwelt bij een gevecht; dat is een andere ronde.
 
+**Stand op 10 oktober 2026.** Punt 2, 3 en 4 zijn gedaan en door Michiel op het oor goedgekeurd: het scherpschuttersgeweer en het pompgeweer hebben hun knal terug en een staart (de opname op afstand op volle lengte, echo's en een nieuwe laag `rumble`), het pompgeweer heeft het lichaam van een Winchester Model 12 eronder en zijn pomp na het schot, en elk wapen herlaadt met opnames uit drie nieuwe CC0-pakketten van OpenGameArt (2,6 MB). De karabijn en de pistoolmitrailleur herladen met het pistool, vertraagd: een eigen opname is er niet. `dry_fire` en `switch` zijn nog gesynthetiseerd. Open: punt 1, 5 en 6.
+
 **Volgorde.** Stap 0, dan 4 en 3 (alleen het manifest, geen nieuwe bron), dan de bron zoeken en 2, 1 en 5 in één keer, dan 6. Na elke stap `tools/hear.py` voor Michiel: hij oordeelt op het oor.
 
 **Wat het kost.** Punt 3 en 4 zijn regels in het manifest en opnieuw bouwen. Punt 1, 2 en 5 zijn een nieuw pakket, zo'n 25 takes erbij (ongeveer 1,5 MB in `assets/audio/`) en code in `weapons.gd`, `weapon_data.gd`, `fx.gd` en `grenade.gd`. Punt 6 is één bestand van 3 MB, een functie in `sfx.gd`, een schuif en een keuze van Michiel.
