@@ -455,11 +455,13 @@ Gemeten in de fabriek op 3456×2160, M1 Pro, met de karabijn in beeld, terwijl d
 |---|---|---|---|
 | Ultra | Geen, 100% | 17–18 fps | scherp |
 | High | MetalFX Spatial, 50% | 63–67 fps | scherp, iets aangezet |
-| Ultra | MetalFX Spatial, 50% | 47–50 fps (drie van de vijf standpunten) | niet bekeken |
+| Ultra | MetalFX Spatial, 50% | 44–50 fps | niet bekeken |
 | High | FSR 2, 50% | 45–47 fps | scherp |
 | High | MetalFX Temporal, 50% | 48–51 fps | blokken van twee bij twee pixels |
 | High | MetalFX Temporal, 67% | 36–39 fps | wazig; niet uitvergroot bekeken |
 | Medium | MetalFX Temporal, 50% | 51–55 fps | niet bekeken |
+
+De regel voor Ultra met MetalFX Spatial is van na een herstart van de laptop, met `--scale=auto`; de eerste meting brak af na drie standpunten, die 47–50 fps gaven. High met MetalFX Spatial gaf bij die tweede meting 64–73 fps.
 
 Ook op halve schaal kost het volle scherm iets: alles na de upscaler (lens, HUD) loopt op 7,5 miljoen pixels. Op 1920×1080 zonder upscaling haalde dezelfde fabriek op Ultra 48 tot 59 fps.
 
