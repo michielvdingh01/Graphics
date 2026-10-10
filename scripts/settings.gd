@@ -16,7 +16,22 @@ const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "me
 const KEYS: Array[String] = [
 	"quality", "upscaler", "render_scale", "vsync", "fullscreen", "show_fps",
 	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume",
-	"enemy_theme",
+	"enemy_theme", "difficulty",
+]
+const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
+## What a difficulty changes, and nothing else does:
+## - attackers: how many enemies may be shooting at the same moment;
+## - rest: seconds after an attack before the next enemy gets its turn;
+## - plates: the share of the robot grunts that carry a plate on their arm;
+## - flankers: how many of a group go round the player;
+## - damage: what an enemy's hit does, next to what its scene says;
+## - warning: how long an attack is announced, next to what its scene says;
+## - regen_to: the health that comes back by itself; the rest has to be found;
+## - drops: how much there is to find, next to Normal.
+const RULES: Array[Dictionary] = [
+	{"attackers": 1, "rest": 1.2, "plates": 0.3, "flankers": 1, "damage": 0.6, "warning": 1.3, "regen_to": 50.0, "drops": 1.4},
+	{"attackers": 2, "rest": 1.0, "plates": 0.5, "flankers": 1, "damage": 1.0, "warning": 1.0, "regen_to": 35.0, "drops": 1.0},
+	{"attackers": 3, "rest": 0.5, "plates": 0.75, "flankers": 2, "damage": 1.35, "warning": 0.8, "regen_to": 25.0, "drops": 0.75},
 ]
 const THEMES := preload("res://scripts/enemy_themes.gd")
 
@@ -48,6 +63,8 @@ var mouse_sensitivity := 1.0
 var stick_sensitivity := 1.0
 var invert_y := false
 var volume := 0.8
+## 0 Easy, 1 Normal, 2 Hard: see RULES.
+var difficulty := 1
 ## Who the enemies are: a theme from enemy_themes.gd, robots unless chosen
 ## otherwise here or with --enemies=<theme> on the command line. It holds for
 ## the enemies that spawn from then on.
@@ -78,6 +95,11 @@ func _ready() -> void:
 		push_warning("No enemies called '%s'; choose from %s. They will be robots." % [enemy_theme, ", ".join(enemy_themes)])
 		enemy_theme = THEMES.ROBOTS
 	apply()
+
+
+## What the difficulty that is set comes down to: see RULES.
+func rules() -> Dictionary:
+	return RULES[clampi(difficulty, 0, RULES.size() - 1)]
 
 
 ## Changes one setting, applies it and saves.
@@ -151,6 +173,7 @@ func _load() -> void:
 		if typeof(value) == typeof(get(key)):
 			set(key, value)
 	quality = clampi(quality, 0, QUALITY.size() - 1)
+	difficulty = clampi(difficulty, 0, RULES.size() - 1)
 	upscaler = clampi(upscaler, 0, UPSCALER_NAMES.size() - 1) as Viewport.Scaling3DMode
 	render_scale = clampf(render_scale, 0.5, 1.0)
 

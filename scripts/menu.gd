@@ -131,6 +131,7 @@ func _show(screen: Screen) -> void:
 			_button("Quit to title", _quit_to_title)
 		Screen.SETTINGS:
 			_heading("Settings", 44)
+			_choice("Difficulty", "difficulty", Settings.DIFFICULTY_NAMES)
 			_choice("Quality", "quality", Settings.QUALITY_NAMES)
 			# MetalFX only exists on Apple hardware.
 			var upscalers := Settings.UPSCALER_NAMES if OS.get_name() == "macOS" else Settings.UPSCALER_NAMES.slice(0, 3)
