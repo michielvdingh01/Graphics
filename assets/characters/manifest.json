@@ -158,7 +158,7 @@
 			},
 			"rusher": {
 				"characters": [
-					"clown_03"
+					"clown_06"
 				],
 				"weapon": "",
 				"moves": "default",
@@ -422,6 +422,41 @@
 						1.01
 					],
 					"occlusion_power": 0.06
+				},
+				"size": 1024,
+				"cutout": false
+			},
+			"fitted": "joints from the shape (landmarks.py)",
+			"imported": "2026-10-10",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"clown_06": {
+			"source": "generated from a description",
+			"license": "generated here; FLUX.1-schnell is Apache-2.0 and TRELLIS.2 is MIT, neither claims what it makes",
+			"prompt": "Full body photograph of a thin, wiry, creepy horror clown standing still and upright, facing the camera, in a wide A-pose: both arms straight and held out to the sides at 45 degrees from the body, well clear of the torso with a wide gap of empty air under each arm, hands open and empty, legs straight and clearly apart with a gap between them, feet flat on the floor wider than the shoulders. He wears a tight harlequin costume of black and dirty white diamonds, a small frayed black ruff, flat black slippers, a wild mop of red hair, cracked white greasepaint, black teardrops under the eyes, a too-wide painted dark red grin, a small red ball nose, bare forearms and bloodied bare hands. Flat even studio lighting without shadows, plain light grey background, the whole figure in frame from head to toe, photorealistic, front view character reference for a 3D model.",
+			"model": "FLUX.1-schnell (seed 1) for the picture, TRELLIS.2-4B at 1024 for the model, both as demos on Hugging Face",
+			"file": "assets/characters/.source/generated/clown_06/clown_06.glb",
+			"options": "--height=1.8",
+			"route": "scan",
+			"triangles": 19700,
+			"source_triangles": 290913,
+			"height": 1.796,
+			"eye_height": 1.64,
+			"head_start": 1.52,
+			"megabytes": 3.34,
+			"textures": {
+				"color": "the scan's texture",
+				"normal": "baked from the scan",
+				"roughness": "the model's own",
+				"texels_per_cm": 4.79,
+				"copied": 1.0,
+				"delight": {
+					"removed": true,
+					"light_from_dark_to_bright": [
+						0.53,
+						1.17
+					],
+					"occlusion_power": 0.6
 				},
 				"size": 1024,
 				"cutout": false
