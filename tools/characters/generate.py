@@ -9,8 +9,10 @@ thousand triangles. Both run on a GPU that Hugging Face shares out in daily
 rations. A visitor without an account gets two minutes and three turns, which
 is three pictures and never a model: TRELLIS.2 asks for two turns of two
 minutes. With a (free) account it fits, about one model a day: make a token at
-https://huggingface.co/settings/tokens and put it in the environment as
-HF_TOKEN. It is sent to the two demos and nowhere else, and never printed.
+https://huggingface.co/settings/tokens and put it in the file
+~/.cache/huggingface/token, where Hugging Face's own tools keep it, or in the
+environment as HF_TOKEN. It is sent to the two demos and nowhere else, and
+never printed.
 What goes over the line is the prompt and the picture made from it: never use
 this for a photo of a real person without their say-so.
 
@@ -36,8 +38,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PAINTER = {"name": "FLUX.1-schnell", "host": "https://black-forest-labs-flux-1-schnell.hf.space", "license": "Apache-2.0"}
 SCULPTOR = {"name": "TRELLIS.2-4B", "host": "https://microsoft-trellis-2.hf.space", "license": "MIT"}
 AGENT = {"User-Agent": "GraphicsFPS-character-generate/0.1"}
-if os.environ.get("HF_TOKEN"):
-    AGENT["Authorization"] = "Bearer " + os.environ["HF_TOKEN"]
+# Where Hugging Face's own tools keep a token; a file is read by every program,
+# whatever shell started it.
+TOKEN_FILE = pathlib.Path.home() / ".cache/huggingface/token"
+_token = os.environ.get("HF_TOKEN") or (TOKEN_FILE.read_text().strip() if TOKEN_FILE.exists() else "")
+if _token:
+    AGENT["Authorization"] = "Bearer " + _token
 BLENDER = os.environ.get("BLENDER") or shutil.which("blender") or "/Applications/Blender.app/Contents/MacOS/Blender"
 
 
@@ -154,7 +160,7 @@ def main() -> None:
         hint = ""
         if "ZeroGPU" in str(error):
             hint = ("\ngenerate: the day's ration of GPU time is used up. " + ("It comes back 24 hours after its first use." if "Authorization" in AGENT else
-                    "Without an account it is too small for a model at all: set HF_TOKEN, see the top of this file."))
+                    "Without an account it is too small for a model at all: it needs a token, see the top of this file."))
         sys.exit("generate: %s%s" % (error, hint))
     (folder / "note.json").write_text(json.dumps(note, indent="\t") + "\n")
     print(model)
