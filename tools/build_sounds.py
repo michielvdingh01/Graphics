@@ -36,7 +36,12 @@ What an entry can say besides its source:
             object. It names a recording with source, files, split and tight
             like the sound itself, of which the left channel is used, or it
             has "sweep": [from Hz, to Hz, seconds] for a sine that drops in
-            pitch, the thump under a shot. It can say lowpass and highpass
+            pitch, the thump under a shot, or "rumble": [seconds, from Hz,
+            to Hz] for noise that dies away over that long while its treble
+            goes first, the way a bang rolls on over open ground. A rumble
+            is different left and right and in every take. An echo needs
+            nothing new: it is the recording again as a layer, later,
+            quieter and duller. A layer can say lowpass and highpass
             (Hz, 24 dB per octave), length (seconds), gain (dB against the
             recording, each at full scale), delay (ms after the recording
             starts) and invert. Those last two decide whether the bass of a
@@ -57,6 +62,7 @@ import json
 import math
 import os
 import pathlib
+import random
 import shutil
 import subprocess
 import sys
@@ -196,6 +202,8 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
     """The takes a sound or a layer names, each as its channels."""
     if "sweep" in spec:
         return [[sweep(*spec["sweep"])]]
+    if "rumble" in spec:
+        return [rumble(*spec["rumble"], seed) for seed in range(4)]
     source = spec["source"]
     patterns = spec["files"] if isinstance(spec["files"], list) else [spec["files"]]
     sources = []
@@ -228,6 +236,29 @@ def sweep(start: float, end: float, seconds: float) -> list:
         if i < attack:
             level *= 0.5 - 0.5 * math.cos(math.pi * i / attack)
         out.append(math.sin(phase) * level)
+    return out
+
+
+def rumble(seconds: float, start: float, end: float, seed: int) -> list:
+    """Noise in two channels that dies away by 60 dB over `seconds`, low-passed
+    at a pitch that falls from `start` to `end` as it does."""
+    count = int(seconds * RATE)
+    attack, release = 0.03 * RATE, 0.15 * count
+    out = []
+    for side in range(2):
+        noise = random.Random(seed * 2 + side)
+        one = two = 0.0
+        channel = []
+        for i in range(count):
+            pitch = end + (start - end) * math.exp(-i / (count / 5.0))
+            pull = 1.0 - math.exp(-math.tau * pitch / RATE)
+            one += pull * (noise.uniform(-1.0, 1.0) - one)
+            two += pull * (one - two)
+            level = math.exp(-6.9 * i / count) * min(1.0, (count - i) / release)
+            if i < attack:
+                level *= 0.5 - 0.5 * math.cos(math.pi * i / attack)
+            channel.append(two * level)
+        out.append(channel)
     return out
 
 
