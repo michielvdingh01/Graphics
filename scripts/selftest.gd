@@ -3,16 +3,17 @@ extends Node
 ##
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
-## enemy types, explosives, grenades and settings. Then it goes through every
-## level along its route, from the start to the exit and on into the next:
-## that the route can be walked over the navmesh, that every robot can reach
-## the player from its post and none stands close by and in view where the
-## player appears or walks into its zone, that the robots a zone lists wait
-## at their posts until its fight starts, that a checkpoint is still there
-## after a restart of the game and after a death, and that the door at the
-## exit is shut until the level is cleared. Where a level is cut into zones
-## that are only drawn when they can be seen, it looks for lines of sight
-## into a zone from where that zone is switched off.
+## enemy types, explosives, grenades, settings and what can be shot to
+## pieces. Then it goes through every level along its route, from the start
+## to the exit and on into the next: that the route can be walked over the
+## navmesh, that every robot can reach the player from its post and none
+## stands close by and in view where the player appears or walks into its
+## zone, that the robots a zone lists wait at their posts until its fight
+## starts, that a checkpoint is still there after a restart of the game and
+## after a death, that the door at the exit is shut until the level is
+## cleared, and that every crate, box and lamp in it can be broken. Where a
+## level is cut into zones that are only drawn when they can be seen, it
+## looks for lines of sight into a zone from where that zone is switched off.
 
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
@@ -69,11 +70,20 @@ func _run() -> void:
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
+	# --breaks leaves out everything but what can be shot to pieces.
+	if "--breaks" in OS.get_cmdline_user_args():
+		await _breakables()
+		_ran(["breakables"])
+		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+		tree.quit(1 if _failures else 0)
+		return
 	if not _routes_only:
 		await _handling()
 		await _fights()
 		await _supplies()
-		_ran(["handling", "fights", "supplies"])
+		# Last, since it breaks what the parts before it fight behind.
+		await _breakables()
+		_ran(["handling", "fights", "supplies", "breakables"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -752,6 +762,272 @@ func _print_cover(player: Node3D) -> void:
 		print(line)
 
 
+## What can be shot to pieces, tried out in the factory: the lamps, the
+## stacks of crates and the cardboard boxes. A stack is only tried on if no
+## part before this one has touched it.
+func _breakables() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var space := player.get_world_3d().direct_space_state
+	var stack_script: GDScript = game.BREAKABLES.STACK
+	player.force_control = true
+	player.health = 1e6
+	weapons._mags[0] = 30
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	await _wait(0.3)
+	var lamps: Array = game._breakables.filter(func(body: Node) -> bool: return body.has_method("lens"))
+	var whole := func(body: Node) -> bool:
+		return body.has_method("cover") and body._members.all(func(member: RefCounted) -> bool:
+			return not member.gone and member.health == body.TUNING[member.kind].health)
+	var stacks: Array = game._breakables.filter(whole)
+	var threes := stacks.filter(func(stack: Node) -> bool: return stack.size() == 3 and stack._colliders.size() == 1)
+	var towers := stacks.filter(func(stack: Node) -> bool: return stack._colliders.size() == 2 and stack._members[0].kind == stack.Kind.CRATE)
+	var most := 0
+
+	# The bottom crate of a stack, which also starts the clock on its pieces.
+	var low: StaticBody3D = threes.pop_back()
+	var crates: Array = low._members
+	low.take_damage(1000.0, low.global_position + Vector3.UP * 0.1, Vector3.FORWARD)
+	var first_pieces: Array = stack_script._pieces.duplicate()
+	var began := Time.get_ticks_msec()
+	var low_collider: CollisionShape3D = low._colliders[0]
+	_check("a crate that takes enough breaks: its model is hidden, and it lies about in pieces", crates[0].gone and not crates[0].model.visible
+		and low.standing() == 2 and first_pieces.size() >= 6)
+	_check("the collider of its stack fits what is left at once", is_equal_approx(low_collider.shape.size.y, crates[1].height + crates[2].height)
+		and is_equal_approx(low_collider.position.y, (crates[1].height + crates[2].height) * 0.5))
+	await _wait(0.5)
+	_check("and the crates above it come down by its height", crates.slice(1).all(func(crate: RefCounted) -> bool:
+		return crate.model.visible and is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[0].height)))
+	most = maxi(most, stack_script.pieces())
+
+	# A hall lamp that is on, shot at from the floor below it.
+	var lamp: StaticBody3D = null
+	var feet := Vector3.INF
+	var glass := Vector3.ZERO
+	for one: StaticBody3D in lamps:
+		if one.kind != one.Kind.HALL or one.light == null or one.out:
+			continue
+		glass = (one.get_child(0) as Node3D).global_position
+		var below := space.intersect_ray(PhysicsRayQueryParameters3D.create(glass, glass + Vector3.DOWN * 20.0, 1))
+		feet = _stand_for(player, one, glass, 2.0, below.position.y if below else 0.0)
+		if feet != Vector3.INF:
+			lamp = one
+			break
+	_check("there is a hall lamp to shoot at from the floor", lamp != null)
+	if lamp:
+		var bursts: int = Fx._expiring.size()
+		await _aim(player, feet, glass)
+		Input.action_press("fire")
+		await _wait(0.1)
+		Input.action_release("fire")
+		_check("a rifle shot puts a hall lamp out: there is nothing left to hit, and glass and sparks come down", lamp.out and lamp.collision_layer == 0
+			and Fx._expiring.size() >= bursts + 3)
+		await _wait(0.4)
+		var eye: Vector3 = player.camera.global_position
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + (glass - eye) * 1.2, weapons.HIT_MASK, [player.get_rid()]))
+		_check("its light has gone, nothing of it glows, and the next shot finds nothing there", not lamp.light.visible and not _glows(lamp._model)
+			and (hit.is_empty() or hit.collider != lamp))
+
+	# A stack of three, from a few steps away: first a shot into the floor in
+	# front of it, then the top crate.
+	var shot: StaticBody3D = null
+	var top := Vector3.ZERO
+	for one: StaticBody3D in threes:
+		top = one._members[2].model.global_transform * stack_script.box_of(one._members[2].model).get_center()
+		feet = _stand_for(player, one, top, 3.5, one.global_position.y)
+		if feet != Vector3.INF:
+			shot = one
+			threes.erase(one)
+			break
+	_check("there is a stack of three crates to shoot at", shot != null)
+	if shot:
+		crates = shot._members
+		await _aim(player, feet, (feet + top) * 0.5 * Vector3(1, 0, 1) + Vector3.UP * feet.y)
+		Input.action_press("fire")
+		await _wait(0.06)
+		Input.action_release("fire")
+		await _wait(0.25)
+		_check("a shot that lands beside a stack breaks nothing", whole.call(shot) and weapons._mags[0] < 30)
+		await _aim(player, feet, top)
+		var loaded: int = weapons._mags[0]
+		for i in 8:
+			Input.action_press("fire")
+			await _wait(0.06)
+			Input.action_release("fire")
+			await _wait(0.24)
+			if crates[2].gone:
+				break
+		print("    the top crate of a stack of three took %d rifle rounds" % (loaded - weapons._mags[0]))
+		var collider: CollisionShape3D = shot._colliders[0]
+		_check("rifle rounds into the top crate of a stack break that one, and the collider is a crate lower", crates[2].gone and not crates[2].model.visible
+			and not crates[0].gone and not crates[1].gone and is_equal_approx(collider.shape.size.y, crates[0].height + crates[1].height)
+			and is_equal_approx(collider.position.y, (crates[0].height + crates[1].height) * 0.5))
+		most = maxi(most, stack_script.pieces())
+
+	# A stack that stands on another: the crate it stands on goes.
+	_check("there is a stack that stands on another", not towers.is_empty())
+	if not towers.is_empty():
+		var tower: StaticBody3D = towers[0]
+		crates = tower._members
+		var under: int = crates.filter(func(crate: RefCounted) -> bool: return crate.collider == 0).size() - 1
+		var upper: CollisionShape3D = tower._colliders[1]
+		var stood: float = upper.position.y
+		tower.take_damage(1000.0, tower.global_position + Vector3.UP * (crates[under].foot + crates[under].height * 0.5), Vector3.FORWARD)
+		await _wait(0.5)
+		_check("breaking the crate it stands on brings that stack down too", crates[under].gone and tower.standing() == tower.size() - 1
+			and is_equal_approx(stood - upper.position.y, crates[under].height)
+			and crates.slice(under + 1).all(func(crate: RefCounted) -> bool: return is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[under].height)))
+		most = maxi(most, stack_script.pieces())
+
+	# What somebody is told who comes into the level later: the same stack
+	# and the same lamp, with nothing flying.
+	var late: StaticBody3D = threes.pop_back()
+	var dark: StaticBody3D = lamps.filter(func(one: Node) -> bool: return one.light != null and not one.out and one.kind != one.Kind.HALL)[0]
+	var lying: int = stack_script.pieces()
+	var playing: int = Fx._expiring.size()
+	late.net_restore(low.net_state())
+	dark.net_restore(1)
+	crates = late._members
+	var late_collider: CollisionShape3D = late._colliders[0]
+	_check("a stack that was broken before somebody came stands the same for them, with no pieces", low.net_state() == 1 and late.net_state() == 1
+		and not crates[0].model.visible and is_equal_approx(late_collider.shape.size.y, crates[1].height + crates[2].height)
+		and is_equal_approx(late_collider.position.y - late_collider.shape.size.y * 0.5, low_collider.position.y - low_collider.shape.size.y * 0.5)
+		and crates.slice(1).all(func(crate: RefCounted) -> bool: return is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[0].height))
+		and stack_script.pieces() == lying)
+	_check("and a lamp that was shot out is dark for them, with no glass and no sparks", dark.out and dark.collision_layer == 0 and not dark.light.visible
+		and dark._covers.all(func(cover: Node3D) -> bool: return cover.visible) and not dark._covers.is_empty() and Fx._expiring.size() == playing)
+
+	# A blast beside a stack.
+	var blown: StaticBody3D = stacks.filter(whole)[0]
+	var middle: Vector3 = (blown._colliders[0] as Node3D).global_position
+	var beside := middle + Vector3(0.9, 0.0, 0.0)
+	for turn in 4:
+		beside = middle + Vector3(0.9, 0.0, 0.0).rotated(Vector3.UP, turn * PI * 0.5)
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(beside, middle, 1, [blown.get_rid()])).is_empty():
+			break
+	Blast.explode(beside, 6.5, 150.0)
+	await _wait(0.2)
+	_check("a blast beside a stack breaks every crate of it, and it is in nobody's way after that", blown.standing() == 0 and blown.collision_layer == 0
+		and blown._members.all(func(crate: RefCounted) -> bool: return not crate.model.visible))
+	most = maxi(most, stack_script.pieces())
+	print("    at most %d pieces lay about, of the %d there may be" % [most, stack_script.MAX_PIECES])
+	_check("there are never more pieces than there may be", most > 0 and most <= stack_script.MAX_PIECES)
+
+	# The pieces of the first crate, once their time is up.
+	var left: float = stack_script.PIECE_TIME + stack_script.SHRINK_TIME + 0.3 - (Time.get_ticks_msec() - began) / 1000.0
+	if left > 0.0:
+		await _wait(left)
+	_check("pieces are cleared away after a while", first_pieces.all(func(piece: Variant) -> bool: return not is_instance_valid(piece)))
+	_finished.append("breakables")
+
+
+## Counts what can be shot to pieces in a level, and checks that nothing of
+## the kind was left out.
+func _inventory(game: Node, title: String) -> void:
+	var level: Node3D = game.get_node("Level")
+	var stack_script: GDScript = game.BREAKABLES.STACK
+	var stacks: Array = game._breakables.filter(func(body: Node) -> bool: return body.has_method("cover"))
+	var lamps: Array = game._breakables.filter(func(body: Node) -> bool: return body.has_method("lens"))
+	# How many stacks each model is part of, and how many colliders there are
+	# of crates.
+	var held := {}
+	var piles := {}
+	var cartons := 0
+	for stack: Node in stacks:
+		for member: RefCounted in stack._members:
+			held[member.model] = held.get(member.model, 0) + 1
+			if member.kind == stack.Kind.CRATE:
+				piles[stack._colliders[member.collider]] = true
+			else:
+				cartons += 1
+	var colliders: Array[CollisionShape3D] = []
+	for collider in level.get_node("Collision").get_children():
+		if collider is CollisionShape3D and collider.shape is BoxShape3D:
+			colliders.append(collider)
+	var inverses := colliders.map(func(collider: CollisionShape3D) -> Transform3D: return collider.global_transform.affine_inverse())
+	var loose := 0
+	var covered := 0
+	for model: Node3D in level.find_children("*", "Node3D", true, false):
+		var folder := model.scene_file_path.get_base_dir().get_file()
+		if folder != "wooden_crate_02" and folder != "cardboard_box_01":
+			continue
+		if held.get(model, 0) != 1:
+			loose += 1
+			print("    not in one stack: %s" % level.get_path_to(model))
+		var middle: Vector3 = model.global_transform * stack_script.box_of(model).get_center()
+		for i in colliders.size():
+			var offset: Vector3 = (inverses[i] as Transform3D) * middle
+			var half: Vector3 = colliders[i].shape.size * 0.5
+			if absf(offset.x) < half.x and absf(offset.y) < half.y and absf(offset.z) < half.z:
+				covered += 1
+				print("    still in the body of the level: %s around %s" % [colliders[i].name, level.get_path_to(model)])
+	# The lights that are lamps, by what their names begin with.
+	var classes := {"HallLamp": "SpotLight3D", "Bulb": "OmniLight3D", "Tube": "OmniLight3D", "Floodlight": "SpotLight3D", "WorkLamp": "SpotLight3D"}
+	var unlit := 0
+	for light: Light3D in level.find_children("*", "Light3D", true, false):
+		if light.get_parent().name != &"Lights":
+			continue
+		for prefix: String in classes:
+			if String(light.name).begins_with(prefix) and light.is_class(classes[prefix]) and lamps.filter(func(lamp: Node) -> bool: return lamp.light == light).size() != 1:
+				unlit += 1
+				print("    no lamp around %s" % level.get_path_to(light))
+	var of_kind := func(kind: int, lit: bool) -> int:
+		return lamps.filter(func(lamp: Node) -> bool: return lamp.kind == kind and (lamp.light != null) == lit).size()
+	var kinds: Dictionary = game.BREAKABLES.LAMP.Kind
+	print("    %s: %d stacks of crates and %d cardboard boxes in %d piles; %d hall lamps on and %d off, %d bulbs, %d tubes, %d floodlights, %d work lamps" % [title,
+		piles.size(), cartons, stacks.size(), of_kind.call(kinds.HALL, true), of_kind.call(kinds.HALL, false), of_kind.call(kinds.BULB, true),
+		of_kind.call(kinds.TUBE, true), of_kind.call(kinds.FLOOD, true), of_kind.call(kinds.WORK, true)])
+	_check("%s: every crate and every cardboard box is part of one stack that can be shot to pieces" % title, loose == 0 and not stacks.is_empty())
+	_check("%s: and no collider of theirs is left in the body of the level" % title, covered == 0)
+	_check("%s: every lamp that is on can be shot out" % title, unlit == 0 and not lamps.is_empty())
+
+
+## A spot on the floor at the height `floor_y` to shoot at `target` from,
+## `reach` metres to the side of it, with nothing between the eye and `body`.
+## Vector3.INF if there is none.
+func _stand_for(player: CharacterBody3D, body: CollisionObject3D, target: Vector3, reach: float, floor_y: float) -> Vector3:
+	var map := player.get_world_3d().navigation_map
+	var space := player.get_world_3d().direct_space_state
+	for turn in 8:
+		var spot := Vector3(target.x, floor_y, target.z) + Vector3(reach, 0.0, 0.0).rotated(Vector3.UP, turn * TAU / 8.0)
+		var feet := NavigationServer3D.map_get_closest_point(map, spot)
+		if feet.distance_to(spot) > 0.5:
+			continue
+		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(feet + Vector3.UP * 0.5, feet + Vector3.DOWN, 1))
+		if ground:
+			feet = ground.position
+		var eye := feet + Vector3.UP * 1.6
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + (target - eye) * 1.2, player.weapons.HIT_MASK, [player.get_rid()]))
+		if hit and hit.collider == body:
+			return feet
+	return Vector3.INF
+
+
+## Stands the player at `feet`, looking at `target`, and gives the weapon a
+## moment to come to rest.
+func _aim(player: CharacterBody3D, feet: Vector3, target: Vector3) -> void:
+	_move(player, feet)
+	player.look_at(Vector3(target.x, feet.y, target.z))
+	await _wait(0.2)
+	var eye: Vector3 = player.camera.global_position
+	player.head.rotation.x = atan2(target.y - eye.y, Vector2(target.x - eye.x, target.z - eye.z).length())
+	await _wait(0.1)
+
+
+## True if any surface of a mesh is drawn with a material that gives light.
+func _glows(mesh: MeshInstance3D) -> bool:
+	for surface in mesh.mesh.get_surface_count():
+		var material := mesh.get_active_material(surface) as BaseMaterial3D
+		if material and material.emission_enabled:
+			return true
+	return false
+
+
 ## Plays the level that is loaded from its start to its exit: zone by zone
 ## and checkpoint by checkpoint, with a restart of the game at the first
 ## checkpoint and a death at the last. `next` is the level its exit should
@@ -768,6 +1044,7 @@ func _play_through(level: Dictionary, next: String) -> void:
 	var explosives := tree.get_nodes_in_group("explosive")
 	_check("%s: has things that explode, each with its model" % title, not explosives.is_empty()
 		and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
+	_inventory(game, title)
 
 	# The route as the level describes it, before anything is fought over.
 	var walk := _walk(game)
