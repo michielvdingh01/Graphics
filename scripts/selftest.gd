@@ -19,6 +19,9 @@ extends Node
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
 const RANGE_TARGET := Vector3(1, 0, -7.5)
 const RUNWAY := Vector3(17.5, 0, 5.5)
+## Where the player stands in the hall for the fights that are tried out:
+## open floor, with crates and machines to the west of it.
+const FIGHT_STAND := Vector3(12, 0, 4)
 ## A robot may stand in sight of where the player walks into its zone, starts
 ## the level or carries on from a checkpoint, but not closer than this.
 const SPAWN_DISTANCE := 14.0
@@ -34,6 +37,9 @@ var active := false
 
 var _failures := 0
 var _routes_only := false
+## The parts of the test that ran to their end. A script error ends the part
+## it happens in without a word, and what was never checked has not passed.
+var _finished: Array[String] = []
 
 
 func _ready() -> void:
@@ -54,8 +60,20 @@ func _run() -> void:
 	# --routes leaves out everything but the levels and their routes, and
 	# lists every spawn point: for working on a level.
 	_routes_only = "--routes" in OS.get_cmdline_user_args()
+	# --fights leaves out everything but what the enemies do in a fight.
+	var fights_only := "--fights" in OS.get_cmdline_user_args()
+	if fights_only:
+		await _fights()
+		await _supplies()
+		_ran(["fights", "supplies"])
+		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+		tree.quit(1 if _failures else 0)
+		return
 	if not _routes_only:
 		await _handling()
+		await _fights()
+		await _supplies()
+		_ran(["handling", "fights", "supplies"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -65,6 +83,7 @@ func _run() -> void:
 	for i in Menu.LEVELS.size():
 		await _wait(0.5)
 		await _play_through(Menu.LEVELS[i], Menu.LEVELS[i + 1].scene if i + 1 < Menu.LEVELS.size() else "")
+	_ran(Menu.LEVELS.map(func(level: Dictionary) -> String: return level.name))
 
 	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)
@@ -274,7 +293,7 @@ func _handling() -> void:
 	Input.action_release("grenade")
 	await _wait(0.5)
 	var thrown := tree.get_nodes_in_group("grenade")
-	_check("a grenade is thrown", weapons.grenades == weapons.GRENADES - 1 and thrown.size() == 1)
+	_check("a grenade is thrown", weapons.grenades == weapons.START_GRENADES - 1 and thrown.size() == 1)
 	if not thrown.is_empty():
 		_check("it flies ahead of the player", thrown[0].global_position.x < player.global_position.x - 2.0)
 	await _wait(2.4)
@@ -290,6 +309,366 @@ func _handling() -> void:
 	Settings.put("render_scale", 0.67)
 	_check("upscaler applies to the viewport", game.get_viewport().scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2
 		and is_equal_approx(game.get_viewport().scaling_3d_scale, 0.67))
+	_finished.append("handling")
+
+
+## What the enemies do in a fight, tried out in the hall of the factory.
+func _fights() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	player.health = 1e6
+	# Nothing else in the level takes part.
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	await _wait(0.3)
+	if "--map" in OS.get_cmdline_user_args():
+		_print_cover(player)
+	var space := player.get_world_3d().direct_space_state
+	var weapons: Node3D = player.weapons
+	var rules: Dictionary = Settings.rules()
+	_move(player, FIGHT_STAND)
+	player.rotation.y = PI * 0.5
+	await _wait(0.2)
+	var eye: Vector3 = player.head.global_position
+
+	# Cover: a grunt that knows of the player runs for a spot where it cannot
+	# be seen, comes out of it to shoot and goes back.
+	var grunt: CharacterBody3D = game.GRUNT.instantiate()
+	grunt.position = FIGHT_STAND + Vector3(-11, 0, 0)
+	game.add_child(grunt)
+	grunt.alert()
+	var settled := 0
+	var hid := 0.0
+	var hidden := false
+	var shot_from := Vector3.ZERO
+	var went_back := false
+	var modes := ""
+	for i in 400:
+		await _wait(0.05)
+		var mode: int = grunt._mode
+		if modes.is_empty() or modes[-1] != str(mode):
+			modes += str(mode)
+		if "--trace" in OS.get_cmdline_user_args() and i % 4 == 0:
+			print("      %.1f mode %d at %s cover %s fire %s los %s attack %d timer %.2f turn %s faces %s" % [i * 0.05, mode, grunt.global_position.snappedf(0.1),
+				(grunt._cover.get("at", Vector3.ZERO) as Vector3).snappedf(0.1), (grunt._cover.get("fire", Vector3.ZERO) as Vector3).snappedf(0.1),
+				grunt._has_los, grunt._attack, grunt._attack_timer, Squad._turns.has(grunt), grunt._faces(eye, 0.7)])
+		# It is nobody's turn until it has been seen to hide, so that it has
+		# to wait where it hides.
+		if hid == 0.0:
+			Squad._rests.assign(range(rules.attackers).map(func(_n: int) -> float: return 0.5))
+		settled = settled + 1 if mode == grunt.Mode.COVER and grunt._flat(grunt._cover.at) < 0.4 else 0
+		if settled == 10 and hid == 0.0:
+			hid = i * 0.05
+			# From the top of its head down, ducked or standing as it is.
+			var top: Vector3 = grunt.global_position + Vector3.UP * (grunt._eyes() + 0.2)
+			hidden = not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, top, 1)).is_empty() \
+				and not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, top - Vector3.UP * 0.5, 1)).is_empty()
+			if "--trace" in OS.get_cmdline_user_args():
+				var c: Dictionary = grunt._cover
+				print("      settled: at %s cover %s crouch %s crouched %s eyes %.2f los %s exposed %.2f; eye %s" % [grunt.global_position, c.at, c.crouch, grunt._crouched, grunt._eyes(), grunt._has_los, grunt._exposed, eye])
+				for h: float in [0.2, 0.41, 0.6, 0.82, 1.04, 1.3, 1.5, 1.7]:
+					var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, (c.at as Vector3) + Vector3.UP * h, 1))
+					var hit2 := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, grunt.global_position + Vector3.UP * h, 1))
+					print("        %.2f: to the spot %s, to the grunt %s" % [h, hit.position if hit else "open", hit2.position if hit2 else "open"])
+		if grunt._attack == grunt.Attack.BURST and mode == grunt.Mode.PEEK and shot_from == Vector3.ZERO:
+			shot_from = grunt.global_position
+		if shot_from != Vector3.ZERO and mode == grunt.Mode.COVER and grunt._attack == grunt.Attack.COOLDOWN:
+			went_back = true
+			break
+	print("    a grunt is in cover after %.1f s, behind something %s; modes %s" % [hid, "low" if grunt._cover.get("crouch", false) else "high", modes])
+	_check("the hall has cover", Squad._spots.size() > 100)
+	_check("a grunt runs for cover and cannot be seen there", hid > 0.0 and hidden)
+	_check("it comes out to shoot when it is its turn", shot_from != Vector3.ZERO)
+	_check("and goes back", went_back)
+
+	# Turns: of a group, only so many attack at the same moment.
+	var squad: Array[CharacterBody3D] = [grunt]
+	for offset: Vector3 in [Vector3(-9, 0, 3), Vector3(-8, 0, -3), Vector3(-12, 0, -2), Vector3(-10, 0, 5)]:
+		var one: CharacterBody3D = game.GRUNT.instantiate()
+		one.position = FIGHT_STAND + offset
+		game.add_child(one)
+		one.alert()
+		squad.append(one)
+	var most := 0
+	var bursts := 0
+	var in_cover := 0
+	var was_attacking := {}
+	var looks: Array[float] = []
+	Squad.timed = looks
+	for i in 240:
+		await _wait(0.05)
+		var now := 0
+		for one in squad:
+			var attacking: bool = one._attack != one.Attack.COOLDOWN
+			if attacking and not was_attacking.get(one, false):
+				bursts += 1
+			was_attacking[one] = attacking
+			now += int(attacking)
+		most = maxi(most, now)
+		if i == 239:
+			in_cover = squad.filter(func(one: CharacterBody3D) -> bool: return one._mode != one.Mode.HUNT).size()
+	print("    five grunts: %d attacks in 12 s, at most %d at once, %d of them fighting from cover" % [bursts, most, in_cover])
+	Squad.timed = null
+	looks.sort()
+	if not looks.is_empty():
+		print("    they looked for cover %d times in 12 s: %.2f ms each at the median, %.2f ms at worst" % [looks.size(), looks[looks.size() >> 1], looks[-1]])
+	_check("a group attacks by turns: never more than %d at once" % rules.attackers, most <= rules.attackers and bursts >= 3)
+	_check("and most of it fights from cover", in_cover >= 3)
+	var round_it := 0
+	for i in 40:
+		for one in squad:
+			round_it += int(Squad.goes_round(one))
+		if round_it > 0:
+			break
+	_check("one of a group goes round the player, and no more", Squad._flankers.size() == rules.flankers)
+
+	# Danger: a grenade at its feet sends a grunt running.
+	for one in squad:
+		if one != grunt:
+			one.queue_free()
+	await _wait(0.2)
+	var before: float = grunt.health
+	var grenade: RigidBody3D = weapons.GRENADE.instantiate()
+	game.add_child(grenade)
+	grenade.global_position = grunt.global_position + Vector3(0.6, 0.2, 0.6)
+	var lay := grenade.global_position
+	var fled := false
+	for i in 50:
+		await _wait(0.05)
+		fled = fled or grunt._mode == grunt.Mode.FLEE
+		if not is_instance_valid(grenade):
+			break
+		lay = grenade.global_position
+	var got_away: float = grunt.global_position.distance_to(lay)
+	print("    a grenade at its feet: it gets %.1f m away and loses %.0f of %.0f health" % [got_away, before - grunt.health, grunt.max_health])
+	# Out of its reach, or behind something that stands between them.
+	_check("a grunt runs from a grenade", fled and not grunt.dead and (got_away > 4.0 or before - grunt.health < 50.0))
+	# And fire: it does not stay standing in it.
+	await _wait(1.0)
+	Blast.burn(grunt.global_position, 1.3, 4.0)
+	var patch := grunt.global_position
+	await _wait(1.2)
+	_check("and gets out of a fire", grunt.dead or not Blast.burning(grunt.global_position) or grunt.global_position.distance_to(patch) > 1.0)
+	grunt.queue_free()
+	await _wait(4.0)
+
+	# The plate on a grunt's arm.
+	var guard: CharacterBody3D = game.GRUNT.instantiate()
+	guard.set_meta(&"plate", true)
+	guard.position = FIGHT_STAND + Vector3(-6, 0, 0)
+	guard.rotation.y = -PI * 0.5
+	game.add_child(guard)
+	guard.set_physics_process(false)
+	var ahead: Vector3 = guard.global_basis.z
+	var chest: Vector3 = guard.global_position + Vector3.UP * 1.1
+	guard.take_damage(10.0, chest, ahead)
+	_check("the first shot at a grunt that has not seen it coming goes home", guard.health == guard.max_health - 10.0 and not guard.deflected)
+	guard.take_damage(10.0, chest, ahead)
+	_check("after that its plate stops a shot from the front", guard.health == guard.max_health - 10.0 and guard.deflected)
+	guard.take_damage(10.0, guard.global_position + Vector3.UP * 1.6, ahead)
+	guard.take_damage(10.0, guard.global_position + Vector3.UP * 0.4, ahead)
+	guard.take_damage(10.0, chest, -ahead)
+	_check("but not one at its head, its legs or its back", guard.health == guard.max_health - 40.0 and not guard.deflected)
+	guard.take_blast(10.0, chest, ahead)
+	_check("nor an explosion", guard.health == guard.max_health - 50.0)
+	# With the rifle, from the front: a stopped shot is no hit.
+	var marks := [0]
+	var count_mark := func(_headshot: bool, _killed: bool) -> void: marks[0] += 1
+	weapons.hit_confirmed.connect(count_mark)
+	_move(player, FIGHT_STAND)
+	player.look_at(Vector3(guard.global_position.x, player.global_position.y, guard.global_position.z))
+	player.head.rotation.x = atan2(1.1 - 1.6, 6.0)
+	await _wait(0.3)
+	Input.action_press("fire")
+	await _wait(0.12)
+	Input.action_release("fire")
+	await _wait(0.1)
+	_check("a shot the plate stops shows no hit marker", marks[0] == 0 and guard._shield < guard.shield and guard.health == guard.max_health - 50.0)
+	Input.action_press("fire")
+	await _wait(0.6)
+	Input.action_release("fire")
+	weapons.hit_confirmed.disconnect(count_mark)
+	_check("enough shots take the plate off its arm, and then it is hurt", not guard._rig.has_shield and guard._shield <= 0.0 and marks[0] > 0)
+	guard.queue_free()
+
+	# The pack on a heavy's back.
+	var blasts := [0]
+	var count_blast := func(_at: Vector3) -> void: blasts[0] += 1
+	Blast.exploded.connect(count_blast)
+	var heavy: CharacterBody3D = game.HEAVY.instantiate()
+	heavy.position = FIGHT_STAND + Vector3(-6, 0, 0)
+	heavy.rotation.y = -PI * 0.5
+	heavy.speed = 0.0
+	game.add_child(heavy)
+	var bystander: CharacterBody3D = game.GRUNT.instantiate()
+	bystander.position = heavy.position + Vector3(-2.2, 0, 0)
+	game.add_child(bystander)
+	bystander.set_physics_process(false)
+	var back: Vector3 = heavy.global_position + heavy.global_basis.z * 0.4 + Vector3.UP * 1.55
+	heavy.take_damage(30.0, heavy.global_position + Vector3.UP * 1.3, heavy.global_basis.z)
+	_check("a heavy shot from the front is hurt and no more", heavy.health == heavy.max_health - 30.0 and heavy.danger().is_empty())
+	_check("a heavy stands its ground and turns slowly", not heavy.takes_cover and not heavy.heeds_danger and heavy.turn_speed < 4.0)
+	heavy.take_damage(30.0, back, -heavy.global_basis.z)
+	heavy.take_damage(30.0, back, -heavy.global_basis.z)
+	_check("shots in the pack on its back hurt more and set it alight", heavy.health < heavy.max_health - 90.0
+		and not heavy.dead and not heavy.danger().is_empty() and blasts[0] == 0)
+	await _wait(heavy.PACK_FUSE + 0.4)
+	_check("then it goes off, and takes the heavy and the grunt beside it along", blasts[0] == 1 and heavy.dead and bystander.dead)
+	Blast.exploded.disconnect(count_blast)
+	await _wait(0.5)
+	_finished.append("fights")
+
+
+## What there is to live on: health that only comes back so far, a reserve
+## that runs out, what the enemies leave behind and what a run is measured by.
+func _supplies() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var rules: Dictionary = Settings.rules()
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	_move(player, FIGHT_STAND)
+	await _wait(0.2)
+
+	# Health comes back by itself, but not all of it.
+	player.health = 10.0
+	player._since_damage = player.REGEN_DELAY
+	await _wait(3.0)
+	_check("health comes back by itself up to %d and no further" % rules.regen_to, is_equal_approx(player.health, rules.regen_to))
+	_check("the HUD marks how far, and shows the health as a number", game.get_node("HUD")._health_label.text == str(int(rules.regen_to))
+		and game.get_node("HUD")._regen_mark.position.x > 60.0)
+
+	# The reserve: less than it can hold to begin with, none at all for the
+	# pistol to run out of.
+	var key := InputEventAction.new()
+	key.pressed = true
+	key.action = "weapon_2"
+	Input.parse_input_event(key)
+	await _wait(0.5)
+	weapons._mags[1] = 3
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	await _wait(2.2)
+	_check("the pistol never runs out of reserve", weapons.current().display_name == "Pistol" and weapons._mags[1] == 12
+		and weapons.ammo_lack() == 0.0)
+	key = key.duplicate()
+	key.action = "weapon_1"
+	Input.parse_input_event(key)
+	await _wait(0.5)
+	var rifle: WeaponData = weapons.LOADOUT[0]
+	weapons.resupply()
+	_check("a level starts with part of the reserve a weapon can hold", weapons._start_reserve(rifle) == rifle.mag_size * weapons.START_MAGS
+		and weapons._start_reserve(rifle) < rifle.reserve_ammo and weapons._reserves[0] >= weapons._start_reserve(rifle))
+
+	# What the enemies leave behind follows what the player lacks: hurt and
+	# with an empty reserve, three kills from close by leave cells and cans.
+	weapons._reserves[0] = 0
+	weapons.grenades = 0
+	game._due.fill(0.0)
+	var notes: Array[String] = []
+	var note := func(text: String, _tint: Color) -> void: notes.append(text)
+	game.picked_up.connect(note)
+	for i in 3:
+		var one: CharacterBody3D = game.GRUNT.instantiate()
+		one.position = FIGHT_STAND + Vector3(-5.0, 0, i * 1.5 - 1.5)
+		game.add_child(one)
+		one.set_physics_process(false)
+		one.died.connect(game._leave_behind)
+		one.take_damage(1e6, one.global_position + Vector3.UP * 1.6, Vector3.DOWN)
+	await _wait(0.8)
+	var lying := tree.get_nodes_in_group("pickup")
+	var cells := lying.filter(func(p: Node) -> bool: return p.kind == p.Kind.HEALTH)
+	var cans := lying.filter(func(p: Node) -> bool: return p.kind == p.Kind.AMMO)
+	print("    three kills, hurt and out of rifle rounds: %d cells, %d cans, %d grenades" % [cells.size(), cans.size(), lying.size() - cells.size() - cans.size()])
+	_check("kills leave cells for somebody who is hurt", cells.size() >= 2)
+	_check("and cans for somebody whose reserve is gone", cans.size() >= 2)
+	# One of each by itself, a step in front of the player.
+	for pickup in lying:
+		pickup.free()
+	var drop := func(kind: int) -> Node3D:
+		return game.leave(kind, player.global_position + Vector3(-1.2, 0.9, 0))
+	var cell: Node3D = drop.call(game.PICKUP.Kind.HEALTH)
+	var mended: float = player.health + cell.HEALTH
+	await _wait(1.2)
+	_check("walking up to a cell mends", is_equal_approx(player.health, mended) and not is_instance_valid(cell) and notes.has("+25 HEALTH"))
+	var can: Node3D = drop.call(game.PICKUP.Kind.AMMO)
+	await _wait(1.2)
+	_check("and a can fills the reserve, most of all that of the weapon in hand", not is_instance_valid(can) and notes.has("+AMMO")
+		and weapons._reserves[0] == rifle.mag_size
+		and weapons._reserves[2] == weapons._start_reserve(weapons.LOADOUT[2]) + ceili(weapons.LOADOUT[2].mag_size * weapons.CAN_MAGS_OTHERS))
+	var grenade: Node3D = drop.call(game.PICKUP.Kind.GRENADE)
+	await _wait(1.2)
+	_check("and a grenade is one more to throw", not is_instance_valid(grenade) and weapons.grenades == 1)
+	# What there is no use for is left lying.
+	player.health = player.MAX_HEALTH
+	var spare: Node3D = drop.call(game.PICKUP.Kind.HEALTH)
+	await _wait(1.2)
+	_check("a cell is left lying by somebody who is not hurt", is_instance_valid(spare))
+	spare.queue_free()
+	game.picked_up.disconnect(note)
+	for pickup in tree.get_nodes_in_group("pickup"):
+		pickup.queue_free()
+
+	# What a checkpoint is good for: back up to what a level starts with.
+	player.health = 20.0
+	weapons._reserves[0] = 0
+	weapons.grenades = 0
+	weapons.resupply()
+	player.heal(maxf(game.CHECKPOINT_HEALTH - player.health, 0.0))
+	_check("a checkpoint brings health and reserves back up, not to the full", player.health == game.CHECKPOINT_HEALTH
+		and weapons._reserves[0] == weapons._start_reserve(rifle) and weapons.grenades == weapons.START_GRENADES)
+	player.health = 1e6
+
+	# The difficulty is one table, and a run is measured.
+	Settings.put("difficulty", 2)
+	var hard: Dictionary = Settings.rules()
+	Settings.put("difficulty", 0)
+	var easy: Dictionary = Settings.rules()
+	Settings.put("difficulty", 1)
+	_check("hard lets more of them shoot at once, hit harder and leave less; easy the other way", hard.attackers > rules.attackers
+		and rules.attackers > easy.attackers and hard.damage > 1.0 and easy.damage < 1.0 and hard.regen_to < easy.regen_to and hard.drops < easy.drops)
+	var run: Dictionary = Save.stats
+	var summary := Menu.run_summary({"seconds": 754.0, "shots": 200.0, "hits": 82.0, "headshots": 9.0, "deaths": 2.0})
+	print("    the run so far: %s; the end screen would say: %s" % [run, " / ".join(summary)])
+	_check("a run is measured: time, shots, hits", run.seconds > 5.0 and run.shots > 0.0 and run.hits > 0.0 and run.hits <= run.shots)
+	_check("and summed up for the end screen", summary.size() == 2 and summary[0].begins_with("Time  12:34   ·   Deaths  2") and summary[1] == "Accuracy  41%   ·   Headshots  9")
+	_finished.append("supplies")
+
+
+## Draws the cover the survey found on the floor the player stands on: `#`
+## where nobody can stand, `.` open floor, `c` something to duck behind and
+## `C` something to stand behind. North is up, a character is a metre.
+func _print_cover(player: Node3D) -> void:
+	var began := Time.get_ticks_usec()
+	Squad._surveyed = [0, 0]
+	Squad.find_cover(player, player.global_position + Vector3.UP * 1.6, {})
+	print("    the survey took %.1f ms" % ((Time.get_ticks_usec() - began) / 1000.0))
+	var cells := {}
+	for at: Vector3 in Squad._open:
+		if absf(at.y) < 0.6:
+			cells[Vector2i(roundi(at.x), roundi(at.z))] = "."
+	for i in Squad._spots.size():
+		var at := Squad._spots[i]
+		if absf(at.y) < 0.6:
+			cells[Vector2i(roundi(at.x), roundi(at.z))] = "C" if Squad._high[i] else "c"
+	var from := Vector2i(1000, 1000)
+	var to := -from
+	for cell: Vector2i in cells:
+		from = from.min(cell)
+		to = to.max(cell)
+	print("    cover: %d spots, %d in the open; x %d to %d, z %d to %d" % [Squad._spots.size(), Squad._open.size(), from.x, to.x, from.y, to.y])
+	for z in range(from.y, to.y + 1):
+		var line := "    %4d " % z
+		for x in range(from.x, to.x + 1):
+			line += cells.get(Vector2i(x, z), "#")
+		print(line)
 
 
 ## Plays the level that is loaded from its start to its exit: zone by zone
@@ -483,6 +862,7 @@ func _play_through(level: Dictionary, next: String) -> void:
 			and Save.resume_point(next).get("at", "?") == "")
 	else:
 		_check("%s: and that is the end of the game" % title, Save.checkpoint.is_empty())
+	_finished.append(title)
 
 
 ## The way from the start past every checkpoint to the exit, as points
@@ -665,6 +1045,13 @@ func _in_view(space: PhysicsDirectSpaceState3D, eye: Vector3, spot: Vector3) -> 
 func _move(player: CharacterBody3D, to: Vector3) -> void:
 	player.global_position = to
 	player.velocity = Vector3.ZERO
+
+
+## Fails for every one of `parts` that did not run to its end.
+func _ran(parts: Array) -> void:
+	for part: String in parts:
+		if not _finished.has(part):
+			_check("the part of the test called '%s' ran to its end" % part, false)
 
 
 func _check(label: String, ok: bool) -> void:

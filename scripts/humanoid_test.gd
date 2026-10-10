@@ -1,9 +1,10 @@
 extends Node
 ## Headless test of the enemies that are people. Run with: tools/test_humanoid.sh
 ##
-## It plays the factory with a theme of characters (the mannequins, unless
-## --enemies= names another) and checks what selftest.gd checks for robots:
-## that they come for the player, hit, and die. On top of that it walks one
+## It plays the first fight of the factory with a theme of characters (the
+## mannequins, unless --enemies= names another) and checks what selftest.gd
+## checks for robots: that they come for the player, hit, and die, and that
+## one of them fights from cover. On top of that it walks one
 ## in every direction and measures how far its feet slide while they are down,
 ## and it looks at what is left of one that has died.
 
@@ -56,11 +57,23 @@ func _run() -> void:
 	print("  enemies: ", theme)
 	_check("a theme of characters is chosen", theme != THEMES.ROBOTS)
 	_check("an unknown theme or role is a robot", THEMES.cast("nobody", "grunt").is_empty() and THEMES.cast(theme, "boss").is_empty())
+	# The fight for the first zone of the route; the rest of the level is
+	# left out of it.
+	var first: RefCounted = game.zones[0]
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+		if zone != first:
+			for other: Node in zone.robots:
+				other.queue_free()
+	await _wait(0.1)
 	var enemies := tree.get_nodes_in_group("enemy")
-	_check("first wave spawned", enemies.size() == 3 and game.wave == 1)
-	_check("the wave is made of characters", enemies.all(_is_character))
+	_check("the first zone of the route is posted", enemies.size() >= 3 and enemies.size() == first.robots.size()
+		and enemies.all(func(e: Node) -> bool: return not e.can_process()))
+	_check("with characters", enemies.all(_is_character))
+	_check("who carry no plate and no pack, and do not duck", enemies.all(func(e: Node) -> bool: return e._shield == 0.0 and e._pack == 0.0 and e._drop == 0.0))
+	game._start(first)
 
-	# They come looking for the player and deal damage, wherever they spawned.
+	# They come looking for the player and deal damage, wherever they stood.
 	player.health = 1e6
 	var start := {}
 	for e in enemies:
@@ -136,6 +149,24 @@ func _run() -> void:
 			slim = slim and capsule.height >= fit.height - 0.01 and one.is_headshot(one.global_position + Vector3.UP * (fit.height - 0.05))
 		one.free()
 	_check("no role is wider than a door allows, and heads can be hit", slim)
+
+	# A character that shoots fights from cover like a robot does, standing.
+	var hider: CharacterBody3D = game.GRUNT.instantiate()
+	hider.position = player.global_position + Vector3(-11, 0, 0)
+	game.add_child(hider)
+	if _is_character(hider) and not hider.melee:
+		hider.alert()
+		var hid := false
+		for i in 240:
+			await _wait(0.05)
+			if hider._mode == hider.Mode.COVER:
+				hid = true
+				break
+		_check("a character that shoots takes cover", hid and not hider._crouched)
+	else:
+		print("  [--] the grunt of this theme does not shoot, or is a robot")
+	hider.queue_free()
+	await _wait(0.1)
 
 	# All three roles at once, in a fight that lasts: they attack for a while
 	# and are then killed in the middle of whatever they are doing, two of
