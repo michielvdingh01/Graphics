@@ -20,12 +20,13 @@ come out differently.
 
 Exits with 1 when anything changed in substance.
 """
-import hashlib
 import os
 import re
 import subprocess
 import sys
 import tempfile
+
+from scene_text import Scene
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GODOT = os.environ.get("GODOT", "/Applications/Godot.app/Contents/MacOS/Godot")
@@ -47,67 +48,8 @@ def git(*args, binary=False):
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=not binary, check=True).stdout
 
 
-def without_ids(text):
-    return re.sub(r" unique_id=\d+", "", text)
-
-
 def canonical(text, whatever_the_order=False):
-    """A text scene with every reference followed to what it refers to. With
-    `whatever_the_order`, the children of the nodes in BUILD_ORDER are
-    nameless and sorted."""
-    ext, sub, nodes, rest = {}, {}, [], []
-    block = None
-    for line in text.split("\n"):
-        if line.startswith("[") and not line.startswith("[["):
-            block = [line]
-            if line.startswith("[ext_resource"):
-                ext[re.search(r' id="([^"]+)"', line).group(1)] = re.search(r' path="([^"]+)"', line).group(1)
-            elif line.startswith("[sub_resource"):
-                sub[re.search(r' id="([^"]+)"', line).group(1)] = block
-            elif line.startswith("[node"):
-                nodes.append(block)
-            elif not line.startswith("[gd_scene"):
-                rest.append(block)
-        elif block is not None and line.strip():
-            block.append(line)
-    inlined = {}
-
-    def follow(line):
-        line = re.sub(r'ExtResource\("([^"]+)"\)', lambda m: 'Ext("%s")' % ext[m.group(1)], line)
-        return re.sub(r'SubResource\("([^"]+)"\)', lambda m: "Sub(%s)" % inline(m.group(1)), line)
-
-    def inline(key):
-        if key not in inlined:
-            kind = re.search(r'type="([^"]+)"', sub[key][0]).group(1)
-            body = kind + "{" + ";".join(follow(line) for line in sub[key][1:]) + "}"
-            inlined[key] = body if len(body) < 200 else kind + "#" + hashlib.sha1(body.encode()).hexdigest()[:16]
-        return inlined[key]
-
-    tree = {}
-    for block in nodes:
-        head = without_ids(block[0])
-        name = re.search(r'name="([^"]+)"', head).group(1)
-        parent = re.search(r' parent="([^"]+)"', head)
-        path = "." if parent is None else name if parent.group(1) == "." else parent.group(1) + "/" + name
-        tree[path] = {"head": follow(head), "lines": [follow(line) for line in block[1:]], "children": []}
-        if parent is not None:
-            tree[parent.group(1)]["children"].append(path)
-
-    def dump(path, depth=0):
-        # depth: how far below a node of BUILD_ORDER this one hangs, 0 for not at all.
-        node = tree[path]
-        head = node["head"]
-        if depth:
-            head = re.sub(r' parent="[^"]+"', "", head)
-        if depth == 1:
-            head = re.sub(r'name="[^"]+"', 'name="*"', head)
-        below = depth + 1 if depth else 1 if whatever_the_order and path in BUILD_ORDER else 0
-        children = [dump(child, below) for child in node["children"]]
-        if below == 1:
-            children.sort()
-        return "\n".join([head] + node["lines"] + children)
-
-    return dump(".") + "\n" + "\n".join(sorted("\n".join(follow(line) for line in block) for block in rest))
+    return Scene(text).canonical(BUILD_ORDER if whatever_the_order else ())
 
 
 def first_differences(old, new, limit=3):
