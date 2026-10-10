@@ -610,7 +610,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | 1. Bouwdoos | De bouwstenen uit de fabriek naar een gedeelde bibliotheek, en een level in één bestand per zone met vaste deurposities | De fabriek komt er byte voor byte gelijk uit | Klaar, zie hieronder |
 | 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na. Zie hieronder |
 | 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | Klaar zonder streamen: het proeflevel haalt het zo. Zie hieronder |
-| 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | Het gereedschap staat en de vleugel is gebouwd, maar nog niet gebakken, bekeken of gespeeld. Zie hieronder |
+| 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | Klaar: de vleugel is gebouwd, gebakken en bekeken. Gespeeld is hij nog niet. Zie hieronder |
 | 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | |
 
 **Wat is afgesproken**
@@ -805,7 +805,19 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 - De route is te lopen: de bouwer vindt elke robot en het checkpoint bereikbaar vanaf de start.
 - Het spel laadt de vleugel en draait hem 600 frames zonder beeld en zonder fout.
 - De fabriek, het depot, de showroom en de modellen komen er gelijk uit, en `tools/selftest.sh --routes` slaagt.
-- **De vleugel is niet gebakken, niet bekeken en niet gespeeld.** Ik heb hem alleen van bovenaf gezien, op de kaart. Of hij er goed uitziet en of de gevechten kloppen, weet ik niet. De selftest loopt hem niet af: hij staat niet in de levelkeuze van het spel.
+- **De vleugel is gebakken en bekeken, na een herstart van de laptop.** Het contactblad laat vijf ruimtes zien die bij de fabriek passen: een lobby met een bureau onder het raam, een magazijn met stellingen en kisten, een gang met leidingen en open deuren, een werkplaats met pers, draaibank en tank onder hallampen, en een ketelruimte met de ketel, het metersbord en de pompen. Wat opvalt: de lobby is kaal en schemerig met één brandende buis, en de voorste hoek van de werkplaats is donker.
+- **Gespeeld is hij niet.** Of de gevechten kloppen, weet ik niet. De selftest loopt hem niet af: hij staat niet in de levelkeuze van het spel.
+
+**De vleugel gemeten**, tien standpunten, op 10 oktober 2026 vlak na de herstart
+
+| | Tekenopdrachten | Driehoeken | Fps |
+|---|---|---|---|
+| 1440p met FSR 2 op 67%, zonder robots | 125 tot 1000 | 0,1 tot 1,7 miljoen | 63 tot 79 |
+| 3456×2160 met MetalFX op 50%, zoals er gespeeld wordt | 125 tot 1006 | 0,1 tot 1,9 miljoen | 66 tot 80 |
+| 1440p met FSR 2 op 67%, de elf robots op hun post | 125 tot 2108 | 0,1 tot 2,1 miljoen | 67 tot 77 |
+
+- Alle vijf de ruimtes bakken samen in 43 seconden: lobby 4, magazijn 10, gang 4, werkplaats 19 en ketelruimte 7. Met het starten van de editor erbij is de hele vleugel in een minuut gebakken. De lightmaps zijn samen 22,8 MB.
+- Met de robots op hun post verdubbelt het aantal tekenopdrachten in de gang, zonder dat de framerate eronder lijdt. De grenzen van het keurmerk gelden voor een ruimte zonder robots; met `--posted` telt alleen de framerate.
 
 **Wat er misging: de bake liep vast, en de GPU met hem**
 
@@ -814,7 +826,7 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 - Daarna is de inrichting van de vleugel nog veranderd, dus ook de vier lightmaps die er lagen klopten niet meer. Ze zijn weggehaald: de vleugel heeft geen lightmaps.
 - **`tools/bake_lightmaps.sh` weigert sindsdien te bakken zolang er een andere Godot op de GPU zit**, tenzij met `--anyway`. Een bake wil de GPU voor zichzelf.
 - `tools/build.gd` laat Godot niet meer eindeloos draaien als een bouwer op een fout stukloopt: na vier minuten stopt het met een melding. Dat gebeurde hier drie keer.
-- **Niet uitgezocht is wat de oorzaak was.** De andere Godot kan de GPU hebben vastgezet, of er zelf het slachtoffer van zijn geweest: het vastlopen begon precies toen de bake aan de ketelruimte toekwam, dus het kan ook aan die ruimte liggen. Een half uur later hingen beide processen er nog, en een poging om het spel te starten liep op dezelfde manier vast. Bak de ketelruimte na een herstart eerst alleen (`tools/bake_lightmaps.sh res://scenes/wing.tscn plant`), met niets anders op de GPU.
+- **Het lag niet aan de ketelruimte.** Het vastlopen begon precies toen de bake aan die ruimte toekwam, dus dat kon de oorzaak zijn. Een half uur later hingen beide processen er nog, en een poging om het spel te starten liep op dezelfde manier vast; pas een herstart van de laptop hielp. Daarna is de ketelruimte eerst alleen gebakken, met niets anders op de GPU: klaar in 7 seconden. Wat overblijft is de botsing met de andere Godot.
 
 **Werkwijze**
 
@@ -823,6 +835,7 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 | Een level uit ruimtes opzetten | Een plan met `room`, `door`, `window` en de route, en `_bare = true`; `tools/build_level.sh <level>`, dan `tools/level_map.py <level>` om het van bovenaf te zien |
 | Het level inrichten | `_bare = false`, `keep_clear` voor wat er met de hand in komt, en een bestand per ruimte dat het level zijn deel laat bouwen |
 | De vleugel bakken en bekijken, als er geen andere Godot draait | `tools/bake_lightmaps.sh res://scenes/wing.tscn`, dan `tools/zone_sheet.py wing` |
+| Meten op de resolutie waarop gespeeld wordt | `tools/zone_sheet.py wing --res=3456x2160 --upscaler=metalfx --scale=0.5` |
 | De vleugel spelen in een venster | `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/wing.tscn -- --play` |
 
 **Nog open**
