@@ -10,7 +10,8 @@ extends Node3D
 ##
 ## The shell of a zone, its lightmapped walls, floor and roof, is never
 ## switched off but left to cast its shadow: without it the sun would shine
-## into the zones next to it through the doorways.
+## into the zones next to it through the doorways. The same goes for what
+## moves in that shell, such as the shutter at an exit.
 ##
 ## The robots are not part of any zone, but one that stands in a zone that is
 ## switched off is behind the same walls, and is not drawn either.
@@ -54,8 +55,22 @@ func _ready() -> void:
 			"sees": node.get_meta(&"sees"),
 			"boxes": boxes,
 			"contents": node.get_node("Contents"),
-			"shell": node.get_node_or_null("Static"),
+			"shells": _shells(node),
 		})
+
+
+## What of a zone stays when it is switched off: its shell, and the meshes of
+## the parts that the game moves.
+func _shells(zone: Node) -> Array[GeometryInstance3D]:
+	var shells: Array[GeometryInstance3D] = []
+	for child in zone.get_children():
+		if child.name == &"Contents" or child.is_in_group("bake_blocker"):
+			continue
+		if child is GeometryInstance3D:
+			shells.append(child)
+		for part: GeometryInstance3D in child.find_children("*", "GeometryInstance3D", true, false):
+			shells.append(part)
+	return shells
 
 
 func _process(_delta: float) -> void:
@@ -83,8 +98,8 @@ func _process(_delta: float) -> void:
 	for zone in _zones:
 		var on: bool = shown.has(zone.name)
 		zone.contents.visible = on
-		if zone.shell:
-			zone.shell.cast_shadow = (
+		for shell: GeometryInstance3D in zone.shells:
+			shell.cast_shadow = (
 				GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on
 				else GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 			)
