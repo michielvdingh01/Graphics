@@ -326,6 +326,36 @@ Alle geluid werd bij het opstarten gesynthetiseerd uit ruis en een toon. Sinds 9
 - Robots hebben geen stem en de stemmen van personages zijn gesynthetiseerd; er is geen omgevingsgeluid, geen muziek en geen geluid van een schot dat langs je heen gaat.
 - De galm kent het ketelhuis en de doorgang van de fabriek niet: daar klinkt het als in de hal.
 
+### Volgende ronde geluid (plan, 10 oktober 2026)
+
+Zes dingen die bij het spelen nep klonken. Dat was gespeeld op een stand zonder de opnames; punt 3, 4 en het stuiteren uit punt 5 zijn sindsdien al opnames. Daarom eerst luisteren, dan pas bouwen.
+
+**Stap 0: luisteren naar wat er nu is.** `tools/hear.py shotgun_shot`, `tools/hear.py marksman_shot`, `tools/hear.py bounce`, en één ronde in het spel. Wat dan nog nep klinkt gaat door; de rest valt af.
+
+| # | Geluid | Nu | Plan |
+|---|---|---|---|
+| 1 | Huls op de vloer (`casing`) | Gesynthetiseerd: 70 ms toon van 3400 Hz | Opnames van messing op beton, 5 tot 6 takes, en een eigen set voor de dikke huls van het pompgeweer (plastic, doffer). Twee tikken per huls in plaats van één: de tweede zachter en 60 tot 120 ms later, door `scripts/fx.gd` afgespeeld bij de tweede stuit die de huls al maakt. Per ondergrond hoeft niet: bijna alles is beton. |
+| 2 | Herladen (`reload`, `reload_end`) | Gesynthetiseerd: twee tikken, dezelfde voor elk wapen | Per wapen een eigen reeks, in stappen die bij de animatie horen: magazijn eruit, magazijn erin, grendel of slede. Het pompgeweer krijgt per patroon een klik en aan het eind de pomp. Dat vraagt een veld `reload_sounds` in `WeaponData` en tijdstippen in `scripts/weapons.gd`, die nu twee vaste momenten kent. `dry_fire` en `switch` gaan in dezelfde ronde mee: ze komen uit dezelfde bron. |
+| 3 | Pompgeweer (`shotgun_shot`) | Opname sinds 9 oktober: Nova en Mossberg, 1,15 s, binnen 30 dB van de piek tot 0,22 s | Als het na stap 0 nog te licht is: de staart langer laten doorklinken (minder `tight`, de take op afstand hoger in de mix en niet onder 400 Hz afgekapt), de dreun dieper en langer (`sweep` van 90 naar 35 Hz over 0,35 s), en na het schot het geluid van de pomp, dat nu ontbreekt: dat is wat een pompgeweer een pompgeweer maakt. De pomp komt uit de bron van punt 2 en speelt 0,25 s na het schot. |
+| 4 | Scherpschuttersgeweer (`marksman_shot`) | Opname: Mosin Nagant, maar afgekapt op 0,41 tot 0,45 s en hard geclipt (`punch` 8, `drive` 2) | Dat afkappen en clippen is de "demper". De take op afstand (`M_26P`) voluit als staart eronder, 1,5 tot 2 s lang, zonder lowpass op 400 Hz; `drive` eraf en `punch` terug naar 4 zodat de knal een knal blijft; een eigen galm op afstand door de staart 15 ms te laten voorlopen op de bus. Doel: binnen 30 dB van de piek tot 0,6 s in plaats van 0,2 s, en hoorbaar tot 1,5 s. |
+| 5 | Granaat: pin, worp, stuiteren (`pin`, `throw`, `bounce`) | `pin` en `throw` gesynthetiseerd; `bounce` is sinds 9 oktober een opname van metaal op metaal | `pin`: een opname van een ring die lostrekt en een hendel die wegspringt (twee takes volstaan). `throw`: een zwiep van stof en arm, geen ruis. `bounce`: zwaar gietijzer op beton in plaats van blik op blik, luider bij een harde stuit en stil onder 1 m/s, en een korte rol erachteraan als hij blijft liggen. `scripts/grenade.gd` geeft de snelheid van de stuit door als volume. |
+| 6 | Muziek in het hoofdmenu | Geen; de bus Music bestaat en is leeg | Zie hieronder. |
+
+**Waar de opnames vandaan komen.** De vier pakketten die er zijn hebben geen hulzen, geen herlaadgeluiden en geen pin: van het vuurwapenpakket zijn alleen schoten uitgepakt, en de Kenney-pakketten zijn inslagen en explosies. Er is dus een bron bij nodig, CC0 zoals de rest, die als `packs` met adres en checksum in het manifest komt. Te zoeken, in deze volgorde: (a) of het volledige vuurwapenpakket van Still North Media ook mechaniek bevat, (b) CC0-pakketten met foley van wapens op OpenGameArt en Freesound, (c) zelf opnemen in `assets/recordings/`: een huls, een sleutelbos en een nietmachine komen een eind. Voor elk pakket eerst de naam, het adres en de grootte voorleggen, dan pas ophalen.
+
+**Muziek in het hoofdmenu.**
+
+- **Het nummer.** Eén nummer van twee tot drie minuten dat rond kan lopen. Zwaar en traag past bij de fabriek: lage synth, vervormde gitaar of beide, 90 tot 110 bpm. Waar het vandaan komt is aan Michiel: een bestaand CC0- of CC-BY-nummer (dan komt de maker in het manifest en op het titelscherm), een gegenereerd nummer (dan eerst de licentie van de dienst nalezen), of iets van onszelf.
+- **Compressie van het bestand.** Ogg Vorbis, stereo, 44,1 kHz, kwaliteit 5 (ongeveer 160 kbit/s): 1,2 MB per minuut, dus 2,5 tot 3,5 MB voor het nummer, tegen 365 MB voor de download nu. Godot speelt Ogg als stroom van schijf af en houdt het niet uitgepakt in het geheugen, anders dan de WAV-takes van de schoten. Lager dan kwaliteit 4 gaat het hoog van bekkens en vervorming horen te ruisen; hoger dan 6 hoort niemand op een titelscherm. Het bronbestand (WAV of FLAC) blijft buiten git in `.cache/`.
+- **Compressie van het geluid.** Het nummer wordt vooraf op luidheid gebracht, niet in het spel: -16 LUFS met de piek op -1 dB, zodat het onder de schoten blijft (een salvo zit op -6 LUFS) en de begrenzer op Master er niets aan hoeft te doen. Op de bus Music komt alleen een zachte compressor (2:1) voor het geval een nummer te veel dynamiek heeft. `tools/build_sounds.py` krijgt er een soort `music` bij die dit doet en het Ogg-bestand schrijft.
+- **Afspelen.** `scripts/sfx.gd` krijgt `music(naam)` en `stop_music(seconden)`: één speler op de bus Music die doorloopt als het spel gepauzeerd is. Het menu start het nummer op het titelscherm, laat het doorlopen in Controls, Settings en Play together, en laat het in 1,5 s uitsterven zodra een level begint. Het nummer begint niet opnieuw bij terugkeer van Settings. Het lus-punt staat in de importinstelling, op een maat.
+- **Instelling.** Een eigen schuif "Music" naast "Volume", die de bus Music regelt.
+- **Later.** Dezelfde speler kan in een level zacht een tweede nummer draaien dat aanzwelt bij een gevecht; dat is een andere ronde.
+
+**Volgorde.** Stap 0, dan 4 en 3 (alleen het manifest, geen nieuwe bron), dan de bron zoeken en 2, 1 en 5 in één keer, dan 6. Na elke stap `tools/hear.py` voor Michiel: hij oordeelt op het oor.
+
+**Wat het kost.** Punt 3 en 4 zijn regels in het manifest en opnieuw bouwen. Punt 1, 2 en 5 zijn een nieuw pakket, zo'n 25 takes erbij (ongeveer 1,5 MB in `assets/audio/`) en code in `weapons.gd`, `weapon_data.gd`, `fx.gd` en `grenade.gd`. Punt 6 is één bestand van 3 MB, een functie in `sfx.gd`, een schuif en een keuze van Michiel.
+
 ## Vijanden die mensen kunnen zijn
 
 De vijanden kunnen in plaats van robots ook personages zijn: één huid op een skelet, aangestuurd door hetzelfde `scripts/enemy.gd`. Wie het zijn is een thema. De standaard is `robots`, en die lopen door dezelfde code als voorheen.
