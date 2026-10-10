@@ -7,8 +7,9 @@ extends Node3D
 ## The clips say how a body walks, strikes, flinches and falls. On top of them
 ## this script turns the legs the way the body is going, so that one walk
 ## serves forwards, sideways and backwards; keeps a foot that is down where
-## it came down; and puts a weapon to the shoulder with both hands on it,
-## for which there are no clips.
+## it came down; puts a weapon to the shoulder with both hands on it; and
+## throws the arms up of one that has lost its head. For those there are no
+## clips.
 ##
 ## Everything it works out about bones is in the space of the skeleton, in
 ## which the character looks along +Z with its left arm along +X.
@@ -61,6 +62,10 @@ const BLOW := 60.0
 const CORPSE_TIME := 4.9
 const FADE_TIME := 0.9
 const STEP_RANGE := 30.0
+## Shortest and longest breath between two screams of one that has lost its
+## head, in seconds, and how loud it screams.
+const BREATH := Vector2(0.25, 0.9)
+const SCREAM_DB := -3.0
 
 const GAIT := &"parameters/gait/blend_position"
 const PACE := &"parameters/pace/scale"
@@ -203,6 +208,11 @@ var _hurt := 0.0
 var _hurt_at := -1.0
 var _cried := -1.0
 var _time := randf() * 10.0
+## It has lost its head, and how far its arms are up for it.
+var _panicking := false
+var _thrown_up := 0.0
+var _scream: AudioStreamPlayer3D
+var _breath := 0.0
 
 # Dying.
 var _dead := false
@@ -365,6 +375,27 @@ func fire() -> void:
 		_pose(0.0)
 
 
+## Loses its head: what it carried falls, its arms go up and stay up, and it
+## screams for as long as it lives.
+func panic() -> void:
+	if _panicking or _dead:
+		return
+	_panicking = true
+	_aiming = false
+	_charging = false
+	_tree.set(ACT, AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT)
+	_drop_weapon(Vector3.ZERO)
+	if _muzzle:
+		# It was pointing, and its shots left from there.
+		_muzzle.queue_free()
+		_muzzle = null
+		_glint = null
+	_hold = Hold.NONE
+	_grip = [null, null]
+	_fingers("hand_relaxed", [0, 1])
+	_breath = randf() * 0.3
+
+
 ## Where its shots leave.
 func muzzle() -> Vector3:
 	return _muzzle.global_position if _muzzle else global_position + Vector3.UP * fit.eyes
@@ -403,6 +434,11 @@ func collapse(push: Vector3) -> void:
 	if _glint:
 		_glint.visible = false
 	_drop_weapon(push)
+	if is_instance_valid(_scream):
+		# Cut short, but not with a click.
+		var hush := _scream.create_tween()
+		hush.tween_property(_scream, ^"volume_db", -60.0, 0.08)
+		hush.tween_callback(_scream.queue_free)
 	_spin = _room_to_fall(push)
 	if not can_process():
 		# Nothing is running: this is a pose for a screenshot.
@@ -478,6 +514,9 @@ func _pose(delta: float) -> void:
 			Sfx.play_at(&"human_step", global_position, -10.0)
 	_steps = steps
 
+	if _panicking and can_process():
+		_wail(delta)
+	_thrown_up = lerpf(_thrown_up, 1.0 if _panicking else 0.0, 1.0 - exp(-9.0 * delta))
 	_raised = lerpf(_raised, 1.0 if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
 	_charge = lerpf(_charge, 1.0 if _charging else 0.0, 1.0 - exp(-14.0 * delta))
 	_recoil = lerpf(_recoil, 0.0, 1.0 - exp(-14.0 * delta))
@@ -527,6 +566,8 @@ func _shape(delta: float, hold_on: float) -> void:
 
 	if _hold != Hold.NONE and hold_on > 0.0:
 		_carry(delta, chest, hold_on)
+	if _thrown_up * hold_on > 0.01:
+		_flail(chest, _thrown_up * hold_on)
 	if _aiming and _hold == Hold.NONE:
 		_aim_yaw = lerpf(_aim_yaw, _bearing(_global(_head).origin).x, 1.0 - exp(-12.0 * delta))
 	_look(hold_on)
@@ -579,6 +620,38 @@ func _carry(delta: float, chest: Basis, hold_on: float) -> void:
 		var fingers := -wrist.basis.z
 		var back := wrist.basis.y
 		_turn_to(arm.end, Basis(fingers, back, fingers.cross(back)) * _hand_fix[side], hold_on)
+
+
+## The arms of one that has lost its head: up over it and thrown about, palms
+## to the front, and the head thrown back. `amount` is how far it has got.
+func _flail(chest: Basis, amount: float) -> void:
+	for side in 2:
+		var arm := _arms[side]
+		var out := 1.0 if side == 0 else -1.0
+		var beat := _time * 9.0 + side * 2.2
+		var shoulder := _global(arm.upper).origin
+		var up := Vector3(out * (0.3 + 0.16 * sin(beat)), 0.8 + 0.1 * sin(beat * 0.7 + 1.0), 0.14 + 0.12 * cos(beat * 0.8))
+		var wrist := shoulder + chest * up * (arm.upper_length + arm.lower_length)
+		# Elbows out.
+		_solve(arm, shoulder, wrist, chest * Vector3(out, -0.35, -0.1))
+		_turn_to(arm.upper, _upper, amount)
+		_turn_to(arm.lower, _lower, amount)
+		var fingers := (wrist - _global(arm.lower).origin).normalized()
+		var back := chest * Vector3(0.0, 0.0, -1.0)
+		back = (back - fingers * fingers.dot(back)).normalized()
+		_turn_to(arm.end, Basis(fingers, back, fingers.cross(back)) * _hand_fix[side], amount)
+	var toss := Basis(Vector3.UP, 0.3 * sin(_time * 5.3)) * Basis(chest.x, -0.25 + 0.1 * sin(_time * 7.9))
+	_turn_to(_head, toss * _global(_head).basis, amount)
+
+
+## Screams, draws breath and screams again. The scream goes where it goes.
+func _wail(delta: float) -> void:
+	if is_instance_valid(_scream):
+		return
+	_breath -= delta
+	if _breath <= 0.0:
+		_breath = randf_range(BREATH.x, BREATH.y)
+		_scream = Sfx.play_on(StringName(_set.voice + "_panic"), self, Vector3.UP * fit.eyes, SCREAM_DB)
 
 
 ## The head turns to what it is aiming at.

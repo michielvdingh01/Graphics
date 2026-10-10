@@ -4,9 +4,9 @@ extends Node
 ## It plays the first fight of the factory with a theme of characters (the
 ## mannequins, unless --enemies= names another) and checks what selftest.gd
 ## checks for robots: that they come for the player, hit, and die, and that
-## one of them fights from cover. On top of that it walks one
-## in every direction and measures how far its feet slide while they are down,
-## and it looks at what is left of one that has died.
+## one of them fights from cover. On top of that it has some lose their
+## heads, walks one in every direction and measures how far its feet slide
+## while they are down, and it looks at what is left of one that has died.
 
 const HUMANOID := preload("res://scripts/humanoid_rig.gd")
 const THEMES := preload("res://scripts/enemy_themes.gd")
@@ -57,6 +57,11 @@ func _run() -> void:
 	print("  enemies: ", theme)
 	_check("a theme of characters is chosen", theme != THEMES.ROBOTS)
 	_check("an unknown theme or role is a robot", THEMES.cast("nobody", "grunt").is_empty() and THEMES.cast(theme, "boss").is_empty())
+	if THEMES.names().has("panic_clowns"):
+		var calm := THEMES.cast("clowns", "heavy", 0)
+		var wild := THEMES.cast("panic_clowns", "heavy", 0)
+		_check("a theme that is like another has its cast, with its own tuning on top", wild.character == calm.character and wild.weapon == calm.weapon
+			and wild.tuning.max_health == calm.tuning.max_health and wild.tuning.get("panics") == true and not calm.tuning.has("panics"))
 	# The fight for the first zone of the route; the rest of the level is
 	# left out of it.
 	var first: RefCounted = game.zones[0]
@@ -188,6 +193,60 @@ func _run() -> void:
 		func(one: CharacterBody3D) -> bool:
 			return one.dead and (not _is_character(one) or not one._rig.is_processing())
 	))
+
+	# Losing its head. One that panics does when another dies next to it: it
+	# lets go of what it carries, throws its arms up and runs about, and does
+	# not attack again. Being badly hurt does the same to one that is alone.
+	var nervous: Array[CharacterBody3D] = []
+	for i in 3:
+		var one: CharacterBody3D = game.GRUNT.instantiate()
+		one.panics = true
+		one.position = player.global_position + Vector3(-8, 0, i * 2.5 - 2.5)
+		game.add_child(one)
+		one.alert()
+		nervous.append(one)
+	if nervous.all(_is_character):
+		await _wait(0.3)
+		var witness := nervous[1]
+		var wild: Node3D = witness._rig
+		var carried: Node3D = wild._weapon
+		_check("one that panics is calm until something happens", nervous.all(func(one: CharacterBody3D) -> bool: return one._mode != one.Mode.PANIC))
+		nervous[0].take_damage(1e6, nervous[0].global_position + Vector3.UP, Vector3.LEFT)
+		_check("it loses its head when another dies next to it", nervous[0].dead and witness._mode == witness.Mode.PANIC and nervous[2]._mode == witness.Mode.PANIC)
+		_check("and lets go of what it carried", wild._weapon == null and wild._hold == HUMANOID.Hold.NONE and (carried == null or not wild.is_ancestor_of(carried)))
+		before = hits[0]
+		var ran := 0.0
+		var screamed := false
+		var was := witness.global_position
+		for i in 30:
+			await _wait(0.1)
+			ran += witness.global_position.distance_to(was)
+			was = witness.global_position
+			screamed = screamed or is_instance_valid(wild._scream)
+		var head: float = wild._global(wild._head).origin.y
+		_check("it runs about (%.1f m in 3 s) with its hands over its head" % ran, ran > 6.0
+			and wild._arms.all(func(arm: RefCounted) -> bool: return wild._global(arm.end).origin.y > head))
+		_check("it does not attack any more", hits[0] == before and witness._attack == witness.Attack.COOLDOWN and not witness._aims)
+		_check("the others are told with where it is", witness.net_state()[3] == -1)
+		# Of the rig's own `_set`, which every object has a method called.
+		if Sfx.has(StringName(wild.get(&"_set").voice + "_panic")):
+			_check("it screams", screamed)
+		else:
+			print("  [--] there is no scream for the voice of this theme")
+		witness.take_damage(1e6, witness.global_position + Vector3.UP, Vector3.LEFT)
+		await _wait(0.4)
+		_check("and dies like any other, its scream cut short", witness.dead and not is_instance_valid(wild._scream))
+		nervous[2].free()
+		var loner: CharacterBody3D = game.GRUNT.instantiate()
+		loner.panics = true
+		loner.position = player.global_position + Vector3(-8, 0, 0)
+		game.add_child(loner)
+		loner.take_damage(loner.max_health * 0.5, loner.global_position + Vector3.UP, Vector3.LEFT)
+		var held: bool = loner._mode != loner.Mode.PANIC
+		loner.take_damage(loner.max_health * 0.15, loner.global_position + Vector3.UP, Vector3.LEFT)
+		_check("one that is badly hurt loses its head as well", held and not loner.dead and loner._mode == loner.Mode.PANIC)
+	else:
+		print("  [--] the grunt of this theme is a robot, and a robot keeps its head")
 
 	# Walking: forwards, to either side and backwards, at the pace of a chase
 	# and of a strafe. A foot that is down has to stay where it is.

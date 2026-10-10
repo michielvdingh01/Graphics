@@ -16,6 +16,11 @@ extends RefCounted
 ## id, for assets/characters/<id>/<id>.glb, or the path of a scene. A table may
 ## also give a role a "tint": material name -> colour for that material.
 ## Whatever is missing or cannot be loaded makes that enemy a robot.
+##
+## A theme may also be another one with something different about it:
+## {"like": "clowns", "tuning": {"panics": true}} is the clowns, each role
+## with that on top of its own tuning. The other has to be a theme with roles
+## of its own.
 
 const ROBOTS := "robots"
 const TABLES: Array[String] = ["res://assets/animations/themes.json", "res://assets/characters/manifest.json"]
@@ -78,4 +83,18 @@ static func _all() -> Dictionary:
 			for theme: String in themes:
 				if themes[theme] is Dictionary:
 					_themes[theme] = themes[theme]
+		for theme: String in _themes.keys():
+			var other: Variant = _themes.get(_themes[theme].get("like", ""))
+			if not other is Dictionary:
+				continue
+			var on_top: Variant = _themes[theme].get("tuning")
+			var roles := {}
+			for role: String in other:
+				var part: Variant = other[role]
+				if part is Dictionary:
+					part = part.duplicate()
+					var tuning: Variant = part.get("tuning")
+					part["tuning"] = (tuning if tuning is Dictionary else {}).merged(on_top if on_top is Dictionary else {}, true)
+					roles[role] = part
+			_themes[theme] = roles
 	return _themes
