@@ -20,12 +20,12 @@ enum Kind { CRATE, CARTON }
 ## Per kind: the damage one takes before it breaks, which for a crate is five
 ## rifle rounds or a load of shot from close by, what a cubic metre of its
 ## pieces weighs in kg, what it is made of to the effects, the sound of it
-## breaking and how loud that is in dB, the sound of it landing on what is
-## left under it, and the sound to play as long as there is no recording of
-## either.
+## breaking and how loud that is in dB, and the sound of it landing on what
+## is left under it. The levels are where these recordings were measured to
+## sit between a shot landing on wood and a barrel going off.
 const TUNING := {
-	Kind.CRATE: {"health": 110.0, "density": 400.0, "matter": "wood", "breaks": &"crate_break", "level": -1.0, "lands": &"crate_drop", "stand_in": &"impact_wood"},
-	Kind.CARTON: {"health": 30.0, "density": 90.0, "matter": "soft", "breaks": &"box_break", "level": -5.0, "lands": &"impact_soft", "stand_in": &"impact_soft"},
+	Kind.CRATE: {"health": 110.0, "density": 400.0, "matter": "wood", "breaks": &"crate_break", "level": -4.0, "lands": &"crate_drop"},
+	Kind.CARTON: {"health": 30.0, "density": 90.0, "matter": "soft", "breaks": &"box_break", "level": -6.0, "lands": &"impact_soft"},
 }
 const WORLD := 1
 ## How far outside a crate a hit may land and still be on it, in metres. One
@@ -48,7 +48,7 @@ const SHRINK_TIME := 0.6
 ## The most pieces there are in a level at any moment; the oldest make way.
 const MAX_PIECES := 48
 ## How much quieter than breaking, in dB, landing on what is left is.
-const LANDING := -4.0
+const LANDING := -2.0
 const GRAVITY := 9.8
 
 
@@ -204,7 +204,7 @@ func _break(which: int, push: Vector3) -> void:
 			loudest = {"tuning": tuning, "at": middle}
 	if loudest.is_empty():
 		return
-	_play(loudest.tuning.breaks, loudest.tuning.stand_in, loudest.at, loudest.tuning.level)
+	Sfx.play_at(loudest.tuning.breaks, loudest.at, loudest.tuning.level)
 	_settle()
 	# What came to rest on the pile is asleep, and nothing wakes it when the
 	# pile changes shape under it: it would hang in the air. Pieces, hulks
@@ -266,7 +266,7 @@ func _process(delta: float) -> void:
 				landed = member
 	if landed:
 		var tuning: Dictionary = TUNING[landed.kind]
-		_play(tuning.lands, tuning.stand_in, landed.model.global_position, tuning.level + LANDING)
+		Sfx.play_at(tuning.lands, landed.model.global_position, tuning.level + LANDING)
 	set_process(falling)
 
 
@@ -362,12 +362,6 @@ func _scatter(member: Member, push: Vector3, most: int) -> void:
 		tween.parallel().tween_property(looks, "position", looks.position * 0.01, SHRINK_TIME)
 		tween.tween_callback(piece.queue_free)
 		_pieces.append(piece)
-
-
-## Plays a sound where it happens, or its stand-in as long as there is no
-## recording of it.
-func _play(sound: StringName, stand_in: StringName, at: Vector3, db: float) -> void:
-	Sfx.play_at(sound if Sfx.has(sound) else stand_in, at, db)
 
 
 ## How many pieces lie about at the moment. One that has been cleared away

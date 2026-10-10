@@ -24,14 +24,12 @@ enum Kind { HALL, BULB, TUBE, FLOOD, WORK }
 ## sound of it and how loud that is in dB, and whether what is left of it
 ## goes on spitting sparks for a while.
 const TUNING := {
-	Kind.HALL: {"size": 1.0, "sound": &"lamp_break", "level": 0.0, "spits": true},
+	Kind.HALL: {"size": 1.0, "sound": &"lamp_break", "level": -3.0, "spits": true},
 	Kind.BULB: {"size": 0.5, "sound": &"bulb_break", "level": -6.0, "spits": false},
 	Kind.TUBE: {"size": 0.7, "sound": &"bulb_break", "level": -4.0, "spits": false},
-	Kind.FLOOD: {"size": 1.0, "sound": &"lamp_break", "level": 0.0, "spits": true},
+	Kind.FLOOD: {"size": 1.0, "sound": &"lamp_break", "level": -3.0, "spits": true},
 	Kind.WORK: {"size": 0.4, "sound": &"bulb_break", "level": -6.0, "spits": false},
 }
-## What breaking glass sounds like as long as there is no recording of it.
-const STAND_IN := &"shield_break"
 ## Seconds the light stutters before it is gone.
 const FLICKER := 0.25
 ## How many times a large lamp spits sparks after that, and within how many
@@ -172,7 +170,7 @@ func _shatter() -> void:
 	_go_dark()
 	for spot in _spots:
 		Fx.shatter(global_transform * spot, facing, tuning.size, light != null)
-	Sfx.play_at(tuning.sound if Sfx.has(tuning.sound) else STAND_IN, global_transform * _spots[0], tuning.level)
+	Sfx.play_at(tuning.sound, global_transform * _spots[0], tuning.level)
 	if light == null:
 		return
 	var full := light.light_energy
