@@ -282,7 +282,7 @@ func _run() -> void:
 			player.global_position += view.global_position - player.camera.global_position
 			player.camera.make_current()
 			_eye = player.camera
-			player.weapons.preview(int(_weapon[0]), _weapon[1] if _weapon.size() > 1 else 0.0, _weapon[2] if _weapon.size() > 2 else 0.0)
+			player.weapons.preview(int(_weapon[0]), _weapon[1] if _weapon.size() > 1 else 0.0, _weapon[2] if _weapon.size() > 2 else 0.0, _weapon[3] if _weapon.size() > 3 else 0.0)
 		if not _shoot.is_empty():
 			# The level has to have its colliders before a shot can land on it.
 			await tree.physics_frame

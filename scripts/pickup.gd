@@ -4,7 +4,8 @@ extends Node3D
 ## left and where; this is the thing itself.
 ##
 ## It hops out of the wreck, hangs a hand above the floor turning slowly, and
-## glows in its own colour so that it is found in a dark hall. Walking up to
+## glows faintly in its own colour: enough to be found in a dark hall, not
+## enough to be the brightest thing in it. Walking up to
 ## it takes it, if there is any use for it: a cell is left lying by somebody
 ## who is not hurt. After a while it blinks and is gone, which is a reason
 ## not to wait behind a crate until the fight is over.
@@ -35,6 +36,12 @@ const LIFE := 40.0
 const BLINK := 6.0
 const HOVER := 0.35
 const HOP_TIME := 0.45
+## Its glow on the floor around it, and how much of the light of whatever
+## shines on the model itself is left. TURN is how fast it turns, in rad/s.
+const GLOW := 0.22
+const GLOW_REACH := 1.5
+const LIT := 0.35
+const TURN := 0.9
 const WORLD := 1
 
 var kind := Kind.HEALTH
@@ -53,10 +60,17 @@ func _ready() -> void:
 	_model.scale = Vector3.ONE * SIZE[kind]
 	for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D"):
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Whatever shines on the model itself, like the window of a cell.
+		for i in mesh.mesh.get_surface_count():
+			var lit := mesh.get_active_material(i) as StandardMaterial3D
+			if lit and lit.emission_enabled:
+				lit = lit.duplicate()
+				lit.emission_energy_multiplier *= LIT
+				mesh.set_surface_override_material(i, lit)
 	add_child(_model)
-	_light.light_color = TINT[kind]
-	_light.light_energy = 0.7
-	_light.omni_range = 2.4
+	_light.light_color = TINT[kind].lerp(Color.WHITE, 0.35)
+	_light.light_energy = GLOW
+	_light.omni_range = GLOW_REACH
 	_light.omni_attenuation = 1.4
 	_light.light_bake_mode = Light3D.BAKE_DISABLED
 	_light.light_volumetric_fog_energy = 0.0
@@ -79,7 +93,7 @@ func _physics_process(delta: float) -> void:
 	if _age >= LIFE:
 		queue_free()
 		return
-	_model.rotation.y += delta * 1.7
+	_model.rotation.y += delta * TURN
 	var hop := minf(_age / HOP_TIME, 1.0)
 	var at := _from.lerp(_rest, hop) + Vector3.UP * (sin(PI * hop) * 0.5 + sin(_age * 2.4) * 0.04 * hop)
 	# About to go: it blinks, faster towards the end.

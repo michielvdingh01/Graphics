@@ -8,7 +8,10 @@ signal revived
 const WALK_SPEED := 5.0
 const SPRINT_SPEED := 8.0
 const CROUCH_SPEED := 2.8
-const JUMP_VELOCITY := 4.8
+## A jump is short and snappy: 0.9 m high and back on the floor in two thirds
+## of a second. The player falls faster than the world's gravity for that.
+const JUMP_VELOCITY := 5.4
+const GRAVITY_SCALE := 1.65
 const GROUND_ACCEL := 60.0
 const AIR_ACCEL := 12.0
 
@@ -172,7 +175,7 @@ func _look(amount: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	var on_floor := is_on_floor()
 	if not on_floor:
-		velocity += get_gravity() * delta
+		velocity += get_gravity() * GRAVITY_SCALE * delta
 	if dead:
 		velocity.x = move_toward(velocity.x, 0.0, GROUND_ACCEL * delta)
 		velocity.z = move_toward(velocity.z, 0.0, GROUND_ACCEL * delta)
