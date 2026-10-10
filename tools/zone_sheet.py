@@ -16,6 +16,13 @@ picture what that view costs. It needs ImageMagick for the sheet.
 What a zone is held to:
   - a reflection probe, a lamp that is on and a lightmap that is up to date;
   - something on its walls or its floor: at least one decal;
+  - no more lamps that cast a shadow in sight, its own and those of the
+    zones it sees, than the shadow atlas has room for in its largest size:
+    SLOTS of them, two for a lamp that shines all round and one for a
+    spotlight. With more, lamps take each other's place in the atlas frame
+    after frame, and every shadow is drawn anew each time: from the door of
+    the stores of the works that was 2800 draw calls and 4.7 million
+    triangles a frame, with the atlas as Godot hands it out;
   - from every view no more than DRAWS draw calls and TRIANGLES triangles,
     and no fewer than FPS frames a second.
 The frame rate is measured over thirty frames with whatever else the laptop
@@ -39,6 +46,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DRAWS = 2000
 TRIANGLES = 4_000_000
 FPS = 60.0
+# Three quarters of the atlas are cut into sixteen, see project.godot.
+SLOTS = 48
 BUDGET = ["--res=2560x1440", "--upscaler=fsr2", "--scale=0.67"]
 FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
 
@@ -65,7 +74,10 @@ def main():
             continue
         zone = "level"
         views = []
+        sees = []
         for line in node["lines"]:
+            if line.startswith("metadata/sees = "):
+                sees = re.findall(r'"([^"]*)"', line)
             found = re.match(r'metadata/zone = "([^"]*)"', line)
             if found:
                 zone = found.group(1)
@@ -74,8 +86,11 @@ def main():
                 numbers = [float(n) for n in found.group(1).split(",")]
                 views = [numbers[i:i + 5] for i in range(0, len(numbers), 5)]
         kinds = [level.nodes[p] for p in level.below(path)]
+        shadows = [n["kind"] for n in kinds if n["kind"] in ("OmniLight3D", "SpotLight3D") and "shadow_enabled = true" in n["lines"]]
         zones[zone] = {
             "views": views,
+            "sees": sees,
+            "slots": sum(2 if kind == "OmniLight3D" else 1 for kind in shadows),
             "probes": sum(1 for n in kinds if n["kind"] == "ReflectionProbe"),
             "lamps": sum(1 for n in kinds if n["kind"] in ("OmniLight3D", "SpotLight3D")),
             "decals": sum(1 for n in kinds if n["kind"] == "Decal"),
@@ -87,6 +102,9 @@ def main():
         sys.exit("The level has no views written on it: build it again with tools/build_level.sh %s." % name)
 
     for zone in zones.values():
+        zone["in_sight"] = zone["slots"] + sum(zones[other]["slots"] for other in zone["sees"] if other in zones)
+        if zone["in_sight"] > SLOTS:
+            zone["short"].append("the lamps in sight want %d places in the shadow atlas, of %d" % (zone["in_sight"], SLOTS))
         if not zone["probes"]:
             zone["short"].append("no reflection probe")
         if not zone["lamps"]:
@@ -140,13 +158,14 @@ def main():
             if view["avg_fps"] < FPS:
                 zone["short"].append("%s: %.0f fps" % (shot["label"], view["avg_fps"]))
 
-    print("%-10s %6s %6s %6s %6s  %s" % ("zone", "probes", "lamps", "decals", "models", "lightmap"))
+    wide = max(len(zone_name) for zone_name in zones) + 2
+    print("%-*s %6s %6s %7s %6s %6s  %s" % (wide, "zone", "probes", "lamps", "shadows", "decals", "models", "lightmap"))
     for zone_name, zone in zones.items():
-        print("%-10s %6d %6d %6d %6d  %s" % (zone_name, zone["probes"], zone["lamps"], zone["decals"], zone["models"], zone["bake"] or "up to date"))
+        print("%-*s %6d %6d %7d %6d %6d  %s" % (wide, zone_name, zone["probes"], zone["lamps"], zone["in_sight"], zone["decals"], zone["models"], zone["bake"] or "up to date"))
     if shots:
-        print("\n%-12s %10s %10s %8s %8s" % ("view", "draw calls", "triangles", "fps", "1% low"))
+        print("\n%-*s %10s %10s %8s %8s" % (wide, "view", "draw calls", "triangles", "fps", "1% low"))
         for shot in shots:
-            print("%-12s %10d %10d %8.1f %8.1f" % (shot["label"], shot["draw_calls"], shot["primitives"], shot["avg_fps"], shot["low_1pct_fps"]))
+            print("%-*s %10d %10d %8.1f %8.1f" % (wide, shot["label"], shot["draw_calls"], shot["primitives"], shot["avg_fps"], shot["low_1pct_fps"]))
         sheet = os.path.join(folder, "zones.jpg")
         columns = 2 if len(shots) <= 12 else 3 if len(shots) <= 27 else 4
         width = 1920 // columns - 8

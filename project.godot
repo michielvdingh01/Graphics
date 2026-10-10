@@ -201,6 +201,11 @@ world/region_use_async_iterations=false
 common/physics_ticks_per_second=120
 3d/physics_engine="Jolt Physics"
 
+[rendering]
+
+lights_and_shadows/positional_shadow/atlas_quadrant_0_subdiv=3
+lights_and_shadows/positional_shadow/atlas_quadrant_1_subdiv=3
+
 [shader_globals]
 
 fx_time={
