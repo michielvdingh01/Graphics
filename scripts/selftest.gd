@@ -309,6 +309,17 @@ func _handling() -> void:
 	Settings.put("render_scale", 0.67)
 	_check("upscaler applies to the viewport", game.get_viewport().scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2
 		and is_equal_approx(game.get_viewport().scaling_3d_scale, 0.67))
+	_check("a render scale that sets itself draws the pixels of 1920 × 1080", is_equal_approx(Settings.scale_for(Vector2i(1920, 1080)), 1.0)
+		and is_equal_approx(Settings.scale_for(Vector2i(2560, 1440)), 0.75) and is_equal_approx(Settings.scale_for(Vector2i(3456, 2160)), 0.5)
+		and is_equal_approx(Settings.scale_for(Vector2i(7680, 4320)), Settings.MIN_SCALE))
+	var window := game.get_window()
+	var windowed := window.size
+	Settings.put("auto_scale", true)
+	_check("left to itself, it takes the scale of the window", is_equal_approx(game.get_viewport().scaling_3d_scale, Settings.scale_for(windowed)))
+	window.size = Vector2i(3456, 2160)
+	_check("and follows the window as that changes size", is_equal_approx(game.get_viewport().scaling_3d_scale, 0.5))
+	window.size = windowed
+	Settings.put("auto_scale", false)
 
 	# A sound is found by its name, and that of an impact by what was hit, so a
 	# folder that is missing would only show up as an error in mid-fight.

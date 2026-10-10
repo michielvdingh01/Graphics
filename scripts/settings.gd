@@ -4,17 +4,21 @@ extends Node
 ##
 ## Benchmark and self-test runs ignore the saved file so results stay
 ## comparable; a benchmark takes --quality=, --upscaler= and --scale= on the
-## command line instead.
+## command line instead. They draw at the full size of the window unless told
+## otherwise; --scale=auto gives a benchmark the scale a player starts with.
 
 signal changed
 
 const PATH := "user://settings.cfg"
 const QUALITY_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
-## Index matches Viewport.Scaling3DMode.
+## Index matches Viewport.Scaling3DMode. The menu leaves MetalFX Temporal out:
+## at half scale it hands a level of this game back as blocks of two by two
+## pixels, where FSR 2 builds up a sharp image. It does work in an empty scene,
+## and a benchmark can still ask for it. See PLAN.md.
 const UPSCALER_NAMES: Array[String] = ["Bilinear", "FSR 1", "FSR 2", "MetalFX Spatial", "MetalFX Temporal"]
 const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "metalfx_temporal"]
 const KEYS: Array[String] = [
-	"quality", "upscaler", "render_scale", "vsync", "fullscreen", "show_fps",
+	"quality", "upscaler", "auto_scale", "render_scale", "vsync", "fullscreen", "show_fps",
 	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume", "music",
 	"enemy_theme", "difficulty",
 ]
@@ -49,11 +53,22 @@ const QUALITY := [
 const LENS := preload("res://shaders/post.gdshader")
 const LENS_ABERRATION := preload("res://shaders/post_aberration.gdshader")
 const ENV_TOGGLES: Array[String] = ["ssao_enabled", "ssil_enabled", "ssr_enabled", "volumetric_fog_enabled"]
+## What the 3D scene is drawn at when the render scale sets itself: the pixels
+## of 1920 × 1080, whatever the size of the window. The screen of a 16 inch
+## MacBook Pro has 3.6 times as many: drawing them all, the factory ran at 17
+## fps on Ultra, against 48 to 59 at this size.
+const AUTO_PIXELS := 1920.0 * 1080.0
+## The render scale goes from MIN_SCALE to 1 in steps of SCALE_STEP.
+const MIN_SCALE := 0.5
+const SCALE_STEP := 0.05
 
 ## Index into QUALITY_NAMES.
 var quality := 2
 var upscaler := Viewport.SCALING_3D_MODE_BILINEAR
-## Fraction of the output resolution the 3D scene is rendered at.
+## Lets the render scale follow the size of the window, see scale_for().
+var auto_scale := false
+## Fraction of the output resolution the 3D scene is rendered at. With
+## `auto_scale` on it is what the window asked for, and setting it is no use.
 var render_scale := 1.0
 var vsync := true
 var fullscreen := false
@@ -88,7 +103,10 @@ func _ready() -> void:
 	if Benchmark.active:
 		_read_args()
 	elif not SelfTest.active:
+		auto_scale = true
+		upscaler = default_upscaler()
 		_load()
+	get_window().size_changed.connect(_fit_window)
 	# The command line decides for this run, whatever was saved.
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--enemies="):
@@ -127,10 +145,36 @@ func temporal_upscaling() -> bool:
 	return upscaler in [Viewport.SCALING_3D_MODE_FSR2, Viewport.SCALING_3D_MODE_METALFX_TEMPORAL]
 
 
+## The upscaler a player starts with: the cheapest that sharpens what it
+## enlarges, which on Apple hardware is MetalFX's. At 3456 × 2160 and half
+## scale it gave 63 to 67 fps where FSR 2 gave 45 to 47.
+func default_upscaler() -> Viewport.Scaling3DMode:
+	return Viewport.SCALING_3D_MODE_METALFX_SPATIAL if OS.get_name() == "macOS" else Viewport.SCALING_3D_MODE_FSR
+
+
+## The render scale that draws the 3D scene at AUTO_PIXELS or just under it in
+## a window of `size` pixels, counted in steps the way the slider counts them.
+func scale_for(size: Vector2i) -> float:
+	var scale := sqrt(AUTO_PIXELS / maxf(size.x * size.y, 1.0))
+	return clampf(MIN_SCALE + floorf((scale - MIN_SCALE) / SCALE_STEP + 0.001) * SCALE_STEP, MIN_SCALE, 1.0)
+
+
+## The size in pixels that a render scale of 1 draws the 3D scene at.
+func output_size() -> Vector2i:
+	var window := get_window()
+	# Stretched as a viewport, which a benchmark does to draw at a size of its
+	# choosing, a window draws at the size of its content and not at its own.
+	if window.content_scale_mode == Window.CONTENT_SCALE_MODE_VIEWPORT:
+		return Vector2i(window.get_visible_rect().size)
+	return window.size
+
+
 ## Safe to call at any time; levels call it once their environment is in the tree.
 func apply() -> void:
 	var preset: Array = QUALITY[quality]
 	var viewport := get_viewport()
+	if auto_scale:
+		render_scale = scale_for(output_size())
 	viewport.scaling_3d_mode = upscaler
 	viewport.scaling_3d_scale = render_scale
 	# Temporal upscalers resolve edges themselves and do not combine with MSAA.
@@ -173,6 +217,17 @@ func apply() -> void:
 	changed.emit()
 
 
+## The window changed size, which a render scale that sets itself goes along
+## with. Nothing else is applied again: the window is in the middle of
+## becoming what it was asked to be.
+func _fit_window() -> void:
+	if not auto_scale or is_equal_approx(render_scale, scale_for(output_size())):
+		return
+	render_scale = scale_for(output_size())
+	get_viewport().scaling_3d_scale = render_scale
+	changed.emit()
+
+
 func _load() -> void:
 	var file := ConfigFile.new()
 	if file.load(PATH) != OK:
@@ -184,7 +239,14 @@ func _load() -> void:
 	quality = clampi(quality, 0, QUALITY.size() - 1)
 	difficulty = clampi(difficulty, 0, RULES.size() - 1)
 	upscaler = clampi(upscaler, 0, UPSCALER_NAMES.size() - 1) as Viewport.Scaling3DMode
-	render_scale = clampf(render_scale, 0.5, 1.0)
+	render_scale = clampf(render_scale, MIN_SCALE, 1.0)
+	# The menu no longer offers MetalFX Temporal; FSR 2 does what it was chosen for.
+	if upscaler == Viewport.SCALING_3D_MODE_METALFX_TEMPORAL:
+		upscaler = Viewport.SCALING_3D_MODE_FSR2
+	# A file from before the render scale set itself names an upscaler that, at
+	# full scale, had nothing to do: that was no choice to hold a player to.
+	if not file.has_section_key("settings", "auto_scale") and render_scale >= 1.0 and not temporal_upscaling():
+		upscaler = default_upscaler()
 
 
 func _save() -> void:
@@ -208,4 +270,5 @@ func _read_args() -> void:
 				upscaler = Viewport.SCALING_3D_MODE_BILINEAR
 				get_tree().quit(1)
 		elif arg.begins_with("--scale="):
+			auto_scale = value == "auto"
 			render_scale = clampf(value.to_float(), 0.25, 1.0)

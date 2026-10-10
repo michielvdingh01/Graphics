@@ -420,7 +420,7 @@ Acht poppen kosten dus 0,2 ms meer dan acht robots, bevroren en in beweging. Bev
 - **Menu.** Titelscherm over het geladen level, levelkeuze, pauzemenu (Esc of Start) en een instellingenscherm. Alles is met muis, toetsenbord en controller te bedienen. `--play` slaat het titelscherm over.
 - **Besturing.** Het titelscherm en het pauzemenu hebben een scherm Controls, met een knop die wisselt tussen muis, trackpad en controller. Voor de trackpad is er één toets bij gekomen: richten met Option (Alt), omdat een trackpad niet tegelijk een rechterklik kan vasthouden en klikken. Wapens wissel je daar met 1 tot 5, want scrollen met twee vingers is voor Godot geen muiswiel. Het scherm noemt C voor bukken en niet Ctrl: macOS maakt van een klik met Ctrl ingedrukt een rechterklik, dus gebukt vuren zou richten worden. Niet op een echte trackpad geprobeerd.
 - **Instellingen**, bewaard in `user://settings.cfg`: kwaliteit (Low tot Ultra), upscaler, renderschaal, V-Sync, fullscreen, fps-teller, gezichtsveld, muis- en stickgevoeligheid, Y-as omkeren en volume. Een kwaliteitsniveau zet alleen effecten uit die het level zelf aan heeft staan.
-- **Upscaling.** Bilinear, FSR 1, FSR 2 en op Apple-hardware MetalFX Spatial en Temporal.
+- **Upscaling.** Bilinear, FSR 1, FSR 2 en op Apple-hardware MetalFX Spatial. Een speler begint met MetalFX Spatial (elders FSR 1) en een renderschaal die zichzelf instelt. Zie "Fullscreen op een Retina-scherm" hieronder, ook voor waarom MetalFX Temporal niet meer in het menu staat.
 - **Springen** is kort: 0,9 m hoog en na twee derde seconde weer op de grond (was 1,2 m en een hele seconde). De speler valt daarvoor 1,65 keer zo snel als de rest van de wereld (`GRAVITY_SCALE` in `scripts/player.gd`).
 - **Controller.** Linkerstick lopen, rechterstick kijken, RT vuren, LT richten, A springen, B bukken en sliden, X herladen, Y granaat, LB en RB wapen wisselen, linkerstick indrukken sprinten, Start pauze. Niet getest met een fysieke controller.
 - **Checkpoints.** Een checkpoint is een plek op de route door het level, bewaard in `user://save.cfg`. Na een dood of een herstart van het spel ga je daar verder. Zie "Een route door de levels" onderaan.
@@ -440,6 +440,37 @@ Acht poppen kosten dus 0,2 ms meer dan acht robots, bevroren en in beweging. Bev
 Met SSIL erbij haalde de fabriek met FSR 2 gemiddeld 66–72 fps en een 1% low die per run tussen 52 en 66 fps lag, afhankelijk van wat de machine verder deed. Dat was te krap om er nog iets bij te zetten. De marge is nu 10 fps in de vaste standpunten, waarvan het wapen en een volle wave vijanden er in het spel ongeveer 3 gebruiken: wat er in de fabriek nog bij komt, moet elders worden terugverdiend. Vóór de containers, tanks en kraan haalde de fabriek met FSR 2 70–74 fps en het depot 75–81 fps; in de fabriek is dat verschil met de lichtere lenspass terugverdiend, in het depot, waar 21 containers staan, voor de helft. MetalFX en de run zonder upscaling zijn gemeten vóór de kleine modellen erbij kwamen.
 
 Het depot haalt op 1920×1080 zonder upscaling 85–102 fps gemiddeld en 80–98 fps 1% low.
+
+**Fullscreen op een Retina-scherm** (10 oktober 2026)
+
+Het budget hierboven gaat over 1440p. Zo wordt er niet gespeeld: vanuit de editor opent het spel in een venster van 1920×1080 pixels, wat op het scherm van een 16 inch MacBook Pro klein is, en fullscreen is daar 3456×2160. Dat zijn 3,6 keer zoveel pixels. Met de instellingen zoals ze stonden (Ultra, renderschaal 100%) liep de fabriek fullscreen op 17 tot 18 fps, tegen 48 tot 59 in het venster. Een upscaler kiezen hielp niet: op 100% heeft die niets te doen, en het menu zei dat nergens.
+
+- **De renderschaal stelt zichzelf in** (`auto_scale`, standaard aan; `scale_for()` in `scripts/settings.gd`). Hij tekent de 3D-scène op de pixels van 1920×1080 of net daaronder, hoe groot het venster ook is, in de stappen van de schuif en niet lager dan 50%: 100% in een venster van 1920×1080, 75% op 2560×1440, 50% op 3456×2160. Hij volgt het venster als dat van grootte verandert. In het menu staat een schakelaar "Auto render scale"; staat die uit, dan geldt de schuif weer, die begint waar de automaat stond. Onder de schuif staat wat het in pixels betekent ("Drawn at 1728 × 1080 and enlarged to 3456 × 2160").
+- **Wie begint, krijgt MetalFX Spatial**, buiten Apple-hardware FSR 1: de goedkoopste upscalers die verscherpen wat ze vergroten. Een instellingenbestand van vóór deze wijziging waarin een upscaler stond die op 100% niets deed, krijgt die standaard ook.
+- **Een benchmark verandert niet**: die tekent op de volle grootte tenzij `--scale=` iets anders zegt. `--scale=auto` geeft hem de schaal van een speler.
+
+Gemeten in de fabriek op 3456×2160, M1 Pro, met de karabijn in beeld, terwijl de laptop in gebruik was:
+
+| Kwaliteit | Upscaler en schaal | Gemiddeld (laagste en hoogste standpunt) | Beeld |
+|---|---|---|---|
+| Ultra | Geen, 100% | 17–18 fps | scherp |
+| High | MetalFX Spatial, 50% | 63–67 fps | scherp, iets aangezet |
+| Ultra | MetalFX Spatial, 50% | 47–50 fps (drie van de vijf standpunten) | niet bekeken |
+| High | FSR 2, 50% | 45–47 fps | scherp |
+| High | MetalFX Temporal, 50% | 48–51 fps | blokken van twee bij twee pixels |
+| High | MetalFX Temporal, 67% | 36–39 fps | wazig; niet uitvergroot bekeken |
+| Medium | MetalFX Temporal, 50% | 51–55 fps | niet bekeken |
+
+Ook op halve schaal kost het volle scherm iets: alles na de upscaler (lens, HUD) loopt op 7,5 miljoen pixels. Op 1920×1080 zonder upscaling haalde dezelfde fabriek op Ultra 48 tot 59 fps.
+
+**MetalFX Temporal staat niet meer in het menu.** In een level van dit spel bouwt het geen beeld op: wat op halve schaal is getekend, komt als blokken van twee bij twee pixels terug, waar FSR 2 uit dezelfde invoer een scherp beeld maakt. Het is bovendien trager dan MetalFX Spatial. Een opgeslagen keuze ervoor wordt FSR 2; een benchmark kan er nog om vragen (`--upscaler=metalfx_temporal`). Wat erover vaststaat:
+
+- Het ligt niet aan Godot alleen. In een lege scène met dunne schuine staven werkt het: gladde randen, ook op 3, 12 en 40 m afstand, ook in een donker of juist heel licht beeld, en met glow, SSR en SSAO aan.
+- In het spel werkt het op zulke staven ook, onbelicht en in dezelfde scène neergezet, dichtbij en op 20 m. De kisten, de machines en een los neergezet model (`ammo_can.scn`) ernaast komen als blokken terug.
+- Dat model wordt gladder als het level om hem heen verborgen is.
+- Het een voor een weghalen van mist, glow, SSR, SSAO, stof, de lenspass, de HUD, schaduwen, lightmaps, reflectieprobes, decals en de eigen materialen van het level hielp niet. Zonder de lampen bleven de randen getrapt, al was het beeld toen te donker om het met zekerheid te zeggen.
+
+De oorzaak is dus niet gevonden. Het is een belicht oppervlak in een level waar het misgaat, en niet één effect dat uit kan.
 
 **Wat een vuurgevecht kost**, gemeten op 9 oktober 2026 in de fabriek op 1440p met FSR 2 op 67%, met de karabijn in beeld en twaalf schoten per seconde in elk standpunt (vlam, licht, tracer, inslag en kogelgat bij elk schot):
 
@@ -468,6 +499,9 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 - De selftest meet "enemies approach" in echte tijd en faalde één keer op die stap toen de laptop zwaar belast was; drie herhalingen daarna slaagden.
 - Geen instelbare toetsen en geen aim assist voor de controller.
 - De HUD schaalt niet mee op hoge resoluties; de tekst is daar klein.
+- Waarom MetalFX Temporal in een level geen beeld opbouwt, is niet gevonden; zie "Fullscreen op een Retina-scherm".
+- De renderschaal die zichzelf instelt is alleen op de M1 Pro gemeten. FSR 1 als begin buiten Apple-hardware is een keuze op papier: op Windows is er niets van geprobeerd. Onder de 50% gaat hij niet, dus op een scherm van 5K tekent hij meer dan de pixels van 1920×1080.
+- De schakelaar Fullscreen in het menu is niet geprobeerd in het Game-venster van de editor, waar het spel draait als je daar op Play drukt. Fullscreen is daar het venster van de editor groot maken.
 
 ## Een route door de levels
 

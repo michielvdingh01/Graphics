@@ -191,11 +191,12 @@ func _show(screen: Screen) -> void:
 			_heading("Settings", 44)
 			_choice("Difficulty", "difficulty", Settings.DIFFICULTY_NAMES)
 			_choice("Quality", "quality", Settings.QUALITY_NAMES)
-			# MetalFX only exists on Apple hardware.
-			var upscalers := Settings.UPSCALER_NAMES if OS.get_name() == "macOS" else Settings.UPSCALER_NAMES.slice(0, 3)
+			# MetalFX only exists on Apple hardware, and of its two only the
+			# spatial one is on offer: see Settings.UPSCALER_NAMES.
+			var upscalers := Settings.UPSCALER_NAMES.slice(0, 4 if OS.get_name() == "macOS" else 3)
 			_choice("Upscaler", "upscaler", upscalers)
 			_choice("Enemies", "enemies", Settings.enemy_names)
-			_slider("Render scale", "render_scale", 0.5, 1.0, 0.05, "%.0f%%", 100.0)
+			_render_scale()
 			_toggle("V-Sync", "vsync")
 			_toggle("Fullscreen", "fullscreen")
 			_toggle("Show fps", "show_fps")
@@ -411,7 +412,7 @@ func _heading(text: String, size: int) -> void:
 
 
 ## A line of plain text between a heading and the buttons under it.
-func _note(text: String) -> void:
+func _note(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.modulate.a = 0.8
@@ -419,6 +420,7 @@ func _note(text: String) -> void:
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
 	_column.add_child(gap)
+	return label
 
 
 ## A line to type in; `changed` is given the text as it is typed.
@@ -458,6 +460,28 @@ func _choice(label: String, key: String, names: Array[String]) -> void:
 	refresh.call()
 
 
+## The render scale: a switch that leaves it to the size of the window, the
+## slider that sets it by hand, and what it comes down to in pixels.
+func _render_scale() -> void:
+	_toggle("Auto render scale", "auto_scale")
+	var slider := _slider("Render scale", "render_scale", Settings.MIN_SCALE, 1.0, Settings.SCALE_STEP, "%.0f%%", 100.0)
+	var note := _note("")
+	var refresh := func() -> void:
+		slider.editable = not Settings.auto_scale
+		slider.focus_mode = Control.FOCUS_NONE if Settings.auto_scale else Control.FOCUS_ALL
+		slider.value = Settings.render_scale
+		var full := Settings.output_size()
+		var drawn := Vector2i(Vector2(full) * Settings.render_scale)
+		if drawn == full:
+			note.text = "Drawn at %d × %d, the size of the window." % [full.x, full.y]
+		else:
+			note.text = "Drawn at %d × %d and enlarged to %d × %d." % [drawn.x, drawn.y, full.x, full.y]
+	# The window can change size with this screen open, and the scale with it.
+	Settings.changed.connect(refresh)
+	slider.tree_exited.connect(func() -> void: Settings.changed.disconnect(refresh))
+	refresh.call()
+
+
 func _toggle(label: String, key: String) -> void:
 	var toggle := CheckButton.new()
 	toggle.text = label
@@ -468,7 +492,7 @@ func _toggle(label: String, key: String) -> void:
 
 
 ## `display_scale` turns the stored value into the number shown, e.g. 0.8 into 80.
-func _slider(label: String, key: String, from: float, to: float, step: float, format: String, display_scale := 1.0) -> void:
+func _slider(label: String, key: String, from: float, to: float, step: float, format: String, display_scale := 1.0) -> HSlider:
 	var row := HBoxContainer.new()
 	var caption := Label.new()
 	caption.text = label
@@ -495,6 +519,7 @@ func _slider(label: String, key: String, from: float, to: float, step: float, fo
 	slider.focus_entered.connect(func() -> void: caption.modulate = ACCENT)
 	slider.focus_exited.connect(func() -> void: caption.modulate = Color.WHITE)
 	_column.add_child(row)
+	return slider
 
 
 ## A button that steps through DEVICES, and under it what does what on the one shown.
