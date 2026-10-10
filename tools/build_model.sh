@@ -5,6 +5,6 @@ GODOT="${GODOT:-/Applications/Godot.app/Contents/MacOS/Godot}"
 cd "$(dirname "$0")/.." || exit 1
 if [ -n "$1" ]; then set -- "tools/models/$1.gd"; else set -- tools/models/*.gd; fi
 for script in "$@"; do
-	"$GODOT" --headless --path . --script "$script" 2>&1 |
+	"$GODOT" --headless --path . --script tools/build.gd -- "$script" 2>&1 |
 		grep -v "RID allocations\|Leaked instance\|^ *at: \|resources still in use\|ObjectDB instances leaked"
 done

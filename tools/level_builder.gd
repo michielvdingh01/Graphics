@@ -1,6 +1,7 @@
-extends SceneTree
+extends RefCounted
 ## Shared level generator; the levels themselves live in tools/levels/ and are
-## built with tools/build_level.sh <name>.
+## built with tools/build_level.sh <name>, which runs them through
+## tools/build.gd.
 ##
 ## A level is described in code by overriding _describe() and written to
 ## scenes/levels/ as merged meshes (lightmapped "static", probe-lit "detail"
@@ -19,6 +20,12 @@ extends SceneTree
 ## only the zones that can be seen from where the camera is. That is what
 ## lets a level grow: what a frame costs depends on what is in sight, not on
 ## how much there is.
+##
+## Such a level is written in more than one file: a plan that every other file
+## extends, with the measurements, the zones and the doorways between them,
+## and a file for each zone, which the level has build its share with
+## build(). See tools/levels/factory.gd. What several levels can use, a
+## machine or a door, belongs in tools/kit/ and not in a level.
 
 const OUT_DIR := "res://scenes/levels/"
 ## Lightmap texel size in metres. Imported models get the same value through
@@ -107,6 +114,9 @@ var _m: Transform3D
 ## Flags those helpers build with: lightmapped, or DETAIL for whatever is too
 ## thin or hangs too high for a patch of lightmap.
 var _part := NO_COLLIDE
+## The other files of the level that have built a share of it, by name; see
+## build().
+var _files := {}
 
 
 func _init() -> void:
@@ -116,8 +126,11 @@ func _init() -> void:
 	_prop_rng.seed = 31
 	_clutter_rng.seed = 43
 	_fuel_rng.seed = 59
+
+
+## Builds what this file describes and writes it out; tools/build.gd calls it.
+func run() -> void:
 	_build()
-	quit()
 
 
 ## Builds what _describe() describes and writes it out. This one makes a
@@ -176,6 +189,28 @@ func _level_name() -> String:
 ## Builds the level out of the prefabs and geometry builders below.
 func _describe() -> void:
 	pass
+
+
+## Has another file of the level build its share: calls `method` on
+## tools/levels/<level>/<file>.gd, which extends the same builder as the level
+## does and builds into the same level. The level decides the order, since
+## that is the order things are filed in, and a file can be asked more than
+## once: to build its zone, and later for its stretch of the route.
+func build(file: String, method := &"_describe") -> void:
+	if not _files.has(file):
+		_files[file] = (load("res://tools/levels/%s/%s.gd" % [_level_name(), file]) as GDScript).new()
+	var other: RefCounted = _files[file]
+	_hand_over(self, other)
+	other.call(method)
+	_hand_over(other, self)
+
+
+## Gives `to` everything `from` has built so far and the state it builds
+## with: every variable the two have in common.
+func _hand_over(from: RefCounted, to: RefCounted) -> void:
+	for property: Dictionary in from.get_property_list():
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name in to:
+			to.set(property.name, from.get(property.name))
 
 
 # --- Zones --------------------------------------------------------------------
