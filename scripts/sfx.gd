@@ -11,11 +11,19 @@ extends Node
 ## the player's own weapon included, plays on the World bus, which carries the
 ## reverb of the space the player stands in; the hit-marker tones play dry on
 ## UI. The buses themselves are in res://default_bus_layout.tres.
+##
+## Music is a piece in assets/music/, played from disk as it goes, on the
+## Music bus: see music().
 
 const SAMPLES := "res://assets/audio/"
 const RATE := 22050
 const WORLD := &"World"
 const UI := &"UI"
+const MUSIC := &"Music"
+const PIECES := "res://assets/music/"
+## The kinds of file a piece may be. Both are played as a stream, not held
+## unpacked in memory the way the takes of a shot are.
+const PIECE_KINDS: Array[String] = [".ogg", ".mp3"]
 ## Sounds that tell the player something instead of coming from the world.
 ## They play dry and always at the same pitch.
 const UI_SOUNDS: Array[StringName] = [&"hit", &"headshot", &"kill"]
@@ -83,6 +91,9 @@ var _space := &"hall"
 var _level := ""
 var _unknown := {}
 var _fade: Tween
+var _music: AudioStreamPlayer
+var _piece := &""
+var _music_fade: Tween
 
 
 func _ready() -> void:
@@ -125,6 +136,59 @@ func _physics_process(_delta: float) -> void:
 	var loaded := scene.scene_file_path != _level
 	_level = scene.scene_file_path
 	set_space(space, 0.0 if loaded else 0.5)
+
+
+## Plays the piece of music of that name round and round: assets/music/ holds
+## it as <piece>.ogg or <piece>.mp3. If it is the one that is playing, it
+## carries on where it is. A piece there is no file for is silence, so the
+## game can ask for one that has yet to be made.
+func music(piece: StringName, seconds := 0.5) -> void:
+	if piece == _piece and _music != null and _music.playing:
+		_swell(0.0, seconds)
+		return
+	for kind in PIECE_KINDS:
+		var path := PIECES + String(piece) + kind
+		if ResourceLoader.exists(path):
+			_start_music(piece, load(path), seconds)
+			return
+	stop_music(seconds)
+
+
+## Lets the music die away over that many seconds.
+func stop_music(seconds := 1.5) -> void:
+	_piece = &""
+	if _music == null or not _music.playing:
+		return
+	_swell(-60.0, seconds)
+	_music_fade.tween_callback(_music.stop)
+
+
+## The piece that is playing, or an empty name.
+func music_playing() -> StringName:
+	return _piece
+
+
+func _start_music(piece: StringName, stream: AudioStream, seconds := 0.0) -> void:
+	if _music == null:
+		_music = AudioStreamPlayer.new()
+		_music.bus = MUSIC
+		# The title screen and the pause menu stop the tree, not the music.
+		_music.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(_music)
+	if stream.get(&"loop") != null:
+		stream.set(&"loop", true)
+	_piece = piece
+	_music.stream = stream
+	_music.volume_db = -60.0 if seconds > 0.0 else 0.0
+	_music.play()
+	_swell(0.0, seconds)
+
+
+func _swell(to_db: float, seconds: float) -> void:
+	if _music_fade:
+		_music_fade.kill()
+	_music_fade = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_music_fade.tween_property(_music, ^"volume_db", to_db, maxf(seconds, 0.01))
 
 
 func has(sound: StringName) -> bool:

@@ -321,6 +321,20 @@ func _handling() -> void:
 	# Without the bus layout everything would still play, dry and unlimited.
 	var world := AudioServer.get_bus_index(Sfx.WORLD)
 	_check("the world has its own bus, with effects on it", world > 0 and AudioServer.get_bus_effect_count(world) > 0)
+	# Music: a piece plays on its own bus, which its own slider turns down,
+	# and one there is no file for is silence and no error.
+	var piece := AudioStreamWAV.new()
+	piece.format = AudioStreamWAV.FORMAT_16_BITS
+	piece.data = PackedByteArray()
+	piece.data.resize(44100)
+	Sfx._start_music(&"test", piece)
+	var music_bus := AudioServer.get_bus_index(Sfx.MUSIC)
+	_check("music plays on its own bus", music_bus > 0 and Sfx._music.playing and Sfx._music.bus == Sfx.MUSIC and Sfx.music_playing() == &"test")
+	Settings.put("music", 0.5)
+	_check("and has a slider of its own", is_equal_approx(AudioServer.get_bus_volume_db(music_bus), linear_to_db(0.5)))
+	Sfx.music(&"a piece nobody has written", 0.1)
+	await _wait(0.5)
+	_check("a piece there is no file for is silence", not Sfx._music.playing and Sfx.music_playing() == &"")
 	_finished.append("handling")
 
 

@@ -18,6 +18,8 @@ const LEVELS: Array[Dictionary] = [
 ## cannot hold a right click and click at once, and its scroll is not a wheel.
 const DEVICES: Array[String] = ["Mouse and keyboard", "Trackpad and keyboard", "Controller"]
 const ACCENT := Color(1.0, 0.62, 0.25)
+## The piece of music the title screen plays, see Sfx.music().
+const THEME := &"theme"
 const COLUMN_WIDTH := 520
 
 var _screen := Screen.NONE
@@ -127,6 +129,12 @@ func _show(screen: Screen) -> void:
 	if screen == Screen.CONTROLS or screen == Screen.SETTINGS:
 		_parent = _screen
 	_screen = screen
+	# The theme plays on the title screen and whatever is opened from it, and
+	# dies away as soon as there is a game to play.
+	if at_title():
+		Sfx.music(THEME)
+	else:
+		Sfx.stop_music()
 	for child in _column.get_children():
 		child.queue_free()
 	_root.visible = screen != Screen.NONE
@@ -199,6 +207,7 @@ func _show(screen: Screen) -> void:
 			_slider("Stick sensitivity", "stick_sensitivity", 0.2, 3.0, 0.05, "%.2f")
 			_toggle("Invert Y", "invert_y")
 			_slider("Volume", "volume", 0.0, 1.0, 0.05, "%.0f%%", 100.0)
+			_slider("Music", "music", 0.0, 1.0, 0.05, "%.0f%%", 100.0)
 			_button("Back", _show.bind(_parent))
 		Screen.END:
 			_heading("You made it out", 56)

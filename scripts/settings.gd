@@ -15,7 +15,7 @@ const UPSCALER_NAMES: Array[String] = ["Bilinear", "FSR 1", "FSR 2", "MetalFX Sp
 const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "metalfx_temporal"]
 const KEYS: Array[String] = [
 	"quality", "upscaler", "render_scale", "vsync", "fullscreen", "show_fps",
-	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume",
+	"fov", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume", "music",
 	"enemy_theme", "difficulty",
 ]
 const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
@@ -63,6 +63,8 @@ var mouse_sensitivity := 1.0
 var stick_sensitivity := 1.0
 var invert_y := false
 var volume := 0.8
+## How loud the music is next to everything else.
+var music := 0.7
 ## 0 Easy, 1 Normal, 2 Hard: see RULES.
 var difficulty := 1
 ## Who the enemies are: a theme from enemy_themes.gd, robots unless chosen
@@ -157,6 +159,10 @@ func apply() -> void:
 	# down and leaves how hard the limiter works alone.
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
 	AudioServer.set_bus_mute(0, volume <= 0.0)
+	var music_bus := AudioServer.get_bus_index(Sfx.MUSIC)
+	if music_bus > 0:
+		AudioServer.set_bus_volume_db(music_bus, linear_to_db(maxf(music, 0.0001)))
+		AudioServer.set_bus_mute(music_bus, music <= 0.0)
 	if not Benchmark.active and DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_vsync_mode(
 			DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
