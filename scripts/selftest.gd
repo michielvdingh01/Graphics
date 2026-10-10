@@ -787,23 +787,50 @@ func _breakables() -> void:
 	var stacks: Array = game._breakables.filter(whole)
 	var threes := stacks.filter(func(stack: Node) -> bool: return stack.size() == 3 and stack._colliders.size() == 1)
 	var towers := stacks.filter(func(stack: Node) -> bool: return stack._colliders.size() == 2 and stack._members[0].kind == stack.Kind.CRATE)
-	var most := 0
 
-	# The bottom crate of a stack, which also starts the clock on its pieces.
+	# Something that lies on top of a stack that stands on another, with the
+	# time of all that comes first to settle there.
+	var sleeper: RigidBody3D = null
+	if not towers.is_empty():
+		var highest: RefCounted = towers[0]._members[-1]
+		var cube := BoxShape3D.new()
+		cube.size = Vector3.ONE * 0.2
+		var shape := CollisionShape3D.new()
+		shape.shape = cube
+		sleeper = RigidBody3D.new()
+		sleeper.collision_layer = 0
+		sleeper.add_child(shape)
+		game.add_child(sleeper)
+		sleeper.global_position = (towers[0]._colliders[1] as Node3D).global_position * Vector3(1, 0, 1) + Vector3.UP * (towers[0].global_position.y + highest.foot + highest.height + 0.11)
+	# Every piece that is made from here on, and the most there are of them
+	# at once: a piece is a rigid body on no layer.
+	var made: Array = []
+	var most := [0]
+	var note := func(node: Node) -> void:
+		if node is RigidBody3D and node.collision_layer == 0:
+			made.append(node)
+			most[0] = maxi(most[0], made.filter(is_instance_valid).size())
+	tree.node_added.connect(note)
+
+	# The bottom crate of a stack, which also starts the clock on its pieces,
+	# and one more hit where it stood, before the crates above have moved.
 	var low: StaticBody3D = threes.pop_back()
 	var crates: Array = low._members
 	low.take_damage(1000.0, low.global_position + Vector3.UP * 0.1, Vector3.FORWARD)
-	var first_pieces: Array = stack_script._pieces.duplicate()
+	low.take_damage(50.0, low.global_position + Vector3.UP * 0.1, Vector3.FORWARD)
 	var began := Time.get_ticks_msec()
 	var low_collider: CollisionShape3D = low._colliders[0]
-	_check("a crate that takes enough breaks: its model is hidden, and it lies about in pieces", crates[0].gone and not crates[0].model.visible
-		and low.standing() == 2 and first_pieces.size() >= 6)
+	_check("a crate that takes enough breaks, and its model is hidden", crates[0].gone and not crates[0].model.visible and low.standing() == 2)
 	_check("the collider of its stack fits what is left at once", is_equal_approx(low_collider.shape.size.y, crates[1].height + crates[2].height)
 		and is_equal_approx(low_collider.position.y, (crates[1].height + crates[2].height) * 0.5))
+	_check("a hit where it stood hurts none of the crates that have yet to come down", crates.slice(1).all(func(crate: RefCounted) -> bool:
+		return crate.health == low.TUNING[crate.kind].health))
 	await _wait(0.5)
+	var first_pieces: Array = made.duplicate()
+	_check("it lies about in pieces, all that a crate is cut into", not first_pieces.is_empty() and first_pieces.size() == stack_script.pieces_of(crates[0].model).size()
+		and stack_script.pieces() >= first_pieces.size())
 	_check("and the crates above it come down by its height", crates.slice(1).all(func(crate: RefCounted) -> bool:
 		return crate.model.visible and is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[0].height)))
-	most = maxi(most, stack_script.pieces())
 
 	# A hall lamp that is on, shot at from the floor below it.
 	var lamp: StaticBody3D = null
@@ -867,7 +894,6 @@ func _breakables() -> void:
 		_check("rifle rounds into the top crate of a stack break that one, and the collider is a crate lower", crates[2].gone and not crates[2].model.visible
 			and not crates[0].gone and not crates[1].gone and is_equal_approx(collider.shape.size.y, crates[0].height + crates[1].height)
 			and is_equal_approx(collider.position.y, (crates[0].height + crates[1].height) * 0.5))
-		most = maxi(most, stack_script.pieces())
 
 	# A stack that stands on another: the crate it stands on goes.
 	_check("there is a stack that stands on another", not towers.is_empty())
@@ -877,52 +903,87 @@ func _breakables() -> void:
 		var under: int = crates.filter(func(crate: RefCounted) -> bool: return crate.collider == 0).size() - 1
 		var upper: CollisionShape3D = tower._colliders[1]
 		var stood: float = upper.position.y
+		var lay: float = sleeper.global_position.y
+		sleeper.sleeping = true
 		tower.take_damage(1000.0, tower.global_position + Vector3.UP * (crates[under].foot + crates[under].height * 0.5), Vector3.FORWARD)
 		await _wait(0.5)
 		_check("breaking the crate it stands on brings that stack down too", crates[under].gone and tower.standing() == tower.size() - 1
 			and is_equal_approx(stood - upper.position.y, crates[under].height)
 			and crates.slice(under + 1).all(func(crate: RefCounted) -> bool: return is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[under].height)))
-		most = maxi(most, stack_script.pieces())
+		var highest: RefCounted = crates[-1]
+		_check("and what lay asleep on top of it comes down with it", absf(lay - tower.global_position.y - highest.foot - highest.height - 0.1) < 0.02
+			and absf(lay - sleeper.global_position.y - crates[under].height) < 0.02)
+		sleeper.free()
 
 	# What somebody is told who comes into the level later: the same stack
 	# and the same lamp, with nothing flying.
 	var late: StaticBody3D = threes.pop_back()
 	var dark: StaticBody3D = lamps.filter(func(one: Node) -> bool: return one.light != null and not one.out and one.kind != one.Kind.HALL)[0]
-	var lying: int = stack_script.pieces()
+	var lying: int = made.size()
 	var playing: int = Fx._expiring.size()
 	late.net_restore(low.net_state())
 	dark.net_restore(1)
+	var quiet: bool = Fx._expiring.size() == playing
+	# Pieces are thrown when the frame is over, if any were.
+	await tree.process_frame
+	await tree.process_frame
 	crates = late._members
 	var late_collider: CollisionShape3D = late._colliders[0]
 	_check("a stack that was broken before somebody came stands the same for them, with no pieces", low.net_state() == 1 and late.net_state() == 1
 		and not crates[0].model.visible and is_equal_approx(late_collider.shape.size.y, crates[1].height + crates[2].height)
 		and is_equal_approx(late_collider.position.y - late_collider.shape.size.y * 0.5, low_collider.position.y - low_collider.shape.size.y * 0.5)
 		and crates.slice(1).all(func(crate: RefCounted) -> bool: return is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[0].height))
-		and stack_script.pieces() == lying)
+		and made.size() == lying)
 	_check("and a lamp that was shot out is dark for them, with no glass and no sparks", dark.out and dark.collision_layer == 0 and not dark.light.visible
-		and dark._covers.all(func(cover: Node3D) -> bool: return cover.visible) and not dark._covers.is_empty() and Fx._expiring.size() == playing)
+		and dark._covers.all(func(cover: Node3D) -> bool: return cover.visible) and not dark._covers.is_empty() and quiet)
 
-	# A blast beside a stack.
-	var blown: StaticBody3D = stacks.filter(whole)[0]
+	# The pieces of the first crate, once their time is up: those and no
+	# others, and not because there were more than there may be.
+	var left: float = stack_script.PIECE_TIME + stack_script.SHRINK_TIME + 0.3 - (Time.get_ticks_msec() - began) / 1000.0
+	if left > 0.0:
+		await _wait(left)
+	_check("pieces are cleared away when their time is up", first_pieces.all(func(piece: Variant) -> bool: return not is_instance_valid(piece))
+		and made.size() > first_pieces.size() and made.size() <= stack_script.MAX_PIECES and made.slice(first_pieces.size()).all(is_instance_valid))
+
+	# A blast beside the largest pile there is, which breaks more crates than
+	# may all lie about in pieces.
+	var piles := stacks.filter(whole)
+	piles.sort_custom(func(a: Node, b: Node) -> bool: return a.size() > b.size())
+	var blown: StaticBody3D = piles[0]
 	var middle: Vector3 = (blown._colliders[0] as Node3D).global_position
 	var beside := middle + Vector3(0.9, 0.0, 0.0)
 	for turn in 4:
 		beside = middle + Vector3(0.9, 0.0, 0.0).rotated(Vector3.UP, turn * PI * 0.5)
 		if space.intersect_ray(PhysicsRayQueryParameters3D.create(beside, middle, 1, [blown.get_rid()])).is_empty():
 			break
+	var standing: Array = []
+	for stack: Node in game._breakables:
+		if stack.has_method("cover"):
+			standing.append_array(stack._members.filter(func(crate: RefCounted) -> bool: return not crate.gone))
+	var before: int = made.size()
 	Blast.explode(beside, 6.5, 150.0)
+	# The pieces are thrown when the frame is over; what the blast broke is
+	# counted before anything it set alight can go off.
+	await tree.process_frame
+	await tree.process_frame
+	var broke := standing.filter(func(crate: RefCounted) -> bool: return crate.gone)
+	var thrown: int = made.size() - before
+	@warning_ignore("integer_division")
+	var share: int = stack_script.MAX_PIECES / maxi(broke.size(), 1)
+	var whole_pieces := 0
+	var shared := 0
+	for crate: RefCounted in broke:
+		whole_pieces += stack_script.pieces_of(crate.model).size()
+		shared += mini(stack_script.pieces_of(crate.model).size(), share)
 	await _wait(0.2)
 	_check("a blast beside a stack breaks every crate of it, and it is in nobody's way after that", blown.standing() == 0 and blown.collision_layer == 0
 		and blown._members.all(func(crate: RefCounted) -> bool: return not crate.model.visible))
-	most = maxi(most, stack_script.pieces())
-	print("    at most %d pieces lay about, of the %d there may be" % [most, stack_script.MAX_PIECES])
-	_check("there are never more pieces than there may be", most > 0 and most <= stack_script.MAX_PIECES)
-
-	# The pieces of the first crate, once their time is up.
-	var left: float = stack_script.PIECE_TIME + stack_script.SHRINK_TIME + 0.3 - (Time.get_ticks_msec() - began) / 1000.0
-	if left > 0.0:
-		await _wait(left)
-	_check("pieces are cleared away after a while", first_pieces.all(func(piece: Variant) -> bool: return not is_instance_valid(piece)))
+	print("    the blast broke %d crates and boxes, which are cut into %d pieces and left %d, %d each at most" % [broke.size(), whole_pieces, thrown, share])
+	_check("a blast that breaks more than may lie about in pieces leaves as many of every crate", whole_pieces > stack_script.MAX_PIECES and thrown == shared)
+	print("    at most %d pieces lay about at once, of the %d there may be" % [most[0], stack_script.MAX_PIECES])
+	_check("there are never more pieces than there may be", most[0] > 0 and most[0] <= stack_script.MAX_PIECES
+		and made.filter(is_instance_valid).size() <= stack_script.MAX_PIECES)
+	tree.node_added.disconnect(note)
 	_finished.append("breakables")
 
 

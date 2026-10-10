@@ -45,7 +45,7 @@ const THROW := 2.4
 ## that takes.
 const PIECE_TIME := 6.0
 const SHRINK_TIME := 0.6
-## The most pieces that lie about in a level; the oldest make way.
+## The most pieces there are in a level at any moment; the oldest make way.
 const MAX_PIECES := 48
 ## How much quieter than breaking, in dB, landing on what is left is.
 const LANDING := -4.0
@@ -84,6 +84,9 @@ static var _cut := {}
 ## Material of a model -> its copy that is drawn from both sides.
 static var _opened := {}
 static var _pieces: Array[RigidBody3D] = []
+## What broke in the frame that is going on and has not flown apart yet: the
+## pile, the member and the push of each. See _throw().
+static var _due: Array[Array] = []
 
 var _members: Array[Member] = []
 var _colliders: Array[CollisionShape3D] = []
@@ -190,7 +193,11 @@ func _break(which: int, push: Vector3) -> void:
 		member.model.visible = false
 		var tuning: Dictionary = TUNING[member.kind]
 		var middle := member.model.global_transform * box_of(member.model).get_center()
-		_scatter(member, push)
+		# Its pieces fly when the frame is over, with those of whatever else
+		# broke in it.
+		if _due.is_empty():
+			_throw.call_deferred()
+		_due.append([self, member, push])
 		Fx.smash(middle, push, tuning.matter, member.height)
 		# Several at once make the sound of one, as loud as the loudest.
 		if loudest.is_empty() or tuning.level > loudest.tuning.level:
@@ -199,6 +206,12 @@ func _break(which: int, push: Vector3) -> void:
 		return
 	_play(loudest.tuning.breaks, loudest.tuning.stand_in, loudest.at, loudest.tuning.level)
 	_settle()
+	# What came to rest on the pile is asleep, and nothing wakes it when the
+	# pile changes shape under it: it would hang in the air. Pieces, hulks
+	# and whatever else lies about are all children of the scene.
+	for body in get_tree().current_scene.get_children():
+		if body is RigidBody3D:
+			body.sleeping = false
 	set_process(true)
 
 
@@ -257,9 +270,11 @@ func _process(delta: float) -> void:
 	set_process(falling)
 
 
-## The member a shot that landed at `at` has hit: the one whose box, as it
-## stands now, that point is in or nearest to. None, -1, if it is not within
-## GRAZE of any.
+## The member a shot that landed at `at` has hit: the one whose box that
+## point is in or nearest to, where it is drawn at this moment. One that is
+## still coming down is not yet where its collider is, so a hit where the
+## crate under it has just gone is not a hit on it. None, -1, if the point is
+## not within GRAZE of any.
 func _member_at(at: Vector3) -> int:
 	var found := -1
 	var nearest := GRAZE * GRAZE
@@ -270,7 +285,7 @@ func _member_at(at: Vector3) -> int:
 		var collider := _colliders[member.collider]
 		var size: Vector3 = (collider.shape as BoxShape3D).size
 		var offset := collider.global_transform.affine_inverse() * at
-		var low := global_position.y + member.foot - member.sink
+		var low := global_position.y + member.foot - member.sunk
 		var away := Vector3(maxf(absf(offset.x) - size.x * 0.5, 0.0), maxf(maxf(low - at.y, at.y - low - member.height), 0.0), maxf(absf(offset.z) - size.z * 0.5, 0.0))
 		if away.length_squared() < nearest:
 			nearest = away.length_squared()
@@ -278,17 +293,46 @@ func _member_at(at: Vector3) -> int:
 	return found
 
 
-## Throws the pieces of one member about from where it stands. They lie on
-## the level and are in nobody's way, and go through what is left of the
-## pile, which has already come down to where they are.
-func _scatter(member: Member, push: Vector3) -> void:
+## Throws about the pieces of everything that broke in the frame that is
+## over. That waits for the end of the frame because a blast breaks many
+## crates in one, and only then is it known how many pieces each of them may
+## leave: MAX_PIECES together, so every crate leaves fewer boards rather than
+## some of them none. What lay about already makes way first, the oldest
+## first, and is gone before the new ones are made, so that there are never
+## more than that.
+static func _throw() -> void:
+	var due := _due.filter(func(broken: Array) -> bool: return is_instance_valid(broken[0]) and (broken[0] as Node).is_inside_tree())
+	_due.clear()
+	due.resize(mini(due.size(), MAX_PIECES))
+	if due.is_empty():
+		return
+	@warning_ignore("integer_division")
+	var most := MAX_PIECES / due.size()
+	var coming := 0
+	for broken: Array in due:
+		coming += mini(pieces_of((broken[1] as Member).model).size(), most)
+	_pieces = _pieces.filter(is_instance_valid)
+	while _pieces.size() + coming > MAX_PIECES:
+		_pieces.pop_front().free()
+	for broken: Array in due:
+		broken[0]._scatter(broken[1], broken[2], most)
+
+
+## Throws the pieces of one member about from where it stood, `most` of them
+## at most: if it has more, every so-manyth of them. They lie on the level
+## and are in nobody's way, and go through what is left of the pile, which
+## has already come down to where they are.
+func _scatter(member: Member, push: Vector3, most: int) -> void:
 	var placed := member.model.global_transform
 	var scale := placed.basis.get_scale()
 	var turn := placed.basis.orthonormalized()
 	var middle := placed * box_of(member.model).get_center()
 	var density: float = TUNING[member.kind].density
-	_pieces = _pieces.filter(is_instance_valid)
-	for cut: Dictionary in pieces_of(member.model):
+	var cuts := pieces_of(member.model)
+	var count := mini(cuts.size(), most)
+	for i in count:
+		@warning_ignore("integer_division")
+		var cut: Dictionary = cuts[i * cuts.size() / count]
 		var piece := RigidBody3D.new()
 		piece.collision_layer = 0
 		piece.collision_mask = WORLD
@@ -318,8 +362,6 @@ func _scatter(member: Member, push: Vector3) -> void:
 		tween.parallel().tween_property(looks, "position", looks.position * 0.01, SHRINK_TIME)
 		tween.tween_callback(piece.queue_free)
 		_pieces.append(piece)
-	while _pieces.size() > MAX_PIECES:
-		_pieces.pop_front().queue_free()
 
 
 ## Plays a sound where it happens, or its stand-in as long as there is no
@@ -328,9 +370,10 @@ func _play(sound: StringName, stand_in: StringName, at: Vector3, db: float) -> v
 	Sfx.play_at(sound if Sfx.has(sound) else stand_in, at, db)
 
 
-## How many pieces lie about at the moment.
+## How many pieces lie about at the moment. One that has been cleared away
+## is no RigidBody3D any more, so what the list holds is looked at untyped.
 static func pieces() -> int:
-	_pieces = _pieces.filter(func(piece: RigidBody3D) -> bool: return is_instance_valid(piece) and not piece.is_queued_for_deletion())
+	_pieces = _pieces.filter(func(piece: Variant) -> bool: return is_instance_valid(piece) and not piece.is_queued_for_deletion())
 	return _pieces.size()
 
 
