@@ -23,7 +23,7 @@ const COAST := 0.25
 const EYE := 1.6
 const CROUCH_EYE := 0.95
 const LAYER := 2
-const HIT_MASK := 0b101  # world + enemy
+const HIT_MASK := 0b100101  # world + enemy + breakable
 
 ## The player it stands for, and what that one is called.
 var id := 0

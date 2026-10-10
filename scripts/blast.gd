@@ -7,10 +7,14 @@ extends Node
 signal exploded(position: Vector3)
 
 const WORLD := 1
-## Layers a blast looks for bodies on: player, enemy, debris and explosive.
-## The level itself is one body of thousands of shapes with nothing to say to
-## a blast, which is why whatever explodes is on a layer of its own as well.
-const REACHED := 0b11110
+## Layers a blast looks for bodies on: player, enemy, debris, explosive and
+## breakable. The level itself is one body of thousands of shapes with
+## nothing to say to a blast, which is why whatever explodes or breaks is on
+## a layer of its own as well.
+const REACHED := 0b111110
+## The most shapes a blast looks at. A lamp is one or two of them, a pile of
+## crates up to three, and a dozen piles can stand around one barrel.
+const MOST := 96
 ## Within this fraction of its radius a blast does all of its damage; from
 ## there it falls off to nothing at the edge.
 const CORE := 0.25
@@ -47,19 +51,28 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 	query.transform = Transform3D(Basis(), position)
 	query.collision_mask = REACHED
 	var reached := {}
-	for found: Dictionary in space.intersect_shape(query, 48):
+	for found: Dictionary in space.intersect_shape(query, MOST):
 		reached[found.collider] = true
 	var ignored: Array[RID] = []
 	if source:
 		ignored.append(source.get_rid())
 	reached.erase(source)
+	# How hard it hits each of them is worked out before any of them is hurt:
+	# a stack of crates that it breaks still stood in the way of whatever was
+	# behind it.
+	var struck: Array[Array] = []
 	for body: Node3D in reached:
 		var middle := _middle(body)
 		var offset := middle - position
 		var strength := clampf(1.0 - (offset.length() - radius * CORE) / (radius * (1.0 - CORE)), 0.0, 1.0)
 		strength *= _exposure(space, position, body, ignored)
-		if strength <= 0.0:
-			continue
+		if strength > 0.0:
+			struck.append([body, middle, offset, strength])
+	for hit: Array in struck:
+		var body: Node3D = hit[0]
+		var middle: Vector3 = hit[1]
+		var offset: Vector3 = hit[2]
+		var strength: float = hit[3]
 		# Things are thrown outwards and a little up, off the floor.
 		var away := (offset.normalized() + Vector3.UP * 0.4).normalized()
 		var player := body.is_in_group("player")

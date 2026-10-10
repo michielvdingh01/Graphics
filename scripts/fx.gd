@@ -1,8 +1,8 @@
 extends Node
 ## Short-lived visual effects: muzzle flashes, tracers, what a shot does to the
-## surface it hits, spent cases, the end of a robot, explosions and the fires
-## they leave. Everything is parented to the current scene so a scene reload
-## cleans it up.
+## surface it hits, spent cases, the end of a robot, of a crate and of a lamp,
+## explosions and the fires they leave. Everything is parented to the current
+## scene so a scene reload cleans it up.
 ##
 ## Sparks, chips and smoke come in bursts. A burst is one mesh instance whose
 ## shader works out where every particle is from the time since the burst
@@ -21,6 +21,8 @@ const HOLE_HEAT := 5.0
 ## size around it is out of view.
 const REACH := 3.0
 const WORLD := 1
+## How far below a lamp its glass and its sparks look for a floor, in metres.
+const LAMP_DROP := 14.0
 ## The shaders keep time in single precision, which gets coarse after hours;
 ## past this many seconds the clock starts again as soon as nothing is playing.
 const CLOCK_SPAN := 600.0
@@ -40,6 +42,7 @@ var held := false
 
 var _sparks: ArrayMesh
 var _chips: ArrayMesh
+var _shards: ArrayMesh
 var _puffs: ArrayMesh
 ## The same balls, not lit pixel by pixel, for what fills too much of the
 ## picture for that: the smoke of a fire, and the cloud of an explosion.
@@ -77,6 +80,7 @@ var _casings: Array[Dictionary] = []
 func _ready() -> void:
 	_sparks = _burst_mesh(28, preload("res://shaders/sparks.gdshader"))
 	_chips = _burst_mesh(18, preload("res://shaders/chips.gdshader"))
+	_shards = _burst_mesh(24, preload("res://shaders/glass.gdshader"))
 	_puffs = _burst_mesh(7, preload("res://shaders/puff.gdshader"))
 	_smoke = _burst_mesh(8, preload("res://shaders/smoke.gdshader"))
 	_clouds = _burst_mesh(20, preload("res://shaders/smoke.gdshader"))
@@ -307,6 +311,55 @@ func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 		soot.size = Vector3(across, 0.3, across)
 		soot.transform = Transform3D(Basis(Vector3.UP, randf() * TAU), Vector3(position.x, floor_y, position.z))
 		_keep(soot)
+
+
+## Something of wood or cardboard comes apart around `position`: `matter` is
+## "wood" for a crate and "soft" for a cardboard box, and `across` how large
+## it was in metres. Splinters or scraps fly, most of them the way of `push`,
+## and the dust that lay on it hangs there for a moment. The boards
+## themselves are up to whoever breaks: see scripts/stack.gd.
+func smash(position: Vector3, push: Vector3, matter := "wood", across := 0.5) -> void:
+	var floor_y := floor_below(position)
+	var about := Transform3D(Basis(), position)
+	var along := Transform3D(_up_along(push.normalized() + Vector3.UP), position)
+	if matter == "wood":
+		_burst(_chips, along, 3.0, {&"floor_y": floor_y, &"tint": Color(0.7, 0.55, 0.36), &"slender": 5.0, &"size": 0.11, &"speed": 5.5, &"spread": 0.9})
+		_burst(_chips, about.rotated_local(Vector3.UP, 1.3), 3.0, {&"floor_y": floor_y, &"tint": Color(0.5, 0.38, 0.25), &"slender": 3.5, &"size": 0.06, &"speed": 4.0, &"spread": 1.0})
+		_burst(_puffs, about, 1.3, {&"tint": Color(0.68, 0.58, 0.45, 0.4), &"speed": 1.6, &"spread": 1.0, &"size": Vector2(0.12, across), &"life": 1.1, &"rise": -0.05, &"amount": 0.6})
+	else:
+		_burst(_chips, along, 3.0, {&"floor_y": floor_y, &"tint": Color(0.62, 0.5, 0.36), &"slender": 1.3, &"size": 0.07, &"speed": 3.0, &"spread": 0.9})
+		_burst(_puffs, about, 1.1, {&"tint": Color(0.7, 0.64, 0.55, 0.35), &"speed": 1.2, &"spread": 1.0, &"size": Vector2(0.08, across), &"life": 0.9, &"rise": -0.05, &"amount": 0.5})
+
+
+## A lamp is shot out at `position`: its glass comes down, which leaves the
+## way of `out`. `size` is 1 for the glass of a hall lamp. A lamp that was
+## `lit` goes with a flash, a shower of sparks and a wisp of smoke.
+func shatter(position: Vector3, out := Vector3.DOWN, size := 1.0, lit := true) -> void:
+	var floor_y := _floor_under_lamp(position)
+	var reach := maxf(REACH, position.y - floor_y + 1.0)
+	var frame := Transform3D(_up_along(out), position)
+	_burst(_shards, frame, 4.0, {&"floor_y": floor_y, &"size": 0.06 * size, &"speed": 2.0 + size, &"spread": 0.85, &"amount": clampf(0.3 + 0.7 * size, 0.0, 1.0)}, reach)
+	if not lit:
+		return
+	flash(position + out * 0.1, Color(0.85, 0.92, 1.0), 5.0 * size, 7.0, 0.12)
+	_burst(_sparks, frame, 1.5, {&"floor_y": floor_y, &"tint": Color(1.0, 0.75, 0.45), &"speed": 3.0 + 3.0 * size, &"spread": 0.85, &"life": 1.2, &"amount": clampf(size, 0.3, 1.0)}, reach)
+	_burst(_puffs, Transform3D(Basis(), position), 1.3, {&"tint": Color(0.8, 0.8, 0.82, 0.3), &"speed": 0.5, &"spread": 0.6, &"size": Vector2(0.03, 0.12 + 0.12 * size), &"life": 1.1, &"rise": 0.3, &"amount": 0.45})
+
+
+## What is left of a lamp that was shot out spits a few sparks, the way of
+## `out`.
+func spit(position: Vector3, out := Vector3.DOWN) -> void:
+	var floor_y := _floor_under_lamp(position)
+	_burst(_sparks, Transform3D(_up_along(out), position), 1.0, {&"floor_y": floor_y, &"tint": Color(1.0, 0.75, 0.45), &"speed": randf_range(2.0, 4.5), &"spread": 0.6, &"life": 0.8, &"amount": randf_range(0.15, 0.4)},
+		maxf(REACH, position.y - floor_y + 1.0))
+	flash(position + out * 0.1, Color(0.85, 0.92, 1.0), 1.6, 4.0, 0.06)
+
+
+## Height of the floor that what falls from a lamp lands on. A lamp hangs
+## higher than anything else that looks for a floor, and one that hangs over
+## nothing drops its glass no further than LAMP_DROP.
+func _floor_under_lamp(position: Vector3) -> float:
+	return maxf(floor_below(position, LAMP_DROP), position.y - LAMP_DROP)
 
 
 ## Something blows up at `position`: a flash, a pressure wave, a ball of fire

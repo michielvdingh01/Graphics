@@ -34,7 +34,7 @@ const CAN_MAGS_OTHERS := 0.34
 const THROW_TIME := 0.55
 const THROW_RELEASE := 0.4
 const THROW_SPEED := 15.0
-const HIT_MASK := 0b101  # world + enemy
+const HIT_MASK := 0b100101  # world + enemy + breakable
 const SWITCH_TIME := 0.3
 const FIRE_BUFFER := 0.12
 ## With nothing left to fire, the trigger swings the weapon instead: how long
