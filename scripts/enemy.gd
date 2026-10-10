@@ -6,7 +6,8 @@ extends CharacterBody3D
 ## goes back. One that does not walks up and stands its ground. Whose turn it
 ## is, where there is cover and who goes round the player is kept by Squad.
 ## All of them get out of the way of what is about to explode, unless they do
-## not heed danger.
+## not heed danger. One that panics loses its head when it is badly hurt or
+## sees one of its own die: from then on it only runs about.
 ##
 ## The grunt, rusher and heavy are this same script with different exported
 ## tuning and a different model; how the model moves is up to its rig. That is
@@ -37,7 +38,7 @@ const LINGER := 6.0
 ## that it does: it has to come close, and it strikes once.
 const MELEE := {"preferred_range": 1.4, "attack_range": 2.0, "burst_shots": 1}
 ## Which way an enemy walks in a pose for a screenshot, see preview().
-const PREVIEW_MOVES := {2.0: Vector3.FORWARD, 5.0: Vector3.RIGHT * 0.5, 6.0: Vector3.LEFT * 0.5, 7.0: Vector3.BACK * 0.5}
+const PREVIEW_MOVES := {2.0: Vector3.FORWARD, 5.0: Vector3.RIGHT * 0.5, 6.0: Vector3.LEFT * 0.5, 7.0: Vector3.BACK * 0.5, 13.0: Vector3.FORWARD * 1.35}
 ## A character is slighter than a robot: its collider is this many times its
 ## height across at most, and never wider than the one in the scene.
 const GIRTH := 0.19
@@ -73,11 +74,21 @@ const PACK_RADIUS := 5.0
 const PACK_DAMAGE := 140.0
 ## Seconds it is out of action when the plate is shot off its arm.
 const STAGGER := 0.9
+## One that panics does so with this much of its health left, or when
+## another dies this near to it.
+const PANIC_HEALTH := 0.4
+const PANIC_RADIUS := 8.0
+## How much faster than its walk it runs about then, how far it goes before
+## it turns, in metres, and the seconds it gives that.
+const PANIC_PACE := 1.35
+const PANIC_RUN := Vector2(4.0, 11.0)
+const PANIC_TIME := Vector2(0.8, 2.2)
 
 enum Attack { COOLDOWN, TELEGRAPH, BURST }
 ## What it is doing about the player: going for it, running for cover,
-## waiting there, out of it to shoot, or getting away from something.
-enum Mode { HUNT, TO_COVER, COVER, PEEK, FLEE }
+## waiting there, out of it to shoot, or getting away from something. Or
+## nothing at all any more: it has lost its head.
+enum Mode { HUNT, TO_COVER, COVER, PEEK, FLEE, PANIC }
 
 ## Which of the three it is: "grunt", "rusher" or "heavy". A theme casts a
 ## character for each.
@@ -115,6 +126,10 @@ enum Mode { HUNT, TO_COVER, COVER, PEEK, FLEE }
 @export var takes_cover := true
 ## Gets out of the way of what is about to go off, and walks round a fire.
 @export var heeds_danger := true
+## Loses its head when it has little health left or one of its own dies next
+## to it, and does not find it again: it drops what it carries and runs about.
+## Only for a model that can show that.
+@export var panics := false
 ## What the plate on its arm takes before it is shot off, and what the pack
 ## on its back takes before it is holed. Only for a model that has one.
 @export var shield := 80.0
@@ -163,6 +178,9 @@ var _danger_timer := 0.0
 ## How long it has known of a danger, and how long it takes to act on one.
 var _noticed := 0.0
 var _nerve := 0.3
+## Where it is running to without its head, and the seconds it still has for it.
+var _bolt_to := Vector3.ZERO
+var _bolt := 0.0
 var _stun := 0.0
 var _shield := 0.0
 var _pack := 0.0
@@ -205,6 +223,7 @@ func _ready() -> void:
 	_shield = shield if _rig.get("has_shield") == true else 0.0
 	_pack = pack if _rig.get("has_pack") == true else 0.0
 	_can_crouch = _rig.has_method("crouch")
+	panics = panics and _rig.has_method("panic")
 	if _can_crouch:
 		_drop = _rig.crouch_drop
 		# The collider comes down with it, and is this enemy's alone for that.
@@ -288,7 +307,8 @@ func _embody(cast: Dictionary, tuned: Array) -> bool:
 ## pieces or lying dead, 4 firing at that target. 5, 6 and 7 are mid-stride
 ## to its right, to its left and backwards, 8 is the moment before it
 ## attacks and 9 the moment it is hit. 10 has its plate up in front of it, 11
-## is ducked behind something and 12 has its pack alight.
+## is ducked behind something and 12 has its pack alight. 13 has lost its head
+## and runs.
 func preview(pose: float) -> void:
 	if pose == 3.0:
 		_die()
@@ -302,7 +322,10 @@ func preview(pose: float) -> void:
 	if PREVIEW_MOVES.has(pose):
 		velocity = global_basis * PREVIEW_MOVES[pose] * speed
 	var eye := global_position + Vector3.UP * eye_height
-	_rig.aim(eye - global_basis.z * 8.0)
+	if pose == 13.0 and _rig.has_method("panic"):
+		_show_panic()
+	else:
+		_rig.aim(eye - global_basis.z * 8.0)
 	for i in 40:
 		_rig._pose(0.03)
 	if pose == 4.0:
@@ -334,6 +357,21 @@ func alert() -> void:
 	for other in get_tree().get_nodes_in_group("enemy"):
 		if other.global_position.distance_to(global_position) < ALERT_RADIUS:
 			other.alert()
+
+
+## Loses its head, if it is one that does. There is no way back from that.
+func panic() -> void:
+	if not panics or dead or _mode == Mode.PANIC:
+		return
+	alert()
+	if _attack != Attack.COOLDOWN:
+		_end_attack(0.0)
+	Squad.done_attacking(self, false)
+	_leave_cover()
+	_mode = Mode.PANIC
+	_bolt = 0.0
+	# The others hear of it with where it is, see net_state().
+	_show_panic()
 
 
 ## A shot that hits it at `hit_position`, coming in along `direction`. True if
@@ -393,6 +431,8 @@ func _hurt(amount: float, hit_position: Vector3, direction: Vector3) -> bool:
 	Net.show(self, &"_show_hit", [hit_position, direction, amount, health])
 	if health <= 0.0:
 		_die()
+	elif health <= max_health * PANIC_HEALTH:
+		panic()
 	return dead
 
 
@@ -492,7 +532,7 @@ func _physics_process(delta: float) -> void:
 			_turn_towards(_face, delta)
 			_update_attack(delta, eye, target, distance)
 			# The weapon is on the player for as long as there is a shot.
-			if _has_los and distance < attack_range * 1.5 and _mode != Mode.FLEE and _stun <= 0.0:
+			if _has_los and distance < attack_range * 1.5 and _fights() and _stun <= 0.0:
 				_aims = true
 				_rig.aim(target)
 			else:
@@ -506,7 +546,7 @@ func _physics_process(delta: float) -> void:
 ## Works out what to do and returns the velocity that goes with it; `_face`
 ## is left pointing where it should look meanwhile.
 func _decide(delta: float, distance: float) -> Vector3:
-	if heeds_danger and _mode != Mode.FLEE:
+	if heeds_danger and _fights():
 		_danger_timer -= delta
 		if _danger_timer <= 0.0:
 			_danger_timer = 0.1
@@ -527,6 +567,8 @@ func _decide(delta: float, distance: float) -> Vector3:
 			return _hold_cover(delta, distance)
 		Mode.PEEK:
 			return _lean_out(delta)
+		Mode.PANIC:
+			return _run_about(delta)
 	return _hunt(delta, distance)
 
 
@@ -667,6 +709,20 @@ func _get_away(delta: float) -> Vector3:
 	return step
 
 
+## Without its head: to one spot and then to another, wherever they happen
+## to be, and never for long.
+func _run_about(delta: float) -> Vector3:
+	_bolt -= delta
+	if _bolt <= 0.0 or _flat(_bolt_to) < 1.0:
+		_bolt = randf_range(PANIC_TIME.x, PANIC_TIME.y)
+		var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU) * randf_range(PANIC_RUN.x, PANIC_RUN.y)
+		_bolt_to = NavigationServer3D.map_get_closest_point(agent.get_navigation_map(), global_position + way)
+	var step := _go_to(_bolt_to, speed * PANIC_PACE)
+	if step.length_squared() > 0.01:
+		_face = step
+	return step
+
+
 ## Keeps out of a fire on the floor: out of it the shortest way, and round
 ## it instead of through it.
 func _mind_fire(desired: Vector3) -> Vector3:
@@ -774,7 +830,7 @@ func _update_attack(delta: float, eye: Vector3, target: Vector3, distance: float
 			# From cover it leans out first, and from danger it only runs. One
 			# that shoots waits for its turn; one that strikes just comes.
 			var set_to := _attack_timer <= 0.0 and _has_los and distance < attack_range and _stun <= 0.0
-			if set_to and _mode != Mode.COVER and _mode != Mode.FLEE and _faces(target, FACING) and (melee or Squad.may_attack(self)):
+			if set_to and _mode != Mode.COVER and _fights() and _faces(target, FACING) and (melee or Squad.may_attack(self)):
 				_attack = Attack.TELEGRAPH
 				_attack_timer = telegraph_time * Settings.rules().warning
 				Net.show(self, &"_show_charge", [true])
@@ -803,6 +859,11 @@ func _end_attack(pause: float) -> void:
 	Squad.done_flanking(self)
 	if _mode == Mode.PEEK:
 		_mode = Mode.COVER
+
+
+## False while it only runs, from something or from everything.
+func _fights() -> bool:
+	return _mode != Mode.FLEE and _mode != Mode.PANIC
 
 
 ## True if `target` is no further off its nose than the cosine `within`.
@@ -848,6 +909,11 @@ func _ray_hits_player(from: Vector3, to: Vector3) -> bool:
 
 func _die() -> void:
 	Net.show(self, &"_show_death", [_last_hit])
+	# Whoever of its kind stood near enough loses its head over it.
+	if panics:
+		for other in get_tree().get_nodes_in_group("enemy"):
+			if other.global_position.distance_to(global_position) < PANIC_RADIUS:
+				other.panic()
 
 
 ## Goes for whoever of the players is nearest and still standing. The one it
@@ -887,6 +953,10 @@ func _show_charge(on: bool) -> void:
 	_rig.charge(on)
 	if on:
 		_say(&"charge", -3.0)
+
+
+func _show_panic() -> void:
+	_rig.panic()
 
 
 func _show_blow() -> void:
@@ -933,9 +1003,9 @@ func _show_death(push: Vector3) -> void:
 
 ## What the copies of this enemy on the other machines need to be shown as it
 ## is here: where it is, which way it faces, how it moves and the id of the
-## player it has its weapon on, 0 for nobody.
+## player it has its weapon on, 0 for nobody and -1 once it has lost its head.
 func net_state() -> Array:
-	var aimed := 0
+	var aimed := -1 if _mode == Mode.PANIC else 0
 	if _aims and is_instance_valid(_player):
 		aimed = _player.get(&"id") if _player.get(&"id") else 1
 	return [global_position, rotation.y, velocity, aimed]
@@ -948,6 +1018,8 @@ func net_follow(at: Vector3, yaw: float, moving: Vector3, aimed: int, at_once :=
 	_told_yaw = yaw
 	_told_aim = aimed
 	velocity = moving
+	if aimed < 0:
+		_show_panic()
 	if at_once:
 		global_position = at
 		rotation.y = yaw
@@ -961,7 +1033,7 @@ func _follow(delta: float) -> void:
 	_told_at += velocity * delta
 	global_position = global_position.lerp(_told_at, 1.0 - exp(-18.0 * delta))
 	rotation.y = lerp_angle(rotation.y, _told_yaw, 1.0 - exp(-14.0 * delta))
-	var target := Net.body(_told_aim) if _told_aim else null
+	var target := Net.body(_told_aim) if _told_aim > 0 else null
 	if target:
 		_rig.aim(target.head.global_position - Vector3.UP * 0.25)
 	else:

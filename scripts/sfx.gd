@@ -208,6 +208,18 @@ func play(sound: StringName, volume_db := 0.0) -> void:
 
 
 func play_at(sound: StringName, position: Vector3, volume_db := 0.0) -> void:
+	_start(_placed(position, volume_db), sound)
+
+
+## The same from something that moves: the sound is `offset` from `node`,
+## goes where it goes and ends with it. Returns what plays it, for whoever
+## wants to cut it short; null if there is no such sound.
+func play_on(sound: StringName, node: Node3D, offset := Vector3.ZERO, volume_db := 0.0) -> AudioStreamPlayer3D:
+	var player := _placed(offset, volume_db)
+	return player if _start(player, sound, node) else null
+
+
+func _placed(position: Vector3, volume_db: float) -> AudioStreamPlayer3D:
 	var player := AudioStreamPlayer3D.new()
 	player.volume_db = volume_db
 	player.unit_size = 8.0
@@ -219,7 +231,7 @@ func play_at(sound: StringName, position: Vector3, volume_db := 0.0) -> void:
 	# asks for more.
 	player.max_db = maxf(player.max_db, volume_db)
 	player.position = position
-	_start(player, sound)
+	return player
 
 
 ## Changes the reverb on World to that of another kind of space, over `seconds`.
@@ -257,13 +269,15 @@ func set_space(space: StringName, seconds := 0.5) -> void:
 			_reverb.predelay_feedback = to[4])
 
 
-func _start(player: Node, sound: StringName) -> void:
+## Plays `sound` on `player`, as a child of `under`. False if there is no such
+## sound, and then the player is gone.
+func _start(player: Node, sound: StringName, under: Node = self) -> bool:
 	if not _streams.has(sound):
 		if not _unknown.has(sound):
 			_unknown[sound] = true
 			push_warning("Sfx has no sound named %s" % sound)
 		player.free()
-		return
+		return false
 	var takes: Array = _streams[sound]
 	var take := 0
 	if takes.size() > 1:
@@ -279,8 +293,9 @@ func _start(player: Node, sound: StringName) -> void:
 	var spread := 0.0 if ui else (0.03 if String(sound).ends_with("_shot") else 0.06)
 	player.pitch_scale = randf_range(1.0 - spread, 1.0 + spread)
 	player.finished.connect(player.queue_free)
-	add_child(player)
+	under.add_child(player)
 	player.play()
+	return true
 
 
 func _synthesise(p: Array) -> AudioStreamWAV:
