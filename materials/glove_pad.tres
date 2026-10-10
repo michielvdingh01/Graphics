@@ -6,7 +6,7 @@
 
 [resource]
 shader = ExtResource("shader")
-shader_parameter/color = Color(0.085, 0.085, 0.09, 1)
+shader_parameter/color = Color(0.15, 0.15, 0.158, 1)
 shader_parameter/roughness = 0.6
 shader_parameter/fuzz = 0.1
 shader_parameter/wear_mask = ExtResource("mask")

@@ -6,7 +6,7 @@
 
 [resource]
 shader = ExtResource("shader")
-shader_parameter/coat = Color(0.045, 0.045, 0.048, 1)
+shader_parameter/coat = Color(0.115, 0.115, 0.12, 1)
 shader_parameter/coat_roughness = 0.6
 shader_parameter/coat_metallic = 0.0
 shader_parameter/core = Color(0.1, 0.1, 0.1, 1)

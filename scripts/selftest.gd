@@ -661,6 +661,27 @@ func _supplies() -> void:
 	await _wait(1.2)
 	_check("a cell is left lying by somebody who is not hurt", is_instance_valid(spare))
 	spare.queue_free()
+
+	# With nothing left to fire, the trigger swings the weapon itself.
+	var dummy: CharacterBody3D = game.GRUNT.instantiate()
+	dummy.position = player.global_position + Vector3(-1.5, 0, 0)
+	game.add_child(dummy)
+	dummy.set_physics_process(false)
+	player.look_at(Vector3(dummy.global_position.x, player.global_position.y, dummy.global_position.z))
+	player.head.rotation.x = 0.0
+	var rounds: int = weapons._reserves[0]
+	weapons._mags[0] = 0
+	weapons._reserves[0] = 0
+	await _wait(0.2)
+	Input.action_press("fire")
+	await _wait(0.1)
+	Input.action_release("fire")
+	_check("out of rounds, the trigger swings the weapon", weapons._melee_left > 0.0 and dummy.health == dummy.max_health)
+	await _wait(0.6)
+	_check("and the blow lands on what stands in front of it", is_equal_approx(dummy.health, dummy.max_health - weapons.MELEE_DAMAGE))
+	dummy.free()
+	weapons._mags[0] = rifle.mag_size
+	weapons._reserves[0] = rounds
 	game.picked_up.disconnect(note)
 	for pickup in tree.get_nodes_in_group("pickup"):
 		pickup.queue_free()

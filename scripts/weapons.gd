@@ -37,6 +37,13 @@ const THROW_SPEED := 15.0
 const HIT_MASK := 0b101  # world + enemy
 const SWITCH_TIME := 0.3
 const FIRE_BUFFER := 0.12
+## With nothing left to fire, the trigger swings the weapon instead: how long
+## that takes, the fraction of it after which the blow lands, how far it
+## reaches from the eye and what it does.
+const MELEE_TIME := 0.5
+const MELEE_LANDS := 0.34
+const MELEE_REACH := 2.1
+const MELEE_DAMAGE := 60.0
 ## A barrel smokes once it has been silent for this long, more the more shots
 ## went through it: the heat of a shot, and how much of it is lost per second.
 const SMOKE_DELAY := 0.14
@@ -47,6 +54,9 @@ const COOLING := 0.35
 const VIEWMODEL_FOV := 58.0
 ## Render layer of the weapon in view; the fill light reaches nothing else.
 const VIEW_LAYER := 2
+## How far beyond the eye the lights on the weapon in view reach: no further
+## than the weapon, so that the level around it does not have to look them up.
+const REACH_OF_LIGHT := 1.0
 ## How far ahead of the eye a wall starts to crowd the weapon.
 const REACH := 0.9
 ## Seconds a slide or bolt takes to come back after a shot and to close again,
@@ -129,6 +139,8 @@ var _shells_to_load := 0
 var _switch_left := 0.0
 var _throw_left := 0.0
 var _thrown := true
+var _melee_left := 0.0
+var _landed := true
 var _bloom := 0.0
 var _kick := 0.0
 var _sway := Vector2.ZERO
@@ -206,10 +218,10 @@ func current_spread_deg() -> float:
 	return spread
 
 
-## Puts one weapon in view, `aim` of the way to the sights and `reload` of the
-## way through reloading. For a screenshot: nothing else poses the weapon
+## Puts one weapon in view, `aim` of the way to the sights, `reload` of the
+## way through reloading and `blow` of the way through hitting with it. For a screenshot: nothing else poses the weapon
 ## while the player stands still.
-func preview(index: int, aim := 0.0, reload := 0.0) -> void:
+func preview(index: int, aim := 0.0, reload := 0.0, blow := 0.0) -> void:
 	_models[_index].root.visible = false
 	_index = index
 	_pending = index
@@ -220,6 +232,7 @@ func preview(index: int, aim := 0.0, reload := 0.0) -> void:
 		_mags[_index] = 0
 		_start_reload()
 		_reload_left = _reload_total * (1.0 - reload)
+	_melee_left = MELEE_TIME * (1.0 - blow) if blow > 0.0 else 0.0
 	_animate_viewmodel(current(), 0.0)
 
 
@@ -340,9 +353,13 @@ func _process(delta: float) -> void:
 		_throw_left -= delta
 		if not _thrown and _throw_left <= THROW_TIME * (1.0 - THROW_RELEASE):
 			_release_grenade()
+	if _melee_left > 0.0:
+		_melee_left -= delta
+		if not _landed and _melee_left <= MELEE_TIME * (1.0 - MELEE_LANDS):
+			_land_blow()
 
 	var data := current()
-	var busy := _switch_left > 0.0 or _reload_left > 0.0 or _throw_left > 0.0
+	var busy := _switch_left > 0.0 or _reload_left > 0.0 or _throw_left > 0.0 or _melee_left > 0.0
 	var aiming := control and Input.is_action_pressed("ads") and not busy
 	ads_blend = move_toward(ads_blend, 1.0 if aiming else 0.0, delta / data.ads_time)
 	_bloom = move_toward(_bloom, 0.0, data.bloom_recovery_deg * delta)
@@ -360,7 +377,7 @@ func _process(delta: float) -> void:
 			elif _reserves[_index] > 0:
 				_start_reload()
 			elif _fire_buffer > 0.0:
-				Sfx.play(&"dry_fire")
+				_start_melee()
 			_fire_buffer = 0.0
 		if Input.is_action_just_pressed("reload"):
 			_start_reload()
@@ -517,7 +534,7 @@ func _handling(data: WeaponData, step: String, fallback: StringName) -> StringNa
 
 func _start_reload() -> void:
 	var data := current()
-	if _reload_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0:
+	if _reload_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0 or _melee_left > 0.0:
 		return
 	if _mags[_index] >= data.mag_size or _reserves[_index] <= 0:
 		return
@@ -569,7 +586,7 @@ func _update_reload() -> void:
 ## The left hand lets go of the weapon, which breaks off a reload, and comes
 ## back once the grenade is on its way.
 func _start_throw() -> void:
-	if grenades <= 0 or _throw_left > 0.0 or _switch_left > 0.0:
+	if grenades <= 0 or _throw_left > 0.0 or _switch_left > 0.0 or _melee_left > 0.0:
 		return
 	_reload_left = 0.0
 	_throw_left = THROW_TIME
@@ -597,9 +614,50 @@ func _release_grenade() -> void:
 	Sfx.play(&"throw", -6.0)
 
 
+## Out of rounds altogether: the weapon itself is what is left to hit with.
+func _start_melee() -> void:
+	_melee_left = MELEE_TIME
+	_landed = false
+	Sfx.play(&"dry_fire", -6.0)
+	Sfx.play(&"swing", -2.0)
+
+
+## The blow lands on what is in reach in front of the player: an enemy before
+## anything else, so that one standing beside a crate can be hit.
+func _land_blow() -> void:
+	_landed = true
+	var origin := camera.global_position
+	var aim := camera.global_basis
+	var space := get_world_3d().direct_space_state
+	var found := {}
+	for off: Vector2 in [Vector2.ZERO, Vector2(-0.22, 0), Vector2(0.22, 0), Vector2(0, -0.25), Vector2(0, 0.18)]:
+		var end := origin + aim * Vector3(off.x, off.y, -1.0).normalized() * MELEE_REACH
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, HIT_MASK, [player.get_rid()]))
+		if hit and (found.is_empty() or (hit.collider.has_method("is_headshot") and not found.collider.has_method("is_headshot"))):
+			found = hit
+	if found.is_empty():
+		return
+	var target: Object = found.collider
+	var at: Vector3 = found.position
+	var direction := (at - origin).normalized()
+	Fx.thud(at, Fx.surface_of(found))
+	Sfx.play(&"melee", -3.0)
+	player.shake(0.22)
+	player.add_recoil(-0.03, randf_range(-0.01, 0.01))
+	if not target.has_method("take_damage"):
+		return
+	var robot := target.has_method("is_headshot")
+	var killed: bool = Net.damage(target, MELEE_DAMAGE, at, direction)
+	if robot and not target.deflected:
+		Sfx.play(&"kill" if killed else &"hit", -10.0)
+		hit_confirmed.emit(false, killed)
+
+
 func _switch_to(index: int) -> void:
 	if index == _pending:
 		return
+	_melee_left = 0.0
+	_landed = true
 	_pending = index
 	_reload_left = 0.0
 	_switch_left = SWITCH_TIME
@@ -643,6 +701,15 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 		# The arm that throws swings down and back out of view, then forward.
 		var swing := 1.0 - _throw_left / THROW_TIME if _throw_left > 0.0 else 0.0
 		model.arm_l.position += Vector3(-0.1, -0.32, 0.25 - 0.3 * smoothstep(0.2, 0.6, swing)) * throw
+
+	# A blow with the weapon: drawn back over the shoulder, then the butt comes
+	# round and forward, and back to where it was held.
+	if _melee_left > 0.0:
+		var swing := 1.0 - _melee_left / MELEE_TIME
+		var back := smoothstep(0.0, 0.22, swing) * (1.0 - smoothstep(0.22, MELEE_LANDS, swing))
+		var out := smoothstep(0.2, MELEE_LANDS, swing) * (1.0 - smoothstep(0.5, 1.0, swing))
+		handling[0] += Vector3(0.06, 0.03, 0.12) * back + Vector3(-0.15, 0.05, -0.3) * out
+		handling[1] += Vector3(0.12, -0.3, -0.25) * back + Vector3(0.05, 0.55, 0.4) * out
 
 	# Up against a wall it is drawn back with the muzzle up, instead of poking
 	# through to the other side.
@@ -727,17 +794,26 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 	return [offset, turn]
 
 
-## A dim light over the left shoulder that reaches only the weapon in view, so
-## that it keeps its shape where the level leaves it in the dark.
+## Three lights that reach only the weapon in view, so that it keeps its shape
+## wherever the level leaves it: a soft one over the left shoulder for the
+## side that faces the eye, one above and ahead of it that draws a highlight
+## along the top of everything, and one from beyond the muzzle that picks out
+## its outline against a dark hall. None of them casts a shadow.
 func _build_fill() -> void:
-	var fill := OmniLight3D.new()
-	fill.name = "Fill"
-	fill.position = Vector3(-0.45, 0.5, 0.25)
-	fill.omni_range = 2.5
-	fill.omni_attenuation = 0.6
-	fill.light_color = Color(0.85, 0.9, 1.0)
-	fill.light_energy = 1.1
-	fill.light_cull_mask = 1 << (VIEW_LAYER - 1)
-	fill.light_volumetric_fog_energy = 0.0
-	fill.light_bake_mode = Light3D.BAKE_DISABLED
-	add_child(fill)
+	for at: Array in [
+		["Fill", Vector3(-0.45, 0.5, 0.25), Color(0.85, 0.9, 1.0), 0.7, 0.5],
+		["Key", Vector3(0.3, 0.55, -0.55), Color(1.0, 0.95, 0.88), 0.45, 2.0],
+		["Rim", Vector3(-0.55, 0.1, -1.3), Color(0.8, 0.88, 1.0), 0.4, 3.0],
+	]:
+		var light := OmniLight3D.new()
+		light.name = at[0]
+		light.position = at[1]
+		light.omni_range = REACH_OF_LIGHT + (at[1] as Vector3).length()
+		light.omni_attenuation = 0.6
+		light.light_color = at[2]
+		light.light_energy = at[3]
+		light.light_specular = at[4]
+		light.light_cull_mask = 1 << (VIEW_LAYER - 1)
+		light.light_volumetric_fog_energy = 0.0
+		light.light_bake_mode = Light3D.BAKE_DISABLED
+		add_child(light)

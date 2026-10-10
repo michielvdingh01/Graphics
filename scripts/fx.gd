@@ -452,6 +452,10 @@ func _process(delta: float) -> void:
 
 func _step(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(&"fx_time", time)
+	# Between two scenes there is nowhere to put the smoke of a fire that was
+	# still burning in the one that is going.
+	if get_tree().current_scene == null:
+		return
 	# A scene reload takes its effects with it, so any of these may be gone.
 	for i in range(_expiring.size() - 1, -1, -1):
 		if not is_instance_valid(_expiring[i][0]):

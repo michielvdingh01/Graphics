@@ -573,9 +573,9 @@ func _hand(frame: Transform3D, radii: Vector2, palm_deg: float, curl: float, wri
 	for k in 4:
 		var along := (1.5 - k) * 0.0205
 		knuckles.append(_around(frame, radii, start, 0.011, along))
-		_ball(GLOVE, knuckles[k], 0.0118)
+		_ball(GLOVE, knuckles[k], 0.0112)
 		if k == 0 and not index.is_empty():
-			_finger(index, thick[k])
+			_finger(index, thick[k], PackedFloat32Array([1.1, 1.02, 0.95, 0.86]))
 			continue
 		var points := []
 		for i in 7:
@@ -590,9 +590,20 @@ func _hand(frame: Transform3D, radii: Vector2, palm_deg: float, curl: float, wri
 		out = -out
 	var basis := Basis(out.cross(back), out, back)
 	rounded_box(GLOVE, _m * Transform3D(basis, (middle + wrist) * 0.5 - out * 0.004), Vector3(0.09, 0.034, middle.distance_to(wrist) + 0.024), 0.014, _part)
-	rounded_box(PAD, _m * Transform3D(basis, middle + back * 0.016 + out * 0.0135), Vector3(0.078, 0.008, 0.026), 0.0035, _part)
-	_ball(GLOVE, thumb[0], 0.0175)
-	_finger(thumb, 0.0108)
+	# The guard is a moulded plate per knuckle on a strip of the same stuff,
+	# and a seam runs down the back of the hand from between each two.
+	rounded_box(PAD, _m * Transform3D(basis, middle + back * 0.02 + out * 0.0125), Vector3(0.08, 0.005, 0.03), 0.0025, _part)
+	for k in 4:
+		var across: Vector3 = basis.x * (knuckles[k] - middle).dot(basis.x)
+		rounded_box(PAD, _m * Transform3D(basis, middle + across + back * 0.012 + out * 0.0155), Vector3(0.0165, 0.008, 0.021), 0.0038, _part)
+		if k < 3:
+			var between: Vector3 = basis.x * ((knuckles[k] + knuckles[k + 1]) * 0.5 - middle).dot(basis.x)
+			_bar(PAD, middle + between + back * 0.038 + out * 0.0128, middle + between * 0.8 + back * (middle.distance_to(wrist) - 0.004) + out * 0.0128, 0.0011, 6)
+	# The ball of the thumb is part of the hand, not a ball on it.
+	var heel: Vector3 = thumb[0].lerp(wrist, 0.5)
+	_ball(GLOVE, heel, 0.0185)
+	_line(GLOVE, [heel, thumb[0], thumb[1]], 0.0108, 10, PackedFloat32Array([1.7, 1.45, 1.12]))
+	_finger(thumb, 0.0108, PackedFloat32Array([1.14, 1.04, 1.0, 0.9]))
 
 	# Cuff of the glove with its strap, and the sleeve.
 	var arm := (elbow - wrist).normalized()
@@ -612,10 +623,12 @@ func _around(frame: Transform3D, radii: Vector2, angle: float, clear: float, alo
 	return frame * Vector3((radii.x + clear) * cos(angle), along, (radii.y + clear) * sin(angle))
 
 
-## Finger or thumb of a glove along `points`, rounded off at the tip.
-func _finger(points: Array, radius: float) -> void:
-	_line(GLOVE, points, radius, 8)
-	_ball(GLOVE, points[-1], radius)
+## Finger or thumb of a glove along `points`, rounded off at the tip. It is
+## thickest at the hand and at its joints and thinner towards the tip; `taper`
+## says how thick at each point, for one that is not a finger of seven points.
+func _finger(points: Array, radius: float, taper := PackedFloat32Array([1.1, 1.0, 1.05, 0.95, 0.99, 0.88, 0.84])) -> void:
+	_line(GLOVE, points, radius, 10, taper)
+	_ball(GLOVE, points[-1], radius * taper[taper.size() - 1])
 
 
 ## Pane of glass that faces the shooter.
