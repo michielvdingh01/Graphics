@@ -12,6 +12,8 @@ plays a footstep or an enemy's shot.
     tools/hear.py rifle_shot              one shot
     tools/hear.py rifle_shot 620          a second and a half at 620 rounds per minute
     tools/hear.py --quiet smg_shot 900    only writes the file
+    tools/hear.py reload shotgun          a shot and then the weapon being reloaded,
+                                          each step at the moment the game plays it
 
 Only recorded sounds, those with a folder in assets/audio/.
 """
@@ -19,6 +21,7 @@ import json
 import os
 import pathlib
 import random
+import re
 import subprocess
 import sys
 
@@ -30,27 +33,71 @@ TAIL = 2.5  # seconds rendered after the last one, for the reverb to die away
 FIRE = 1.5  # seconds a burst lasts
 
 
-def render(sound: str, rate: float) -> pathlib.Path:
+def played(sound: str, times: list, db: float = 0.0) -> list:
+    """The events of a sound played at each of `times`, as scripts/sfx.gd
+    plays it: never the same take twice in a row, and the pitch a little off
+    each time, less so for a weapon."""
     takes = sorted((ROOT / "assets/audio" / sound).glob("*.wav"))
     if not takes:
         raise SystemExit(f"no takes in assets/audio/{sound}/")
-    shots = max(1, int(FIRE * rate / 60.0)) if rate else 1
-    # As scripts/sfx.gd does: never the same take twice in a row, and the
-    # pitch a little off each time, less so for a weapon.
     spread = 0.03 if sound.endswith("_shot") else 0.06
     events = []
     take = 0
-    for i in range(shots):
+    for at in times:
         if len(takes) > 1:
             take = (take + 1 + random.randrange(len(takes) - 1)) % len(takes)
         events.append({
-            "t": START + i * 60.0 / rate if rate else START,
-            "file": str(takes[take]), "bus": "World",
+            "t": at, "file": str(takes[take]), "bus": "World", "db": db,
             "pitch": random.uniform(1.0 - spread, 1.0 + spread),
         })
+    return events
+
+
+def reload(weapon: str) -> list:
+    """A shot and the reload after it. The moments and the levels are those
+    of scripts/weapons.gd, and a step is the weapon's own sound if it has
+    one and else the one all weapons share, as there. A step that is still
+    synthesised in the game is left out and named."""
+    path = ROOT / "weapons" / f"{weapon}.tres"
+    if not path.exists():
+        raise SystemExit(f"no weapon named {weapon}")
+    data = dict(re.findall(r"^(\w+) = (.+)$", path.read_text(), re.M))
+    time = float(data.get("reload_time", 1.8))
+
+    def step(name: str, at: float, db: float) -> list:
+        for sound in (f"{weapon}_{name}", name):
+            if (ROOT / "assets/audio" / sound).is_dir():
+                return played(sound, [at], db)
+        print(f"{name}: no recording yet, left out")
+        return []
+
+    events = played(f"{weapon}_shot", [START])
+    begin = START + 0.9
+    if data.get("loads_singly") == "true":
+        events += step("pump", START + 0.14, -7.0)
+        shells = int(data.get("mag_size", 6))
+        each = time / shells
+        for i in range(shells):
+            events += step("shell_in", begin + 0.35 + (i + 0.55) * each, -9.0)
+        events += step("pump", begin + 0.35 + time + 0.3, -6.0)
+    else:
+        for name, moment in (("mag_out", 0.14), ("mag_in", 0.72), ("bolt", 0.88)):
+            events += step(name, begin + moment * time, -9.0)
+    return events
+
+
+def render(sound: str, rate: float) -> pathlib.Path:
+    if sound == "reload":
+        raise SystemExit("say which weapon: tools/hear.py reload shotgun")
+    shots = max(1, int(FIRE * rate / 60.0)) if rate else 1
+    return mixed(sound, played(sound, [START + i * 60.0 / rate if rate else START for i in range(shots)]))
+
+
+def mixed(name: str, events: list) -> pathlib.Path:
+    events.sort(key=lambda event: event["t"])
     OUT.mkdir(parents=True, exist_ok=True)
-    spec = OUT / f"{sound}.json"
-    out = OUT / f"{sound}.wav"
+    spec = OUT / f"{name}.json"
+    out = OUT / f"{name}.wav"
     spec.write_text(json.dumps({
         "layout": str(ROOT / "default_bus_layout.tres"),
         "length": events[-1]["t"] + TAIL,
@@ -73,7 +120,10 @@ def main() -> None:
     args = [arg for arg in sys.argv[1:] if arg != "--quiet"]
     if not args:
         raise SystemExit(__doc__)
-    out = render(args[0], float(args[1]) if len(args) > 1 else 0.0)
+    if args[0] == "reload" and len(args) > 1:
+        out = mixed(f"reload_{args[1]}", reload(args[1]))
+    else:
+        out = render(args[0], float(args[1]) if len(args) > 1 else 0.0)
     print(out.relative_to(ROOT))
     if "--quiet" not in sys.argv:
         subprocess.run(["afplay", str(out)], check=True)

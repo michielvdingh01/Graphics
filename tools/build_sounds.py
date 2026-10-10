@@ -16,6 +16,12 @@ What an entry can say besides its source:
     files   a path inside the pack or the recordings folder, or a list of
             them; * matches
     split   the file holds several takes with silence between them
+    gap     seconds of silence that separate two of them, 0.3 without it:
+            less for a file in which one thing follows close on another
+    pick    which of the takes found to keep, counted from 1 in the order
+            they were found: for a file that holds different things
+    pitch   play a take this many times as fast, and so higher and shorter;
+            under 1 it is lower and longer, as of something bigger
     tight   begin a take at its bang, not where it rises out of the noise:
             for a shot, which otherwise comes late by however long the
             mechanism rattles before it
@@ -53,7 +59,8 @@ What an entry can say besides its source:
             the layers one sound
 
 A pack is downloaded once into .cache/sounds/ and checked against the checksum
-in the manifest; only the files a sound names are unpacked. Needs macOS
+in the manifest; only the files a sound names are unpacked. A pack may also be
+one sound file instead of an archive. Needs macOS
 (afconvert, bsdtar) and Godot for Ogg files.
 """
 import array
@@ -110,6 +117,10 @@ def unpack(name: str, pack: dict, wanted: str) -> pathlib.Path:
             digest.update(chunk)
     if digest.hexdigest() != pack["sha256"]:
         raise SystemExit(f"checksum mismatch for {archive}")
+    if archive.suffix.lower() in (".wav", ".ogg", ".mp3", ".flac"):
+        files.mkdir(parents=True, exist_ok=True)
+        shutil.copy(archive, files / archive.name)
+        return files
     # bsdtar reads both zip and 7z, and refuses to write outside the folder.
     with tempfile.TemporaryDirectory(dir=folder) as partial:
         subprocess.run(["bsdtar", "-xf", str(archive), "-C", partial, wanted], check=True)
@@ -161,7 +172,7 @@ def read_wav(path: pathlib.Path) -> list:
     return [samples[c::channels] for c in range(channels)]
 
 
-def spans(channel: array.array, split: bool) -> list:
+def spans(channel: array.array, split: bool, apart: float = GAP) -> list:
     """Where the takes are in a channel, as (first sample, one past the last)."""
     levels = [max(max(channel[i:i + BLOCK]), -min(channel[i:i + BLOCK])) for i in range(0, len(channel), BLOCK)]
     peak = max(levels)
@@ -175,7 +186,7 @@ def spans(channel: array.array, split: bool) -> list:
         on = max(off * 4.0, peak * 0.1)
     else:
         off = on = peak * 0.003
-    gap = int(GAP * RATE / BLOCK)
+    gap = int(apart * RATE / BLOCK)
     found = []
     start = None
     quiet = 0
@@ -217,11 +228,28 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
     for channels in load(sources, scratch):
         if not stereo:
             channels = channels[:1]
-        for first, last in spans(channels[0], spec.get("split", False)):
+        for first, last in spans(channels[0], spec.get("split", False), spec.get("gap", GAP)):
             takes.append([[float(sample) for sample in channel[first:last]] for channel in channels])
+    if "pick" in spec:
+        if max(spec["pick"]) > len(takes):
+            raise SystemExit(f"{spec['files']} holds {len(takes)} takes, not the {max(spec['pick'])} that are picked from")
+        takes = [takes[number - 1] for number in spec["pick"]]
     if not takes:
         raise SystemExit(f"found no sound in {spec['files']}")
+    if "pitch" in spec:
+        takes = [[pitched(channel, spec["pitch"]) for channel in take] for take in takes]
     return takes
+
+
+def pitched(samples: list, speed: float) -> list:
+    """A channel played `speed` times as fast."""
+    last = len(samples) - 1
+    out = []
+    for i in range(int(last / speed)):
+        at = i * speed
+        whole = int(at)
+        out.append(samples[whole] + (samples[min(whole + 1, last)] - samples[whole]) * (at - whole))
+    return out
 
 
 def sweep(start: float, end: float, seconds: float) -> list:

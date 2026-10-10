@@ -469,13 +469,28 @@ func _eject(model: Viewmodel, data: WeaponData) -> void:
 func _update_pump(data: WeaponData) -> void:
 	if _pump_stage > 1 or _since_shot < PUMP_DELAY:
 		return
+	# A recording of the whole stroke plays from its start; without one the
+	# way back and the way forward each make their own sound.
+	var stroke := _handling(data, "pump", &"")
 	if _pump_stage == 0:
-		Sfx.play(&"reload", -5.0)
+		Sfx.play(stroke if stroke != &"" else _handling(data, "pump_back", &"reload"), -7.0)
 		_pump_stage = 1
 	elif _since_shot > PUMP_DELAY + PUMP_TIME * 0.45:
 		_eject(_models[_index], data)
-		Sfx.play(&"reload_end", -5.0)
+		if stroke == &"":
+			Sfx.play(_handling(data, "pump_forward", &"reload_end"), -5.0)
 		_pump_stage = 2
+
+
+## The sound of one step in handling a weapon: its own if it has one, named
+## after its shot ("pistol_mag_in" for the pistol), else the one all weapons
+## share ("mag_in"), else `fallback`. Recording a step for one weapon and
+## adding it to the manifest is all it takes to give that weapon its own.
+func _handling(data: WeaponData, step: String, fallback: StringName) -> StringName:
+	var own := StringName("%s_%s" % [String(data.shot_sound).trim_suffix("_shot"), step])
+	if Sfx.has(own):
+		return own
+	return StringName(step) if Sfx.has(StringName(step)) else fallback
 
 
 func _start_reload() -> void:
@@ -506,18 +521,19 @@ func _update_reload() -> void:
 			_mags[_index] += 1
 			if not data.bottomless:
 				_reserves[_index] -= 1
-			Sfx.play(&"reload", -3.0)
+			Sfx.play(_handling(data, "shell_in", &"reload"), -9.0)
 			_emit_ammo()
 		if _reload_left <= 0.0:
 			_reload_left = 0.0
-			Sfx.play(&"reload_end")
+			Sfx.play(_handling(data, "pump", &"reload_end"), -6.0)
 		return
 
 	var fraction := 1.0 - _reload_left / _reload_total
 	var moments: Array[float] = [MAG_OUT, MAG_IN, BOLT_RELEASE]
+	var steps: Array[String] = ["mag_out", "mag_in", "bolt"]
 	var sounds: Array[StringName] = [&"reload", &"reload_end", &"switch"]
 	while _reload_stage < moments.size() and fraction >= moments[_reload_stage]:
-		Sfx.play(sounds[_reload_stage], -2.0)
+		Sfx.play(_handling(data, steps[_reload_stage], sounds[_reload_stage]), -9.0)
 		_reload_stage += 1
 	if _reload_left <= 0.0:
 		var needed := mini(data.mag_size - _mags[_index], _reserves[_index])
