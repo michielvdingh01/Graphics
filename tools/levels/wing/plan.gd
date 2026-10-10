@@ -51,9 +51,9 @@ func _plan() -> void:
 	# The way through: out of the lobby, down the corridor, the storeroom and
 	# the boiler room off it, and through the workshop to the loading door.
 	start_in("lobby")
-	fight("corridor", "the corridor", ["rusher"], "lobby")
-	fight("store", "the storeroom", ["grunt", "grunt"], "corridor")
+	fight("corridor", "the corridor", {"corridor": ["rusher"]}, "lobby")
+	fight("store", "the storeroom", {"store": ["grunt", "grunt"]}, "corridor")
 	checkpoint_in("store", "Storeroom")
-	fight("plant", "the boiler room", ["grunt", "grunt", "rusher"], "corridor")
-	fight("workshop", "the workshop", ["grunt", "grunt", "grunt", "rusher", "heavy"], "corridor")
+	fight("plant", "the boiler room", {"plant": ["grunt", "rusher"]}, "corridor")
+	fight("workshop", "the workshop", {"workshop": ["grunt", "grunt", "grunt", "rusher", "heavy"]}, "corridor")
 	exit_through("workshop", EAST, 7.0, "Leave by the loading door")

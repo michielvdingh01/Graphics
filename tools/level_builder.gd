@@ -68,6 +68,13 @@ const PAINT_BLACK := Color(0.035, 0.035, 0.035)
 ## same two numbers.
 const LOOKOUTS := 150
 const SIGHT_GRID := 1.5
+## Looking through the openings in the sides of a zone: how far apart the
+## spots are that are looked from, how high over the floor they lie, in how
+## many directions is looked from each and how far.
+const OPENING_GRID := 0.3
+const OPENING_HEIGHTS: Array[float] = [0.95, 1.6, 2.05]
+const OPENING_LOOKS := 480
+const OPENING_REACH := 90.0
 
 var _tools := {}
 ## Size of the blocks that probe-lit detail is cut into, see _tool(). A level
@@ -168,11 +175,11 @@ func _build() -> void:
 	_add(_explosives, _root)
 
 	_describe()
-	_check_route()
 	# Better no level than one whose zones do not know what they can see.
 	if not await _survey():
 		push_error("The lines of sight between the zones were not worked out: nothing is written")
 		return
+	_check_route()
 
 	# The meshes come in as many files as there are zones and blocks of detail;
 	# clear out last time's.
@@ -416,6 +423,7 @@ func _survey() -> bool:
 	for zone_name: String in _zones:
 		grounds[zone_name] = _zones[zone_name].bounds
 	var walked := _walked(navmesh)
+	_garrison(space, ray, navmesh, walked)
 	_check_walkable(navmesh, walked)
 	var feet := {}
 	# Of those, the ones the player can get to: not the roof, not the top of
@@ -497,6 +505,13 @@ func _walked(navmesh: NavigationMesh) -> Dictionary:
 	return walked
 
 
+## Posts the robots that a level leaves for the builder to post, now that
+## everything stands and it is known where one can walk: see
+## tools/kit/rooms.gd. Nothing, for a level that says where its robots stand.
+func _garrison(_space: PhysicsDirectSpaceState3D, _ray: PhysicsRayQueryParameters3D, _navmesh: NavigationMesh, _walked: Dictionary) -> void:
+	pass
+
+
 ## Catches a route that cannot be walked: a robot posted where it cannot get
 ## to the player from, or a checkpoint that cannot be reached. `walked` is
 ## what _walked() found.
@@ -536,47 +551,157 @@ func _check_walkable(navmesh: NavigationMesh, walked: Dictionary) -> void:
 
 
 ## Works out which zones are in sight of each other: from where somebody can
-## stand in one zone, standing and crouching, it looks at points all through
-## each of the others. One line that nothing stops, and the two are drawn
-## together. Windows count as holes: nothing that has no collider stops a
-## look. What is found is added to what zone() was told.
+## stand in one zone, standing and crouching, it looks into each of the
+## others. One line that nothing stops, and the two are drawn together.
+## Windows count as holes: nothing that has no collider stops a look. What is
+## found is added to what zone() was told.
+##
+## To look into a zone is to look at the sides of the box that lies a step
+## inside its walls: whatever is seen of its inside is seen through one of
+## those sides, and only through one that faces the eye. That is a few dozen
+## points a pair of zones instead of every point in the zone.
 ##
 ## scripts/selftest.gd looks for the same lines in the running game, where a
 ## zone is switched off, and fails on the first it finds.
 func _find_sightlines(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3D, feet: Dictionary) -> void:
-	# What there is to see of a zone: points all through it.
-	var insides := {}
+	var sides := {}
 	for zone_name: String in _zones:
-		var points := PackedVector3Array()
+		var mine: Array[Dictionary] = []
 		for box: AABB in _zones[zone_name].bounds:
 			var inner := box.grow(-0.6)
-			var counts := Vector3i((inner.size / SIGHT_GRID).ceil()).maxi(1)
-			for x in counts.x + 1:
-				for y in counts.y + 1:
-					for z in counts.z + 1:
-						points.append(inner.position + inner.size * Vector3(x, y, z) / Vector3(counts))
-		insides[zone_name] = points
+			for axis in 3:
+				var u := (axis + 1) % 3
+				var v := (axis + 2) % 3
+				var across := maxi(1, ceili(inner.size[u] / SIGHT_GRID * 1.5))
+				var up := maxi(1, ceili(inner.size[v] / SIGHT_GRID * 1.5))
+				for outward: float in [-1.0, 1.0]:
+					var normal := Vector3.ZERO
+					normal[axis] = outward
+					var points := PackedVector3Array()
+					for i in across + 1:
+						for j in up + 1:
+							var point := inner.position
+							point[axis] += inner.size[axis] if outward > 0.0 else 0.0
+							point[u] += inner.size[u] * i / across
+							point[v] += inner.size[v] * j / up
+							points.append(point)
+					mine.append({"normal": normal, "at": points[0], "points": points})
+		sides[zone_name] = mine
 	var looked := 0
 	var found := PackedStringArray()
 	for from: String in _zones:
 		for to: String in _zones:
 			if to == from or to in _zones[from].sees or from in _zones[to].sees:
 				continue
+			var seen := false
 			for stand: Vector3 in feet[from]:
 				for height: float in [1.6, 0.95]:
-					ray.from = stand + Vector3.UP * height
-					for point: Vector3 in insides[to]:
-						ray.to = point
-						looked += 1
-						if space.intersect_ray(ray).is_empty():
-							_zones[from].sees.append(to)
-							found.append("%s and %s" % [from, to])
-							break
-					if to in _zones[from].sees:
-						break
-				if to in _zones[from].sees:
+					var eye := stand + Vector3.UP * height
+					ray.from = eye
+					for side: Dictionary in sides[to]:
+						if seen or (eye - (side.at as Vector3)).dot(side.normal) <= 0.0:
+							continue
+						for point: Vector3 in side.points:
+							ray.to = point
+							looked += 1
+							if space.intersect_ray(ray).is_empty():
+								seen = true
+								break
+				if seen:
 					break
-	print("Sight: %s; %d looks" % [", ".join(found) if found else "no zone sees another", looked])
+			if seen:
+				_zones[from].sees.append(to)
+				found.append("%s and %s" % [from, to])
+	var through := _look_through(space, ray)
+	looked += through.looks
+	print("Sight: %s; through an opening besides: %s; %d looks" % [", ".join(found) if found else "no zone sees another",
+		", ".join(through.found) if through.found else "none", looked])
+
+
+## Looks through every opening in the sides of the zones, level with the eyes
+## of a player who stands or crouches and just under the head of a door, in
+## every direction of the compass. The look from one zone into another can
+## be a sliver between two doorposts, at the far end of a corridor say, which
+## the points of _find_sightlines() miss and the next step of the player
+## finds. A look that is open both ways from a spot in an opening joins the
+## zones it passes through: those see each other. Returns {found, looks}.
+func _look_through(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3D) -> Dictionary:
+	var names: Array[String] = []
+	var insides: Array[Array] = []
+	for zone_name: String in _zones:
+		names.append(zone_name)
+		insides.append((_zones[zone_name].bounds as Array).map(func(box: AABB) -> AABB: return box.grow(-0.6)))
+	var within := func(zone_name: String, at: Vector3) -> bool:
+		return (_zones[zone_name].bounds as Array).any(func(box: AABB) -> bool: return box.has_point(at))
+	# The openings: where a look across the side of a zone meets nothing. Not
+	# a spot inside a wall, at a corner say: a ray does not see what it
+	# starts in, and would look out of that wall on every side.
+	var solid := PhysicsPointQueryParameters3D.new()
+	solid.collision_mask = 1
+	var openings := {}
+	var looks := 0
+	for zone_name: String in _zones:
+		for box: AABB in _zones[zone_name].bounds:
+			for axis: int in [0, 2]:
+				var along := 2 - axis
+				var count := maxi(1, ceili(box.size[along] / OPENING_GRID))
+				var across := Vector3.ZERO
+				across[axis] = 1.0
+				for far: float in [0.0, 1.0]:
+					for i in count + 1:
+						var foot := box.position
+						foot[axis] += box.size[axis] * far
+						foot[along] += box.size[along] * i / count
+						# Inside the zone, where two of its boxes meet: no side.
+						if within.call(zone_name, foot + across + Vector3.UP * 2.0) and within.call(zone_name, foot - across + Vector3.UP * 2.0):
+							continue
+						ray.from = foot + Vector3.UP * 3.0
+						ray.to = foot + Vector3.DOWN * 0.5
+						var ground := space.intersect_ray(ray)
+						var floor_y: float = ground.position.y if ground else foot.y + 1.0
+						for height: float in OPENING_HEIGHTS:
+							var at := Vector3(foot.x, floor_y + height, foot.z)
+							ray.from = at - across * 0.6
+							ray.to = at + across * 0.6
+							solid.position = at
+							looks += 1
+							if space.intersect_ray(ray).is_empty() and space.intersect_point(solid, 1).is_empty():
+								openings[Vector3i((at * 20.0).round())] = at
+	var found := PackedStringArray()
+	var free := PackedFloat32Array()
+	free.resize(OPENING_LOOKS)
+	var touched := PackedInt32Array()
+	for at: Vector3 in openings.values():
+		ray.from = at
+		for k in OPENING_LOOKS:
+			var turn := TAU * k / OPENING_LOOKS
+			ray.to = at + Vector3(cos(turn), 0, sin(turn)) * OPENING_REACH
+			var hit := space.intersect_ray(ray)
+			free[k] = at.distance_to(hit.position) if hit else OPENING_REACH
+		looks += OPENING_LOOKS
+		@warning_ignore("integer_division")
+		for k in OPENING_LOOKS / 2:
+			@warning_ignore("integer_division")
+			var back := free[k + OPENING_LOOKS / 2]
+			# A look that ends in the doorpost on either side goes nowhere.
+			if free[k] < 0.7 or back < 0.7:
+				continue
+			var turn := TAU * k / OPENING_LOOKS
+			var way := Vector3(cos(turn), 0, sin(turn))
+			var from := at - way * (back - 0.05)
+			var to := at + way * (free[k] - 0.05)
+			touched.clear()
+			for i in names.size():
+				for inside: AABB in insides[i]:
+					if inside.intersects_segment(from, to):
+						touched.append(i)
+						break
+			for i in touched:
+				for j in touched:
+					if i < j and not (names[j] in _zones[names[i]].sees or names[i] in _zones[names[j]].sees):
+						_zones[names[i]].sees.append(names[j])
+						found.append("%s and %s (from %.1f, %.1f to %.1f, %.1f at %.1f)" % [names[i], names[j], from.x, from.z, to.x, to.z, at.y])
+	return {"found": found, "looks": looks}
 
 
 ## Where to stand to look a zone over, for tools/zone_sheet.py to take its
@@ -694,10 +819,12 @@ func _finish_zones() -> void:
 		lightmap.bounces = 4
 		lightmap.directional = true
 		# Probes for what moves through the zone, about as far apart in a small
-		# zone as in a large one.
+		# zone as in a large one: a good metre at the closest. Closer than
+		# that, a hall of 21 m took Godot longer to sort its probes than
+		# anyone waited for: see "Stap 5" in PLAN.md.
 		var cells := whole.get_longest_axis_size() / 1.3
 		lightmap.generate_probes_subdiv = (
-			LightmapGI.GENERATE_PROBES_SUBDIV_32 if cells > 16.0
+			LightmapGI.GENERATE_PROBES_SUBDIV_32 if cells > 20.0
 			else LightmapGI.GENERATE_PROBES_SUBDIV_16 if cells > 8.0
 			else LightmapGI.GENERATE_PROBES_SUBDIV_8 if cells > 4.0
 			else LightmapGI.GENERATE_PROBES_SUBDIV_4

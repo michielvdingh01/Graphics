@@ -29,8 +29,9 @@ func _route_through() -> void:
 		["grunt", Vector3(-10.3, 0, 6.2)], ["grunt", Vector3(-16.3, 0, 10.2)], ["grunt", Vector3(-15.0, DECK_Y, -8.2)],
 		["rusher", Vector3(-13.5, 0, -9.0)], ["rusher", Vector3(-17.2, 0, -10.2)], ["heavy", Vector3(-17.5, 0, 0.5)],
 	])
-	# Out is out: the level ends a step beyond the door, in the yard.
-	route_exit("Leave by the loading door", AABB(Vector3(-HX - 4.5, -0.3, -4.0), Vector3(3.0, 4.5, 8.0)), "depot", Vector3(-HX, 5.6, 0.0), Vector3.RIGHT)
+	# Out is out: the level ends a step beyond the door, in the yard, and the
+	# works are next.
+	route_exit("Leave by the loading door", AABB(Vector3(-HX - 4.5, -0.3, -4.0), Vector3(3.0, 4.5, 8.0)), "works", Vector3(-HX, 5.6, 0.0), Vector3.RIGHT)
 
 
 func _shell() -> void:

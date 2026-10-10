@@ -49,9 +49,11 @@ func _plan() -> void:
 	_shared_dice = true
 	_detail_inside = AABB(Vector3(-HX - 0.5, 0, -HZ - 0.5), Vector3(HX * 2.0 + 12.0, RIDGE + 1.0, HZ * 2.0 + 1.0))
 	# Four zones in a row. The hall and the annex look into each other through
-	# two doorways; the passage has a bend in it, so that neither the annex and
-	# the boiler house nor the passage and the hall are ever in sight of each
-	# other. The builder finds that out for itself.
+	# two doorways; the passage has a bend in it, so that the annex and the
+	# boiler house are never in sight of each other. The passage and the hall
+	# are, by a sliver: from the south-east of the hall through a doorway of
+	# the annex and the door of the passage. The builder finds all of that
+	# out for itself.
 	zone("hall", [AABB(Vector3(-HX - 0.6, -1.0, -HZ - 0.6), Vector3(HX * 2.0 + 1.1, 13.0, HZ * 2.0 + 1.2))])
 	zone("annex", [AABB(Vector3(HX + 0.5, -1.0, -HZ - 0.4), Vector3(10.45, 5.0, HZ + 2.85))])
 	zone("passage", [
