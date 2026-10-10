@@ -311,6 +311,8 @@ func _fire(data: WeaponData) -> void:
 	var headshot := false
 	var killed := false
 
+	# A load of shot makes one sound per thing it lands on, not one per pellet.
+	var struck := {}
 	for i in data.pellets:
 		var angle := randf() * TAU
 		var radius := sqrt(randf()) * spread
@@ -322,11 +324,15 @@ func _fire(data: WeaponData) -> void:
 		if hit:
 			end = hit.position
 			var target: Object = hit.collider
-			# A robot shows a hit itself; anything else is part of the level,
-			# even if it can be damaged, like a fuel barrel.
+			# A robot shows a hit itself, and sounds like the steel it is;
+			# anything else is part of the level, even if it can be damaged,
+			# like a fuel barrel.
 			var robot := target.has_method("is_headshot")
 			if not robot:
-				Fx.impact(hit, direction, data.pellets > 1)
+				Fx.strike(hit.position, hit.normal, direction, Fx.surface_of(hit), data.pellets > 1)
+			if not struck.has(target):
+				struck[target] = true
+				Fx.thud(end, "metal" if robot else Fx.surface_of(hit))
 			if target.has_method("take_damage"):
 				var distance := origin.distance_to(end)
 				var falloff := remap(distance, data.falloff_start, data.falloff_end, 1.0, data.min_damage_scale)
@@ -359,7 +365,7 @@ func _fire(data: WeaponData) -> void:
 
 	Sfx.play(data.shot_sound)
 	if any_hit:
-		Sfx.play(&"kill" if killed else (&"headshot" if headshot else &"hit"), -4.0)
+		Sfx.play(&"kill" if killed else (&"headshot" if headshot else &"hit"), -10.0)
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()
 

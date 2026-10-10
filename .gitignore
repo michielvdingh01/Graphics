@@ -2,3 +2,4 @@
 *.translation
 .DS_Store
 benchmark/results/
+.cache/

@@ -107,7 +107,10 @@ func apply() -> void:
 	for lens: CanvasItem in get_tree().get_nodes_in_group(&"lens"):
 		(lens.material as ShaderMaterial).shader = LENS_ABERRATION if preset[7] else LENS
 
+	# A bus's fader comes after its effects: the slider turns the finished mix
+	# down and leaves how hard the limiter works alone.
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
+	AudioServer.set_bus_mute(0, volume <= 0.0)
 	if not Benchmark.active and DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_vsync_mode(
 			DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED

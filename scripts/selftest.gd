@@ -230,6 +230,18 @@ func _run() -> void:
 	_check("upscaler applies to the viewport", game.get_viewport().scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2
 		and is_equal_approx(game.get_viewport().scaling_3d_scale, 0.67))
 
+	# A sound is found by its name, and that of an impact by what was hit, so a
+	# folder that is missing would only show up as an error in mid-fight.
+	var sounds: Array[StringName] = []
+	for data: WeaponData in weapons.LOADOUT:
+		sounds.append(data.shot_sound)
+	for surface: String in Fx.HOLE_VARIANTS:
+		sounds.append(StringName("impact_" + surface))
+	_check("every weapon and every surface has its sound", sounds.all(Sfx.has))
+	# Without the bus layout everything would still play, dry and unlimited.
+	var world := AudioServer.get_bus_index(Sfx.WORLD)
+	_check("the world has its own bus, with effects on it", world > 0 and AudioServer.get_bus_effect_count(world) > 0)
+
 	# Every level: loads, bakes a navmesh and has spawns the enemies can leave.
 	for level in Menu.LEVELS:
 		tree.change_scene_to_file(level.scene)

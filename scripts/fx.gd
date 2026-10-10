@@ -192,8 +192,15 @@ func surface_of(hit: Dictionary) -> String:
 ## ray found. One pellet of several makes a `light` impact, so that a load of
 ## shot does not throw nine times the dust of a bullet.
 func impact(hit: Dictionary, incoming: Vector3, light := false) -> void:
-	strike(hit.position, hit.normal, incoming, surface_of(hit), light)
-	Sfx.play_at(&"impact", hit.position, -8.0)
+	var surface := surface_of(hit)
+	strike(hit.position, hit.normal, incoming, surface, light)
+	thud(hit.position, surface)
+
+
+## What a shot sounds like where it lands.
+func thud(position: Vector3, surface: String) -> void:
+	var sound := "concrete" if surface == "brick" else surface
+	Sfx.play_at(StringName("impact_" + sound), position, -8.0)
 
 
 ## The same without a ray to go by.

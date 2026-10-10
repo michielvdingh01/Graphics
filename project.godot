@@ -42,6 +42,9 @@ scene={
 "meshes/light_baking": 2,
 "meshes/lightmap_texel_size": 0.08
 }
+wav={
+"compress/mode": 0
+}
 
 [input]
 
