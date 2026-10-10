@@ -610,7 +610,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | 1. Bouwdoos | De bouwstenen uit de fabriek naar een gedeelde bibliotheek, en een level in één bestand per zone met vaste deurposities | De fabriek komt er byte voor byte gelijk uit | Klaar, zie hieronder |
 | 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na. Zie hieronder |
 | 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | Klaar zonder streamen: het proeflevel haalt het zo. Zie hieronder |
-| 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | |
+| 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | Het gereedschap staat en de vleugel is gebouwd, maar nog niet gebakken, bekeken of gespeeld. Zie hieronder |
 | 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | |
 
 **Wat is afgesproken**
@@ -775,6 +775,62 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 
 - Het proeflevel is gekopieerd en niet gebouwd: wat de bouwer zelf aan twintig zones kost (de zichtlijnen, zie stap 2) is er niet mee gemeten, en evenmin een level waarin de zones aan elkaar grenzen.
 - De 870 MB aan texturen is het grootste wat een level in het geheugen heeft. Dat is geen vraag van levelgrootte, maar wel de eerste plek om te kijken als het geheugen ooit krap wordt.
+
+### Stap 4: ruimtes uit een plattegrond
+
+**Wat er staat**
+
+- **Een level als plattegrond** (`tools/kit/rooms.gd`, de vijfde la van de bouwdoos). Het plan van een level noemt zijn ruimtes: een rechthoek op de grond, een soort en een hoogte. Daarna de deuren ertussen, de ramen, wat vrij moet blijven voor wat er met de hand in komt, en de route: `room`, `door`, `window`, `keep_clear`, `start_in`, `fight`, `checkpoint_in` en `exit_through`. De rechthoek is de ruimte met zijn muren, dus twee ruimtes die een muur delen hebben rechthoeken die elkaar raken.
+- **Wat de bouwer daarvan maakt** (`build_rooms`). Per ruimte een eigen zone, gesloten door eigen vloer, muren en plafond; de deuropeningen en ramen uitgespaard, met in elke deuropening het paneel dat hem tijdens het bakken afsluit; lampen naar de soort ruimte (tl-buizen onder een laag plafond, hallampen onder een hoog), waarvan de meeste nog branden; een reflectieprobe. En tenzij het level kaal is (`_bare`): deuren in de deuropeningen, vuil langs de plinten, lekstrepen onder de ramen, vlekken op de vloer, en wat er in zo'n ruimte rondstaat. Een magazijn krijgt stellingen langs de muren en kisten, pallets en zakken ertussen; een kantoor een bureau, een stoel, een kast en dozen; een gang brandblussers en leidingen; een werkhal iets tegen de muur om de paar meter en dekking op de vloer. Dat blijft uit de buurt van de deuren, van waar de robots staan en van wat het plan vrijhoudt.
+- **Vijf soorten ruimte**: `hall`, `plant`, `corridor`, `office` en `storage` (`ROOM_KINDS`). Een soort legt het materiaal van muren en plafond vast, de dikte van de muren, welke lampen er hangen en hoe ver uit elkaar, en wat er rondstaat.
+- **De robots krijgen hun post van de bouwer.** `fight` zet er een per soort neer, zo ver van de deur waar de speler binnenkomt als de vloer toelaat, een paar passen uit elkaar.
+- **Wat een ruimte tot díé ruimte maakt, komt er met de hand in**, in een bestand per ruimte, met `spot_in` voor een plek gerekend vanaf de noordwesthoek van de ruimte. De ruimte verhuizen in het plan verhuist dan ook wat erin staat.
+- **Elke ruimte heeft zijn eigen toeval**, zodat een wijziging in de ene de lampen en kisten van de andere laat staan, en hun lightmap ook.
+- **De bouwer controleert of de route te lopen is** (`_check_walkable`). Een robot of een checkpoint op een plek die vanaf de start niet te bereiken is, geeft een fout bij het bouwen. Dat geldt voor elk level; de fabriek en het depot komen erdoor.
+- **`tools/level_map.py [level]`** tekent een level van bovenaf zoals het gebouwd is: wat er op de vloer staat (zwart wat hoger is dan een mens, grijs waar een robot overheen schiet), de zones, de robots op hun post, de start en de uitgang. Zonder GPU.
+- **De vleugel** (`tools/levels/wing.gd`, `scenes/wing.tscn`): een lobby en een magazijn aan de westkant van een gang, een werkplaats en een ketelruimte aan de oostkant, en een laaddeur in de oostwand van de werkplaats als uitgang. In de werkplaats staan een draaibank, een pers en een tank met de hand; in de ketelruimte de ketel, twee pompen en het metersbord. Elf robots in vier gevechten, met een checkpoint in het magazijn.
+
+**Gemeten** op 10 oktober 2026
+
+| | |
+|---|---|
+| De vleugel, vijf ruimtes met machines en route | 137 regels in vijf bestanden; de fabriek was 1720 regels voor vier zones |
+| Kaal gebouwd | 254 nodes, 9 modellen, 20 decals |
+| Ingericht | 440 nodes, 88 modellen, 72 decals |
+| Bouwen, met zichtlijnen | 1,8 s |
+| Zichtlijnen die de bouwer vond | lobby en gang, lobby en werkplaats, magazijn en gang, magazijn en ketelruimte, gang en werkplaats, gang en ketelruimte, werkplaats en ketelruimte |
+
+**Gecontroleerd, en wat niet**
+
+- De route is te lopen: de bouwer vindt elke robot en het checkpoint bereikbaar vanaf de start.
+- Het spel laadt de vleugel en draait hem 600 frames zonder beeld en zonder fout.
+- De fabriek, het depot, de showroom en de modellen komen er gelijk uit, en `tools/selftest.sh --routes` slaagt.
+- **De vleugel is niet gebakken, niet bekeken en niet gespeeld.** Ik heb hem alleen van bovenaf gezien, op de kaart. Of hij er goed uitziet en of de gevechten kloppen, weet ik niet. De selftest loopt hem niet af: hij staat niet in de levelkeuze van het spel.
+
+**Wat er misging: de bake liep vast, en de GPU met hem**
+
+- Om 17:39 begon de bake van de vijf ruimtes. Lobby, magazijn, gang en werkplaats waren in twee minuten klaar. Om 17:41:06 startte er een andere Godot op de laptop, niet van deze sessie; de bake bleef daarna hangen op de ketelruimte.
+- Die andere Godot stond twintig minuten later nog in de proceslijst als bezig met afsluiten. Elke nieuwe run op de GPU liep sindsdien vast met `timeout waiting for fence`, ook een screenshot van één standpunt, en bleef na afbreken zelf minutenlang hangen.
+- Daarna is de inrichting van de vleugel nog veranderd, dus ook de vier lightmaps die er lagen klopten niet meer. Ze zijn weggehaald: de vleugel heeft geen lightmaps.
+- **`tools/bake_lightmaps.sh` weigert sindsdien te bakken zolang er een andere Godot op de GPU zit**, tenzij met `--anyway`. Een bake wil de GPU voor zichzelf.
+- `tools/build.gd` laat Godot niet meer eindeloos draaien als een bouwer op een fout stukloopt: na vier minuten stopt het met een melding. Dat gebeurde hier drie keer.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Een level uit ruimtes opzetten | Een plan met `room`, `door`, `window` en de route, en `_bare = true`; `tools/build_level.sh <level>`, dan `tools/level_map.py <level>` om het van bovenaf te zien |
+| Het level inrichten | `_bare = false`, `keep_clear` voor wat er met de hand in komt, en een bestand per ruimte dat het level zijn deel laat bouwen |
+| De vleugel bakken en bekijken, als er geen andere Godot draait | `tools/bake_lightmaps.sh res://scenes/wing.tscn`, dan `tools/zone_sheet.py wing` |
+| De vleugel spelen in een venster | `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/wing.tscn -- --play` |
+
+**Nog open**
+
+- De regels voor wat er rondstaat zijn een eerste gok. In de werkplaats, met drie machines, drie deuren en vijf robots op 200 m², blijft er plek voor drie eilanden dekking. De robots staan open en bloot, in het zicht van wie binnenkomt: in de ketelruimte staat er een op een meter van de deur.
+- Een ruimte is een rechthoek langs de assen met een vlak plafond. Geen schuin dak met spanten, geen tussenvloer, geen trap, geen terrein onder de open lucht.
+- Tussen twee ruimtes staan twee muren rug aan rug. Dat houdt elke zone gesloten voor zijn bake, en kost muur die niemand ziet.
+- Wat er met de hand in komt, moet het plan zelf vrijhouden; de bouwer weet niet hoe groot een pers is.
+- De werkbank, het leidingwerk van de gang en de kraan uit de bouwdoos kunnen nog steeds maar in één richting staan.
 
 ## Gevechten: dekking, beurten en schaarste
 
