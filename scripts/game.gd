@@ -100,6 +100,17 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	nav_region.bake_navigation_mesh(false)
+	# Cover is only looked for where there is fighting: in the zones.
+	var grounds: Array[AABB] = []
+	for zone in zones:
+		var size: Vector3 = (zone.area.get_child(0) as CollisionShape3D).shape.size
+		grounds.append(AABB(zone.area.global_position - size * 0.5, size).grow(0.3))
+	Squad.fight_in(grounds)
+	if playing:
+		# And it is looked up now, while the screen is still coming up out of
+		# black, not when the first fight asks for it.
+		await get_tree().physics_frame
+		Squad.prepare()
 
 
 ## True while robots of any zone are still standing.
@@ -170,7 +181,7 @@ func _resume() -> void:
 ## that would start every fight at once. Switched off, a robot does not move
 ## a joint either: one that so much as sways makes every lamp around it draw
 ## its shadows again, frame after frame. Of a robot this reads no more than
-## the agreed signal, alert() and dead, and its health to see that it was hit.
+## its signals died and disturbed, alert() and dead.
 func post_robots() -> void:
 	for zone in zones:
 		if zone.cleared or not zone.robots.is_empty():
@@ -184,6 +195,9 @@ func post_robots() -> void:
 			var towards := from - robot.position
 			robot.rotation.y = atan2(-towards.x, -towards.z)
 			robot.died.connect(_on_enemy_died.bind(zone))
+			# One that is shot at where it stands does not take it standing,
+			# whether the shot hurt it or its plate stopped it.
+			robot.disturbed.connect(_start.bind(zone))
 			add_child(robot)
 			# It stays there to be shot at and walked into.
 			robot.disable_mode = CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE
@@ -200,19 +214,6 @@ func _approach(zone: Zone) -> Vector3:
 		if checkpoint.order < zone.order:
 			from = checkpoint.pose.origin
 	return from
-
-
-func _physics_process(_delta: float) -> void:
-	# A robot that is shot at where it stands does not take it standing.
-	for zone in zones:
-		if not zone.started and zone.robots.any(_is_hurt):
-			_start(zone)
-
-
-## Untyped, as is the robot in _start(): one that has been freed is not a
-## node any more.
-func _is_hurt(robot: Variant) -> bool:
-	return is_instance_valid(robot) and robot.health < robot.max_health
 
 
 ## Begins the fight for a zone: its robots are switched on.

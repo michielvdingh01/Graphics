@@ -8,7 +8,9 @@ extends "res://tools/model_builder.gd"
 ## joints by name: Hips, Torso, Head, ArmR/ForearmR, ArmL/ForearmL,
 ## ThighR/ShinR/FootR and their left counterparts. Parts whose name begins
 ## with Glow take the colour of the enemy's visor, Barrels spins, and the
-## marker Muzzle is where its shots leave.
+## marker Muzzle is where its shots leave. Shield is the plate the grunt
+## holds in front of it and can have shot off its arm, and Pack the
+## ammunition on the heavy's back that goes off when it is holed.
 
 const FRAME := "robot_frame"
 const STEEL := "gun_steel"
@@ -17,6 +19,10 @@ const RUBBER := "rubber"
 const GLOW := "robot_glow"
 ## A profile drawn from the robot's right-hand side is in (ahead, up).
 const SIDE := Basis(Vector3.FORWARD, Vector3.UP, Vector3.RIGHT)
+## How far forward the grunt raises its upper arm to hold its plate in front
+## of it, in radians. The plate is bolted on so that it then faces ahead; the
+## rig reads the angle off the model.
+const GUARD := 0.75
 
 ## How tall and how broad the robot being built is next to the grunt, and the
 ## paint on its armour.
@@ -143,9 +149,9 @@ func _torso(arms: String) -> void:
 		_bar(RUBBER, _p(side * 0.11, 1.558, 0.2), _p(side * 0.11, 1.562, 0.2), 0.016 * _broad, 10)
 	_ring(FRAME, _p(0, 1.5, 0), Vector3.UP, 0.075 * _broad, 0.018 * _tall)
 	if arms == "cannon":
-		# Ammunition for the cannon rides on the back.
-		_block(_armor, _p(0.02, 1.36, 0.27), _d(0.3, 0.26, 0.12), 0.025 * _broad)
 		_line(STEEL, [_p(0.16, 1.3, 0.27), _p(0.27, 1.22, 0.2), _p(0.33, 1.16, 0.1)], 0.028 * _broad)
+		_pack()
+		part("Torso")
 	elif arms == "rifle":
 		_bar(FRAME, _p(-0.12, 1.5, 0.21), _p(-0.14, 1.83, 0.24), 0.005, 6)
 
@@ -206,9 +212,7 @@ func _arm(side: float, arms: String) -> void:
 		for finger: Vector2 in [Vector2(-0.028, -0.012), Vector2(0.028, -0.012), Vector2(0, 0.022)]:
 			_bar(FRAME, _p(x + finger.x, 0.76, finger.y), _p(x + finger.x * 1.2, 0.69, finger.y * 0.6 - 0.01), 0.011 * _broad, 8)
 		if arms == "rifle":
-			# The grunt carries a shield on this arm.
-			_block(_armor, _p(x - 0.07, 1.0, -0.01), _d(0.025, 0.36, 0.24), 0.012 * _broad)
-			_block("steel_yellow", _p(x - 0.0835, 1.08, -0.01), _d(0.004, 0.05, 0.2), 0.001)
+			_shield(x)
 		return
 
 	if arms == "rifle":
@@ -236,3 +240,51 @@ func _arm(side: float, arms: String) -> void:
 		for y: float in [0.7, 0.5]:
 			_bar(FRAME, _p(x, y, 0), _p(x, y - 0.018, 0), 0.054 * _broad, 16)
 		_bar(STEEL, _p(x, 0.82, 0), _p(x, 0.47, 0), 0.014 * _broad, 8)
+
+
+## The plate the grunt carries on its left forearm. It hangs behind the arm
+## at an angle while the arm hangs; with the upper arm raised GUARD radians
+## and the forearm laid across the chest it faces straight ahead and covers
+## the trunk from the hips to the neck. It is a part of its own, so that it
+## can be shot off.
+func _shield(x: float) -> void:
+	# Out of the plate, and down it as it is held up.
+	var out := Vector3(-cos(GUARD), 0, sin(GUARD))
+	var down := Vector3(sin(GUARD), 0, cos(GUARD))
+	var turn := Vector3(0, rad_to_deg(GUARD), 0)
+	_block(FRAME, _p(x, 0.97, 0) + out * 0.05, _d(0.05, 0.2, 0.09), 0.012, turn)
+	tag("guard", GUARD)
+	# From 18 cm over the forearm to 40 cm under it, and from just outside
+	# the elbow to well past the hand.
+	tag("shield_span", Vector2(1.42 - 0.3 * cos(GUARD) - 0.4, 1.42 - 0.3 * cos(GUARD) + 0.17))
+	part("Shield", _joint(x, 1.12, 0), "ForearmL")
+	var middle := _p(x, 0.9, 0) + out * 0.075 + down * 0.115
+	_block(_armor, middle, Vector3(0.022, 0.5, 0.57), 0.02, turn)
+	# A rim, a boss over the bracket and a warning stripe along the top.
+	for edge: float in [-1.0, 1.0]:
+		_block(FRAME, middle + down * edge * 0.273 + out * 0.004, Vector3(0.03, 0.5, 0.024), 0.008, turn)
+		_block(FRAME, middle + Vector3(0, edge * 0.238, 0) + out * 0.004, Vector3(0.03, 0.024, 0.57), 0.008, turn)
+	_block(FRAME, middle - down * 0.115 + out * 0.014, Vector3(0.016, 0.16, 0.16), 0.012, turn)
+	_block("steel_yellow", middle - down * 0.215 + out * 0.012, Vector3(0.004, 0.42, 0.05), 0.001, turn)
+	for bolt: Vector2 in [Vector2(-0.2, 0.19), Vector2(0.2, 0.19), Vector2(-0.2, -0.05), Vector2(0.2, -0.05)]:
+		_bar(BARE, middle + Vector3(0, bolt.x, 0) + down * bolt.y + out * 0.011, middle + Vector3(0, bolt.x, 0) + down * bolt.y + out * 0.016, 0.009, 8)
+	part("ForearmL")
+
+
+## The ammunition for the heavy's cannon: a drum on its back, painted as what
+## it is, with a lamp either side that says where to shoot. A part of its
+## own: it flashes when it is hit and is gone when it has gone off.
+func _pack() -> void:
+	tag("pack_span", Vector2(1.2 * _tall, 1.56 * _tall))
+	tag("pack_back", 0.3 * _broad)
+	part("Pack", _joint(0, 1.37, 0.3), "Torso")
+	_block(FRAME, _p(0, 1.37, 0.245), _d(0.34, 0.3, 0.05), 0.02 * _broad)
+	_bar("steel_yellow", _p(-0.15, 1.37, 0.33), _p(0.15, 1.37, 0.33), 0.115 * _broad, 20)
+	for side: float in [-1.0, 1.0]:
+		_bar(FRAME, _p(side * 0.15, 1.37, 0.33), _p(side * 0.172, 1.37, 0.33), 0.122 * _broad, 20)
+		_ring(RUBBER, _p(side * 0.075, 1.37, 0.33), Vector3.RIGHT, 0.116 * _broad, 0.007 * _broad)
+	_block(_armor, _p(0, 1.51, 0.32), _d(0.2, 0.05, 0.12), 0.015 * _broad)
+	part("GlowPack", _joint(0, 1.37, 0.3), "Pack")
+	for side: float in [-1.0, 1.0]:
+		_turned(GLOW, _p(side * 0.174, 1.37, 0.33), Vector3.RIGHT * side, [Vector2(0.05 * _broad, 0), Vector2(0.05 * _broad, 0.008), Vector2(0, 0.014)], 12)
+	_turned(GLOW, _p(0, 1.37, 0.443 ), Vector3.BACK, [Vector2(0.03 * _broad, 0), Vector2(0.03 * _broad, 0.006), Vector2(0, 0.01)], 12)

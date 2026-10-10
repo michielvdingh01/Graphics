@@ -331,11 +331,14 @@ func _fire(data: WeaponData) -> void:
 				var distance := origin.distance_to(end)
 				var falloff := remap(distance, data.falloff_start, data.falloff_end, 1.0, data.min_damage_scale)
 				var amount := data.damage * clampf(falloff, data.min_damage_scale, 1.0)
-				if robot and target.is_headshot(end):
+				var head: bool = robot and target.is_headshot(end)
+				if head:
 					amount *= data.headshot_multiplier
-					headshot = true
-				any_hit = any_hit or robot
 				killed = target.take_damage(amount, end, direction) or killed
+				# A shot that the plate on its arm stopped is no hit.
+				if robot and not target.deflected:
+					any_hit = true
+					headshot = headshot or head
 		# One pellet in three of a load of shot is enough to show where it went.
 		if i % 3 == 0:
 			Fx.tracer(muzzle, end)

@@ -56,6 +56,13 @@ func is_alight() -> bool:
 	return _alight
 
 
+## What whoever stands near it has to fear once it burns: see Squad.threat().
+func danger() -> Dictionary:
+	if not _alight or gone:
+		return {}
+	return {"at": _middle(), "radius": _tuning.radius, "left": _fuse}
+
+
 func take_damage(amount: float, hit_position: Vector3, _direction: Vector3) -> bool:
 	if gone:
 		return false
@@ -80,6 +87,7 @@ func _physics_process(delta: float) -> void:
 ## side of anything that holds fuel.
 func _ignite(hole: Vector3) -> void:
 	_alight = true
+	add_to_group("hazard")
 	_fuse = _tuning.fuse
 	set_physics_process(true)
 	var middle := _middle()

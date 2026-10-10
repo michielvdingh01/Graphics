@@ -12,11 +12,26 @@ const GLOW_CHARGED := 14.0
 ## Footsteps are heard from this far.
 const STEP_RANGE := 30.0
 
-## What enemy.gd plays and draws for this enemy.
-var sounds := {&"alert": &"enemy_alert", &"death": &"enemy_death", &"shot": &"enemy_shot", &"melee": &"melee"}
+## What enemy.gd plays and draws for this enemy. Besides what it does, a
+## robot says what it is about to do: the whine before a burst (its own for
+## each kind), the call of one that goes round the player and the alarm of
+## one that runs from something.
+var sounds := {
+	&"alert": &"enemy_alert", &"death": &"enemy_death", &"shot": &"enemy_shot", &"melee": &"melee",
+	&"charge": &"enemy_charge", &"flank": &"enemy_flank", &"alarm": &"enemy_alarm",
+}
 var tracer_tint := Color(1.0, 0.3, 0.2)
 var flash_tint := Color(1.0, 0.45, 0.3)
 var flash_prongs := 3
+
+## What the model carries that the enemy can lose: a plate on its arm, held
+## in front of it between these heights, and a pack on its back between those.
+var has_shield := false
+var has_pack := false
+var shield_span := Vector2(0.8, 1.36)
+var pack_span := Vector2(1.2, 1.56)
+## How far its head comes down when it ducks.
+var crouch_drop := 0.68
 
 var _joints := {}
 var _rest := {}
@@ -43,6 +58,15 @@ var _charge := 0.0
 var _spin := 0.0
 var _spin_speed := 0.0
 var _time := randf() * 10.0
+## 0 standing, 1 ducked down behind something.
+var _crouching := false
+var _crouch := 0.0
+## 0 with the plate hanging by its side, 1 with it held in front.
+var _guarding := false
+var _guard := 0.0
+var _guard_raise := 0.75
+var _blocked := 0.0
+var _pack_back := 0.3
 
 
 func _ready() -> void:
@@ -54,6 +78,17 @@ func _ready() -> void:
 	_stride = get_meta("stride", 0.8)
 	_melee = get_meta("melee", false)
 	_bulk = get_meta("bulk", 1.0)
+	has_shield = _joints.has("Shield")
+	has_pack = _joints.has("Pack")
+	shield_span = get_meta("shield_span", shield_span)
+	pack_span = get_meta("pack_span", pack_span)
+	_pack_back = get_meta("pack_back", _pack_back)
+	_guard_raise = get_meta("guard", _guard_raise)
+	crouch_drop *= _stride / 0.8
+	if _melee:
+		sounds[&"charge"] = &"rusher_charge"
+	elif _joints.has("Barrels"):
+		sounds[&"charge"] = &"heavy_charge"
 	_glow_mat = GLOW.duplicate()
 	for mesh in _meshes:
 		if mesh.name.begins_with("Glow"):
@@ -101,11 +136,68 @@ func hit(at: Vector3, direction: Vector3, _amount := 0.0) -> void:
 	_flash = 1.0
 
 
+## Holds the plate on its arm up in front of it, or lets it hang again.
+func guard(on: bool) -> void:
+	_guarding = on and has_shield
+
+
+## Ducks down behind something, or stands up again.
+func crouch(on: bool) -> void:
+	_crouching = on
+
+
+## A shot at `at`, coming in along `direction`, that its plate stopped.
+func block(at: Vector3, direction: Vector3) -> void:
+	Fx.robot_hit(at, direction, Color(1.0, 0.85, 0.55))
+	_blocked = 1.0
+	_flinch = (global_basis.inverse() * direction).limit_length(1.0) * 0.4
+
+
+## The plate is shot off its arm: it flies off the way of `push`, and the
+## robot reels.
+func shed_shield(push: Vector3) -> void:
+	if not has_shield:
+		return
+	has_shield = false
+	_guarding = false
+	var plate: MeshInstance3D = _joints["Shield"]
+	_meshes.erase(plate)
+	plate.set_instance_shader_parameter("flash", 0.0)
+	_loosen(plate, plate.global_transform, push * 2.0 + Vector3.UP * 2.5 - global_basis.x * 1.5)
+	_flinch = (global_basis.inverse() * push).limit_length(1.0) * 2.2
+	_flash = 1.0
+
+
+## This one carries no plate: it is taken off its arm before anybody sees it.
+func drop_shield() -> void:
+	if not has_shield:
+		return
+	has_shield = false
+	_guarding = false
+	var plate: MeshInstance3D = _joints["Shield"]
+	_meshes.erase(plate)
+	plate.visible = false
+
+
+## Where the pack on its back is.
+func pack_position() -> Vector3:
+	return global_transform * Vector3(0.0, (pack_span.x + pack_span.y) * 0.5, _pack_back)
+
+
+## The pack has gone off: there is nothing left of it.
+func lose_pack() -> void:
+	for part: String in ["GlowPack", "Pack"]:
+		var mesh := _joints.get(part) as MeshInstance3D
+		if mesh:
+			_meshes.erase(mesh)
+			mesh.visible = false
+	has_pack = false
+
+
 ## Falls apart: every part becomes a loose piece, knocked the way of `push`.
 func collapse(push: Vector3) -> void:
 	set_process(false)
 	_glow_mat.emission_energy_multiplier = 0.0
-	var scene := get_tree().current_scene
 	var body := get_parent() as CharacterBody3D
 	var carried := body.velocity if body else Vector3.ZERO
 	var middle := global_position + Vector3.UP * 1.0
@@ -114,31 +206,37 @@ func collapse(push: Vector3) -> void:
 		placed[mesh] = mesh.global_transform
 	for mesh in _meshes:
 		mesh.set_instance_shader_parameter("flash", 0.0)
-		var box := mesh.get_aabb()
-		var shape := BoxShape3D.new()
-		shape.size = box.size.max(Vector3.ONE * 0.05)
-		var collider := CollisionShape3D.new()
-		collider.shape = shape
-		collider.position = box.get_center()
-		var piece := RigidBody3D.new()
-		# Pieces lie on the level and are in nobody's way.
-		piece.collision_layer = 0
-		piece.collision_mask = 1
-		piece.mass = maxf(box.get_volume() * 400.0, 0.5)
-		piece.add_child(collider)
-		scene.add_child(piece)
-		piece.global_transform = placed[mesh]
-		mesh.get_parent().remove_child(mesh)
-		piece.add_child(mesh)
-		mesh.transform = Transform3D()
-		var out: Vector3 = (placed[mesh] as Transform3D) * box.get_center() - middle
-		piece.linear_velocity = carried + push * randf_range(0.5, 1.2) + out * randf_range(1.0, 2.5) + Vector3.UP * randf_range(0.5, 2.0)
-		piece.angular_velocity = Vector3(randf_range(-4, 4), randf_range(-4, 4), randf_range(-4, 4))
-		var tween := piece.create_tween()
-		tween.tween_interval(DEBRIS_TIME - 1.0 + randf())
-		tween.tween_property(mesh, "scale", Vector3.ONE * 0.01, 0.6)
-		tween.tween_callback(piece.queue_free)
+		var out: Vector3 = (placed[mesh] as Transform3D) * mesh.get_aabb().get_center() - middle
+		_loosen(mesh, placed[mesh], carried + push * randf_range(0.5, 1.2) + out * randf_range(1.0, 2.5) + Vector3.UP * randf_range(0.5, 2.0))
 	Fx.wreck(middle)
+
+
+## Makes a part a loose piece where it is, thrown off at `velocity`. It lies
+## about for a few seconds and then shrinks away.
+func _loosen(mesh: MeshInstance3D, placed: Transform3D, velocity: Vector3) -> void:
+	var box := mesh.get_aabb()
+	var shape := BoxShape3D.new()
+	shape.size = box.size.max(Vector3.ONE * 0.05)
+	var collider := CollisionShape3D.new()
+	collider.shape = shape
+	collider.position = box.get_center()
+	var piece := RigidBody3D.new()
+	# Pieces lie on the level and are in nobody's way.
+	piece.collision_layer = 0
+	piece.collision_mask = 1
+	piece.mass = maxf(box.get_volume() * 400.0, 0.5)
+	piece.add_child(collider)
+	get_tree().current_scene.add_child(piece)
+	piece.global_transform = placed
+	mesh.get_parent().remove_child(mesh)
+	piece.add_child(mesh)
+	mesh.transform = Transform3D()
+	piece.linear_velocity = velocity
+	piece.angular_velocity = Vector3(randf_range(-4, 4), randf_range(-4, 4), randf_range(-4, 4))
+	var tween := piece.create_tween()
+	tween.tween_interval(DEBRIS_TIME - 1.0 + randf())
+	tween.tween_property(mesh, "scale", Vector3.ONE * 0.01, 0.6)
+	tween.tween_callback(piece.queue_free)
 
 
 func _process(delta: float) -> void:
@@ -175,10 +273,16 @@ func _pose(delta: float) -> void:
 	_flinch = _flinch.lerp(Vector3.ZERO, 1.0 - exp(-8.0 * delta))
 	_charge = lerpf(_charge, 1.0 if _charging else 0.0, 1.0 - exp(-14.0 * delta))
 	_glow_mat.emission_energy_multiplier = lerpf(GLOW_IDLE, GLOW_CHARGED, _charge) * (0.9 + 0.1 * sin(_time * 40.0) * _charge)
+	_crouch = lerpf(_crouch, 1.0 if _crouching else 0.0, 1.0 - exp(-9.0 * delta))
+	_guard = lerpf(_guard, 1.0 if _guarding else 0.0, 1.0 - exp(-10.0 * delta))
 	if _flash > 0.0 or delta == 0.0:
 		_flash = maxf(_flash - delta * 7.0, 0.0)
 		for mesh in _meshes:
 			mesh.set_instance_shader_parameter("flash", _flash * 1.5)
+	# A shot that the plate stops lights up the plate alone.
+	if _blocked > 0.0 and has_shield:
+		_blocked = maxf(_blocked - delta * 6.0, 0.0)
+		(_joints["Shield"] as MeshInstance3D).set_instance_shader_parameter("flash", maxf(_flash * 1.5, _blocked))
 
 	# Legs: each swings from the hip, bends at the knee as it comes through,
 	# and keeps its foot level.
@@ -187,8 +291,9 @@ func _pose(delta: float) -> void:
 		var at := _phase + (0.0 if side > 0.0 else PI)
 		var swing := sin(at) * reach
 		var lift := maxf(0.0, cos(at)) * _moving
-		var hip := 0.14 + swing * absf(along) + lift * 0.3
-		var knee := -(0.28 + lift * 0.85 + maxf(0.0, -swing) * 0.35)
+		# Ducked down it sits on its heels, thighs level and shins folded under.
+		var hip := 0.14 + swing * absf(along) + lift * 0.3 + _crouch * 1.21
+		var knee := -(0.28 + lift * 0.85 + maxf(0.0, -swing) * 0.35 + _crouch * 2.42)
 		_turn("Thigh" + leg, Vector3(hip, 0.0, -swing * across * 0.7 + side * 0.03))
 		_turn("Shin" + leg, Vector3(knee, 0.0, 0.0))
 		_turn("Foot" + leg, Vector3(-(hip + knee) * 0.85, 0.0, 0.0))
@@ -198,9 +303,11 @@ func _pose(delta: float) -> void:
 	var sway := sin(_time * 1.3) * 0.012
 	var hunch := -0.32 if _melee else 0.0
 	var bob := -0.028 * _stride - 0.035 * _stride * (1.0 - absf(cos(_phase))) * _moving
-	_turn("Hips", Vector3(-0.1 * along * _moving + hunch * 0.4, sin(_phase) * 0.07 * _moving, -0.07 * across * _moving), Vector3(0.0, bob, 0.0))
-	_turn("Torso", Vector3(_pitch * 0.25 * _raised + hunch * 0.6 + sway + _flinch.z * -0.3, -sin(_phase) * 0.1 * _moving, _flinch.x * -0.3))
-	_turn("Head", Vector3(_pitch * 0.5 * _raised - hunch * 0.9, -_flinch.x * 0.3, 0.0))
+	# The legs fold up under it by this much.
+	var sink := -0.8 * _stride * _crouch
+	_turn("Hips", Vector3(-0.1 * along * _moving + hunch * 0.4, sin(_phase) * 0.07 * _moving, -0.07 * across * _moving), Vector3(0.0, bob + sink, 0.0))
+	_turn("Torso", Vector3(_pitch * 0.25 * _raised + hunch * 0.6 + sway + _flinch.z * -0.3 - 0.4 * _crouch, -sin(_phase) * 0.1 * _moving, _flinch.x * -0.3))
+	_turn("Head", Vector3(_pitch * 0.5 * _raised - hunch * 0.9 + 0.3 * _crouch, -_flinch.x * 0.3, 0.0))
 
 	var stride_r := -sin(_phase) * 0.3 * _moving
 	if _melee:
@@ -214,9 +321,13 @@ func _pose(delta: float) -> void:
 	# The weapon arm comes up level with the target and kicks with every shot.
 	_turn("ArmR", Vector3(lerpf(0.22 + stride_r, 1.02 + _pitch * 0.75 + _recoil * 0.05, _raised), _toe_in * _raised, 0.05))
 	_turn("ForearmR", Vector3(lerpf(0.42, 0.55 + _recoil * 0.16, _raised), 0.0, 0.0))
-	# The other arm swings along, or comes across in front when the weapon is up.
-	_turn("ArmL", Vector3(lerpf(0.15 - stride_r, 0.75 + _pitch * 0.4, _raised), lerpf(0.0, -0.55, _raised), -0.05))
-	_turn("ForearmL", Vector3(lerpf(0.35, 1.05, _raised), 0.0, 0.0))
+	# The other arm swings along, or comes across in front when the weapon is
+	# up. With the plate held up, the forearm lies level across the chest: the
+	# plate is bolted on so that it then faces straight ahead.
+	var arm_l := Vector3(lerpf(0.15 - stride_r, 0.75 + _pitch * 0.4, _raised), lerpf(0.0, -0.55, _raised), -0.05)
+	var forearm_l := Vector3(lerpf(0.35, 1.05, _raised), 0.0, 0.0)
+	_turn("ArmL", arm_l.lerp(Vector3(_guard_raise, 0.0, 0.0), _guard))
+	_turn("ForearmL", forearm_l.lerp(Vector3(PI * 0.5, -PI * 0.5, 0.0), _guard))
 	if _joints.has("Barrels"):
 		_spin_speed = lerpf(_spin_speed, 18.0 if _charging else 0.0, 1.0 - exp(-3.0 * delta))
 		_spin += _spin_speed * delta

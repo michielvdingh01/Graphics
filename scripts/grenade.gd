@@ -11,6 +11,12 @@ var _fuse := FUSE
 
 func _ready() -> void:
 	body_entered.connect(_on_bounce)
+	add_to_group("hazard")
+
+
+## What whoever stands near it has to fear: see Squad.threat().
+func danger() -> Dictionary:
+	return {"at": global_position, "radius": RADIUS, "left": _fuse}
 
 
 func _physics_process(delta: float) -> void:

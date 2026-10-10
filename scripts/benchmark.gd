@@ -49,6 +49,11 @@ extends Node
 ## measure what it costs that they stand there.
 ## --exit shows the way out of the level as it is once every zone is cleared:
 ## the lamp over it on and its door rolled up.
+## --awake=x,y,z is for measuring a fight: it stands the player at that spot,
+## unseen and beyond hurting, and switches on every robot of the route at
+## once. They come for the player from wherever they are posted, take cover
+## and shoot. Give it a --warmup of a few hundred frames, so that they have
+## arrived, and compare with --posted, where the same robots stand still.
 ## --snap=3 is for looking at the game itself instead of at a level: without
 ## --benchmark, and with --play to skip the title screen, it lets the game run
 ## as it is played, saves one screenshot after that many seconds and quits.
@@ -94,6 +99,7 @@ var _show := PackedStringArray()
 var _eval := PackedStringArray()
 var _posted := false
 var _exit := false
+var _awake := PackedFloat64Array()
 
 
 func _ready() -> void:
@@ -141,6 +147,8 @@ func _ready() -> void:
 			_warmup_frames = arg.get_slice("=", 1).to_int()
 		elif arg.begins_with("--show="):
 			_show = arg.get_slice("=", 1).split(",")
+		elif arg.begins_with("--awake="):
+			_awake = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--snap="):
 			_snap = arg.get_slice("=", 1).to_float()
 		elif arg.begins_with("--eval="):
@@ -187,8 +195,15 @@ func _run() -> void:
 		if _animate:
 			node.process_mode = Node.PROCESS_MODE_INHERIT
 			node.set_physics_process(false)
-	if _posted and tree.current_scene.has_method("post_robots"):
+	if (_posted or not _awake.is_empty()) and tree.current_scene.has_method("post_robots"):
 		tree.current_scene.post_robots()
+	if _awake.size() >= 3 and player and tree.current_scene.has_method("post_robots"):
+		# The player is there to be found and shot at, and does nothing.
+		player.process_mode = Node.PROCESS_MODE_INHERIT
+		player.global_position = Vector3(_awake[0], _awake[1], _awake[2])
+		player.health = 1e9
+		for zone: RefCounted in tree.current_scene.zones:
+			tree.current_scene._start(zone)
 	if _exit and tree.current_scene.has_method("_open_exit"):
 		tree.current_scene._open_exit(false)
 	if not _blast.is_empty():

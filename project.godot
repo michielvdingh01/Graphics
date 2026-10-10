@@ -24,6 +24,7 @@ HumanoidTest="*res://scripts/humanoid_test.gd"
 Settings="*res://scripts/settings.gd"
 Save="*res://scripts/save.gd"
 Blast="*res://scripts/blast.gd"
+Squad="*res://scripts/squad.gd"
 Menu="*res://scripts/menu.gd"
 
 [display]

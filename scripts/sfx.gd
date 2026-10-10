@@ -48,6 +48,17 @@ const SOUNDS := {
 	&"zombie_death": [0.9, 0.45, 3.0, 0.2, 0.8, 120.0, 1.6, 2.6, 4.0, 0.05, 32.0],
 	&"swing": [0.2, 0.9, 10.0, 0.3, 0.0, 100.0, 0.0, 1.0, 1.2, 0.06],
 	&"body_fall": [0.25, 0.8, 18.0, 0.07, 0.9, 55.0, 8.0, 16.0, 2.2],
+	# What a robot says of what it is about to do: the whine before a burst,
+	# for each kind its own, the call of one that goes round the player and
+	# the alarm of one that runs from something.
+	&"enemy_charge": [0.4, 0.0, 1.0, 1.0, 0.45, 520.0, -2.4, 2.5, 1.0, 0.25],
+	&"heavy_charge": [0.75, 0.25, 2.0, 0.2, 0.5, 110.0, -1.5, 1.5, 1.6, 0.4],
+	&"rusher_charge": [0.26, 0.3, 8.0, 1.0, 0.5, 1500.0, -1.8, 6.0, 1.8, 0.05],
+	&"enemy_flank": [0.3, 0.0, 1.0, 1.0, 0.5, 760.0, 3.2, 7.0, 1.0, 0.01, 11.0],
+	&"enemy_alarm": [0.42, 0.0, 1.0, 1.0, 0.55, 1900.0, 0.0, 3.0, 1.0, 0.01, 14.0],
+	# A shot the plate of a grunt stops, and the plate coming off.
+	&"shield_block": [0.2, 0.5, 30.0, 1.0, 0.55, 980.0, 0.6, 16.0, 1.6],
+	&"shield_break": [0.45, 0.8, 9.0, 0.7, 0.5, 520.0, 2.5, 7.0, 2.2],
 }
 
 var _streams := {}
