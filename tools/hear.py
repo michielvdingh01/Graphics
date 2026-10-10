@@ -94,7 +94,7 @@ def casings(weapon: str) -> list:
     times = [START + i * (0.75 if weapon == "shotgun" else 0.25) for i in range(5)]
     events = played(f"{weapon}_shot", times)
     for at in times:
-        events += played("shell_drop" if shell else "casing", [at + random.uniform(0.5, 0.65)], -12.0)
+        events += played("shell_drop" if shell else "casing", [at + random.uniform(0.5, 0.65)], -24.0)
     return events
 
 

@@ -140,6 +140,8 @@ var _locked := 0.0
 var _crowded := 0.0
 ## Where the pump is in its stroke: 0 due, 1 on its way back, 2 done.
 var _pump_stage := 2
+## True while a click that macOS made a right click of is held down.
+var _ctrl_click := false
 ## 0 for a cold barrel, 1 for one that has just emptied a magazine.
 var _heat := 0.0
 var _smoke_due := false
@@ -282,6 +284,25 @@ func _start_reserve(data: WeaponData) -> int:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and player.has_control():
 		_sway = (_sway - event.relative * 0.00005).limit_length(0.025)
+	_mend_ctrl_click(event)
+
+
+## macOS hands a click with Ctrl held on as a right click. Ctrl crouches, so
+## whoever fires from a crouch would aim instead and never get a shot off.
+## A right click that comes with Ctrl is therefore a shot here. It costs
+## aiming with the right button of a mouse while Ctrl is held on a Mac; C
+## crouches as well, and Option aims.
+func _mend_ctrl_click(event: InputEvent) -> void:
+	var click := event as InputEventMouseButton
+	if click == null or click.button_index != MOUSE_BUTTON_RIGHT or OS.get_name() != "macOS":
+		return
+	if click.pressed and click.ctrl_pressed:
+		_ctrl_click = true
+		Input.action_release("ads")
+		Input.action_press("fire")
+	elif not click.pressed and _ctrl_click:
+		_ctrl_click = false
+		Input.action_release("fire")
 
 
 func _unhandled_input(event: InputEvent) -> void:

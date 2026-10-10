@@ -125,6 +125,6 @@ func _take() -> void:
 			_player.weapons.add_ammo()
 		_:
 			_player.weapons.add_grenade()
-	Sfx.play(SOUND[kind], -3.0)
+	Sfx.play(SOUND[kind], -10.0)
 	taken.emit(kind)
 	queue_free()

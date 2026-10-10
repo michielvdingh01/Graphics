@@ -321,6 +321,21 @@ func _handling() -> void:
 	# Without the bus layout everything would still play, dry and unlimited.
 	var world := AudioServer.get_bus_index(Sfx.WORLD)
 	_check("the world has its own bus, with effects on it", world > 0 and AudioServer.get_bus_effect_count(world) > 0)
+	# A click with Ctrl held, as macOS hands it on: a shot, not the sights.
+	if OS.get_name() == "macOS":
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_RIGHT
+		click.ctrl_pressed = true
+		click.pressed = true
+		Input.parse_input_event(click)
+		await _wait(0.1)
+		_check("a click with Ctrl held fires instead of aiming", Input.is_action_pressed("fire") and not Input.is_action_pressed("ads"))
+		click = click.duplicate()
+		click.pressed = false
+		Input.parse_input_event(click)
+		await _wait(0.1)
+		_check("and stops firing when it is let go", not Input.is_action_pressed("fire"))
+
 	# Music: a piece plays on its own bus, which its own slider turns down,
 	# and one there is no file for is silence and no error.
 	var piece := AudioStreamWAV.new()

@@ -11,8 +11,8 @@ extends CanvasLayer
 enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER }
 
 const LEVELS: Array[Dictionary] = [
-	{"name": "Factory", "scene": "res://scenes/factory.tscn"},
-	{"name": "Depot", "scene": "res://scenes/depot.tscn"},
+	{"name": "Factory", "scene": "res://scenes/factory.tscn", "music": &"level1and2"},
+	{"name": "Depot", "scene": "res://scenes/depot.tscn", "music": &"level1and2"},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it
 ## cannot hold a right click and click at once, and its scroll is not a wheel.
@@ -20,6 +20,8 @@ const DEVICES: Array[String] = ["Mouse and keyboard", "Trackpad and keyboard", "
 const ACCENT := Color(1.0, 0.62, 0.25)
 ## The piece of music the title screen plays, see Sfx.music().
 const THEME := &"theme"
+## How loud the music of a level plays: it is behind a fight, not in front.
+const LEVEL_MUSIC_DB := -9.0
 const COLUMN_WIDTH := 520
 
 var _screen := Screen.NONE
@@ -129,12 +131,7 @@ func _show(screen: Screen) -> void:
 	if screen == Screen.CONTROLS or screen == Screen.SETTINGS:
 		_parent = _screen
 	_screen = screen
-	# The theme plays on the title screen and whatever is opened from it, and
-	# dies away as soon as there is a game to play.
-	if at_title():
-		Sfx.music(THEME)
-	else:
-		Sfx.stop_music()
+	_score()
 	for child in _column.get_children():
 		child.queue_free()
 	_root.visible = screen != Screen.NONE
@@ -230,6 +227,7 @@ func _play(scene: String, fresh: bool) -> void:
 	if fresh:
 		Save.clear()
 	_show(Screen.NONE)
+	_score(scene)
 	get_tree().change_scene_to_file(scene)
 
 
@@ -300,7 +298,25 @@ func _company() -> String:
 	return text
 
 
+## Plays what belongs to where the player is: the theme on the title screen
+## and whatever is opened from it, and in a game the music of the level,
+## `scene` or else the one that is loaded. Two levels that name the same
+## piece play it through from the one into the other.
+func _score(scene := "") -> void:
+	if at_title():
+		Sfx.music(THEME)
+		return
+	if scene == "" and get_tree().current_scene:
+		scene = get_tree().current_scene.scene_file_path
+	for level in LEVELS:
+		if level.scene == scene and level.has("music"):
+			Sfx.music(level.music, 1.5, LEVEL_MUSIC_DB)
+			return
+	Sfx.stop_music()
+
+
 func _on_scene_changed() -> void:
+	_score()
 	if _title_camera:
 		_title_camera.queue_free()
 		_title_camera = null
@@ -485,14 +501,14 @@ func _slider(label: String, key: String, from: float, to: float, step: float, fo
 func _controls() -> void:
 	# Mac keyboards call the Alt key Option.
 	var alt := "Option" if OS.get_name() == "macOS" else "Alt"
-	# Ctrl crouches as well, but is left out: macOS turns a click with Ctrl held
-	# into a right click, so firing from a crouch would aim instead.
+	# macOS turns a click with Ctrl held into a right click, which
+	# scripts/weapons.gd turns back into a shot: see _input() there.
 	var lines: Array[Array] = [
 		["Move", "W A S D", "W A S D", "Left stick"],
 		["Look", "Mouse", "Trackpad", "Right stick"],
 		["Sprint", "Hold Shift", "Hold Shift", "Click left stick"],
 		["Jump", "Space", "Space", "A"],
-		["Crouch", "Hold C", "Hold C", "Hold B"],
+		["Crouch", "Hold C or Ctrl", "Hold C or Ctrl", "Hold B"],
 		["Slide", "C while sprinting", "C while sprinting", "B while sprinting"],
 		["Fire", "Left click", "Click", "RT"],
 		["Aim", "Hold right click", "Hold " + alt, "Hold LT"],

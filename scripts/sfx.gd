@@ -24,6 +24,8 @@ const PIECES := "res://assets/music/"
 ## The kinds of file a piece may be. Both are played as a stream, not held
 ## unpacked in memory the way the takes of a shot are.
 const PIECE_KINDS: Array[String] = [".ogg", ".mp3"]
+## Seconds a piece takes to make way for the next.
+const CHANGE_TIME := 0.7
 ## Sounds that tell the player something instead of coming from the world.
 ## They play dry and always at the same pitch.
 const UI_SOUNDS: Array[StringName] = [&"hit", &"headshot", &"kill"]
@@ -78,10 +80,6 @@ const SOUNDS := {
 	# A shot the plate of a grunt stops, and the plate coming off.
 	&"shield_block": [0.2, 0.5, 30.0, 1.0, 0.55, 980.0, 0.6, 16.0, 1.6],
 	&"shield_break": [0.45, 0.8, 9.0, 0.7, 0.5, 520.0, 2.5, 7.0, 2.2],
-	# Something picked up off the floor.
-	&"pickup_ammo": [0.1, 0.35, 50.0, 1.0, 0.5, 1050.0, -2.5, 26.0, 1.0],
-	&"pickup_health": [0.24, 0.0, 1.0, 1.0, 0.5, 620.0, -3.2, 9.0, 1.0],
-	&"pickup_grenade": [0.1, 0.4, 40.0, 0.6, 0.5, 430.0, -2.0, 24.0, 1.4],
 }
 
 var _streams := {}
@@ -142,15 +140,24 @@ func _physics_process(_delta: float) -> void:
 ## it as <piece>.ogg or <piece>.mp3. If it is the one that is playing, it
 ## carries on where it is. A piece there is no file for is silence, so the
 ## game can ask for one that has yet to be made.
-func music(piece: StringName, seconds := 0.5) -> void:
-	if piece == _piece and _music != null and _music.playing:
-		_swell(0.0, seconds)
+## `db` is how loud it plays: music behind a fight wants to be well under it.
+## Another piece that is playing dies away first.
+func music(piece: StringName, seconds := 0.5, db := 0.0) -> void:
+	var busy := _music != null and _music.playing
+	if busy and piece == _piece:
+		_swell(db, seconds)
 		return
 	for kind in PIECE_KINDS:
 		var path := PIECES + String(piece) + kind
-		if ResourceLoader.exists(path):
-			_start_music(piece, load(path), seconds)
-			return
+		if not ResourceLoader.exists(path):
+			continue
+		if busy:
+			_piece = piece
+			_swell(-60.0, CHANGE_TIME)
+			_music_fade.tween_callback(_start_music.bind(piece, load(path), seconds, db))
+		else:
+			_start_music(piece, load(path), seconds, db)
+		return
 	stop_music(seconds)
 
 
@@ -168,7 +175,7 @@ func music_playing() -> StringName:
 	return _piece
 
 
-func _start_music(piece: StringName, stream: AudioStream, seconds := 0.0) -> void:
+func _start_music(piece: StringName, stream: AudioStream, seconds := 0.0, db := 0.0) -> void:
 	if _music == null:
 		_music = AudioStreamPlayer.new()
 		_music.bus = MUSIC
@@ -179,9 +186,9 @@ func _start_music(piece: StringName, stream: AudioStream, seconds := 0.0) -> voi
 		stream.set(&"loop", true)
 	_piece = piece
 	_music.stream = stream
-	_music.volume_db = -60.0 if seconds > 0.0 else 0.0
+	_music.volume_db = -60.0 if seconds > 0.0 else db
 	_music.play()
-	_swell(0.0, seconds)
+	_swell(db, seconds)
 
 
 func _swell(to_db: float, seconds: float) -> void:

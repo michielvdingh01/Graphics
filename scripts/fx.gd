@@ -512,7 +512,7 @@ func _step(delta: float) -> void:
 				item.bounces += 1
 				if item.bounces == 1:
 					# The take rings on over the bounces that follow.
-					Sfx.play_at(&"shell_drop" if item.shell and Sfx.has(&"shell_drop") else &"casing", node.position, -12.0)
+					Sfx.play_at(&"shell_drop" if item.shell and Sfx.has(&"shell_drop") else &"casing", node.position, -24.0)
 				item.velocity = Vector3(item.velocity.x * 0.45, -item.velocity.y * 0.3, item.velocity.z * 0.45)
 				item.spin *= 0.4
 				if item.velocity.y < 0.5:
