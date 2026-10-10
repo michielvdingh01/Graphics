@@ -95,7 +95,9 @@ def run(command: list, what: str) -> str:
     done = subprocess.run(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL)
     lines = [line for line in done.stdout.splitlines() if not NOISE.search(line)]
     if done.returncode != 0:
-        tail = [line for line in lines if "import_character:" in line or "check:" in line or "sheet:" in line] or lines[-25:]
+        tail = [line for line in lines if "import_character:" in line or "check:" in line or "sheet:" in line]
+        if not tail or any("Traceback" in line for line in lines):
+            tail = lines[-25:]
         sys.exit("import_character: %s failed\n%s" % (what, "\n".join(tail)))
     return "\n".join(lines)
 
@@ -135,7 +137,8 @@ def main() -> None:
     print("%s: preparing in Blender" % args.id)
     with tempfile.TemporaryDirectory() as scratch:
         report_file = pathlib.Path(scratch) / "report.json"
-        run([BLENDER, "-b", "--factory-startup", "--python", str(HERE / "prepare.py"), "--",
+        # Without the exit code Blender calls a script that fell over a success.
+        run([BLENDER, "-b", "--factory-startup", "--python-exit-code", "1", "--python", str(HERE / "prepare.py"), "--",
              str(source), str(target), "--id", args.id, "--report", str(report_file)] + rest, "Blender")
         report = json.loads(report_file.read_text())
         if args.report:

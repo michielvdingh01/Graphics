@@ -26,6 +26,7 @@ CELL = 0.007
 HIP = 0.500
 SHOULDER = 0.784
 SHOULDER_PIT = 0.072
+PIT = 0.712
 SHOULDER_WIDE = 0.111
 SHOULDER_IN = 0.035
 SHOULDER_BACK = 0.003
@@ -200,15 +201,26 @@ def fit(points: np.ndarray, measures: dict = None) -> dict:
     lines = {}
     for side, word in (("L", "Left"), ("R", "Right")):
         own = run(arms[side])
-        if len(own) < 0.12 * SLICES:
-            raise PoseError("the %s arm does not stand clear of the body; hold the arms 30 to 45 degrees out" % word.lower())
+        if len(own) < 0.03 * SLICES:
+            raise PoseError("the %s arm does not stand clear of the body anywhere; hold the arms 30 to 45 degrees out" % word.lower())
         pits[side] = own[-1] + 1
         z = np.array([slices.z(level) for level in own])
         centre = np.array([arms[side][level]["centre"] for level in own])
-        # Leave out the hand, where the outline widens, and the last bit under the armpit.
-        use = slice(int(len(own) * 0.3), len(own) - 2)
-        lines[side] = (np.polyfit(z[use], centre[use, 0], 1), np.polyfit(z[use], centre[use, 1], 1), slices.z(own[0]) - slices.step / 2)
+        z_tip = slices.z(own[0]) - slices.step / 2
+        if len(own) >= 0.12 * SLICES:
+            # Leave out the hand, where the outline widens, and the last bit under the armpit.
+            use = slice(int(len(own) * 0.3), len(own) - 2)
+            lines[side] = (np.polyfit(z[use], centre[use, 0], 1), np.polyfit(z[use], centre[use, 1], 1), z_tip)
+        else:
+            # A sleeve that lies against the body leaves only the hand and the
+            # wrist free: enough for where the arm ends, not for how it runs.
+            # The elbow then goes on the straight line from the shoulder.
+            lines[side] = (None, centre[:max(len(own) // 2, 1)].mean(axis=0), z_tip)
     pit = int(round((pits["L"] + pits["R"]) / 2))
+    # An armpit is found where the arm joins the trunk, but a sleeve joins it
+    # at the elbow. Where that is no armpit, the height of the body says where one is.
+    if not 0.65 * height < slices.z(pit) < 0.78 * height:
+        pit = slices.at(PIT * height)
 
     # The neck: where the trunk is narrowest above the shoulders.
     top = max(trunk)
@@ -250,6 +262,11 @@ def fit(points: np.ndarray, measures: dict = None) -> dict:
         joints[word + "Shoulder"] = (spine_x + (float(x) - spine_x) * CLAVICLE, y, z_shoulder + 0.017 * height)
         fit_x, fit_y, z_tip = lines[side]
         shoulder = np.array(joints[word + "UpperArm"])
+        if fit_x is None:
+            # Only the end of the arm is known: a straight arm from the shoulder to there.
+            tip = np.array([fit_y[0], fit_y[1], z_tip])
+            fit_x = np.polyfit([z_tip, shoulder[2]], [tip[0], shoulder[0]], 1)
+            fit_y = np.polyfit([z_tip, shoulder[2]], [tip[1], shoulder[1]], 1)
         tip = np.array([np.polyval(fit_x, z_tip), np.polyval(fit_y, z_tip), z_tip])
         length = float(np.linalg.norm(tip - shoulder))
         if (shoulder[2] - z_tip) < 0.5 * length:

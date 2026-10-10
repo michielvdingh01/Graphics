@@ -133,6 +133,7 @@
 		"clowns": {
 			"grunt": {
 				"characters": [
+					"clown_05",
 					"clown_01",
 					"clown_02"
 				],
@@ -392,6 +393,41 @@
 				"cutout": true
 			},
 			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"clown_05": {
+			"source": "generated from a description",
+			"license": "generated here; FLUX.1-schnell is Apache-2.0 and TRELLIS.2 is MIT, neither claims what it makes",
+			"prompt": "Full body photograph of a creepy horror clown standing still and upright, facing the camera, in a relaxed A-pose: both arms straight and hanging down at his sides, held a little away from the body, hands open and empty below hip height, legs straight and clearly apart with a gap between them, feet flat on the floor shoulder width apart. He wears a threadbare one-piece costume in faded purple and dirty green vertical stripes with a moth-eaten grey ruff, long worn brown shoes, cracked white greasepaint, black diamonds painted over the eyes, a too-wide smeared dark red grin, a red ball nose, a bald crown with matted green hair at the sides. Flat even studio lighting without shadows, plain light grey background, the whole figure in frame from head to toe, photorealistic, front view character reference for a 3D model.",
+			"model": "FLUX.1-schnell (seed 2) for the picture, TRELLIS.2-4B at 1024 for the model, both as demos on Hugging Face",
+			"file": "assets/characters/.source/generated/clown_05/clown_05.glb",
+			"options": "--height=1.8",
+			"route": "scan",
+			"triangles": 19700,
+			"source_triangles": 297897,
+			"height": 1.804,
+			"eye_height": 1.68,
+			"head_start": 1.56,
+			"megabytes": 3.23,
+			"textures": {
+				"color": "the scan's texture",
+				"normal": "baked from the scan",
+				"roughness": "the model's own",
+				"texels_per_cm": 4.49,
+				"copied": 1.0,
+				"delight": {
+					"removed": true,
+					"light_from_dark_to_bright": [
+						0.92,
+						1.01
+					],
+					"occlusion_power": 0.06
+				},
+				"size": 1024,
+				"cutout": false
+			},
+			"fitted": "joints from the shape (landmarks.py)",
+			"imported": "2026-10-10",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_01": {
@@ -703,29 +739,29 @@
 			"look": "zombie",
 			"triangles": 19700,
 			"source_triangles": 595830,
-			"height": 1.78,
+			"height": 1.785,
 			"eye_height": 1.68,
 			"head_start": 1.56,
-			"megabytes": 2.25,
+			"megabytes": 2.48,
 			"textures": {
 				"color": "the scan's texture",
 				"normal": "baked from the scan",
 				"roughness": "one value: a scan has none",
-				"texels_per_cm": 4.94,
-				"copied": 0.997,
+				"texels_per_cm": 5.09,
+				"copied": 1.0,
 				"delight": {
 					"removed": true,
 					"light_from_dark_to_bright": [
-						0.25,
+						0.27,
 						1.22
 					],
-					"occlusion_power": 0.85
+					"occlusion_power": 0.94
 				},
 				"size": 1024,
 				"cutout": false
 			},
 			"fitted": "joints from the shape (landmarks.py)",
-			"imported": "2026-10-09",
+			"imported": "2026-10-10",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"zombie_blocky_01": {

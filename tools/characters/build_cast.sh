@@ -5,8 +5,8 @@
 # library (MIT) and the blocky ones from Kenney (CC0); both are fetched to
 # assets/characters/.source/, which is not in git. A zombie or a clown is a
 # Rocketbox civilian painted up by --look and is marked as a placeholder, with
-# what should replace it. This file is the recipe: change a line and run it
-# for that id.
+# what should replace it; one clown is generated from a description. This
+# file is the recipe: change a line and run it for that id.
 BLENDER="${BLENDER:-blender}"
 cd "$(dirname "$0")/../.." || exit 1
 SOURCE=assets/characters/.source
@@ -52,6 +52,22 @@ blocky() {
 		--url="$KENNEY" --license=CC0 --author=Kenney "$@" || failed="$failed $id"
 }
 
+# id, seed, prompt, then options: a character that is made from a description.
+# The picture and the model are kept, because making them again takes a
+# day's ration of GPU time (see tools/characters/generate.py).
+generated() {
+	id=$1 seed=$2 prompt=$3
+	shift 3
+	wanted "$id" || return 0
+	file="$SOURCE/generated/$id/$id.glb"
+	if [ ! -f "$file" ]; then
+		python3 tools/characters/generate.py "$id" "$prompt" --seed="$seed" >/dev/null || exit 1
+	fi
+	tools/import_character.sh "$file" "$id" --height=1.8 --source="generated from a description" --prompt="$prompt" \
+		--model="FLUX.1-schnell (seed $seed) for the picture, TRELLIS.2-4B at 1024 for the model, both as demos on Hugging Face" \
+		--license="generated here; FLUX.1-schnell is Apache-2.0 and TRELLIS.2 is MIT, neither claims what it makes" "$@" || failed="$failed $id"
+}
+
 only="$*"
 ZOMBIE="an everyday civilian, painted pale and bloody by --look=zombie"
 CLOWN="a civilian painted up by --look=clown: the costume is paint on everyday clothes, the nose a ball"
@@ -85,6 +101,8 @@ person clown_03 Sports_Male_02 --look=clown --seed=2 --placeholder="$CLOWN" \
 	--wanted="photorealistic creepy clown, thin and quick, harlequin costume in black and white diamonds, red wig, too-wide painted grin, bare bloodied hands, A-pose, game character, 20k triangles, PBR textures"
 person clown_04 Male_Adult_03 --look=clown --seed=4 --scale=1.12 --wide=1.15 --placeholder="$CLOWN" \
 	--wanted="photorealistic creepy clown, huge and fat, an old man in a stained striped costume with oversized shoes, bald crown with green side tufts, greasepaint running, A-pose, game character, 20k triangles, PBR textures"
+
+generated clown_05 2 "Full body photograph of a creepy horror clown standing still and upright, facing the camera, in a relaxed A-pose: both arms straight and hanging down at his sides, held a little away from the body, hands open and empty below hip height, legs straight and clearly apart with a gap between them, feet flat on the floor shoulder width apart. He wears a threadbare one-piece costume in faded purple and dirty green vertical stripes with a moth-eaten grey ruff, long worn brown shoes, cracked white greasepaint, black diamonds painted over the eyes, a too-wide smeared dark red grin, a red ball nose, a bald crown with matted green hair at the sides. Flat even studio lighting without shadows, plain light grey background, the whole figure in frame from head to toe, photorealistic, front view character reference for a 3D model."
 
 blocky zombie_blocky_01 l --height=1.75 --placeholder="$BLOCKY"
 blocky zombie_blocky_02 o --height=1.75 --placeholder="$BLOCKY"

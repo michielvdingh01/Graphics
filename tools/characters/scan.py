@@ -64,13 +64,13 @@ def upright(obj: bpy.types.Object, height: float) -> float:
         co = coordinates(obj.data)
         low = co[:, 2].min()
     if height > 0.0:
-        scale = height / span
+        scale = float(height / span)
     else:
         scale = next((unit for unit in (1.0, 0.01, 0.001, 0.0254, 100.0) if 0.9 <= span * unit <= 2.6), 0.0)
         if scale == 0.0:
             sys.exit("import_character: the scan is %.3g units tall, which is no person in any unit; pass --height=1.8" % span)
     middle = (co[:, :2].min(axis=0) + co[:, :2].max(axis=0)) / 2
-    obj.data.transform(Matrix.Scale(scale, 4) @ Matrix.Translation((-middle[0], -middle[1], -low)))
+    obj.data.transform(Matrix.Scale(scale, 4) @ Matrix.Translation((-float(middle[0]), -float(middle[1]), -float(low))))
     return scale
 
 
@@ -129,6 +129,135 @@ def tidy(obj: bpy.types.Object) -> dict:
     return {"floor_faces": cut, "loose_faces": len(loose), "pieces": len(pieces), "faces": faces}
 
 
+def solid(obj: bpy.types.Object, height: float) -> tuple:
+    """Fills the figure in on a grid and returns a blocky mesh of the body,
+    and how it was told what is inside.
+
+    A scan is one skin with holes in it where the camera could not look. A
+    generated model is clothes: a skin that stands open at the cuffs and the
+    trouser legs, with hands, shoes and loose layers inside. A mesh repair
+    patches the first and returns the second as the thin shell it is. On a
+    grid neither matters: what is inside is decided cell by cell."""
+    size = height / 320.0
+    co = coordinates(obj.data).astype(np.float64)
+    corners = np.empty(len(obj.data.loops), dtype=np.int32)
+    obj.data.loops.foreach_get("vertex_index", corners)
+    a, b, c = co[corners[0::3]], co[corners[1::3]], co[corners[2::3]]
+    # Enough points on every triangle that no cell the surface crosses is missed.
+    area = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    random = np.random.default_rng(5)
+    which = np.repeat(np.arange(len(a)), np.ceil(area / (0.2 * size * size)).astype(np.int64))
+    u, v = random.random(len(which)), random.random(len(which))
+    over = u + v > 1.0
+    u[over], v[over] = 1.0 - u[over], 1.0 - v[over]
+    points = np.concatenate([co, a[which] + (b - a)[which] * u[:, None] + (c - a)[which] * v[:, None]])
+    low = points.min(axis=0) - 6.0 * size
+    cells = np.floor((points - low) / size).astype(np.int64)
+    shape = tuple(int(extent) for extent in cells.max(axis=0) + 7)
+    wall = np.zeros(shape, dtype=bool)
+    wall[cells[:, 0], cells[:, 1], cells[:, 2]] = True
+    thin = int(wall.sum())
+
+    def grow(grid: np.ndarray) -> np.ndarray:
+        out = grid.copy()
+        out[1:] |= grid[:-1]
+        out[:-1] |= grid[1:]
+        out[:, 1:] |= grid[:, :-1]
+        out[:, :-1] |= grid[:, 1:]
+        out[:, :, 1:] |= grid[:, :, :-1]
+        out[:, :, :-1] |= grid[:, :, 1:]
+        return out
+
+    # First the exact way: whatever cannot be reached from outside is body.
+    # The wall is made one cell thicker for it, so that nothing slips through
+    # between two cells that only touch at a corner, and the body one cell
+    # thinner afterwards.
+    free = ~grow(wall)
+    outside = np.zeros(shape, dtype=bool)
+    outside[0], outside[-1], outside[:, 0], outside[:, -1], outside[:, :, 0], outside[:, :, -1] = True, True, True, True, True, True
+    outside &= free
+    while True:
+        before = int(outside.sum())
+        for axis in range(3):
+            moved, open_ = np.moveaxis(outside, axis, 0), np.moveaxis(free, axis, 0)
+            for index in range(1, shape[axis]):
+                moved[index] |= moved[index - 1] & open_[index]
+            for index in range(shape[axis] - 2, -1, -1):
+                moved[index] |= moved[index + 1] & open_[index]
+        if int(outside.sum()) == before:
+            break
+    body = ~grow(outside)
+    how = "what cannot be reached from outside"
+    if int(body.sum()) < 1.6 * thin:
+        # The outside leaks in, through a hole or up a trouser leg. Then a cell
+        # is inside when it is shut in: when nearly every way it looks, along
+        # the axes and the diagonals between them, there is surface. From
+        # inside a sleeve the only way out is down the sleeve; from between an
+        # arm and the body it is forward, back, and every slant between.
+        shut = np.zeros(shape, dtype=np.uint8)
+        ways = 0
+        for axis in range(3):
+            for flip in (False, True):
+                view = np.flip(wall, axis) if flip else wall
+                seen = np.logical_or.accumulate(view, axis=axis)
+                shut += np.flip(seen, axis) if flip else seen
+                ways += 1
+        reach = int(0.6 / size)
+        for first in range(3):
+            for second in range(first + 1, 3):
+                for step_first in (1, -1):
+                    for step_second in (1, -1):
+                        step = [0, 0, 0]
+                        step[first], step[second] = step_first, step_second
+                        carried = wall
+                        seen = np.zeros(shape, dtype=bool)
+                        for _ in range(reach):
+                            moved = np.zeros(shape, dtype=bool)
+                            source = tuple(slice(max(-move, 0), shape[axis] - max(move, 0)) for axis, move in enumerate(step))
+                            target = tuple(slice(max(move, 0), shape[axis] - max(-move, 0)) for axis, move in enumerate(step))
+                            moved[target] = carried[source]
+                            carried = moved
+                            seen |= carried
+                        shut += seen
+                        ways += 1
+        body = wall | (shut >= ways - 3)
+        how = "what is shut in on nearly all sides"
+
+    # The faces between a cell of body and a cell of air.
+    quads = []
+    for axis in range(3):
+        others = [other for other in range(3) if other != axis]
+        for sign in (1, -1):
+            beyond = np.roll(body, -sign, axis=axis)
+            at = np.argwhere(body & ~beyond).astype(np.float64)
+            at[:, axis] += 1.0 if sign > 0 else 0.0
+            ring = [(0, 0), (1, 0), (1, 1), (0, 1)] if sign > 0 else [(0, 0), (0, 1), (1, 1), (1, 0)]
+            if axis == 1:
+                ring = [(second, first) for first, second in ring]
+            corner = np.repeat(at[:, None, :], 4, axis=1)
+            for index, (first, second) in enumerate(ring):
+                corner[:, index, others[0]] += first
+                corner[:, index, others[1]] += second
+            quads.append(corner)
+    quads = np.concatenate(quads).reshape(-1, 3) * size + low
+    mesh = bpy.data.meshes.new("solid")
+    count = len(quads) // 4
+    mesh.vertices.add(len(quads))
+    mesh.vertices.foreach_set("co", quads.astype(np.float32).ravel())
+    mesh.loops.add(len(quads))
+    mesh.loops.foreach_set("vertex_index", np.arange(len(quads), dtype=np.int32))
+    mesh.polygons.add(count)
+    mesh.polygons.foreach_set("loop_start", np.arange(count, dtype=np.int32) * 4)
+    mesh.polygons.foreach_set("loop_total", np.full(count, 4, dtype=np.int32))
+    mesh.update()
+    welded = bmesh.new()
+    welded.from_mesh(mesh)
+    bmesh.ops.remove_doubles(welded, verts=welded.verts, dist=size * 0.01)
+    welded.to_mesh(mesh)
+    welded.free()
+    return mesh, how
+
+
 def shell(obj: bpy.types.Object, name: str) -> bpy.types.Object:
     """A watertight copy of the scan: holes closed, one surface, no insides."""
     copy = obj.copy()
@@ -143,15 +272,36 @@ def shell(obj: bpy.types.Object, name: str) -> bpy.types.Object:
         copy.data.uv_layers.remove(layer)
     copy.data.materials.clear()
     height = float(coordinates(copy.data)[:, 2].max())
-    # Two rebuilds. The first is a mesh repair (Blender's octree remesher is
-    # PolyMender): it takes a surface with holes and overlaps and returns a
-    # closed one, patching each hole with the smallest surface that fits. The
-    # second, through a volume, evens out the triangles and removes the few
-    # edges the first leaves shared by more than two faces. On its own the
-    # second gives scraps for anything that is not closed already.
-    apply(copy, "REMESH", mode="SMOOTH", octree_depth=9, scale=0.95, use_remove_disconnected=True, threshold=0.5, use_smooth_shade=True)
+    copy.data, copy["closed_by"] = solid(copy, height)
+    # A rebuild through a volume takes the steps off the blocks and leaves an
+    # even surface; smoothing takes off what is left of them. The detail that
+    # goes with them comes back as a normal map of the scan itself.
     apply(copy, "REMESH", mode="VOXEL", voxel_size=height / 320.0, adaptivity=0.0, use_smooth_shade=True)
-    apply(copy, "SMOOTH", factor=0.5, iterations=3)
+    apply(copy, "SMOOTH", factor=0.5, iterations=8)
+    # A pocket of air that was shut in becomes a loose bubble: keep the body.
+    whole = bmesh.new()
+    whole.from_mesh(copy.data)
+    whole.verts.ensure_lookup_table()
+    seen = set()
+    pieces = []
+    for vertex in whole.verts:
+        if vertex.index in seen:
+            continue
+        piece = [vertex]
+        seen.add(vertex.index)
+        stack = [vertex]
+        while stack:
+            for edge in stack.pop().link_edges:
+                for near in edge.verts:
+                    if near.index not in seen:
+                        seen.add(near.index)
+                        piece.append(near)
+                        stack.append(near)
+        pieces.append(piece)
+    biggest = max(pieces, key=len)
+    bmesh.ops.delete(whole, geom=[vertex for piece in pieces if piece is not biggest for vertex in piece], context="VERTS")
+    whole.to_mesh(copy.data)
+    whole.free()
     return copy
 
 
@@ -444,6 +594,7 @@ def rig(source: bpy.types.Object, args, report: dict) -> tuple:
         source.data.transform(Matrix.Scale(args.scale, 4))
     hull = shell(source, "shell")
     report["open_edges"] = hull["open_edges"]
+    report["closed_by"] = hull["closed_by"]
     try:
         if args.yaw is not None:
             yaw = math.radians(args.yaw)
