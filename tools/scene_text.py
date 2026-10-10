@@ -72,6 +72,8 @@ class Scene:
 
     def below(self, path):
         """The paths of a node and of everything under it, in the order of the file."""
+        if path == ".":
+            return list(self.nodes)
         return [p for p in self.nodes if p == path or p.startswith(path + "/")]
 
     def canonical(self, build_order=()):

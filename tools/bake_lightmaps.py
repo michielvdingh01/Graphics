@@ -88,6 +88,39 @@ def signature(level, played, zone):
     return seen.hexdigest()
 
 
+def units_of(scene):
+    """What there is to bake in the level that `scene` plays, and how it
+    stands: the name of the level, whether it is cut into zones, and by zone
+    {node, files, now, stale}. `stale` says why a zone needs a bake, and is
+    empty for one that is up to date. A level that is baked whole is one
+    zone, called "level". The last thing returned is what is on record."""
+    name = os.path.basename(scene)[:-5]
+    level_path = "scenes/levels/%s_level.tscn" % name
+    if not os.path.exists(os.path.join(ROOT, level_path)):
+        sys.exit("%s has no level in scenes/levels/: nothing here knows what its bake looks at." % scene)
+    level, played = Scene(read(level_path)), Scene(read(scene.replace("res://", "")))
+    # The zones that have a LightmapGI, or the level whole.
+    units = {}
+    for path, node in level.nodes.items():
+        if 'groups=["level_zone"]' in node["head"] and path + "/LightmapGI" in level.nodes:
+            zone = next(re.match(r'metadata/zone = "([^"]*)"', line).group(1) for line in node["lines"] if line.startswith("metadata/zone = "))
+            units[zone] = {"node": path, "files": "scenes/%s_%s" % (name, zone)}
+    zoned = bool(units)
+    if not zoned:
+        units["level"] = {"node": ".", "files": "scenes/%s" % name}
+    record_path = os.path.join(ROOT, "scenes/%s_bakes.json" % name)
+    record = json.load(open(record_path)) if os.path.exists(record_path) else {}
+    for zone, unit in units.items():
+        unit["now"] = signature(level, played, unit["node"])
+        if not all(os.path.exists(os.path.join(ROOT, unit["files"] + ext)) for ext in (".lmbake", ".exr")):
+            unit["stale"] = "has no lightmap yet"
+        elif zone not in record:
+            unit["stale"] = "has a lightmap, but nothing says what it was baked from"
+        else:
+            unit["stale"] = "" if record[zone] == unit["now"] else "changed since it was last baked"
+    return name, zoned, units, record
+
+
 def main():
     args = sys.argv[1:]
     flags = {a for a in args if a.startswith("--")}
@@ -99,38 +132,13 @@ def main():
     if args and args[0].endswith(".tscn"):
         scene = args.pop(0)
     asked = [name for a in args for name in a.split(",") if name]
-    name = os.path.basename(scene)[:-5]
-    played_path = scene.replace("res://", "")
-    level_path = "scenes/levels/%s_level.tscn" % name
-    if not os.path.exists(os.path.join(ROOT, level_path)):
-        sys.exit("%s has no level in scenes/levels/: nothing here knows what its bake looks at." % scene)
-    level, played = Scene(read(level_path)), Scene(read(played_path))
-
-    # What there is to bake: the zones that have a LightmapGI, or the level whole.
-    units = {}
-    for path, node in level.nodes.items():
-        if 'groups=["level_zone"]' in node["head"] and path + "/LightmapGI" in level.nodes:
-            zone = next(re.match(r'metadata/zone = "([^"]*)"', line).group(1) for line in node["lines"] if line.startswith("metadata/zone = "))
-            units[zone] = {"node": path, "files": "scenes/%s_%s" % (name, zone)}
-    zoned = bool(units)
-    if not zoned:
-        units["level"] = {"node": ".", "files": "scenes/%s" % name}
-    for unit in units.values():
-        unit["now"] = signature(level, played, unit["node"])
-
-    record_path = os.path.join(ROOT, "scenes/%s_bakes.json" % name)
-    record = json.load(open(record_path)) if os.path.exists(record_path) else {}
+    name, zoned, units, record = units_of(scene)
 
     def stale(zone):
-        unit = units[zone]
-        if not all(os.path.exists(os.path.join(ROOT, unit["files"] + ext)) for ext in (".lmbake", ".exr")):
-            return "has no lightmap yet"
-        if zone not in record:
-            return "has a lightmap, but nothing says what it was baked from"
-        return "" if record[zone] == unit["now"] else "changed since it was last baked"
+        return units[zone]["stale"]
 
     def save():
-        with open(record_path, "w") as out:
+        with open(os.path.join(ROOT, "scenes/%s_bakes.json" % name), "w") as out:
             json.dump({zone: record[zone] for zone in sorted(record) if zone in units}, out, indent="\t")
             out.write("\n")
 
