@@ -61,8 +61,9 @@ def signature(level, played, zone):
         node = level.nodes[path]
         if node["kind"] not in BAKED and not node["instance"]:
             continue
-        # Lit by the probes, or glass: not part of a bake.
-        if node["kind"] == "MeshInstance3D" and ("gi_mode = 2" in node["lines"] or "gi_mode = 0" in node["lines"]):
+        # Lit by the probes, or glass: not part of a bake. That goes for a mesh
+        # of the builder's and for one inside a placed model alike.
+        if node["kind"] in ("MeshInstance3D", "") and ("gi_mode = 2" in node["lines"] or "gi_mode = 0" in node["lines"]):
             continue
         add(node["head"])
         for line in node["lines"]:

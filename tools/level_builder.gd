@@ -1259,7 +1259,10 @@ func prop(model: String, xf: Transform3D, scale := 1.0, dynamic := false, pose :
 	var info := _model(model)
 	var box: AABB = Transform3D(pose, Vector3.ZERO) * (info.box as AABB)
 	var base := Vector3(box.get_center().x, box.position.y, box.get_center().z)
-	var node: Node3D = info.scene.instantiate()
+	# Instantiated as the editor does it, so that the level knows what the
+	# model was like to begin with. Without that, a model whose insides the
+	# level changes is saved with a copy of its whole mesh.
+	var node: Node3D = info.scene.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
 	node.name = model.to_pascal_case()
 	node.transform = xf * Transform3D(Basis.from_scale(Vector3.ONE * scale) * pose, -base * scale)
 	_add(node, _group("Props", xf.origin))

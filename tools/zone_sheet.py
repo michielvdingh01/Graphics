@@ -158,6 +158,9 @@ def main():
 
     short = [(zone_name, what) for zone_name, zone in zones.items() for what in zone["short"]]
     print()
+    if shots and min(shots, key=lambda shot: shot["draw_calls"])["avg_fps"] < FPS:
+        print("Even the lightest view fell short: something else was using the GPU. What the")
+        print("frame rates say this time is how busy the laptop was; measure again when it is at rest.")
     for zone_name, what in short:
         print("%s falls short: %s" % (zone_name, what))
     if not short:
