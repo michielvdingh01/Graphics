@@ -449,6 +449,8 @@ Het budget hierboven gaat over 1440p. Zo wordt er niet gespeeld: vanuit de edito
 - **Wie begint, krijgt MetalFX Spatial**, buiten Apple-hardware FSR 1: de goedkoopste upscalers die verscherpen wat ze vergroten. Een instellingenbestand van vóór deze wijziging waarin een upscaler stond die op 100% niets deed, krijgt die standaard ook.
 - **Een benchmark verandert niet**: die tekent op de volle grootte tenzij `--scale=` iets anders zegt. `--scale=auto` geeft hem de schaal van een speler.
 
+Michiel heeft het op 10 oktober zo gespeeld, vanuit de editor en op het volle scherm: het werkt.
+
 Gemeten in de fabriek op 3456×2160, M1 Pro, met de karabijn in beeld, terwijl de laptop in gebruik was:
 
 | Kwaliteit | Upscaler en schaal | Gemiddeld (laagste en hoogste standpunt) | Beeld |
@@ -503,7 +505,7 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 - De HUD schaalt niet mee op hoge resoluties; de tekst is daar klein.
 - Waarom MetalFX Temporal in een level geen beeld opbouwt, is niet gevonden; zie "Fullscreen op een Retina-scherm".
 - De renderschaal die zichzelf instelt is alleen op de M1 Pro gemeten. FSR 1 als begin buiten Apple-hardware is een keuze op papier: op Windows is er niets van geprobeerd. Onder de 50% gaat hij niet, dus op een scherm van 5K tekent hij meer dan de pixels van 1920×1080.
-- De schakelaar Fullscreen in het menu is niet geprobeerd in het Game-venster van de editor, waar het spel draait als je daar op Play drukt. Fullscreen is daar het venster van de editor groot maken.
+- Of de schakelaar Fullscreen in het menu iets doet in het Game-venster van de editor, waar het spel draait als je daar op Play drukt, is niet bekend.
 
 ## Een route door de levels
 
