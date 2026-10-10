@@ -51,6 +51,7 @@ const EXIT_FADE := 0.9
 const DOOR_TIME := 3.2
 const DOOR_DELAY := 0.5
 const PICKUP := preload("res://scripts/pickup.gd")
+const BREAKABLES := preload("res://scripts/breakables.gd")
 ## Health the player has at least after reaching a checkpoint, and after
 ## carrying on from one: dying is never the better way to get there.
 const CHECKPOINT_HEALTH := 75.0
@@ -118,6 +119,9 @@ var _due: Array[float] = [0.0, 0.5, 0.0]
 var _robots := {}
 ## What can explode in the level, by path, to tell a latecomer what is gone.
 var _explosives: Array[NodePath] = []
+## What can be shot to pieces in the level, in an order that is the same on
+## every machine: to tell a latecomer what is broken.
+var _breakables: Array[Node] = []
 var _robot_tick := 0.0
 var _wiped := false
 
@@ -128,6 +132,7 @@ var _wiped := false
 func _ready() -> void:
 	Settings.apply()
 	Blast.clear()
+	_make_breakable()
 	_read_route()
 	# Behind the title screen the level is only a backdrop.
 	var playing := not Benchmark.active and not Menu.at_title()
@@ -182,6 +187,20 @@ func fighting() -> bool:
 func next_level() -> String:
 	var next: String = exit.get_meta(&"next", "") if exit else ""
 	return "res://scenes/%s.tscn" % next if next else ""
+
+
+## Gives what can be shot to pieces in the level a body of its own: see
+## scripts/breakables.gd. That is done on every machine, before anybody else
+## is told that this level is ready and before the navmesh is baked from its
+## colliders, and also where the level is only a backdrop, so that it is the
+## same level whatever it is loaded for.
+func _make_breakable() -> void:
+	var level := get_node_or_null("Level")
+	if level:
+		var breakables: Node3D = BREAKABLES.new()
+		breakables.name = "Breakables"
+		level.add_child(breakables)
+		_breakables = breakables.get_children()
 
 
 ## Takes the route apart into what the game keeps track of. A level without
@@ -612,7 +631,8 @@ func _check_wipe() -> void:
 
 ## How the level stands, for somebody who walks in while it is being played:
 ## which robots have fallen, which zones are being fought over, what has
-## exploded, the last checkpoint, the kills and where the robots are.
+## exploded, what is broken, the last checkpoint, the kills and where the
+## robots are.
 func net_snapshot() -> Dictionary:
 	var fallen: Array[int] = []
 	for number: int in _robots:
@@ -628,7 +648,14 @@ func net_snapshot() -> Dictionary:
 		var explosive := get_node_or_null(path)
 		if explosive == null or explosive.gone:
 			blown.append(path)
-	return {"fallen": fallen, "started": started, "blown": blown, "checkpoint": _checkpoint, "kills": kills, "robots": _robot_states()}
+	# Of what is no longer whole: its place in the list, then how it stands.
+	var broken := PackedInt32Array()
+	for i in _breakables.size():
+		var state: int = _breakables[i].net_state()
+		if state:
+			broken.append(i)
+			broken.append(state)
+	return {"fallen": fallen, "started": started, "blown": blown, "broken": broken, "checkpoint": _checkpoint, "kills": kills, "robots": _robot_states()}
 
 
 ## Brings a level that has just been loaded to how the host's stands.
@@ -648,6 +675,10 @@ func net_restore(state: Dictionary) -> void:
 		var explosive := get_node_or_null(path)
 		if explosive:
 			explosive.vanish(true)
+	var broken: PackedInt32Array = state.broken
+	for i in range(0, broken.size(), 2):
+		if broken[i] < _breakables.size():
+			_breakables[broken[i]].net_restore(broken[i + 1])
 	_checkpoint = state.checkpoint
 	kills = state.kills
 	kills_changed.emit(kills)

@@ -3,16 +3,18 @@ extends Node
 ##
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
-## enemy types, explosives, grenades and settings. Then it goes through every
-## level along its route, from the start to the exit and on into the next:
-## that the route can be walked over the navmesh, that every robot can reach
-## the player from its post and none stands close by and in view where the
-## player appears or walks into its zone, that the robots a zone lists wait
-## at their posts until its fight starts, that a checkpoint is still there
-## after a restart of the game and after a death, and that the door at the
-## exit is shut until the level is cleared. Where a level is cut into zones
-## that are only drawn when they can be seen, it looks for lines of sight
-## into a zone from where that zone is switched off.
+## enemy types, explosives, grenades, settings, how the view moves and what
+## can be shot to pieces. Then it goes through every level along its route,
+## from the start to the exit and on into the next: that the route can be
+## walked over the navmesh, that every robot can reach the player from its
+## post and none stands close by and in view where the player appears or
+## walks into its zone, that the robots a zone lists wait at their posts
+## until its fight starts, that a checkpoint is still there after a restart
+## of the game and after a death, that the door at the exit is shut until
+## the level is cleared, and that every crate, box and lamp in it can be
+## broken. Where a level is cut into zones that are only drawn when they can
+## be seen, it looks for lines of sight into a zone from where that zone is
+## switched off.
 
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
@@ -69,11 +71,24 @@ func _run() -> void:
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
+	# --view leaves out everything but how the view moves, and --breaks
+	# everything but what can be shot to pieces.
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"]]:
+		if only[0] not in OS.get_cmdline_user_args():
+			continue
+		await (only[1] as Callable).call()
+		_ran([only[2]])
+		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+		tree.quit(1 if _failures else 0)
+		return
 	if not _routes_only:
 		await _handling()
 		await _fights()
 		await _supplies()
-		_ran(["handling", "fights", "supplies"])
+		await _view()
+		# Last, since it breaks what the parts before it fight behind.
+		await _breakables()
+		_ran(["handling", "fights", "supplies", "view", "breakables"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -723,6 +738,329 @@ func _supplies() -> void:
 	_finished.append("supplies")
 
 
+## How the view moves, tried out on the runway of the factory: the bob of a
+## walk on the stride the footsteps go by, what a shot, a hit and a landing do
+## to it, the one setting that scales all of it, and the settings screen that
+## setting is on. What is checked is where the camera sits on the head and how
+## it is turned there: the head itself is where the player looks, and what the
+## enemies aim at.
+func _view() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var camera: Camera3D = player.camera
+	var hud: CanvasLayer = game.get_node("HUD")
+	var rifle: WeaponData = weapons.LOADOUT[0]
+	player.force_control = true
+	player.health = 1e6
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	var stand := func() -> void:
+		for action in ["move_forward", "move_right", "sprint", "crouch", "jump", "ads", "fire"]:
+			Input.action_release(action)
+		_move(player, RUNWAY)
+		player.rotation = Vector3(0, PI * 0.5, 0)
+		player.head.rotation.x = 0.0
+	stand.call()
+	await _wait(0.6)
+	_check("standing still, the camera sits dead level on the head", camera.position.length() < 0.0001 and camera.rotation.length() < 0.0001)
+
+	# A walk: once it has got going the eye rises and falls with every step,
+	# and it is lowest as the foot comes down, which is when the step sounds.
+	# The sound is listened for where it is made: for every step, how many
+	# frames of this walk the stride is past the footfall as it starts. That
+	# is one at most if it starts on the frame the foot comes down.
+	var steps: Array[float] = []
+	var hear := func(sound: Node) -> void:
+		if sound is AudioStreamPlayer and Sfx._streams[&"footstep"].has(sound.stream):
+			var frame: float = Vector2(player.velocity.x, player.velocity.z).length() * get_process_delta_time() / player.STEP_DISTANCE
+			steps.append(fposmod(player.stride(), 1.0) / frame)
+	Sfx.child_entered_tree.connect(hear)
+	Input.action_press("move_forward")
+	var walk := await _watch(player, 1.8)
+	Sfx.child_entered_tree.disconnect(hear)
+	var steady := walk.filter(func(frame: Array) -> bool: return frame[0] > 0.5)
+	var heights := steady.map(func(frame: Array) -> float: return frame[2].y)
+	var walk_swing: float = heights.max()
+	var off_step := 0.0
+	var dips := 0
+	for i in range(1, steady.size() - 1):
+		if heights[i] < heights[i - 1] and heights[i] <= heights[i + 1]:
+			dips += 1
+			off_step = maxf(off_step, absf(steady[i][1] - roundf(steady[i][1])))
+	print("    a walk: the eye goes from %.1f to %.1f mm, lowest %.3f of a step off the footfall at worst; %d steps sound, %.2f of a frame after the footfall at worst" % [
+		heights.min() * 1000.0, walk_swing * 1000.0, off_step, steps.size(), steps.max() if steps.size() > 0 else -1.0])
+	_check("walking, the eye rises and falls between 1 and 2 cm with every step", walk_swing > 0.01 and walk_swing < 0.02
+		and heights.min() < -0.01 and heights.min() > -0.02)
+	_check("and is lowest as the foot comes down", dips >= 2 and off_step < 0.05)
+	_check("which is the frame on which the step sounds", steps.size() >= 3 and steps.all(func(frames: float) -> bool: return frames < 1.001))
+
+	# The one setting: at nothing the camera does not move, whatever happens.
+	# The weapon in view keeps some of its bob, or it would look broken.
+	Settings.put("view_motion", 0.0)
+	stand.call()
+	Input.action_press("move_forward")
+	await tree.process_frame
+	await tree.process_frame
+	player.take_damage(40.0)
+	player.punch_fov(1.0)
+	var held := await _watch(player, 0.6)
+	var sways := held.map(func(frame: Array) -> float: return frame[6].x)
+	var level: float = held[0][4]
+	var still := func(frame: Array) -> bool: return frame[2].length() < 1e-7 and frame[3].length() < 1e-6 and absf(frame[4] - level) < 1e-4
+	_check("with view motion at 0 the camera holds still through a walk, a hard hit and a shot's punch", held.all(still))
+	_check("and the weapon in view still moves, a third as much", sways.max() - sways.min() > 0.002 and sways.max() - sways.min() < 0.01)
+	# And through what leans the view and widens it: a strafe at a sprint and a
+	# jump with its landing, then a slide. The player is turned an eighth so
+	# that forward and to the right together run down the runway.
+	var landings := [0]
+	var count := func(_hardness: float) -> void: landings[0] += 1
+	player.landed.connect(count)
+	stand.call()
+	player.rotation.y = PI * 0.75
+	for action in ["move_forward", "move_right", "sprint", "jump"]:
+		Input.action_press(action)
+	var leant := await _watch(player, 0.9)
+	var strafed: bool = player.is_sprinting() and player.velocity.dot(player.global_basis.x) > 4.0
+	Input.action_press("crouch")
+	leant.append_array(await _watch(player, 0.2))
+	player.landed.disconnect(count)
+	_check("nor does it lean or widen: through a strafe at a sprint, a landing and a slide", strafed and landings[0] == 1 and player.is_sliding()
+		and leant.all(still))
+	Settings.put("view_motion", 1.0)
+
+	stand.call()
+	Input.action_press("move_forward")
+	Input.action_press("sprint")
+	var sprint := await _watch(player, 0.9)
+	var sprint_swing: float = sprint.filter(func(frame: Array) -> bool: return frame[0] > 0.5).map(func(frame: Array) -> float: return frame[2].y).max()
+	_check("with it back at 1 it moves again, and more at a sprint than at a walk", sprint_swing > walk_swing * 1.3)
+
+	# Over the sights the camera may still rise and fall a little, but it
+	# does not turn: the sights hold on what they are held on.
+	stand.call()
+	Input.action_press("move_forward")
+	Input.action_press("ads")
+	var aimed := (await _watch(player, 0.9)).filter(func(frame: Array) -> bool: return frame[0] > 0.5)
+	var aimed_heights := aimed.map(func(frame: Array) -> float: return frame[2].y)
+	var aimed_swing: float = aimed_heights.max() - aimed_heights.min()
+	_check("walking with the sights up, the camera does not turn", weapons.ads_blend == 1.0 and aimed_swing > 0.0005 and aimed_swing < 0.005
+		and aimed.all(func(frame: Array) -> bool: return frame[3].length() < 0.0001))
+
+	# A jump: the knees give as the player comes down and straighten again,
+	# on the camera and not on the head that the enemies aim at.
+	stand.call()
+	await _wait(0.1)
+	Input.action_press("jump")
+	var jump := await _watch(player, 1.3)
+	Input.action_release("jump")
+	var dip: float = jump.map(func(frame: Array) -> float: return frame[2].y).min()
+	print("    a jump: the eye dips %.0f mm on landing" % (-dip * 1000.0))
+	_check("landing dips the view and it comes back", dip < -0.05 and dip > -0.12 and absf(jump[-1][2].y) < 0.002)
+	_check("and the head the camera sits on stays where it is all the while", jump.all(
+		func(frame: Array) -> bool: return absf(frame[7] - player.STAND_EYE) < 0.001))
+
+	# One shot of the rifle. What it does to the aim is what it did before
+	# the view learned to move: a kick of what its data says, of which the
+	# view showed 0.598 at its peak at 45 frames a second, 0.608 at 60, 0.624
+	# at 120 and 0.627 as fast as this test runs. Each frame is held against
+	# that recoil worked out here: nothing else may turn the camera of
+	# somebody who stands still. Next to it the field of view widens for a
+	# moment, and the weapon kicks back in the hands. How much of either kick
+	# a frame gets to show depends on how long the frame before it took: the
+	# bounds leave room for one of 50 ms, which shows 0.547 of the kick of the
+	# aim and 0.6 of that of the weapon, as on a machine that is busy.
+	weapons._mags[0] = rifle.mag_size
+	var wide: float = camera.fov
+	var held_at: Vector3 = weapons._models[0].root.position
+	Input.action_press("fire")
+	for i in 100:
+		if weapons._mags[0] < rifle.mag_size:
+			break
+		await tree.process_frame
+	Input.action_release("fire")
+	var kick: Vector3 = player._recoil_target
+	var due := kick
+	var aim: Vector3 = player._recoil
+	var stray := 0.0
+	var peak := 0.0
+	var punch := 0.0
+	var back := 0.0
+	var forward := 0.0
+	var since := 0.0
+	while since < 0.3:
+		# What the frame before this one left to be seen, and then what the
+		# recoil will have come to by the next.
+		stray = maxf(stray, (camera.rotation - aim).length())
+		peak = maxf(peak, camera.rotation.x)
+		punch = maxf(punch, camera.fov - wide)
+		var pushed: float = weapons._models[0].root.position.z - held_at.z
+		back = maxf(back, pushed)
+		forward = minf(forward, pushed)
+		var step := get_process_delta_time()
+		since += step
+		due = due.lerp(Vector3.ZERO, 1.0 - exp(-player.RECOIL_RETURN * step))
+		aim = aim.lerp(due, 1.0 - exp(-player.RECOIL_SNAP * step))
+		await tree.process_frame
+	var nominal := deg_to_rad(rifle.recoil_pitch_deg)
+	print("    a rifle shot: the aim is kicked %.2f° up, of which the view shows %.3f; it widens %.2f°; the weapon comes %.0f mm back and %.1f mm forward of where it was held" % [
+		rad_to_deg(kick.x), peak / kick.x, punch, back * 1000.0, -forward * 1000.0])
+	_check("a rifle shot kicks the aim by what its data says, as it did before", kick.x > nominal * 0.849 and kick.x < nominal * 1.151
+		and absf(kick.y) <= deg_to_rad(rifle.recoil_yaw_deg) and is_equal_approx(kick.z, kick.y * 0.5))
+	_check("and the view shows the same share of it, with nothing else turning the camera", peak / kick.x > 0.5 and peak / kick.x < 0.645 and stray < 1e-5)
+	_check("the shot widens the field of view for a moment, and it is back within 0.3 s", punch > 0.3 and punch < 0.5 and absf(camera.fov - wide) < 0.01)
+	_check("the weapon kicks back as far as its data says and swings a little past where it was held", back > rifle.kick_back * 0.5
+		and back < rifle.kick_back * 1.05 and forward < 0.0)
+
+	# A hit from the left: `direction` is the way the shot travels, so to the
+	# player's right. The head rolls away from it and the aim stays put, which
+	# here is where the shot just fired has left it; the HUD draws an arc on
+	# the left, which stays on whoever fired as the player turns to face them.
+	var bearings: Array[Vector3] = []
+	var note := func(_amount: float, bearing: Vector3) -> void: bearings.append(bearing)
+	player.hit_from.connect(note)
+	var to_right: Vector3 = player.global_basis.x
+	player.take_damage(7.0, player.global_position + Vector3.UP, to_right)
+	var rolled := 0.0
+	var turned := 0.0
+	for frame in await _watch(player, 0.12):
+		var knock: Vector3 = frame[3] - frame[5]
+		rolled = minf(rolled, knock.z)
+		turned = maxf(turned, Vector2(knock.x, knock.y).length())
+	_check("a hit says where it came from: a direction to the left of the player", bearings.size() == 1 and bearings[0].dot(-to_right) > 0.99)
+	_check("it rolls the head away from that side, by something to see, and leaves the aim alone", rolled < -0.004 and rolled > -0.009 and turned < 1e-5)
+	var arcs: Array[Vector2] = hud._hit_arcs.arcs
+	_check("the HUD draws an arc on the side the hit came from", arcs.size() == 1 and absf(arcs[0].x + PI * 0.5) < 0.02 and arcs[0].y > 0.4)
+	player.rotate_y(PI * 0.5)
+	await tree.process_frame
+	await tree.process_frame
+	_check("which stays on where it came from as the player turns to face it", arcs.size() == 1 and absf(arcs[0].x) < 0.02)
+	player.take_damage(7.0)
+	player.take_damage(7.0, Vector3.ZERO, to_right.rotated(Vector3.UP, deg_to_rad(10.0)))
+	await tree.process_frame
+	await tree.process_frame
+	var renewed := arcs.size()
+	player.take_damage(7.0, Vector3.ZERO, -to_right)
+	await tree.process_frame
+	await tree.process_frame
+	_check("a hit from no side draws none, one from the same side renews its arc, one from elsewhere adds one",
+		bearings.size() == 4 and bearings[1] == Vector3.ZERO and renewed == 1 and arcs.size() == 2)
+	player.hit_from.disconnect(note)
+
+	# The commonest hit there is, a grunt's shot from straight ahead: it has
+	# no side to roll the head away from, and still rolls it, half as far and
+	# either way, and throws it back by as much.
+	stand.call()
+	await _wait(0.3)
+	player._knock.settle()
+	player.take_damage(7.0, Vector3.ZERO, player.global_basis.z)
+	var thrown := Vector3.ZERO
+	for frame in await _watch(player, 0.12):
+		var knock: Vector3 = frame[3] - frame[5]
+		thrown = thrown.max(Vector3(knock.x, absf(knock.y), absf(knock.z)))
+	_check("a grunt's shot from straight ahead throws the head back and rolls it, each by a fifth of a degree", thrown.x > 0.002 and thrown.x < 0.0045
+		and thrown.z > 0.002 and thrown.z < 0.0045 and thrown.y < 1e-5)
+
+	# The weapon lags a turn of the view, but only so far, however sudden:
+	# the test itself turns the player a quarter circle in one frame. Posed
+	# for a picture of a player who stands still, it sits where its data puts
+	# it, whatever it swung with before.
+	var held_to := rifle.hip_rotation_deg * (PI / 180.0)
+	player.rotate_y(-PI * 0.5)
+	await tree.process_frame
+	await tree.process_frame
+	var lag: float = absf(weapons._models[0].root.rotation.y - held_to.y)
+	player.rotate_y(PI * 0.5)
+	weapons.preview(0)
+	_check("a sudden turn leaves the weapon behind, by no more than it may lag", lag > 0.005 and lag < weapons.SWAY_MAX + 0.001)
+	_check("posed for a picture, the weapon sits where its data puts it", weapons._models[0].root.position.is_equal_approx(rifle.hip_offset)
+		and weapons._models[0].root.rotation.is_equal_approx(held_to))
+	# Posed with its kick at its furthest, at the hip and then over the
+	# sights, where it comes less far back: the sights should stay near what
+	# they are held on.
+	var kicks: Array[float] = []
+	for sights: float in [0.0, 1.0]:
+		weapons.preview(0, sights)
+		weapons._kick.at = Vector3(0.0, 0.0, 1.0)
+		weapons._animate_viewmodel(rifle, 0.0)
+		kicks.append(weapons._models[0].root.position.z - rifle.hip_offset.lerp(rifle.ads_offset, sights).z)
+	weapons.preview(0)
+	_check("over the sights the weapon kicks less far back than at the hip", is_equal_approx(kicks[0], rifle.kick_back)
+		and kicks[1] > rifle.kick_back * 0.5 and kicks[1] < rifle.kick_back * 0.8)
+
+	# The settings screen has more on it than fits a screen of 1920 × 1080,
+	# which is as low as one gets: the list in it scrolls, and the way back
+	# stays in view.
+	var window := game.get_window()
+	var windowed := window.size
+	window.size = Vector2i(1920, 1080)
+	Menu._show(Menu.Screen.SETTINGS)
+	for i in 4:
+		await tree.process_frame
+	var column: Array[Node] = Menu._column.get_children()
+	var list: ScrollContainer = column.filter(func(child: Node) -> bool: return child is ScrollContainer)[0]
+	var heading: Control = column[0]
+	var back_button: Button = column[-1]
+	var top := heading.global_position.y
+	var bottom := back_button.global_position.y + back_button.size.y
+	var screen: float = Menu._root.size.y
+	# Down the list with the keys, as a controller steps through it too.
+	var stops := 0
+	var in_view := true
+	var focused := window.gui_get_focus_owner()
+	while focused and stops < 40:
+		stops += 1
+		var box := focused.get_global_rect()
+		var frame := list.get_global_rect() if list.is_ancestor_of(focused) else Rect2(0, 0, 1920, screen)
+		in_view = in_view and box.position.y > frame.position.y - 0.5 and box.end.y < frame.end.y + 0.5
+		for pressed: bool in [true, false]:
+			var key := InputEventAction.new()
+			key.action = "ui_down"
+			key.pressed = pressed
+			Input.parse_input_event(key)
+		await tree.process_frame
+		await tree.process_frame
+		if window.gui_get_focus_owner() == focused:
+			break
+		focused = window.gui_get_focus_owner()
+	var sliders := Menu._column.find_children("*", "HSlider", true, false)
+	var lines := Menu._column.find_children("*", "Control", true, false).filter(
+		func(control: Control) -> bool: return control.focus_mode == Control.FOCUS_ALL).size()
+	print("    the settings screen at 1920 × 1080: its column is %.0f px high, from %.0f to %.0f of %.0f, and the Back button ends at %.0f; the list in it shows %.0f of %.0f px; %d stops for the keys" % [
+		bottom - top, top, bottom, screen, bottom, list.size.y, list.get_child(0).size.y, stops])
+	_check("the settings screen fits a screen of 1920 × 1080, Back button and all", screen == 1080.0 and top >= 0.0 and bottom <= screen
+		and back_button.text == "Back")
+	_check("and stepping down it reaches every setting, each in view when its turn comes", stops == lines and in_view and focused == back_button)
+	_check("view motion is one of them, from 0 to 150 percent", Settings.KEYS.has("view_motion") and Settings.view_motion == 1.0
+		and sliders.any(func(slider: HSlider) -> bool: return slider.max_value == Settings.MAX_VIEW_MOTION))
+	Menu._show(Menu.Screen.NONE)
+	Sfx.stop_music(0.0)
+	window.size = windowed
+	await _wait(0.2)
+	_finished.append("view")
+
+
+## Follows the camera of `player` for `seconds`. Returns a line for every
+## frame that was drawn: the seconds since the start, the stride, where the
+## camera sits on the head, how it is turned there, its field of view, how
+## much of that turn is recoil, where the weapon in view is held, and how
+## high the head is that the camera sits on.
+func _watch(player: CharacterBody3D, seconds: float) -> Array[Array]:
+	var frames: Array[Array] = []
+	var clock := [0.0]
+	var note := func() -> void:
+		clock[0] += get_process_delta_time()
+		frames.append([clock[0], player.stride(), player.camera.position, player.camera.rotation, player.camera.fov, player._recoil,
+			player.weapons._models[player.weapons._index].root.position, player.head.position.y])
+	get_tree().process_frame.connect(note)
+	await _wait(seconds)
+	get_tree().process_frame.disconnect(note)
+	return frames
+
+
 ## Draws the cover the survey found on the floor the player stands on: `#`
 ## where nobody can stand, `.` open floor, `c` something to duck behind and
 ## `C` something to stand behind. North is up, a character is a metre.
@@ -752,6 +1090,333 @@ func _print_cover(player: Node3D) -> void:
 		print(line)
 
 
+## What can be shot to pieces, tried out in the factory: the lamps, the
+## stacks of crates and the cardboard boxes. A stack is only tried on if no
+## part before this one has touched it.
+func _breakables() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var space := player.get_world_3d().direct_space_state
+	var stack_script: GDScript = game.BREAKABLES.STACK
+	player.force_control = true
+	player.health = 1e6
+	weapons._mags[0] = 30
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	await _wait(0.3)
+	var lamps: Array = game._breakables.filter(func(body: Node) -> bool: return body.has_method("lens"))
+	var whole := func(body: Node) -> bool:
+		return body.has_method("cover") and body._members.all(func(member: RefCounted) -> bool:
+			return not member.gone and member.health == body.TUNING[member.kind].health)
+	var stacks: Array = game._breakables.filter(whole)
+	var threes := stacks.filter(func(stack: Node) -> bool: return stack.size() == 3 and stack._colliders.size() == 1)
+	var towers := stacks.filter(func(stack: Node) -> bool: return stack._colliders.size() == 2 and stack._members[0].kind == stack.Kind.CRATE)
+
+	# Something that lies on top of a stack that stands on another, with the
+	# time of all that comes first to settle there.
+	var sleeper: RigidBody3D = null
+	if not towers.is_empty():
+		var highest: RefCounted = towers[0]._members[-1]
+		var cube := BoxShape3D.new()
+		cube.size = Vector3.ONE * 0.2
+		var shape := CollisionShape3D.new()
+		shape.shape = cube
+		sleeper = RigidBody3D.new()
+		sleeper.collision_layer = 0
+		sleeper.add_child(shape)
+		game.add_child(sleeper)
+		sleeper.global_position = (towers[0]._colliders[1] as Node3D).global_position * Vector3(1, 0, 1) + Vector3.UP * (towers[0].global_position.y + highest.foot + highest.height + 0.11)
+	# Every piece that is made from here on, and the most there are of them
+	# at once: a piece is a rigid body on no layer.
+	var made: Array = []
+	var most := [0]
+	var note := func(node: Node) -> void:
+		if node is RigidBody3D and node.collision_layer == 0:
+			made.append(node)
+			most[0] = maxi(most[0], made.filter(is_instance_valid).size())
+	tree.node_added.connect(note)
+
+	# The bottom crate of a stack, which also starts the clock on its pieces,
+	# and one more hit where it stood, before the crates above have moved.
+	var low: StaticBody3D = threes.pop_back()
+	var crates: Array = low._members
+	low.take_damage(1000.0, low.global_position + Vector3.UP * 0.1, Vector3.FORWARD)
+	low.take_damage(50.0, low.global_position + Vector3.UP * 0.1, Vector3.FORWARD)
+	var began := Time.get_ticks_msec()
+	var low_collider: CollisionShape3D = low._colliders[0]
+	_check("a crate that takes enough breaks, and its model is hidden", crates[0].gone and not crates[0].model.visible and low.standing() == 2)
+	_check("the collider of its stack fits what is left at once", is_equal_approx(low_collider.shape.size.y, crates[1].height + crates[2].height)
+		and is_equal_approx(low_collider.position.y, (crates[1].height + crates[2].height) * 0.5))
+	_check("a hit where it stood hurts none of the crates that have yet to come down", crates.slice(1).all(func(crate: RefCounted) -> bool:
+		return crate.health == low.TUNING[crate.kind].health))
+	await _wait(0.5)
+	var first_pieces: Array = made.duplicate()
+	_check("it lies about in pieces, all that a crate is cut into", not first_pieces.is_empty() and first_pieces.size() == stack_script.pieces_of(crates[0].model).size()
+		and stack_script.pieces() >= first_pieces.size())
+	_check("and the crates above it come down by its height", crates.slice(1).all(func(crate: RefCounted) -> bool:
+		return crate.model.visible and is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[0].height)))
+
+	# A hall lamp that is on, shot at from the floor below it.
+	var lamp: StaticBody3D = null
+	var feet := Vector3.INF
+	var glass := Vector3.ZERO
+	for one: StaticBody3D in lamps:
+		if one.kind != one.Kind.HALL or one.light == null or one.out:
+			continue
+		glass = (one.get_child(0) as Node3D).global_position
+		var below := space.intersect_ray(PhysicsRayQueryParameters3D.create(glass, glass + Vector3.DOWN * 20.0, 1))
+		feet = _stand_for(player, one, glass, 2.0, below.position.y if below else 0.0)
+		if feet != Vector3.INF:
+			lamp = one
+			break
+	_check("there is a hall lamp to shoot at from the floor", lamp != null)
+	if lamp:
+		var bursts: int = Fx._expiring.size()
+		await _aim(player, feet, glass)
+		Input.action_press("fire")
+		await _wait(0.1)
+		Input.action_release("fire")
+		_check("a rifle shot puts a hall lamp out: there is nothing left to hit, and glass and sparks come down", lamp.out and lamp.collision_layer == 0
+			and Fx._expiring.size() >= bursts + 3)
+		await _wait(0.4)
+		var eye: Vector3 = player.camera.global_position
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + (glass - eye) * 1.2, weapons.HIT_MASK, [player.get_rid()]))
+		_check("its light has gone, nothing of it glows, and the next shot finds nothing there", not lamp.light.visible and not _glows(lamp._model)
+			and (hit.is_empty() or hit.collider != lamp))
+
+	# A stack of three, from a few steps away: first a shot into the floor in
+	# front of it, then the top crate.
+	var shot: StaticBody3D = null
+	var top := Vector3.ZERO
+	for one: StaticBody3D in threes:
+		top = one._members[2].model.global_transform * stack_script.box_of(one._members[2].model).get_center()
+		feet = _stand_for(player, one, top, 3.5, one.global_position.y)
+		if feet != Vector3.INF:
+			shot = one
+			threes.erase(one)
+			break
+	_check("there is a stack of three crates to shoot at", shot != null)
+	if shot:
+		crates = shot._members
+		await _aim(player, feet, (feet + top) * 0.5 * Vector3(1, 0, 1) + Vector3.UP * feet.y)
+		Input.action_press("fire")
+		await _wait(0.06)
+		Input.action_release("fire")
+		await _wait(0.25)
+		_check("a shot that lands beside a stack breaks nothing", whole.call(shot) and weapons._mags[0] < 30)
+		await _aim(player, feet, top)
+		var loaded: int = weapons._mags[0]
+		for i in 8:
+			Input.action_press("fire")
+			await _wait(0.06)
+			Input.action_release("fire")
+			await _wait(0.24)
+			if crates[2].gone:
+				break
+		print("    the top crate of a stack of three took %d rifle rounds" % (loaded - weapons._mags[0]))
+		var collider: CollisionShape3D = shot._colliders[0]
+		_check("rifle rounds into the top crate of a stack break that one, and the collider is a crate lower", crates[2].gone and not crates[2].model.visible
+			and not crates[0].gone and not crates[1].gone and is_equal_approx(collider.shape.size.y, crates[0].height + crates[1].height)
+			and is_equal_approx(collider.position.y, (crates[0].height + crates[1].height) * 0.5))
+
+	# A stack that stands on another: the crate it stands on goes.
+	_check("there is a stack that stands on another", not towers.is_empty())
+	if not towers.is_empty():
+		var tower: StaticBody3D = towers[0]
+		crates = tower._members
+		var under: int = crates.filter(func(crate: RefCounted) -> bool: return crate.collider == 0).size() - 1
+		var upper: CollisionShape3D = tower._colliders[1]
+		var stood: float = upper.position.y
+		var lay: float = sleeper.global_position.y
+		sleeper.sleeping = true
+		tower.take_damage(1000.0, tower.global_position + Vector3.UP * (crates[under].foot + crates[under].height * 0.5), Vector3.FORWARD)
+		await _wait(0.5)
+		_check("breaking the crate it stands on brings that stack down too", crates[under].gone and tower.standing() == tower.size() - 1
+			and is_equal_approx(stood - upper.position.y, crates[under].height)
+			and crates.slice(under + 1).all(func(crate: RefCounted) -> bool: return is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[under].height)))
+		var highest: RefCounted = crates[-1]
+		_check("and what lay asleep on top of it comes down with it", absf(lay - tower.global_position.y - highest.foot - highest.height - 0.1) < 0.02
+			and absf(lay - sleeper.global_position.y - crates[under].height) < 0.02)
+		sleeper.free()
+
+	# What somebody is told who comes into the level later: the same stack
+	# and the same lamp, with nothing flying.
+	var late: StaticBody3D = threes.pop_back()
+	var dark: StaticBody3D = lamps.filter(func(one: Node) -> bool: return one.light != null and not one.out and one.kind != one.Kind.HALL)[0]
+	var lying: int = made.size()
+	var playing: int = Fx._expiring.size()
+	late.net_restore(low.net_state())
+	dark.net_restore(1)
+	var quiet: bool = Fx._expiring.size() == playing
+	# Pieces are thrown when the frame is over, if any were.
+	await tree.process_frame
+	await tree.process_frame
+	crates = late._members
+	var late_collider: CollisionShape3D = late._colliders[0]
+	_check("a stack that was broken before somebody came stands the same for them, with no pieces", low.net_state() == 1 and late.net_state() == 1
+		and not crates[0].model.visible and is_equal_approx(late_collider.shape.size.y, crates[1].height + crates[2].height)
+		and is_equal_approx(late_collider.position.y - late_collider.shape.size.y * 0.5, low_collider.position.y - low_collider.shape.size.y * 0.5)
+		and crates.slice(1).all(func(crate: RefCounted) -> bool: return is_equal_approx(crate.rest.y - crate.model.global_position.y, crates[0].height))
+		and made.size() == lying)
+	_check("and a lamp that was shot out is dark for them, with no glass and no sparks", dark.out and dark.collision_layer == 0 and not dark.light.visible
+		and dark._covers.all(func(cover: Node3D) -> bool: return cover.visible) and not dark._covers.is_empty() and quiet)
+
+	# The pieces of the first crate, once their time is up: those and no
+	# others, and not because there were more than there may be.
+	var left: float = stack_script.PIECE_TIME + stack_script.SHRINK_TIME + 0.3 - (Time.get_ticks_msec() - began) / 1000.0
+	if left > 0.0:
+		await _wait(left)
+	_check("pieces are cleared away when their time is up", first_pieces.all(func(piece: Variant) -> bool: return not is_instance_valid(piece))
+		and made.size() > first_pieces.size() and made.size() <= stack_script.MAX_PIECES and made.slice(first_pieces.size()).all(is_instance_valid))
+
+	# A blast beside the largest pile there is, which breaks more crates than
+	# may all lie about in pieces.
+	var piles := stacks.filter(whole)
+	piles.sort_custom(func(a: Node, b: Node) -> bool: return a.size() > b.size())
+	var blown: StaticBody3D = piles[0]
+	var middle: Vector3 = (blown._colliders[0] as Node3D).global_position
+	var beside := middle + Vector3(0.9, 0.0, 0.0)
+	for turn in 4:
+		beside = middle + Vector3(0.9, 0.0, 0.0).rotated(Vector3.UP, turn * PI * 0.5)
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(beside, middle, 1, [blown.get_rid()])).is_empty():
+			break
+	var standing: Array = []
+	for stack: Node in game._breakables:
+		if stack.has_method("cover"):
+			standing.append_array(stack._members.filter(func(crate: RefCounted) -> bool: return not crate.gone))
+	var before: int = made.size()
+	Blast.explode(beside, 6.5, 150.0)
+	# The pieces are thrown when the frame is over; what the blast broke is
+	# counted before anything it set alight can go off.
+	await tree.process_frame
+	await tree.process_frame
+	var broke := standing.filter(func(crate: RefCounted) -> bool: return crate.gone)
+	var thrown: int = made.size() - before
+	@warning_ignore("integer_division")
+	var share: int = stack_script.MAX_PIECES / maxi(broke.size(), 1)
+	var whole_pieces := 0
+	var shared := 0
+	for crate: RefCounted in broke:
+		whole_pieces += stack_script.pieces_of(crate.model).size()
+		shared += mini(stack_script.pieces_of(crate.model).size(), share)
+	await _wait(0.2)
+	_check("a blast beside a stack breaks every crate of it, and it is in nobody's way after that", blown.standing() == 0 and blown.collision_layer == 0
+		and blown._members.all(func(crate: RefCounted) -> bool: return not crate.model.visible))
+	print("    the blast broke %d crates and boxes, which are cut into %d pieces and left %d, %d each at most" % [broke.size(), whole_pieces, thrown, share])
+	_check("a blast that breaks more than may lie about in pieces leaves as many of every crate", whole_pieces > stack_script.MAX_PIECES and thrown == shared)
+	print("    at most %d pieces lay about at once, of the %d there may be" % [most[0], stack_script.MAX_PIECES])
+	_check("there are never more pieces than there may be", most[0] > 0 and most[0] <= stack_script.MAX_PIECES
+		and made.filter(is_instance_valid).size() <= stack_script.MAX_PIECES)
+	tree.node_added.disconnect(note)
+	_finished.append("breakables")
+
+
+## Counts what can be shot to pieces in a level, and checks that nothing of
+## the kind was left out.
+func _inventory(game: Node, title: String) -> void:
+	var level: Node3D = game.get_node("Level")
+	var stack_script: GDScript = game.BREAKABLES.STACK
+	var stacks: Array = game._breakables.filter(func(body: Node) -> bool: return body.has_method("cover"))
+	var lamps: Array = game._breakables.filter(func(body: Node) -> bool: return body.has_method("lens"))
+	# How many stacks each model is part of, and how many colliders there are
+	# of crates.
+	var held := {}
+	var piles := {}
+	var cartons := 0
+	for stack: Node in stacks:
+		for member: RefCounted in stack._members:
+			held[member.model] = held.get(member.model, 0) + 1
+			if member.kind == stack.Kind.CRATE:
+				piles[stack._colliders[member.collider]] = true
+			else:
+				cartons += 1
+	var colliders: Array[CollisionShape3D] = []
+	for collider in level.get_node("Collision").get_children():
+		if collider is CollisionShape3D and collider.shape is BoxShape3D:
+			colliders.append(collider)
+	var inverses := colliders.map(func(collider: CollisionShape3D) -> Transform3D: return collider.global_transform.affine_inverse())
+	var loose := 0
+	var covered := 0
+	for model: Node3D in level.find_children("*", "Node3D", true, false):
+		var folder := model.scene_file_path.get_base_dir().get_file()
+		if folder != "wooden_crate_02" and folder != "cardboard_box_01":
+			continue
+		if held.get(model, 0) != 1:
+			loose += 1
+			print("    not in one stack: %s" % level.get_path_to(model))
+		var middle: Vector3 = model.global_transform * stack_script.box_of(model).get_center()
+		for i in colliders.size():
+			var offset: Vector3 = (inverses[i] as Transform3D) * middle
+			var half: Vector3 = colliders[i].shape.size * 0.5
+			if absf(offset.x) < half.x and absf(offset.y) < half.y and absf(offset.z) < half.z:
+				covered += 1
+				print("    still in the body of the level: %s around %s" % [colliders[i].name, level.get_path_to(model)])
+	# The lights that are lamps, by what their names begin with.
+	var classes := {"HallLamp": "SpotLight3D", "Bulb": "OmniLight3D", "Tube": "OmniLight3D", "Floodlight": "SpotLight3D", "WorkLamp": "SpotLight3D"}
+	var unlit := 0
+	for light: Light3D in level.find_children("*", "Light3D", true, false):
+		if light.get_parent().name != &"Lights":
+			continue
+		for prefix: String in classes:
+			if String(light.name).begins_with(prefix) and light.is_class(classes[prefix]) and lamps.filter(func(lamp: Node) -> bool: return lamp.light == light).size() != 1:
+				unlit += 1
+				print("    no lamp around %s" % level.get_path_to(light))
+	var of_kind := func(kind: int, lit: bool) -> int:
+		return lamps.filter(func(lamp: Node) -> bool: return lamp.kind == kind and (lamp.light != null) == lit).size()
+	var kinds: Dictionary = game.BREAKABLES.LAMP.Kind
+	print("    %s: %d stacks of crates and %d cardboard boxes in %d piles; %d hall lamps on and %d off, %d bulbs, %d tubes, %d floodlights, %d work lamps" % [title,
+		piles.size(), cartons, stacks.size(), of_kind.call(kinds.HALL, true), of_kind.call(kinds.HALL, false), of_kind.call(kinds.BULB, true),
+		of_kind.call(kinds.TUBE, true), of_kind.call(kinds.FLOOD, true), of_kind.call(kinds.WORK, true)])
+	_check("%s: every crate and every cardboard box is part of one stack that can be shot to pieces" % title, loose == 0 and not stacks.is_empty())
+	_check("%s: and no collider of theirs is left in the body of the level" % title, covered == 0)
+	_check("%s: every lamp that is on can be shot out" % title, unlit == 0 and not lamps.is_empty())
+
+
+## A spot on the floor at the height `floor_y` to shoot at `target` from,
+## `reach` metres to the side of it, with nothing between the eye and `body`.
+## Vector3.INF if there is none.
+func _stand_for(player: CharacterBody3D, body: CollisionObject3D, target: Vector3, reach: float, floor_y: float) -> Vector3:
+	var map := player.get_world_3d().navigation_map
+	var space := player.get_world_3d().direct_space_state
+	for turn in 8:
+		var spot := Vector3(target.x, floor_y, target.z) + Vector3(reach, 0.0, 0.0).rotated(Vector3.UP, turn * TAU / 8.0)
+		var feet := NavigationServer3D.map_get_closest_point(map, spot)
+		if feet.distance_to(spot) > 0.5:
+			continue
+		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(feet + Vector3.UP * 0.5, feet + Vector3.DOWN, 1))
+		if ground:
+			feet = ground.position
+		var eye := feet + Vector3.UP * 1.6
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + (target - eye) * 1.2, player.weapons.HIT_MASK, [player.get_rid()]))
+		if hit and hit.collider == body:
+			return feet
+	return Vector3.INF
+
+
+## Stands the player at `feet`, looking at `target`, and gives the weapon a
+## moment to come to rest.
+func _aim(player: CharacterBody3D, feet: Vector3, target: Vector3) -> void:
+	_move(player, feet)
+	player.look_at(Vector3(target.x, feet.y, target.z))
+	await _wait(0.2)
+	var eye: Vector3 = player.camera.global_position
+	player.head.rotation.x = atan2(target.y - eye.y, Vector2(target.x - eye.x, target.z - eye.z).length())
+	await _wait(0.1)
+
+
+## True if any surface of a mesh is drawn with a material that gives light.
+func _glows(mesh: MeshInstance3D) -> bool:
+	for surface in mesh.mesh.get_surface_count():
+		var material := mesh.get_active_material(surface) as BaseMaterial3D
+		if material and material.emission_enabled:
+			return true
+	return false
+
+
 ## Plays the level that is loaded from its start to its exit: zone by zone
 ## and checkpoint by checkpoint, with a restart of the game at the first
 ## checkpoint and a death at the last. `next` is the level its exit should
@@ -768,6 +1433,7 @@ func _play_through(level: Dictionary, next: String) -> void:
 	var explosives := tree.get_nodes_in_group("explosive")
 	_check("%s: has things that explode, each with its model" % title, not explosives.is_empty()
 		and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
+	_inventory(game, title)
 
 	# The route as the level describes it, before anything is fought over.
 	var walk := _walk(game)

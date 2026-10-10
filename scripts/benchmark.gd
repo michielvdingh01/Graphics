@@ -418,7 +418,7 @@ func _fire(eye: Camera3D, count: int, spread_deg: float) -> void:
 		var hit := eye.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, end, 0b101))
 		if hit:
 			end = hit.position
-			if hit.collider.has_method("take_damage"):
+			if hit.collider.has_method("is_headshot"):
 				Fx.robot_hit(end, direction)
 			else:
 				Fx.impact(hit, direction)

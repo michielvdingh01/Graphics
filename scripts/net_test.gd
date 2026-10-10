@@ -18,6 +18,7 @@ const DEPOT := "res://scenes/depot.tscn"
 const RANGE_TARGET := Vector3(1, 0, -7.5)
 ## Not the port the game hosts on, so that a test never meets a real game.
 const PORT := 24599
+const STACK := preload("res://scripts/stack.gd")
 
 ## True for a run of this test. The menu stays on for it, unlike for the
 ## self-test.
@@ -81,6 +82,12 @@ func _host() -> void:
 	var first: CharacterBody3D = game._robots.values()[2]
 	first.take_damage(1000.0, first.global_position, Vector3.FORWARD)
 	_check("a robot falls before the guest is there", first.dead and game.kills == 1)
+	# And a lamp is shot out and a crate to pieces.
+	var lamps := _far(game, true)
+	var stacks := _far(game, false)
+	lamps[0].take_damage(1.0, lamps[0].global_position, Vector3.UP)
+	stacks[0].take_damage(1000.0, stacks[0].global_position, Vector3.FORWARD)
+	_check("so do a lamp and a crate", lamps[0].out and stacks[0].standing() == stacks[0].size() - 1)
 
 	_check("the guest walks in", await _until(func() -> bool: return game.puppets.size() == 1, 60.0))
 	var puppet: CharacterBody3D = game.puppets.values()[0]
@@ -118,6 +125,10 @@ func _host() -> void:
 	var barrels := tree.get_nodes_in_group("explosive")
 	barrels[0].take_damage(1000.0, barrels[0].global_position, Vector3.FORWARD)
 	_check("a barrel goes off", await _until(func() -> bool: return blasts[0] >= 2 and tree.get_nodes_in_group("explosive").size() == barrels.size() - 1, 10.0))
+	# Another lamp and another crate, with the guest there to see it.
+	lamps[1].take_damage(1.0, lamps[1].global_position, Vector3.UP)
+	stacks[1].take_damage(1000.0, stacks[1].global_position, Vector3.FORWARD)
+	_check("another lamp is shot out and another crate to pieces", lamps[1].out and stacks[1].standing() == stacks[1].size() - 1)
 
 	# The guest dies, gets up again and takes up another weapon.
 	_check("the guest is seen to die", await _until(func() -> bool: return puppet.dead, 20.0))
@@ -197,6 +208,10 @@ func _join() -> void:
 
 	_check("the enemies are the host's", Settings.enemy_theme == Net.session.theme)
 	_check("the robot that fell before is gone, and counted", not is_instance_valid(game._robots.values()[2]) and game.kills == 1)
+	var lamps := _far(game, true)
+	var stacks := _far(game, false)
+	_check("the lamp and the crate that broke before are broken, with nothing flying", lamps[0].out and not lamps[0].light.visible
+		and stacks[0].standing() == stacks[0].size() - 1 and STACK.pieces() == 0)
 	var host: CharacterBody3D = game.puppets.get(1)
 	_check("the host stands there as a soldier", host != null and await _until(func() -> bool: return host.visible and host._rig != null, 5.0))
 	_check("the player of this machine is still the first of the players", tree.get_first_node_in_group("player") == player)
@@ -225,6 +240,8 @@ func _join() -> void:
 	Input.action_release("grenade")
 	_check("the guest's grenade goes off here too", await _until(func() -> bool: return blasts[0] >= 1, 10.0) and weapons.grenades == carried - 1)
 	_check("a barrel the host sets off is gone here", await _until(func() -> bool: return blasts[0] >= 2 and tree.get_nodes_in_group("explosive").size() == barrels - 1, 15.0))
+	_check("a lamp and a crate the host breaks then break here too, in pieces", await _until(func() -> bool: return lamps[1].out and stacks[1].standing() == stacks[1].size() - 1, 10.0)
+		and STACK.pieces() > 0)
 
 	# Dying is not the end.
 	player.health = 1.0
@@ -297,6 +314,15 @@ func _exit_floor(game: Node3D) -> Vector3:
 	var top := area.global_position + Vector3.UP * size.y * 0.5
 	var floor_there := game.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(top, top + Vector3.DOWN * (size.y + 1.0), 1))
 	return floor_there.position if floor_there else top + Vector3.DOWN * size.y
+
+
+## The lamps of a level that are on, or else its stacks of crates and boxes:
+## the ones furthest from the lane first, out of reach of whatever goes off
+## there. The same ones in the same order on both machines.
+func _far(game: Node3D, lamps: bool) -> Array:
+	var found: Array = game._breakables.filter(func(body: Node) -> bool: return body.get("light") != null if lamps else body.has_method("cover"))
+	found.sort_custom(func(a: Node3D, b: Node3D) -> bool: return a.global_position.distance_to(RANGE_TARGET) > b.global_position.distance_to(RANGE_TARGET))
+	return found
 
 
 ## Shoots down every robot of `robots` that still stands.
