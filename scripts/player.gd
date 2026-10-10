@@ -75,16 +75,19 @@ const LAND_DIP := 0.025
 const LAND_DIP_MAX := 0.16
 const LAND_TIME := 0.07
 ## Being hit knocks the head aside: by this many radians for a hit of HIT_FULL
-## damage or more and by less for less, furthest after HIT_TIME seconds. For a
-## hit from the front or the back, HIT_NOD of it throws the head back or
-## forward. Over the sights HIT_AIMED of it is left.
+## damage or more and by less for less, see hit_weight(), furthest after
+## HIT_TIME seconds. It rolls away from the side the hit came from, and by no
+## less than HIT_ROLL of that, so that a hit from the front or the back rolls
+## it as well; of those, HIT_NOD also throws the head back or forward. Over
+## the sights HIT_AIMED of it all is left.
 const HIT_KICK := 0.017
 const HIT_FULL := 40.0
 const HIT_TIME := 0.06
+const HIT_ROLL := 0.5
 const HIT_NOD := 0.5
 const HIT_AIMED := 0.5
-## A hit of this much damage or more rattles the view as well: by HIT_TRAUMA
-## for one of HIT_FULL, see shake().
+## A hit of this much damage or more rattles the view as well, by this much,
+## see shake().
 const HARD_HIT := 20.0
 const HIT_TRAUMA := 0.3
 ## How fast the view settles after an explosion, per second, and how far it
@@ -197,6 +200,14 @@ func punch_fov(degrees: float) -> void:
 ## Rattles the view: 1 is an explosion at arm's length. It settles by itself.
 func shake(amount: float) -> void:
 	_trauma = minf(_trauma + amount, 1.0)
+
+
+## How hard a hit of `amount` damage lands: 1 for HIT_FULL or more, and for
+## less the square root of its share of that, so that a quarter of the damage
+## still lands half as hard. A grunt's shot is a sixth of HIT_FULL: going by
+## the damage alone it would move the view by less than anybody can see.
+func hit_weight(amount: float) -> float:
+	return sqrt(clampf(amount / HIT_FULL, 0.0, 1.0))
 
 
 ## Mends the player by `amount`. False if there was nothing to mend.
@@ -445,18 +456,21 @@ func _bearing(direction: Vector3) -> Vector3:
 
 ## Knocks the head aside, away from where a hit came from: mostly a roll,
 ## which leaves the aim where it was, and for a hit from the front a little
-## back. One that came from no side rolls it half as far, either way. This
+## back. The roll is never less than HIT_ROLL of what a hit from the side
+## gives: most shots come from where the player looks, and those would
+## otherwise move the view least of all. One with no side to it, from straight
+## ahead, from behind or from nowhere, rolls it either way by chance. This
 ## takes the place of a kick of the aim by chance, as large for a graze as for
 ## a blow: being hit should say from where, not spoil the next shot.
 func _knock_head(amount: float, bearing: Vector3) -> void:
-	var size := clampf(amount / HIT_FULL, 0.1, 1.0) * HIT_KICK * lerpf(1.0, HIT_AIMED, weapons.ads_blend)
-	if bearing == Vector3.ZERO:
-		_knock.push(Vector3(0.0, 0.0, size * (0.5 if randf() < 0.5 else -0.5)))
-	else:
-		var from := global_basis.inverse() * bearing
-		_knock.push(Vector3(-from.z * HIT_NOD, 0.0, from.x) * size)
+	var size := hit_weight(amount) * HIT_KICK * lerpf(1.0, HIT_AIMED, weapons.ads_blend)
+	var from := global_basis.inverse() * bearing
+	var side := signf(from.x)
+	if is_zero_approx(from.x):
+		side = 1.0 if randf() < 0.5 else -1.0
+	_knock.push(Vector3(-from.z * HIT_NOD, 0.0, side * maxf(absf(from.x), HIT_ROLL)) * size)
 	if amount >= HARD_HIT:
-		shake(minf(amount / HIT_FULL, 1.0) * HIT_TRAUMA)
+		shake(HIT_TRAUMA)
 
 
 func _start_slide() -> void:

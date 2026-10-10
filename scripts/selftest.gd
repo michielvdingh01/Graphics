@@ -752,7 +752,7 @@ func _view() -> void:
 	for enemy in tree.get_nodes_in_group("enemy"):
 		enemy.queue_free()
 	var stand := func() -> void:
-		for action in ["move_forward", "sprint", "ads", "fire"]:
+		for action in ["move_forward", "move_right", "sprint", "crouch", "jump", "ads", "fire"]:
 			Input.action_release(action)
 		_move(player, RUNWAY)
 		player.rotation = Vector3(0, PI * 0.5, 0)
@@ -763,8 +763,18 @@ func _view() -> void:
 
 	# A walk: once it has got going the eye rises and falls with every step,
 	# and it is lowest as the foot comes down, which is when the step sounds.
+	# The sound is listened for where it is made: for every step, how many
+	# frames of this walk the stride is past the footfall as it starts. That
+	# is one at most if it starts on the frame the foot comes down.
+	var steps: Array[float] = []
+	var hear := func(sound: Node) -> void:
+		if sound is AudioStreamPlayer and Sfx._streams[&"footstep"].has(sound.stream):
+			var frame: float = Vector2(player.velocity.x, player.velocity.z).length() * get_process_delta_time() / player.STEP_DISTANCE
+			steps.append(fposmod(player.stride(), 1.0) / frame)
+	Sfx.child_entered_tree.connect(hear)
 	Input.action_press("move_forward")
 	var walk := await _watch(player, 1.8)
+	Sfx.child_entered_tree.disconnect(hear)
 	var steady := walk.filter(func(frame: Array) -> bool: return frame[0] > 0.5)
 	var heights := steady.map(func(frame: Array) -> float: return frame[2].y)
 	var walk_swing: float = heights.max()
@@ -774,10 +784,12 @@ func _view() -> void:
 		if heights[i] < heights[i - 1] and heights[i] <= heights[i + 1]:
 			dips += 1
 			off_step = maxf(off_step, absf(steady[i][1] - roundf(steady[i][1])))
-	print("    a walk: the eye goes from %.1f to %.1f mm, lowest %.3f of a step off the footfall at worst" % [heights.min() * 1000.0, walk_swing * 1000.0, off_step])
+	print("    a walk: the eye goes from %.1f to %.1f mm, lowest %.3f of a step off the footfall at worst; %d steps sound, %.2f of a frame after the footfall at worst" % [
+		heights.min() * 1000.0, walk_swing * 1000.0, off_step, steps.size(), steps.max() if steps.size() > 0 else -1.0])
 	_check("walking, the eye rises and falls between 1 and 2 cm with every step", walk_swing > 0.01 and walk_swing < 0.02
 		and heights.min() < -0.01 and heights.min() > -0.02)
 	_check("and is lowest as the foot comes down", dips >= 2 and off_step < 0.05)
+	_check("which is the frame on which the step sounds", steps.size() >= 3 and steps.all(func(frames: float) -> bool: return frames < 1.001))
 
 	# The one setting: at nothing the camera does not move, whatever happens.
 	# The weapon in view keeps some of its bob, or it would look broken.
@@ -790,9 +802,27 @@ func _view() -> void:
 	player.punch_fov(1.0)
 	var held := await _watch(player, 0.6)
 	var sways := held.map(func(frame: Array) -> float: return frame[6].x)
-	_check("with view motion at 0 the camera holds still through a walk, a hard hit and a shot's punch", held.all(
-		func(frame: Array) -> bool: return frame[2].length() < 1e-7 and frame[3].length() < 1e-6 and absf(frame[4] - held[0][4]) < 1e-4))
+	var level: float = held[0][4]
+	var still := func(frame: Array) -> bool: return frame[2].length() < 1e-7 and frame[3].length() < 1e-6 and absf(frame[4] - level) < 1e-4
+	_check("with view motion at 0 the camera holds still through a walk, a hard hit and a shot's punch", held.all(still))
 	_check("and the weapon in view still moves, a third as much", sways.max() - sways.min() > 0.002 and sways.max() - sways.min() < 0.01)
+	# And through what leans the view and widens it: a strafe at a sprint and a
+	# jump with its landing, then a slide. The player is turned an eighth so
+	# that forward and to the right together run down the runway.
+	var landings := [0]
+	var count := func(_hardness: float) -> void: landings[0] += 1
+	player.landed.connect(count)
+	stand.call()
+	player.rotation.y = PI * 0.75
+	for action in ["move_forward", "move_right", "sprint", "jump"]:
+		Input.action_press(action)
+	var leant := await _watch(player, 0.9)
+	var strafed: bool = player.is_sprinting() and player.velocity.dot(player.global_basis.x) > 4.0
+	Input.action_press("crouch")
+	leant.append_array(await _watch(player, 0.2))
+	player.landed.disconnect(count)
+	_check("nor does it lean or widen: through a strafe at a sprint, a landing and a slide", strafed and landings[0] == 1 and player.is_sliding()
+		and leant.all(still))
 	Settings.put("view_motion", 1.0)
 
 	stand.call()
@@ -823,7 +853,8 @@ func _view() -> void:
 	var dip: float = jump.map(func(frame: Array) -> float: return frame[2].y).min()
 	print("    a jump: the eye dips %.0f mm on landing" % (-dip * 1000.0))
 	_check("landing dips the view and it comes back", dip < -0.05 and dip > -0.12 and absf(jump[-1][2].y) < 0.002)
-	_check("and the head the camera sits on stays where it is", absf(player.head.position.y - player.STAND_EYE) < 0.001)
+	_check("and the head the camera sits on stays where it is all the while", jump.all(
+		func(frame: Array) -> bool: return absf(frame[7] - player.STAND_EYE) < 0.001))
 
 	# One shot of the rifle. What it does to the aim is what it did before
 	# the view learned to move: a kick of what its data says, of which the
@@ -831,7 +862,10 @@ func _view() -> void:
 	# at 120 and 0.627 as fast as this test runs. Each frame is held against
 	# that recoil worked out here: nothing else may turn the camera of
 	# somebody who stands still. Next to it the field of view widens for a
-	# moment, and the weapon kicks back in the hands.
+	# moment, and the weapon kicks back in the hands. How much of either kick
+	# a frame gets to show depends on how long the frame before it took: the
+	# bounds leave room for one of 50 ms, which shows 0.547 of the kick of the
+	# aim and 0.6 of that of the weapon, as on a machine that is busy.
 	weapons._mags[0] = rifle.mag_size
 	var wide: float = camera.fov
 	var held_at: Vector3 = weapons._models[0].root.position
@@ -869,9 +903,9 @@ func _view() -> void:
 		rad_to_deg(kick.x), peak / kick.x, punch, back * 1000.0, -forward * 1000.0])
 	_check("a rifle shot kicks the aim by what its data says, as it did before", kick.x > nominal * 0.849 and kick.x < nominal * 1.151
 		and absf(kick.y) <= deg_to_rad(rifle.recoil_yaw_deg) and is_equal_approx(kick.z, kick.y * 0.5))
-	_check("and the view shows the same share of it, with nothing else turning the camera", peak / kick.x > 0.57 and peak / kick.x < 0.645 and stray < 1e-5)
+	_check("and the view shows the same share of it, with nothing else turning the camera", peak / kick.x > 0.5 and peak / kick.x < 0.645 and stray < 1e-5)
 	_check("the shot widens the field of view for a moment, and it is back within 0.3 s", punch > 0.3 and punch < 0.5 and absf(camera.fov - wide) < 0.01)
-	_check("the weapon kicks back as far as its data says and swings a little past where it was held", back > rifle.kick_back * 0.8
+	_check("the weapon kicks back as far as its data says and swings a little past where it was held", back > rifle.kick_back * 0.5
 		and back < rifle.kick_back * 1.05 and forward < 0.0)
 
 	# A hit from the left: `direction` is the way the shot travels, so to the
@@ -890,7 +924,7 @@ func _view() -> void:
 		rolled = minf(rolled, knock.z)
 		turned = maxf(turned, Vector2(knock.x, knock.y).length())
 	_check("a hit says where it came from: a direction to the left of the player", bearings.size() == 1 and bearings[0].dot(-to_right) > 0.99)
-	_check("it rolls the head away from that side and leaves the aim alone", rolled < -0.002 and rolled > -0.005 and turned < 1e-5)
+	_check("it rolls the head away from that side, by something to see, and leaves the aim alone", rolled < -0.004 and rolled > -0.009 and turned < 1e-5)
 	var arcs: Array[Vector2] = hud._hit_arcs.arcs
 	_check("the HUD draws an arc on the side the hit came from", arcs.size() == 1 and absf(arcs[0].x + PI * 0.5) < 0.02 and arcs[0].y > 0.4)
 	player.rotate_y(PI * 0.5)
@@ -909,11 +943,24 @@ func _view() -> void:
 		bearings.size() == 4 and bearings[1] == Vector3.ZERO and renewed == 1 and arcs.size() == 2)
 	player.hit_from.disconnect(note)
 
-	# The weapon lags a turn of the view, but only so far, however sudden:
-	# the test itself turns the player a quarter circle in one frame. Posed
-	# for a picture it sits where its data puts it, whatever went before.
+	# The commonest hit there is, a grunt's shot from straight ahead: it has
+	# no side to roll the head away from, and still rolls it, half as far and
+	# either way, and throws it back by as much.
 	stand.call()
 	await _wait(0.3)
+	player._knock.settle()
+	player.take_damage(7.0, Vector3.ZERO, player.global_basis.z)
+	var thrown := Vector3.ZERO
+	for frame in await _watch(player, 0.12):
+		var knock: Vector3 = frame[3] - frame[5]
+		thrown = thrown.max(Vector3(knock.x, absf(knock.y), absf(knock.z)))
+	_check("a grunt's shot from straight ahead throws the head back and rolls it, each by a fifth of a degree", thrown.x > 0.002 and thrown.x < 0.0045
+		and thrown.z > 0.002 and thrown.z < 0.0045 and thrown.y < 1e-5)
+
+	# The weapon lags a turn of the view, but only so far, however sudden:
+	# the test itself turns the player a quarter circle in one frame. Posed
+	# for a picture of a player who stands still, it sits where its data puts
+	# it, whatever it swung with before.
 	var held_to := rifle.hip_rotation_deg * (PI / 180.0)
 	player.rotate_y(-PI * 0.5)
 	await tree.process_frame
@@ -924,6 +971,18 @@ func _view() -> void:
 	_check("a sudden turn leaves the weapon behind, by no more than it may lag", lag > 0.005 and lag < weapons.SWAY_MAX + 0.001)
 	_check("posed for a picture, the weapon sits where its data puts it", weapons._models[0].root.position.is_equal_approx(rifle.hip_offset)
 		and weapons._models[0].root.rotation.is_equal_approx(held_to))
+	# Posed with its kick at its furthest, at the hip and then over the
+	# sights, where it comes less far back: the sights should stay near what
+	# they are held on.
+	var kicks: Array[float] = []
+	for sights: float in [0.0, 1.0]:
+		weapons.preview(0, sights)
+		weapons._kick.at = Vector3(0.0, 0.0, 1.0)
+		weapons._animate_viewmodel(rifle, 0.0)
+		kicks.append(weapons._models[0].root.position.z - rifle.hip_offset.lerp(rifle.ads_offset, sights).z)
+	weapons.preview(0)
+	_check("over the sights the weapon kicks less far back than at the hip", is_equal_approx(kicks[0], rifle.kick_back)
+		and kicks[1] > rifle.kick_back * 0.5 and kicks[1] < rifle.kick_back * 0.8)
 
 	# The settings screen has more on it than fits a screen of 1920 × 1080,
 	# which is as low as one gets: the list in it scrolls, and the way back
@@ -980,14 +1039,15 @@ func _view() -> void:
 ## Follows the camera of `player` for `seconds`. Returns a line for every
 ## frame that was drawn: the seconds since the start, the stride, where the
 ## camera sits on the head, how it is turned there, its field of view, how
-## much of that turn is recoil, and where the weapon in view is held.
+## much of that turn is recoil, where the weapon in view is held, and how
+## high the head is that the camera sits on.
 func _watch(player: CharacterBody3D, seconds: float) -> Array[Array]:
 	var frames: Array[Array] = []
 	var clock := [0.0]
 	var note := func() -> void:
 		clock[0] += get_process_delta_time()
 		frames.append([clock[0], player.stride(), player.camera.position, player.camera.rotation, player.camera.fov, player._recoil,
-			player.weapons._models[player.weapons._index].root.position])
+			player.weapons._models[player.weapons._index].root.position, player.head.position.y])
 	get_tree().process_frame.connect(note)
 	await _wait(seconds)
 	get_tree().process_frame.disconnect(note)

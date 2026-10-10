@@ -88,11 +88,14 @@ const SHELL_TAIL := 0.3
 ## which it is furthest back, and how much of its swing it loses, so that it
 ## comes forward a little past where it was held before it settles. By chance
 ## it also rolls and shifts sideways, at most this many radians and metres,
-## so that no two shots look alike.
+## so that no two shots look alike. Over the sights it kicks KICK_AIMED as
+## far, which is about what was ever drawn of it there before it was a spring:
+## the sights should jump no further off what they are held on than they did.
 const KICK_TIME := 0.025
 const KICK_DAMPING := 0.6
 const KICK_ROLL := 0.015
 const KICK_SHIFT := 0.003
+const KICK_AIMED := 0.75
 ## Shot after shot the muzzle climbs: by this share of the weapon's
 ## kick_rotation for each, up to CLIMB_MAX of it. It stays up while the shots
 ## keep coming, which is for CLIMB_HOLD seconds after the last, and then comes
@@ -104,11 +107,10 @@ const CLIMB_BLEED := 14.0
 ## A shot widens the field of view for a moment, by this many degrees for
 ## every degree it kicks the aim up, see Player.punch_fov(). A weapon that
 ## kicks it up by HEAVY_RECOIL degrees or more, the shotgun and the marksman
-## rifle, rattles the view as well, by this much per degree, see
-## Player.shake().
+## rifle, rattles the view as well, by this much, see Player.shake().
 const SHOT_FOV := 0.35
 const HEAVY_RECOIL := 3.0
-const SHOT_TRAUMA := 0.056
+const SHOT_TRAUMA := 0.3
 ## The bob of a walk, at walking speed: metres to either side and half that
 ## up and down, radians of roll with the sway and of pitch with the step. It
 ## runs BOB_LAG of a step behind the bob of the view, as something with weight
@@ -155,8 +157,9 @@ const BREATH_SIZE := 0.002
 const BREATH_PITCH := 0.0015
 const BREATH_RATE := 0.25
 ## A hit knocks it away from the side the hit came from: by this many metres
-## for a hit of the player's HIT_FULL or more, with this many radians of roll,
-## furthest after FLINCH_TIME seconds and swinging back a little past rest.
+## for a hit of the player's HIT_FULL or more and by less for less, see
+## Player.hit_weight(), with this many radians of roll, furthest after
+## FLINCH_TIME seconds and swinging back a little past rest.
 const FLINCH_SHIFT := 0.008
 const FLINCH_ROLL := 0.03
 const FLINCH_TIME := 0.06
@@ -587,14 +590,15 @@ func _fire(data: WeaponData) -> void:
 ## What a shot does to the picture, the aim apart: the weapon kicks back in
 ## the hands, never twice alike, and climbs if more follow; the view widens for
 ## a moment, less over the sights and not at all through a telescopic one;
-## and a heavy weapon rattles it.
+## and a heavy weapon rattles it, half as much over the sights.
 func _kick_view(data: WeaponData) -> void:
 	_kick.push(Vector3(randf_range(-KICK_SHIFT, KICK_SHIFT), randf_range(-KICK_ROLL, KICK_ROLL), 1.0))
 	_climb = minf(_climb + CLIMB_STEP, CLIMB_MAX)
 	var sights := lerpf(1.0, 0.5, ads_blend)
 	player.punch_fov(data.recoil_pitch_deg * SHOT_FOV * sights * (1.0 - scope_blend()))
 	if data.recoil_pitch_deg >= HEAVY_RECOIL:
-		player.shake(data.recoil_pitch_deg * SHOT_TRAUMA * sights)
+		# What a rattle shows goes by its square, so it is the root that halves it.
+		player.shake(SHOT_TRAUMA * sqrt(sights))
 
 
 ## Where the shots of the weapon in hand leave it.
@@ -837,15 +841,16 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	handling[0] += Vector3(-0.02, -0.07, 0.14) * _crowded
 	handling[1] += Vector3(0.95, 0.25, 0.0) * _crowded
 
-	# Over the sights the kick is straighter and the muzzle climbs less, so
-	# that the sights stay close to what they are held on.
+	# Over the sights the kick is smaller and straighter and the muzzle climbs
+	# less, so that the sights stay close to what they are held on.
 	var kick := _kick.at
 	var askew := 1.0 - 0.7 * aim
+	var shove := kick.z * lerpf(1.0, KICK_AIMED, aim)
 	var offset := data.hip_offset.lerp(data.ads_offset, aim) + carried[0]
-	offset += Vector3(-0.05 * _sprint_blend + kick.x * askew, -0.22 * lower - 0.03 * _sprint_blend, kick.z * data.kick_back)
+	offset += Vector3(-0.05 * _sprint_blend + kick.x * askew, -0.22 * lower - 0.03 * _sprint_blend, shove * data.kick_back)
 	model.root.position = offset + handling[0]
 	model.root.rotation = data.hip_rotation_deg * (PI / 180.0) * (1.0 - aim) + handling[1] + carried[1] + Vector3(
-		(kick.z * (1.0 - 0.5 * aim) + _climb * (1.0 - 0.8 * aim)) * data.kick_rotation - 0.9 * lower - 0.25 * _sprint_blend,
+		(shove * (1.0 - 0.5 * aim) + _climb * (1.0 - 0.8 * aim)) * data.kick_rotation - 0.9 * lower - 0.25 * _sprint_blend,
 		0.5 * _sprint_blend,
 		kick.y * askew
 	)
@@ -918,7 +923,10 @@ func _carry(aim: float, delta: float) -> Array[Vector3]:
 
 
 ## Brings everything that swings to rest, with the weapon held on where the
-## player now looks: for a picture of it, and to begin with.
+## player now looks: for a picture of it, and to begin with. What is not the
+## weapon's own to bring to rest stays as it is: the stride and the speed of
+## whoever carries it, and with them the bob of a walk and the hold of a
+## sprint. A picture is taken of a player who stands still.
 func _settle() -> void:
 	_kick.settle()
 	_drop.settle()
@@ -933,7 +941,7 @@ func _settle() -> void:
 ## A hit knocks the weapon away from the side it came from, and back for one
 ## from the front. One that came from no side only makes it sag.
 func _on_hit(amount: float, bearing: Vector3) -> void:
-	var size := clampf(amount / player.HIT_FULL, 0.1, 1.0) * FLINCH_SHIFT
+	var size: float = player.hit_weight(amount) * FLINCH_SHIFT
 	if bearing == Vector3.ZERO:
 		_flinch.push(Vector3(0.0, -0.4 * size, 0.0))
 		return
