@@ -1052,7 +1052,7 @@ Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het sa
 
 ## De centrale: het vierde level
 
-Op 11 oktober 2026 gevraagd: een heel nieuw level op de standaard van nu. Dat is de centrale geworden (`tools/levels/powerhouse.gd`, `scenes/powerhouse.tscn`), de elektriciteitscentrale van het fabrieksterrein, gebouwd met de bouwdoos en de plattegrond van "Grotere levels bouwen". Het thema is door de sessie gekozen, niet door Michiel. Het is gebouwd op branch `centrale` en dezelfde dag, op zijn woord, in `fase-2-vertical-slice` gezet.
+Op 11 oktober 2026 gevraagd: een heel nieuw level op de standaard van nu. Dat is de centrale geworden (`tools/levels/powerhouse.gd`, `scenes/powerhouse.tscn`), de elektriciteitscentrale van het fabrieksterrein, gebouwd met de bouwdoos en de plattegrond van "Grotere levels bouwen". Het thema is door de sessie gekozen, niet door Michiel. Het is gebouwd op branch `centrale` en dezelfde dag, op zijn woord, in `fase-2-vertical-slice` gezet en gepusht, met zijn lightmaps in Git LFS.
 
 **Wat er staat**
 
@@ -1138,7 +1138,6 @@ Elke ruimte haalt het keurmerk. Op de instellingen waarmee gespeeld wordt (Ultra
 - De lijnen van de mast buiten naar het portaal liggen grotendeels buiten het terrein en horen daarom bij geen ruimte: ze worden altijd getekend.
 - De ontvangst, de schakelruimte en het pompenhuis zijn donker, zoals de kleedkamer van de fabriek. Of dat sfeer is of te weinig om bij te vechten, moet het spelen uitwijzen.
 - De schermen op het terrein en in de werkplaats zijn nog die van de bouwer. In de werkplaats staan zo twee wanden van pallets op 180 m².
-- De lightmaps van de centrale zijn 137 MB in Git LFS, naast ruim 350 MB van de andere levels. Ze zijn nog niet gepusht.
 
 ## Gevechten: dekking, beurten en schaarste
 
