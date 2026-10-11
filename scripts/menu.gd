@@ -114,6 +114,11 @@ func at_title() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _enabled or not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
 		return
+	# While a level is being loaded there is none: after a death and between
+	# two levels the old one is gone a frame before the new one is there, and
+	# that frame is where a key lands that was pressed during the load.
+	if get_tree().current_scene == null:
+		return
 	match _screen:
 		Screen.NONE:
 			_show(Screen.PAUSE)
