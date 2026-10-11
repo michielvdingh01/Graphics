@@ -49,6 +49,7 @@ def options() -> argparse.Namespace:
     parser.add_argument("--look", default="", help="zombie or clown: paint the character up as one")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--no-delight", action="store_true", help="scan: leave the light that is baked into the texture")
+    parser.add_argument("--baggy", action="store_true", help="scan: the legs are in one garment down to the knees, such as a clown's suit")
     parser.add_argument("--flip-normal-y", action="store_true", help="the source's normal maps are DirectX style")
     parser.add_argument("--keep", default="", help="folder to leave the Blender scene and the textures in, to look at afterwards")
     parser.add_argument("--report", default="")
