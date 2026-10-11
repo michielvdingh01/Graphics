@@ -12,7 +12,9 @@ extends RefCounted
 ##
 ## A role names the characters one is picked from for every enemy, the model
 ## in scenes/models/ it carries ("" for none), its set of moves, and the
-## exported variables of enemy.gd that are different for it. A character is an
+## exported variables of enemy.gd that are different for it. It may name a
+## "voice", for the sounds <voice>_alert, _hurt, _death and _panic of
+## scripts/sfx.gd; without one its people sound the way their moves do. A character is an
 ## id, for assets/characters/<id>/<id>.glb, or the path of a scene. A table may
 ## also give a role a "tint": material name -> colour for that material.
 ## Whatever is missing or cannot be loaded makes that enemy a robot.
@@ -50,8 +52,8 @@ static func define(theme: String, spec: Dictionary) -> void:
 	_unlisted[theme] = true
 
 
-## What an enemy of `role` is in `theme`: {character, weapon, moves, tuning,
-## tint}, with the character as a scene. Empty for a robot. The character is
+## What an enemy of `role` is in `theme`: {character, weapon, moves, voice,
+## tuning, tint}, with the character as a scene. Empty for a robot. The character is
 ## picked at random, unless `pick` is given: the same number picks the same
 ## one, which is how machines that play together see the same faces.
 static func cast(theme: String, role: String, pick := -1) -> Dictionary:
@@ -75,6 +77,7 @@ static func cast(theme: String, role: String, pick := -1) -> Dictionary:
 		"character": load(scenes.pick_random() if pick < 0 else scenes[pick % scenes.size()]),
 		"weapon": str(part.get("weapon", "")),
 		"moves": str(part.get("moves", "default")),
+		"voice": str(part.get("voice", "")),
 		"tuning": tuning if tuning is Dictionary else {},
 		"tint": tint if tint is Dictionary else {},
 	}

@@ -15,6 +15,13 @@ pre_gain = 2.0
 keep_hf_hz = 20500.0
 post_gain = -4.0
 
+[sub_resource type="AudioEffectReverb" id="AudioEffectReverb_far01"]
+predelay_msec = 20.0
+predelay_feedback = 0.0
+hipass = 0.02
+dry = 0.0
+wet = 0.18
+
 [resource]
 bus/0/effect/0/effect = SubResource("AudioEffectHardLimiter_nuamj")
 bus/0/effect/0/enabled = true
@@ -46,3 +53,17 @@ bus/4/mute = false
 bus/4/bypass_fx = false
 bus/4/volume_db = 0.0
 bus/4/send = &"Master"
+bus/5/name = &"Far"
+bus/5/solo = false
+bus/5/mute = false
+bus/5/bypass_fx = false
+bus/5/volume_db = -2.0
+bus/5/send = &"Master"
+bus/5/effect/0/effect = SubResource("AudioEffectReverb_far01")
+bus/5/effect/0/enabled = true
+bus/6/name = &"Ambience"
+bus/6/solo = false
+bus/6/mute = false
+bus/6/bypass_fx = false
+bus/6/volume_db = 0.0
+bus/6/send = &"Master"

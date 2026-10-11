@@ -22,8 +22,11 @@ extends SceneTree
 ##   "float":   true writes 32-bit float WAVs instead of 16-bit (optional)
 ##   "events":  [{"t": seconds, "file": path, "bus": "World", "db": 0.0, "pitch": 1.0,
 ##                "pos": [x, y, z], "unit_size": 8.0, "max_distance": 80.0, "max_db": 3.0,
-##                "filter_db": -24.0, "filter_hz": 5000.0}]
-##              with "pos" the event is an AudioStreamPlayer3D set up as scripts/sfx.gd does.
+##                "filter_db": -24.0, "filter_hz": 5000.0, "attenuation": true, "panning": 1.0}]
+##              with "pos" the event is an AudioStreamPlayer3D set up as scripts/sfx.gd does;
+##              "attenuation": false is one that is as loud from any distance.
+##              "from": seconds into the file at which to begin; "until": the moment at
+##              which the event is cut off, having died away over "fade" seconds.
 ##
 ## How it keeps time. The Dummy driver mixes 4096 frames at a go, about every
 ## 93 ms, and a sound starts at the beginning of the block after play() was
@@ -70,7 +73,9 @@ func _effect(description: Dictionary) -> AudioEffect:
 ## A path on disk is read as it is. A res:// path is taken as the project
 ## imported it, which is what the game plays: with the default import that is
 ## Quite OK Audio, a lossy format, so it is decoded here first.
-func _padded(path: String, frames: int, cache: Dictionary) -> AudioStreamWAV:
+## `first` and `count` cut a piece out of it, in frames (a count below 0 is
+## all that is left), of which the last `fade` frames die away.
+func _padded(path: String, frames: int, cache: Dictionary, first := 0, count := -1, fade := 0) -> AudioStreamWAV:
 	if not cache.has(path):
 		var loaded: AudioStreamWAV
 		if path.begins_with("res://") and ResourceLoader.exists(path):
@@ -86,9 +91,17 @@ func _padded(path: String, frames: int, cache: Dictionary) -> AudioStreamWAV:
 	stream.format = source.format
 	stream.mix_rate = source.mix_rate
 	stream.stereo = source.stereo
+	var size := 4 if source.stereo else 2
+	var sound := source.data
+	if first > 0 or count >= 0:
+		sound = sound.slice(first * size, (first + count) * size if count >= 0 else sound.size())
+		var total := sound.size() / size
+		for i in range(maxi(total - fade, 0), total):
+			for at in range(i * size, (i + 1) * size, 2):
+				sound.encode_s16(at, int(sound.decode_s16(at) * float(total - i) / fade))
 	var silence := PackedByteArray()
-	silence.resize(frames * (4 if source.stereo else 2))
-	silence.append_array(source.data)
+	silence.resize(frames * size)
+	silence.append_array(sound)
 	stream.data = silence
 	return stream
 
@@ -201,7 +214,9 @@ func _run(spec: Dictionary, out: String) -> void:
 			return
 		# Frames of silence in the stream's own rate, played at this pitch.
 		var lead := roundi(float(event.get("t", 0.0)) * probe.mix_rate * pitch)
-		var stream := _padded(event["file"], lead, cache)
+		var first := roundi(float(event.get("from", 0.0)) * probe.mix_rate)
+		var count := roundi((float(event["until"]) - float(event.get("t", 0.0))) * probe.mix_rate * pitch) if event.has("until") else -1
+		var stream := _padded(event["file"], lead, cache, first, count, roundi(float(event.get("fade", 0.0)) * probe.mix_rate * pitch))
 		var player: Node
 		if event.has("pos"):
 			var p3 := AudioStreamPlayer3D.new()
@@ -215,6 +230,10 @@ func _run(spec: Dictionary, out: String) -> void:
 				p3.attenuation_filter_db = event["filter_db"]
 			if event.has("filter_hz"):
 				p3.attenuation_filter_cutoff_hz = event["filter_hz"]
+			if not event.get("attenuation", true):
+				p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+			if event.has("panning"):
+				p3.panning_strength = event["panning"]
 			positional = true
 			player = p3
 		else:
