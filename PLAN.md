@@ -815,7 +815,7 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 
 ## Zestig beelden op het volle scherm
 
-Op 11 oktober 2026 gevraagd: alle vier de levels op de instellingen waarmee gespeeld wordt (3456×2160, Ultra, MetalFX Spatial, renderschaal vanzelf) naar 60 fps, of laten zien wat Ultra daarvoor moet inleveren. Ze haalden 44 tot 52 fps. Het is allebei geworden: twee dingen die het beeld gelijk laten, drie instellingen waar niets van te zien is, en drie dingen die Ultra inlevert. Elk vast standpunt van elk level haalde daarmee 60 fps of meer, het krapste 61; na twee correcties die daarna nog kwamen (zie "Onderweg gevonden") is alleen de fabriek opnieuw gemeten. Gebouwd op branch `zestig` en op 11 oktober, op Michiels woord, in `fase-2-vertical-slice` gezet om het te kunnen spelen, voordat het meten af was. Er is niets herbouwd en niets gebakken: alles gebeurt bij het laden of in het spel.
+Op 11 oktober 2026 gevraagd: alle vier de levels op de instellingen waarmee gespeeld wordt (3456×2160, Ultra, MetalFX Spatial, renderschaal vanzelf) naar 60 fps, of laten zien wat Ultra daarvoor moet inleveren. Ze haalden 44 tot 52 fps. Het is allebei geworden: twee dingen die het beeld gelijk laten, drie instellingen waar niets van te zien is, en drie dingen die Ultra inlevert. Op de maat van het scherm haalt elk vast standpunt van elk level nu 65 fps of meer, en elk standpunt van de contactbladen 60 of meer. Zoals de benchmark tekent, met 11% meer pixels dan het scherm, blijft één standpunt eronder: de tussenvloer van de fabriek, op 59,7. Gebouwd op branch `zestig` en op 11 oktober, op Michiels woord, in `fase-2-vertical-slice` gezet om het te kunnen spelen; de metingen hieronder zijn daarna gedaan, op de samengevoegde stand. Er is niets herbouwd en niets gebakken: alles gebeurt bij het laden of in het spel.
 
 De twee punten bovenaan "Nog open" van stap 5 zijn hiermee gedaan: de kamers die elkaar allemaal tekenen, en de lampen die door muren heen rekenen, voor zover ze een schaduw hebben.
 
@@ -865,66 +865,64 @@ Gemeten door in één run, per standpunt, één ding om en om aan en uit te zett
 - **Ultra houdt MSAA 4×, de kleurzweem en de zachte zonneschaduw.** Dat is nu het verschil met High.
 - **Elke maatregel is voor een meting terug te zetten**: `--undo=ssil,lamp_filter,sun_atlas,fringe,glow,ssao,lamps,occlusion`, of `--undo=all` (`UNDO` in `scripts/settings.gd`). Het werkt op `tools/benchmark.sh` en, omdat die elke optie doorgeeft, op `tools/zone_sheet.py`.
 
-**Gemeten** op 11 oktober 2026, M1 Pro, om en om met een kopie van de branch zoals hij was, terwijl andere sessies tests draaiden. Ultra, MetalFX Spatial, renderschaal vanzelf (50%), de karabijn in beeld. Gemiddelde fps, tussen haakjes de 1% low. "Voor" en "Na" zijn zoals de benchmark tekent, op 3840×2160.
-
-**De tabellen zijn van vóór de twee correcties**: alle lampen waren nog gebonden, ook die zonder schaduw, en de occluders verborgen ook lightmaps. Op de vaste standpunten was van geen van beide iets te zien; de eerste kost in de fabriek niets (daar zijn het dezelfde zes lampen) en op het fabrieksterrein en in de centrale een deel van de winst van de lampen. Daarna is alleen de fabriek opnieuw gemeten, terwijl de laptop zwaar in gebruik was: voor 46,5 tot 49,7 fps, na 57,8 tot 70,5, met Platform op 57,8 en een 1% low van 48 waar de rustige meting 60,9 en 59 gaf. De rest stond in de rij toen Michiel wilde spelen.
+**Gemeten** op 11 oktober 2026, M1 Pro, op de samengevoegde hoofdbranch (met de wapens en handen van `wapens` in beeld), om en om: "voor" is dezelfde stand met `--undo=all`, die in de fabriek de cijfers van de branch van vóór dit werk geeft (46 tot 51 fps). Ultra, MetalFX Spatial, renderschaal vanzelf (50%), de karabijn in beeld. Twee rondes, terwijl andere sessies tests draaiden; per standpunt de beste van de twee, voor en na. Gemiddelde fps, tussen haakjes de 1% low. "Voor" en "Na" zijn zoals de benchmark tekent, op 3840×2160.
 
 **Fabriek**, de vaste standpunten
 
 | Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
 |---|---|---|---|---|
-| Overview | 49,3 (47) | 63,8 (61) | 53,0 (51) | 69,8 (66) |
-| Corridor | 50,0 (48) | 68,0 (64) | 53,8 (52) | 74,3 (70) |
-| Platform | 46,5 (45) | 60,9 (59) | 50,2 (48) | 67,0 (64) |
-| Hall | 50,5 (48) | 66,0 (63) | 54,2 (52) | 72,1 (68) |
-| Boiler | 51,4 (49) | 70,1 (66) | 55,7 (54) | 77,5 (72) |
+| Overview | 48,7 (47) | 62,8 (60) | 52,5 (50) | 68,3 (65) |
+| Corridor | 49,3 (47) | 66,6 (64) | 53,2 (51) | 72,6 (69) |
+| Platform | 45,9 (44) | 59,7 (58) | 49,6 (43) | 65,5 (62) |
+| Hall | 49,9 (48) | 64,9 (62) | 53,6 (51) | 70,6 (68) |
+| Boiler | 50,5 (48) | 68,6 (65) | 54,5 (52) | 75,0 (71) |
 
 **Fabrieksterrein**, de vaste standpunten
 
 | Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
 |---|---|---|---|---|
-| Overview | 66,2 (29) | 95,1 (50) | 72,2 (29) | 104,3 (52) |
-| Corridor | 61,5 (59) | 86,0 (81) | 66,9 (63) | 94,7 (89) |
-| Platform | 57,2 (55) | 83,5 (79) | 60,5 (58) | 89,1 (84) |
-| Hall | 48,3 (44) | 74,5 (70) | 52,6 (49) | 81,6 (77) |
-| Boiler | 69,6 (66) | 98,1 (92) | 76,7 (72) | 109,3 (103) |
+| Overview | 64,3 (28) | 92,0 (50) | 70,2 (29) | 101,3 (52) |
+| Corridor | 59,6 (48) | 82,1 (77) | 64,7 (62) | 90,5 (85) |
+| Platform | 56,0 (54) | 79,2 (75) | 59,2 (57) | 84,5 (80) |
+| Hall | 47,3 (45) | 71,5 (68) | 51,6 (49) | 78,2 (74) |
+| Boiler | 68,5 (66) | 95,0 (89) | 75,8 (71) | 106,2 (100) |
 
 **Depot**, de vaste standpunten
 
 | Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
 |---|---|---|---|---|
-| Overview | 52,4 (49) | 74,1 (71) | 56,2 (53) | 80,6 (76) |
-| Lane | 46,3 (43) | 67,3 (63) | 50,3 (46) | 74,3 (70) |
-| Dock | 47,1 (44) | 67,1 (63) | 50,6 (47) | 73,0 (68) |
-| Yard | 53,3 (51) | 75,4 (71) | 57,2 (54) | 82,0 (77) |
+| Overview | 51,5 (49) | 72,7 (69) | 55,4 (52) | 78,0 (74) |
+| Lane | 45,2 (43) | 65,6 (63) | 47,3 (45) | 71,4 (68) |
+| Dock | 46,3 (44) | 65,4 (63) | 49,8 (48) | 70,2 (68) |
+| Yard | 52,5 (50) | 73,6 (70) | 56,0 (52) | 78,8 (75) |
 
 **Centrale**, de vaste standpunten
 
 | Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
 |---|---|---|---|---|
-| Yard | 51,7 (50) | 70,9 (67) | 56,0 (54) | 76,0 (66) |
-| PumpHouse | 48,2 (46) | 67,1 (64) | 51,5 (48) | 73,2 (69) |
-| BoilerHouse | 48,8 (46) | 67,9 (64) | 52,5 (50) | 72,8 (69) |
-| ControlRoom | 44,7 (43) | 64,4 (61) | 48,5 (46) | 70,9 (67) |
-| TurbineHall | 47,7 (46) | 64,4 (61) | 51,0 (49) | 68,7 (62) |
+| Yard | 50,9 (49) | 68,5 (65) | 55,6 (54) | 74,8 (72) |
+| PumpHouse | 47,3 (45) | 64,7 (54) | 51,3 (49) | 70,8 (67) |
+| BoilerHouse | 47,9 (46) | 65,3 (62) | 52,0 (50) | 71,2 (68) |
+| ControlRoom | 43,8 (42) | 61,8 (59) | 47,4 (45) | 67,9 (65) |
+| TurbineHall | 46,7 (45) | 62,5 (60) | 49,9 (47) | 67,5 (65) |
 
-Het contactblad, `tools/zone_sheet.py <level> --res=3456x2160 --upscaler=metalfx --scale=0.5 --quality=3`, zonder wapen in beeld en gemeten over dertig frames per standpunt. De regels "na" van het fabrieksterrein en de centrale zijn van vóór de correctie van de occluders: 13 en 4 van hun standpunten zijn daar zonder lightmap getekend en tellen te licht. Die twee bladen moeten opnieuw; de fabriek en het depot kloppen.
+Het contactblad, `tools/zone_sheet.py <level> --res=3456x2160 --upscaler=metalfx --scale=0.5 --quality=3`, "voor" met `--undo=all` erbij: zonder wapen in beeld, gemeten over dertig frames per standpunt, zoals de benchmark tekent. Na haalt elke zone van elk level het keurmerk. Deze tabellen en die van de vaste standpunten zijn van vóór de reparatie van de lightmaps (zie "Onderweg gevonden"); met haar haalden de bladen van het fabrieksterrein en de centrale 60 tot 85 en 62 tot 72 fps.
 
-| Level | Fps voor | Fps na | Onder de 60 voor | na | Tekenopdrachten voor | na | Zwaarste standpunt na |
+| Level | Standpunten | Fps voor | Fps na | Onder de 60 voor | na | Tekenopdrachten voor | na | Zwaarste standpunt na |
 |---|---|---|---|---|---|---|---|---|
-| Fabriek | 10 | 48 tot 59 | 64 tot 82 | 10 | 0 | 343 tot 839 | 337 tot 813 | hall 2: 64 fps |
-| Fabrieksterrein | 56 | 43 tot 63 | 62 tot 87 | 55 | 0 | 147 tot 951 | 147 tot 916 | workshop 3: 62 fps |
-| Depot | 4 | 48 tot 57 | 69 tot 81 | 4 | 0 | 334 tot 391 | 336 tot 391 | level 3: 69 fps |
-| Centrale | 25 | 46 tot 56 | 66 tot 79 | 25 | 0 | 216 tot 1098 | 216 tot 1085 | turbine_hall 3: 66 fps |
+| Fabriek | 10 | 48 tot 59 | 63 tot 83 | 10 | 0 | 343 tot 839 | 337 tot 813 | hall 2: 63 fps |
+| Fabrieksterrein | 56 | 42 tot 62 | 61 tot 86 | 55 | 0 | 147 tot 951 | 147 tot 916 | paint_shop 2: 61 fps |
+| Depot | 4 | 48 tot 57 | 69 tot 81 | 4 | 0 | 334 tot 391 | 336 tot 391 | level 2: 69 fps |
+| Centrale | 25 | 47 tot 56 | 66 tot 78 | 25 | 0 | 216 tot 1098 | 216 tot 1085 | turbine_hall 3: 66 fps |
 
-Een gevecht, in de fabriek, met alle zestien soldaten tegelijk aan en op de speler af (`--awake`) tegen dezelfde zestien op hun post (`--posted`), vanaf Overview en Hall, twee keer om en om. Gemeten vóór de laatste drie instellingen erbij kwamen:
+Een gevecht, in de fabriek, met alle zestien soldaten tegelijk aan en op de speler af (`--awake`) tegen dezelfde zestien op hun post (`--posted`), vanaf Overview en Hall:
 
 | | Op hun post | In gevecht | 1% low op hun post | 1% low in gevecht |
 |---|---|---|---|---|
-| Voor | 48,4–49,7 | 48,8–51,5 | 46–48 | 45–46 |
-| Na | 60,9–62,7 | 61,5–62,5 | 59–60 | 56–57 |
+| Voor | 47,3 en 48,4 | 48,9 en 48,0 | 45 en 47 | 44 en 44 |
+| Na | 61,2 en 63,0 | 62,1 en 62,6 | 59 en 61 | 57 en 58 |
 
-Het gemiddelde blijft gelijk; de 1% low zakt twee tot drie fps, voor en na evenveel. Dat is wat de soldaten die lopen aan schaduwen laten hertekenen.
+Het gemiddelde blijft gelijk; de 1% low zakt twee tot drie fps, voor en na evenveel. Dat is wat de soldaten die lopen aan schaduwen laten hertekenen. Er is niets apart aan gedaan, behalve dat een gebonden lamp zijn schaduw nog maar van zijn eigen ruimtes tekent.
 
 **Wat elke maatregel oplevert en hoeveel van het beeld erdoor verandert**
 
@@ -933,8 +931,8 @@ De winst is gemeten als hierboven, om en om in één run. De pixels zijn geteld 
 | Maatregel | Winst per frame | Fabriek | Fabrieksterrein | Depot | Centrale |
 |---|---|---|---|---|---|
 | Twee keer hetzelfde | | 2 764 | 3 491 | 249 | 1 367 |
-| Lampen met schaduw in hun eigen ruimtes | 0–0,1 ms in de fabriek; met alle lampen gebonden 0–1,6 op het fabrieksterrein en 0,1–0,7 in de centrale, nu minder en niet opnieuw gemeten | 1 654 | 4 371 | | 2 342 |
-| Muren als occluders | 0–0,1, 0–1,3 en 0–0,4 ms | 1 450 | 3 952 | | 1 183 |
+| Lampen met schaduw in hun eigen ruimtes | niets in de fabriek, 0–0,9 ms op het fabrieksterrein, 0–0,4 in de centrale | 1 654 | 4 371 | | 2 342 |
+| Muren als occluders | 0–0,1, 0–1,1 en 0–0,3 ms | 1 450 | 3 952 | | 1 183 |
 | Atlas van de zon van 8192 naar 4096 | 1,1–2,1 ms | 1 980 | 5 674 | 256 | 945 |
 | en van 4096 naar 2048 | 0,3–0,5 ms | 2 381 | 8 683 | 191 | 1 199 |
 | Glow lineair vergroot | 0,2 ms | 1 750 | 3 897 | 211 | 998 |
@@ -949,29 +947,32 @@ De winst is gemeten als hierboven, om en om in één run. De pixels zijn geteld 
 - **SSIL** maakte wat in de zon staat een fractie lichter: de cementzakken in de gang van de fabriek, de kluisjes op het fabrieksterrein.
 - **De atlas van de zon** is binnen niet terug te vinden, ook niet met de soldaten op hun post in het depot en de fabriek (hooguit 268 en 2 476 pixels, tegen 208 en 2 643 voor twee keer hetzelfde). Buiten het fabrieksterrein verschuift de rand van de schaduw van het gebouw op de grond een paar pixels: dat zijn de 8 683.
 - **Het filter van de lampschaduwen** verschilt langs een handvol schaduwranden.
-- **De lampen en de muren** veranderen het beeld niet. De getallen in de tabel zijn van de vaste standpunten, vóór de correcties. Erna zijn alle 91 standpunten van de contactbladen bekeken, op 1920×1080 (2,1 miljoen pixels), elk met en zonder: hooguit 1 039, 513 en 701 pixels verschil voor de lampen in de fabriek, op het fabrieksterrein en in de centrale, en 1 031, 500 en 715 voor de occluders, tegen 1 031, 503 en 696 voor twee keer hetzelfde.
+- **De lampen en de muren** veranderen het beeld niet. De getallen in de tabel zijn van de vaste standpunten, vóór de twee correcties uit "Onderweg gevonden". Erna zijn alle 91 standpunten van de contactbladen bekeken, op 1920×1080 (2,1 miljoen pixels), elk met en zonder: hooguit 1 039, 513 en 701 pixels verschil voor de lampen in de fabriek, op het fabrieksterrein en in de centrale, en 1 031, 500 en 715 voor de occluders, tegen 1 031, 503 en 696 voor twee keer hetzelfde.
 
-De bladen met voor, na en het verschil, per maatregel het standpunt van elk level waar het meest verandert, staan in `benchmark/results/zestig/` van de worktree `.claude/worktrees/zestig` (niet in Git).
+De bladen met voor, na en het verschil, per maatregel het standpunt van elk level waar het meest verandert, staan in `benchmark/results/zestig/` van de worktree `.claude/worktrees/zestig` (niet in Git), met de contactbladen van voor en na erbij.
 
 **Onderweg gevonden**
 
-- **Achter een occluder verdween het gebakken licht.** De vijf vaste standpunten lieten niets zien. Screenshots vanaf elk standpunt van het contactblad, met en zonder de occluders, wel: in 13 van de 56 standpunten van het fabrieksterrein en 4 van de 25 van de centrale was een ruimte zonder haar lightmap getekend, tot een vijfde van het beeld. De renderer kent een lightmap aan de doos van haar probes; vanuit een hoek van de ruimte staat de camera daarbuiten, en dan telde die doos als verborgen. Alles wat niet zelf getekend wordt, een lightmap, een lamp, een reflectieprobe en een decal, laten de occluders nu met rust. Daarna is over alle 91 standpunten gemeten wat hieronder staat.
+- **De renderer gebruikt acht lightmaps per frame, en het fabrieksterrein heeft er 23.** Liggen er in de kijkrichting meer dan acht dozen van lightmaps, ook van zones die uit staan, dan krijgen acht ruimtes hun gebakken licht en de rest niet. Zo'n ruimte wordt dan egaal verlicht door het hemellicht, zonder schaduw en veel lichter dan ze gebakken is: het magazijn van het fabrieksterrein is zonder lightmap gemiddeld vier keer zo licht als met. Welke ruimtes afvallen hangt af van de volgorde waarin de renderer ze tegenkomt, en die verschuift terwijl zones aan en uit gaan; hetzelfde standpunt komt er in het ene blad met en in het andere zonder uit. **Dat is niet van dit werk**: op het blad van de branch van vóór dit werk missen andere ruimtes hun licht dan op de bladen van erna (12 van de 56 standpunten van het fabrieksterrein verschillen), en met alle 23 lightmaps verborgen ziet het magazijn eruit zoals het daar stond. Het speelt op het fabrieksterrein en in de centrale (11 zones); de fabriek heeft er vier. Voor en na zijn hieronder met dezelfde ruimtes zonder licht gemeten, dus de vergelijking klopt; de bladen zelf laten een mengsel zien, zoals elk blad van die twee levels tot nu toe.
+- **De occluders veranderden welke acht dat waren.** De doos van een lightmap achter een muur telde in de eerste versie niet meer mee, en in 13 van de 56 standpunten van het fabrieksterrein en 4 van de 25 van de centrale kwam een ruimte er anders uit, tot een vijfde van het beeld. Ik hield dat eerst voor licht dat verdween; het was licht dat terugkwam. De occluders laten lightmaps, lampen, reflectieprobes en decals nu met rust, zodat zij aan het beeld niets veranderen. Daarna is over alle 91 standpunten geteld wat hierboven staat.
+- **De reparatie staat erin** (`_light()` in `scripts/zones.gd`), op 11 oktober op Michiels woord in de hoofdbranch gezet: alleen de lightmaps van de zones die getekend worden staan aan, en zijn dat er meer dan acht, dan die van de zones het dichtst bij de camera. Dertien van de 56 standpunten van het fabrieksterrein en drie van de 25 van de centrale worden er meer dan 10% donkerder van: de compressorruimte, het ketelhuis, de kantoren, de spuiterij, de loge, de oostgang, de regelkamer en het ketelhuis van de centrale komen eruit zoals ze gebakken zijn, warm onder hun lampen en donker daarbuiten, in plaats van egaal blauwgrijs. Het blad `lightmaps_zoals_nu_en_gerepareerd.jpg` zet negen ruimtes naast elkaar. Met de reparatie haalt elk standpunt van die twee contactbladen nog 60 fps (60 tot 85 en 62 tot 72, tegen 61 tot 86 en 66 tot 78), van zone wisselen duurt niet langer (de traagste frame bij een sprong naar een andere zone 35 tot 41 ms, tegen 38 tot 50) en de selftest slaagt. Het verandert hoe twee levels eruitzien: wie ze gespeeld heeft, kent een deel van de kamers lichter dan ze nu zijn.
 - **Een lamp zonder schaduw verlicht de ruimte achter de muur, en dat is te zien.** De eerste versie bond elke lamp. In zes standpunten van het fabrieksterrein en drie van de centrale werd het daar donkerder van: de linkerhelft van de ontvangst van de centrale had haar licht van een buis in de kabelgang ernaast. Dat is een lek, maar het is het licht waarmee het level is gemaakt en bekeken. Alleen de lampen met schaduw worden nu gebonden; bij hen kwam er achter de muur niets aan.
 - **De sortering in de schaduw en de zon zelf leveren verder niets op.** Zeventien van de 38 zones krijgen geen zon. Alles wat in de schaduw staat buiten het licht van de zon houden: niets te meten, want de schil van een zone slaat de gebakken zon al over. Twee schaduwkaarten in plaats van vier: 0,1 ms, en te zien.
 - **Een rij runs zonder pauze laat andere sessies wachten.** Mijn runs volgden elkaar binnen een seconde op; een andere sessie, die netjes wachtte tot de GPU vrij was, kwam een uur niet aan de beurt en meldde het. Sindsdien start een run pas als er een tijd lang geen andere Godot heeft getekend.
-- **Michiel speelde zelf, in een venster, en dat zag mijn controle niet**: die keek alleen naar Godot zonder venster. Twee minuten lang liep een contactblad naast zijn spel. Die metingen zijn weggegooid en opnieuw gedaan; de controle telt nu elke Godot die tekent.
+- **Michiel speelde zelf, in een venster, en dat zag mijn controle niet**: die keek alleen naar Godot zonder venster. Twee keer liep er anderhalve tot twee minuten een meting naast zijn spel. Die metingen zijn weggegooid en opnieuw gedaan; een run breekt nu af zodra er naast hem een andere Godot tekent.
+- **Een laadcontrole met `--play` schrijft in het savebestand.** Om te zien of een level nog laadde startte ik het een keer of twaalf zonder venster met `--play`, en elk daarvan zette een checkpoint in Michiels `save.cfg`. Zo'n controle krijgt nu een eigen `HOME`.
 
 **Gecontroleerd, en wat niet**
 
-- `tools/selftest.sh` slaagt op de branch zoals hij is samengevoegd, met de hoofdbranch van dat moment erin; `tools/nettest.sh` slaagde vóór de twee correcties. Met een eigen `HOME`, omdat andere sessies tegelijk testten.
-- Met `--undo=all` haalt de branch in de fabriek de cijfers van ervoor: 46,2 tot 51,2 fps tegen 46,5 tot 51,4.
-- **Niemand heeft het op het scherm gezien.** Alles is gemeten zonder venster en vergeleken in screenshots, door pixels te tellen en door de bladen te bekijken. Of de schaduwen van de lampen en de kleurzweem er in beweging hetzelfde uitzien, is niet beoordeeld.
+- `tools/selftest.sh` en `tools/nettest.sh` slagen op de samengevoegde hoofdbranch, met een eigen `HOME` omdat andere sessies tegelijk testten.
+- Met `--undo=all` haalde de branch in de fabriek de cijfers van de kopie van ervoor: 46,2 tot 51,2 fps tegen 46,5 tot 51,4. De "voor" van de tabellen is daarom zo gemeten: de samenvoeging met `wapens` zette andere wapens en handen in beeld, en daarmee was de kopie niet meer te vergelijken.
+- **Ik heb het alleen in screenshots gezien.** Alles is gemeten zonder venster en vergeleken door pixels te tellen en de bladen te bekijken. Michiel heeft de samengevoegde stand op 11 oktober gespeeld; wat hij ervan vond, staat hier nog niet.
 - De frametijden zijn die van een camera die stilstaat. In beweging komen daar de schaduwen bij die een lamp opnieuw tekent als er iets onder beweegt; dat is alleen in het ene gevecht hierboven gemeten.
 - **Een standpunt buiten het level is niet te vertrouwen.** Staat de camera in geen enkele zone, dan tekent het level alle zones tegelijk, en dan zijn er meer lampen met schaduw in beeld dan de atlas plaats heeft. Welke lamp dan zonder schaduw blijft, wisselt van keer tot keer: op het dak van het magazijn van het fabrieksterrein scheelde dat 30 duizend pixels tussen twee runs die verder gelijk waren. Dat was er al, en in het spel komt de camera daar niet. Ik hield het eerst voor een fout van de lampen per zone.
 - De eerste keer dat iets getekend wordt kan haperen. De occluders stellen dat moment uit voor wat achter een muur staat; het is niet geteld met de teller van pipelines.
-- Samen spelen is niet geprobeerd. Lagen en maskers zijn op elke machine eigen en gaan niet over het net.
+- Samen spelen is getest met `tools/nettest.sh`, niet gespeeld. Lagen en maskers zijn op elke machine eigen en gaan niet over het net.
 - De Compatibility-renderer, waar de kleurzweem terugvalt op de lenspass, is niet gestart.
-- **Na de correcties is alleen de fabriek opnieuw gemeten**, en de contactbladen van het fabrieksterrein en de centrale niet opnieuw gemaakt. Wat er nog moet: de vier levels voor en na, om en om, en die twee bladen, met de opdrachten onder Werkwijze.
+- De pixels per maatregel zijn geteld vóór de samenvoeging met de hoofdbranch en, voor de instellingen van Ultra, vóór de twee correcties; die raken de lampen en de occluders, en die twee zijn daarna over alle standpunten opnieuw geteld.
 - Low, Medium en High zijn niet opnieuw gemeten. Ze krijgen de lampen per zone, de occluders en de drie instellingen ook.
 
 **Werkwijze**
@@ -986,6 +987,8 @@ De bladen met voor, na en het verschil, per maatregel het standpunt van elk leve
 
 **Nog open**
 
+- **Waar meer dan acht zones tegelijk getekend worden**, uit de westgang van het fabrieksterrein zijn dat er negen, valt de verste nog altijd af en wordt zonder gebakken licht getekend.
+- **Wat over het licht van het fabrieksterrein en de centrale is gezegd, is gezegd over kamers die deels te licht waren.** Elk contactblad en elke screenshot van die twee levels van vóór de reparatie van de lightmaps laat een wisselend deel van de kamers vlak en te licht zien, ook die in "Stap 5" en "De centrale". Of de ontvangst, de schakelruimte en het pompenhuis te donker zijn om bij te vechten, moet opnieuw bekeken worden, nu ze zijn zoals ze gebakken zijn.
 - **MSAA 4× is wat Ultra nog kost**: 0,9 tot 1,4 ms boven 2×. Wie meer marge wil dan er nu is, vindt die daar; het is op de bladen het best te zien van alles wat overwogen is.
 - **SSR kost 1,4 tot 1,9 ms**, op High en op Ultra. Het halve aantal stappen scheelt 0,25 ms en is te zien; verder is er niet naar gekeken.
 - **De schaduwen van de lampen blijven de grootste post per pixel.** Een pixel betaalt voor elke lamp met schaduw binnen wiens bereik hij ligt, ook waar die lamp nauwelijks nog licht geeft. Korter bereik of minder lampen met schaduw verandert het licht en vraagt de levelbouwer.
