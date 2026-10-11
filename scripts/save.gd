@@ -4,12 +4,12 @@ extends Node
 ## there. A checkpoint is named by the id the level gives it; what was cleared
 ## on the way to it follows from where it lies on the route, so that is not
 ## stored. A benchmark or --snap run never reads or writes it, and a
-## self-test run keeps a file of its own. A level that is not in the game's
+## self-test run keeps a file of its own, one for every checkout of the
+## project (see SelfTest.own_file). A level that is not in the game's
 ## list of levels, one that is being tried out, keeps its checkpoints for as
 ## long as it runs and leaves the file as it found it.
 
 const PATH := "user://save.cfg"
-const SELFTEST_PATH := "user://selftest_save.cfg"
 
 ## What a run is measured by, see `stats`.
 const STATS: Array[String] = ["seconds", "shots", "hits", "headshots", "deaths"]
@@ -24,13 +24,15 @@ var stats := {}
 
 var _path := PATH
 var _persistent := true
+## What was saved and whether it was written, while it is set aside.
+var _aside := {}
 
 
 func _ready() -> void:
 	_persistent = not Benchmark.active and not Benchmark.snapping
 	if SelfTest.active:
 		# Starts from nothing, whatever an earlier run left behind.
-		_path = SELFTEST_PATH
+		_path = SelfTest.own_file("save.cfg")
 		clear()
 	reload()
 
@@ -73,6 +75,24 @@ func tally(what: String, by := 1.0) -> void:
 ## Writes what there is to the file now, instead of at the next checkpoint.
 func flush() -> void:
 	_write()
+
+
+## Sets what is saved aside while something is played that is not the game,
+## and puts it back afterwards as it was. In between nothing is written,
+## whatever is stored or tallied.
+func set_aside(on: bool) -> void:
+	if on == not _aside.is_empty():
+		return
+	if on:
+		_aside = {"checkpoint": checkpoint, "stats": stats, "persistent": _persistent}
+		checkpoint = {}
+		_persistent = false
+		_reset_stats()
+	else:
+		checkpoint = _aside.checkpoint
+		stats = _aside.stats
+		_persistent = _aside.persistent
+		_aside = {}
 
 
 func _reset_stats() -> void:

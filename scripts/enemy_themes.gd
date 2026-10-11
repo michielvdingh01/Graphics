@@ -19,8 +19,10 @@ extends RefCounted
 ##
 ## A theme may also be another one with something different about it:
 ## {"like": "clowns", "tuning": {"panics": true}} is the clowns, each role
-## with that on top of its own tuning. The other has to be a theme with roles
-## of its own.
+## with that on top of its own tuning. The other has to be a theme that came
+## before it. define() adds one that way while the game runs, which is how
+## the sandbox fields the variants of an experiment: nobody is offered those
+## as a theme.
 
 const ROBOTS := "robots"
 const TABLES: Array[String] = ["res://assets/animations/themes.json", "res://assets/characters/manifest.json"]
@@ -28,15 +30,24 @@ const CHARACTERS := "res://assets/characters/%s/%s.glb"
 
 static var _themes := {}
 static var _read := false
+## Themes that define() added, which names() leaves out.
+static var _unlisted := {}
 
 
 ## Every theme there is, robots first.
 static func names() -> Array[String]:
 	var found: Array[String] = [ROBOTS]
 	for theme: String in _all():
-		if theme != ROBOTS:
+		if theme != ROBOTS and not _unlisted.has(theme):
 			found.append(theme)
 	return found
+
+
+## Adds a theme that is in no table, or replaces it: `spec` is what a table
+## would say of it.
+static func define(theme: String, spec: Dictionary) -> void:
+	_all()[theme] = _resolved(spec)
+	_unlisted[theme] = true
 
 
 ## What an enemy of `role` is in `theme`: {character, weapon, moves, tuning,
@@ -84,17 +95,23 @@ static func _all() -> Dictionary:
 				if themes[theme] is Dictionary:
 					_themes[theme] = themes[theme]
 		for theme: String in _themes.keys():
-			var other: Variant = _themes.get(_themes[theme].get("like", ""))
-			if not other is Dictionary:
-				continue
-			var on_top: Variant = _themes[theme].get("tuning")
-			var roles := {}
-			for role: String in other:
-				var part: Variant = other[role]
-				if part is Dictionary:
-					part = part.duplicate()
-					var tuning: Variant = part.get("tuning")
-					part["tuning"] = (tuning if tuning is Dictionary else {}).merged(on_top if on_top is Dictionary else {}, true)
-					roles[role] = part
-			_themes[theme] = roles
+			_themes[theme] = _resolved(_themes[theme])
 	return _themes
+
+
+## A theme as it is cast from: its own roles, or those of the theme it is
+## like with its tuning on top of theirs.
+static func _resolved(theme: Dictionary) -> Dictionary:
+	var other: Variant = _themes.get(theme.get("like", ""))
+	if not other is Dictionary:
+		return theme
+	var on_top: Variant = theme.get("tuning")
+	var roles := {}
+	for role: String in other:
+		var part: Variant = other[role]
+		if part is Dictionary:
+			part = part.duplicate()
+			var tuning: Variant = part.get("tuning")
+			part["tuning"] = (tuning if tuning is Dictionary else {}).merged(on_top if on_top is Dictionary else {}, true)
+			roles[role] = part
+	return roles

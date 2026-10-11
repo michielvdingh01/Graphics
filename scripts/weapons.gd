@@ -395,6 +395,17 @@ func resupply() -> void:
 	_emit_ammo()
 
 
+## Everything as a level starts: full magazines, the reserve a weapon begins
+## with and the grenades. For a fight that is fought again.
+func restock() -> void:
+	for i in LOADOUT.size():
+		_mags[i] = LOADOUT[i].mag_size
+		_reserves[i] = _start_reserve(LOADOUT[i])
+	grenades = START_GRENADES
+	grenades_changed.emit(grenades)
+	_emit_ammo()
+
+
 ## Takes what a can of ammunition holds: most for the weapon in hand, some
 ## for the others. False if nothing of it fitted.
 func add_ammo() -> bool:

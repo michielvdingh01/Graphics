@@ -1,0 +1,39 @@
+{
+	"_doc": "The experiments of the sandbox, see scripts/sandbox.gd. An experiment has a 'title' for the menu, the 'level' and the 'zone' of it that is the arena (the id the level gives the zone on its route), optionally a 'squad' (the roles that stand at the posts of that zone, in the order of the posts; without it, whoever the level has there) and its 'variants'. A variant has a 'name' and is otherwise a theme as assets/characters/manifest.json writes one: usually 'like' another theme with a 'tuning' on top, which sets exported variables of scripts/enemy.gd. An experiment is here to be decided: once it is, what won goes into the theme and the experiment goes.",
+	"experiments": {
+		"panic_spread": {
+			"title": "Panic: how far it spreads",
+			"level": "res://scenes/factory.tscn",
+			"zone": "loading_bay",
+			"variants": [
+				{"name": "to 8 m, as it is", "like": "panic_clowns"},
+				{"name": "through the whole room", "like": "panic_clowns", "tuning": {"panic_radius": 40.0}},
+				{"name": "not at all, only when hurt", "like": "panic_clowns", "tuning": {"panic_radius": 0.0}}
+			]
+		},
+		"panic_pace": {
+			"title": "Panic: how fast they run",
+			"level": "res://scenes/factory.tscn",
+			"zone": "hall",
+			"squad": ["grunt", "grunt", "grunt", "rusher", "heavy"],
+			"variants": [
+				{"name": "1.35 times their walk, as it is", "like": "panic_clowns"},
+				{"name": "no faster than they walk", "like": "panic_clowns", "tuning": {"panic_pace": 1.0}},
+				{"name": "twice their walk", "like": "panic_clowns", "tuning": {"panic_pace": 2.0}}
+			]
+		},
+		"who": {
+			"title": "Who to fight in the yard",
+			"level": "res://scenes/depot.tscn",
+			"zone": "gate",
+			"squad": ["grunt", "grunt", "grunt", "rusher", "heavy"],
+			"variants": [
+				{"name": "robots", "like": "robots"},
+				{"name": "soldiers", "like": "soldiers"},
+				{"name": "zombies", "like": "zombies"},
+				{"name": "clowns", "like": "clowns"},
+				{"name": "panic clowns", "like": "panic_clowns"}
+			]
+		}
+	}
+}

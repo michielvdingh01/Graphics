@@ -27,8 +27,11 @@ was imported anew. After that, bake with --all.
 A bake wants the GPU to itself. Next to another Godot that draws, the game
 being played or a benchmark of somebody else's, both have hung, and so has
 every Godot started after them until the laptop was restarted or the stuck
-one was gone. So this refuses to bake while there is one, unless told to
-with --anyway.
+one was gone. So a bake takes the GPU slot of tools/gpu_slot.sh before it
+looks at anything and keeps it until it is done: runs from other checkouts
+wait for it, and it waits for theirs. A Godot that draws without the slot,
+the editor or the game played from it, is still in the way: this refuses to
+bake while there is one, unless told to with --anyway.
 """
 import hashlib
 import json
@@ -179,6 +182,11 @@ def main():
     if not wanted:
         print("%s: nothing to bake, every lightmap is up to date." % name)
         return 0
+    if not os.environ.get("GPU_SLOT_HELD"):
+        # From here on with the GPU slot, for as long as the bake lasts: the
+        # same once more, started by what takes the slot.
+        slot = os.path.join(ROOT, "tools/gpu_slot.sh")
+        os.execv(slot, [slot, sys.executable, os.path.abspath(__file__)] + sys.argv[1:])
     for zone in wanted:
         print("%s %s: %s" % (name, zone, stale(zone) or "up to date, baked all the same"))
     others = drawing_godots()

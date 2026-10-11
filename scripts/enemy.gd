@@ -74,13 +74,8 @@ const PACK_RADIUS := 5.0
 const PACK_DAMAGE := 140.0
 ## Seconds it is out of action when the plate is shot off its arm.
 const STAGGER := 0.9
-## One that panics does so with this much of its health left, or when
-## another dies this near to it.
-const PANIC_HEALTH := 0.4
-const PANIC_RADIUS := 8.0
-## How much faster than its walk it runs about then, how far it goes before
-## it turns, in metres, and the seconds it gives that.
-const PANIC_PACE := 1.35
+## How far one that has lost its head runs before it turns, in metres, and
+## the seconds it gives that.
 const PANIC_RUN := Vector2(4.0, 11.0)
 const PANIC_TIME := Vector2(0.8, 2.2)
 
@@ -130,6 +125,11 @@ enum Mode { HUNT, TO_COVER, COVER, PEEK, FLEE, PANIC }
 ## to it, and does not find it again: it drops what it carries and runs about.
 ## Only for a model that can show that.
 @export var panics := false
+## It does so with this much of its health left, or when another dies this
+## many metres from it, and then runs this much faster than it walks.
+@export var panic_health := 0.4
+@export var panic_radius := 8.0
+@export var panic_pace := 1.35
 ## What the plate on its arm takes before it is shot off, and what the pack
 ## on its back takes before it is holed. Only for a model that has one.
 @export var shield := 80.0
@@ -200,7 +200,8 @@ var _told_aim := 0
 
 func _ready() -> void:
 	# Every machine has to cast the same character for the same enemy.
-	var cast := THEMES.cast(Settings.enemy_theme, role, String(name).hash() if Net.active else -1)
+	var theme: String = Sandbox.theme if Sandbox.active else Settings.enemy_theme
+	var cast := THEMES.cast(theme, role, String(name).hash() if Net.active else -1)
 	var tuned := _tune(cast.get("tuning", {}))
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
@@ -431,7 +432,7 @@ func _hurt(amount: float, hit_position: Vector3, direction: Vector3) -> bool:
 	Net.show(self, &"_show_hit", [hit_position, direction, amount, health])
 	if health <= 0.0:
 		_die()
-	elif health <= max_health * PANIC_HEALTH:
+	elif health <= max_health * panic_health:
 		panic()
 	return dead
 
@@ -717,7 +718,7 @@ func _run_about(delta: float) -> Vector3:
 		_bolt = randf_range(PANIC_TIME.x, PANIC_TIME.y)
 		var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU) * randf_range(PANIC_RUN.x, PANIC_RUN.y)
 		_bolt_to = NavigationServer3D.map_get_closest_point(agent.get_navigation_map(), global_position + way)
-	var step := _go_to(_bolt_to, speed * PANIC_PACE)
+	var step := _go_to(_bolt_to, speed * panic_pace)
 	if step.length_squared() > 0.01:
 		_face = step
 	return step
@@ -912,7 +913,7 @@ func _die() -> void:
 	# Whoever of its kind stood near enough loses its head over it.
 	if panics:
 		for other in get_tree().get_nodes_in_group("enemy"):
-			if other.global_position.distance_to(global_position) < PANIC_RADIUS:
+			if other.global_position.distance_to(global_position) < panic_radius:
 				other.panic()
 
 
