@@ -135,10 +135,12 @@ def units_of(scene):
 def drawing_godots():
     """The other Godots on this laptop that use the GPU: (pid, how it was started)."""
     found = []
-    for line in subprocess.run(["ps", "-axo", "pid=,args="], capture_output=True, text=True).stdout.splitlines():
-        pid, _, started = line.strip().partition(" ")
-        program = started.split(" --")[0].strip()
-        if (program.endswith("/Godot") or program == "(Godot)") and "--headless" not in started:
+    # By the name of the program that runs, not by its command line: a run of
+    # another checkout that waits for the GPU slot is a shell with Godot's path
+    # among its arguments, and draws nothing yet.
+    for line in subprocess.run(["ps", "-axo", "pid=,ucomm=,args="], capture_output=True, text=True).stdout.splitlines():
+        pid, program, started = (line.split(None, 2) + ["", ""])[:3]
+        if program in ("Godot", "(Godot)") and "--headless" not in started:
             found.append((pid, started[:90]))
     return found
 
