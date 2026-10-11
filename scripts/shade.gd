@@ -38,6 +38,14 @@ static func sort(scene: Node, level: Node) -> int:
 		return 0
 	var space := (level as Node3D).get_world_3d().direct_space_state
 	var ray := PhysicsRayQueryParameters3D.create(Vector3.ZERO, Vector3.ZERO, WORLD)
+	# What can be shot to pieces does not stop the sun: a crate that stands in
+	# the shade of nothing but a stack of crates is in the sun once that stack
+	# has gone. See scripts/breakables.gd, which has made its bodies by now.
+	var passing: Array[RID] = []
+	for body in scene.get_tree().get_nodes_in_group("breakable"):
+		if body is CollisionObject3D and scene.is_ancestor_of(body):
+			passing.append(body.get_rid())
+	ray.exclude = passing
 	var shaded := 0
 	for group: Node in level.find_children("Props", "Node3D", true, false):
 		for model: Node in group.get_children():
