@@ -22,11 +22,13 @@ Fx="*res://scripts/fx.gd"
 SelfTest="*res://scripts/selftest.gd"
 HumanoidTest="*res://scripts/humanoid_test.gd"
 NetTest="*res://scripts/net_test.gd"
+SandboxTest="*res://scripts/sandbox_test.gd"
 Settings="*res://scripts/settings.gd"
 Save="*res://scripts/save.gd"
 Net="*res://scripts/net.gd"
 Blast="*res://scripts/blast.gd"
 Squad="*res://scripts/squad.gd"
+Sandbox="*res://scripts/sandbox.gd"
 Menu="*res://scripts/menu.gd"
 
 [display]

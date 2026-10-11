@@ -50,6 +50,23 @@ func _ready() -> void:
 		_run.call_deferred()
 
 
+## The checkout this runs from, by a name no other has: the folder it is in
+## and a number made of the whole path to it, "Graphics-1c9a04e7".
+func checkout() -> String:
+	var folder := ProjectSettings.globalize_path("res://").trim_suffix("/")
+	return "%s-%08x" % [folder.get_file(), folder.hash()]
+
+
+## Where a test keeps a file called `file`: in a folder of this checkout's
+## own under user://selftest/. Every checkout of the project has the same
+## user://, and tests of two of them run at the same time: with one file
+## between them each found there what the other had just written.
+func own_file(file: String) -> String:
+	var folder := "user://selftest/%s" % checkout()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
+	return "%s/%s" % [folder, file]
+
+
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
@@ -409,6 +426,37 @@ func _fights() -> void:
 	player.rotation.y = PI * 0.5
 	await _wait(0.2)
 	var eye: Vector3 = player.head.global_position
+
+	# Cover may not hang on the last digit of a ray. Jolt returns every hit a
+	# hair differently once a collider is added anywhere in the level, or the
+	# same ones come in another order: both are done here, and neither may
+	# change which spots there are or what one is worth.
+	var colliders: StaticBody3D = game.get_node("Level/Collision")
+	var cover := _cover_from(player, eye)
+	var far := CollisionShape3D.new()
+	far.shape = BoxShape3D.new()
+	(far.shape as BoxShape3D).size = Vector3.ONE * 30.0
+	far.position = Vector3(300, 50, -200)
+	colliders.add_child(far)
+	await _wait(0.1)
+	var with_more := _cover_differs(cover, _cover_from(player, eye))
+	far.free()
+	var shapes := colliders.get_children()
+	for i in range(0, shapes.size(), 7):
+		colliders.remove_child(shapes[i])
+		colliders.add_child(shapes[i])
+	await _wait(0.1)
+	var shuffled := _cover_differs(cover, _cover_from(player, eye))
+	for shape in shapes:
+		colliders.remove_child(shape)
+		colliders.add_child(shape)
+	await _wait(0.1)
+	Squad._surveyed = [0, 0]
+	print("    cover against somebody at the stand: %d spots to stand behind and %d to duck behind, of %d; with a collider more: %s; in another order: %s" % [
+		cover.standing, cover.ducked, cover.spots.size(), with_more if with_more else "the same", shuffled if shuffled else "the same"])
+	_check("there is cover to stand behind and cover to duck behind", cover.standing >= 10 and cover.ducked > 0)
+	_check("a collider more, far from the fight, changes none of it", with_more.is_empty())
+	_check("nor do the same colliders in another order", shuffled.is_empty())
 
 	# Cover: a grunt that knows of the player runs for a spot where it cannot
 	# be seen, comes out of it to shoot and goes back.
@@ -1059,6 +1107,41 @@ func _watch(player: CharacterBody3D, seconds: float) -> Array[Array]:
 	await _wait(seconds)
 	get_tree().process_frame.disconnect(note)
 	return frames
+
+
+## Surveys the level as it is at this moment and asks of every spot what it
+## is worth to a robot grunt against somebody looking from `eye`: nothing,
+## cover to stand behind or cover to duck behind. `standing` and `ducked` count
+## the spots on the player's floor, at a distance a grunt fights from.
+func _cover_from(player: Node3D, eye: Vector3) -> Dictionary:
+	Squad._surveyed = [0, 0]
+	Squad.find_cover(player, eye, {})
+	var space := player.get_world_3d().direct_space_state
+	var map := player.get_world_3d().navigation_map
+	var worth := PackedInt32Array()
+	var counts := [0, 0, 0]
+	for at in Squad._spots:
+		var found := Squad._suits(space, map, at, eye, 1.5, 0.68)
+		worth.append(0 if found.is_empty() else 2 if found.crouch else 1)
+		var away := Vector2(at.x - eye.x, at.z - eye.z).length()
+		if away > 5.0 and away < 23.0 and absf(at.y - player.global_position.y) < 2.0:
+			counts[worth[-1]] += 1
+	return {"spots": Squad._spots.duplicate(), "low": Squad._low.duplicate(), "high": Squad._high.duplicate(), "worth": worth, "standing": counts[1], "ducked": counts[2]}
+
+
+## The first thing that differs between two looks at the cover, or nothing.
+func _cover_differs(a: Dictionary, b: Dictionary) -> String:
+	if a.spots.size() != b.spots.size():
+		return "%d spots instead of %d" % [b.spots.size(), a.spots.size()]
+	for i in a.spots.size():
+		var at: Vector3 = a.spots[i]
+		if at.distance_to(b.spots[i]) > 0.001:
+			return "the spot at %s is at %s" % [at.snappedf(0.01), (b.spots[i] as Vector3).snappedf(0.01)]
+		if a.low[i] != b.low[i] or a.high[i] != b.high[i]:
+			return "other things stand around %s" % at.snappedf(0.01)
+		if a.worth[i] != b.worth[i]:
+			return "%s is worth %d instead of %d" % [at.snappedf(0.01), b.worth[i], a.worth[i]]
+	return ""
 
 
 ## Draws the cover the survey found on the floor the player stands on: `#`

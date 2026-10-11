@@ -113,8 +113,10 @@ def _nearest(found: list, centre: np.ndarray, reach: float):
     return best[1] if best else None
 
 
-def legs(slices: Slices) -> dict:
-    """Follows the two legs up from the shins to where they meet."""
+def legs(slices: Slices, baggy: bool = False) -> dict:
+    """Follows the two legs up from the shins to where they meet. In something
+    `baggy`, a suit that hangs down to the knees, that may be lower than any
+    crotch is."""
     start = slices.at(0.14 * slices.height)
     found = slices.levels[start]
     if len(found) < 2:
@@ -131,8 +133,9 @@ def legs(slices: Slices) -> dict:
             break
         tracks["a"][level] = next_a
         tracks["b"][level] = next_b
-    if crotch is None or not 0.3 < slices.z(crotch) / slices.height < 0.62:
-        raise PoseError("cannot find where the legs meet")
+    if crotch is None or not (0.2 if baggy else 0.3) < slices.z(crotch) / slices.height < 0.62:
+        raise PoseError("cannot find where the legs meet" + ("" if crotch is None else
+            ": they join at %d%% of the height; for a suit that hangs that low, say --baggy" % round(100 * slices.z(crotch) / slices.height)))
     for level in range(start - 1, -1, -1):
         here = slices.levels[level]
         for key in "ab":
@@ -141,9 +144,9 @@ def legs(slices: Slices) -> dict:
     return {"a": tracks["a"], "b": tracks["b"], "crotch": crotch}
 
 
-def facing(slices: Slices) -> np.ndarray:
+def facing(slices: Slices, baggy: bool = False) -> np.ndarray:
     """The direction the figure looks in, from where its feet stick out."""
-    found = legs(slices)
+    found = legs(slices, baggy)
     ankle = slices.at(0.11 * slices.height)
     sole = slices.at(0.02 * slices.height)
     ahead = np.zeros(2)
@@ -155,13 +158,14 @@ def facing(slices: Slices) -> np.ndarray:
     return ahead / length
 
 
-def fit(points: np.ndarray, measures: dict = None) -> dict:
+def fit(points: np.ndarray, measures: dict = None, baggy: bool = False) -> dict:
     """The joints of a figure that faces -Y with its feet on z = 0, as
     {profile bone name: (x, y, z)}. Left is +X. The heights and widths they
-    were placed from are left in measures, for calibrate.py."""
+    were placed from are left in measures, for calibrate.py. `baggy` is for
+    legs that are in one garment down to the knees, see legs()."""
     slices = Slices(points)
     height = slices.height
-    found = legs(slices)
+    found = legs(slices, baggy)
     crotch = found["crotch"]
     below = crotch - 2
     left, right = (found["a"], found["b"]) if found["a"][below]["centre"][0] > found["b"][below]["centre"][0] else (found["b"], found["a"])
@@ -288,7 +292,8 @@ def fit(points: np.ndarray, measures: dict = None) -> dict:
         z_ankle = ANKLE * height
         ankle = leg[slices.at(z_ankle + 0.03 * height)]["centre"]
         z_knee = z_ankle + KNEE * (z_hip - z_ankle)
-        knee = leg[slices.at(z_knee)]["centre"]
+        # In a suit that hangs low the knee is above where the legs come apart.
+        knee = leg[min(slices.at(z_knee), below)]["centre"]
         joints[word + "LowerLeg"] = (float(knee[0]), float(knee[1]) - 0.002 * height, z_knee)
         joints[word + "Foot"] = (float(ankle[0]), float(ankle[1]), z_ankle)
         sole = np.concatenate([slices.points[level] for level in range(0, slices.at(0.035 * height) + 1)])

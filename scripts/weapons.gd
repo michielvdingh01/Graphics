@@ -5,7 +5,9 @@ extends Node3D
 ## A viewmodel is a scene built by tools/models/weapons.gd. Whatever moves on
 ## it is found by name, and a weapon without one of these simply skips that
 ## motion: the parts Mag, Slide or Bolt, Pump, ArmL and ArmR, and the markers
-## Muzzle (required), Eject and MagHold.
+## Muzzle (required), Eject and MagHold. An ArmL with a node Glove on it is a
+## hand with bones: it changes a magazine with its fingers, by the holds the
+## glove has been given, where another hand is moved as one piece.
 
 signal ammo_changed(weapon_name: String, mag: int, reserve: int)
 signal hit_confirmed(headshot: bool, killed: bool)
@@ -77,6 +79,8 @@ const MAG_OUT := 0.14
 const MAG_IN := 0.72
 const BOLT_RELEASE := 0.88
 const MAG_DROP := 0.32
+## How far the fingers of a hand open while it goes from one hold to another.
+const LET_GO := 0.85
 ## Loading one shell at a time: seconds before the first and after the last.
 const SHELL_LEAD := 0.35
 const SHELL_TAIL := 0.3
@@ -184,6 +188,15 @@ class Viewmodel:
 	var locks_open := false
 	var mag_hold := Vector3.ZERO
 	var rest := {}
+	## The left hand, if it is a glove with bones in it: the node at its wrist,
+	## its bones, which of them are fingers and the ways it has of holding
+	## things, see _glove() in tools/models/weapons.gd.
+	var glove_l: Node3D
+	var bones_l: Skeleton3D
+	var fingers_l := PackedInt32Array()
+	var holds_l := {}
+	## Whether that hand has left the hold it rests in.
+	var away := false
 
 	func _init(scene: Node3D) -> void:
 		root = scene
@@ -204,6 +217,30 @@ class Viewmodel:
 		for node: Node3D in [mag, action, pump, arm_l]:
 			if node:
 				rest[node] = node.transform
+		if arm_l:
+			glove_l = arm_l.get_node_or_null("Glove")
+		if glove_l:
+			bones_l = glove_l.find_child("Skeleton")
+			holds_l = glove_l.get_meta("holds")
+			for bone in bones_l.get_bone_count():
+				if bones_l.get_bone_name(bone).right(1).is_valid_int():
+					fingers_l.append(bone)
+
+	## Takes the left hand `share` of the way from where it rests to another
+	## of its holds, `shift` away from it. On the way there and back the
+	## fingers let go and open.
+	func reach(hold: StringName, share: float, shift := Vector3.ZERO) -> void:
+		away = share > 0.0
+		var from: Dictionary = holds_l.rest
+		var to: Dictionary = holds_l.get(hold, from)
+		var eased := smoothstep(0.0, 1.0, share)
+		glove_l.transform = (from.at as Transform3D).interpolate_with(to.at, eased).translated(shift)
+		for bone in bones_l.get_bone_count():
+			bones_l.set_bone_pose_rotation(bone, (from.bones[bone] as Quaternion).slerp(to.bones[bone], eased))
+		var loose: Array = holds_l.loose.bones
+		var open := sin(PI * share) * LET_GO
+		for bone in fingers_l:
+			bones_l.set_bone_pose_rotation(bone, bones_l.get_bone_pose_rotation(bone).slerp(loose[bone], open))
 
 
 ## 0 at the hip, 1 fully aimed down sights.
@@ -354,6 +391,17 @@ func resupply() -> void:
 	for i in LOADOUT.size():
 		_reserves[i] = maxi(_reserves[i], _start_reserve(LOADOUT[i]))
 	grenades = maxi(grenades, START_GRENADES)
+	grenades_changed.emit(grenades)
+	_emit_ammo()
+
+
+## Everything as a level starts: full magazines, the reserve a weapon begins
+## with and the grenades. For a fight that is fought again.
+func restock() -> void:
+	for i in LOADOUT.size():
+		_mags[i] = LOADOUT[i].mag_size
+		_reserves[i] = _start_reserve(LOADOUT[i])
+	grenades = START_GRENADES
 	grenades_changed.emit(grenades)
 	_emit_ammo()
 
@@ -982,6 +1030,8 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		model.action.position.z += model.travel * maxf(back, _locked)
 
 	if _reload_left <= 0.0:
+		if model.away:
+			model.reach(&"mag", 0.0)
 		return [offset, turn]
 
 	if data.loads_singly:
@@ -993,9 +1043,13 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		if model.arm_l:
 			var turn_at := fposmod((elapsed - SHELL_LEAD) / (data.reload_time / data.mag_size), 1.0)
 			var at_port := smoothstep(0.1, 0.5, turn_at) * (1.0 - smoothstep(0.7, 1.0, turn_at))
-			var port: Vector3 = (model.arm_l.get_parent() as Node3D).transform.affine_inverse() * model.mag_hold
-			var away := port + Vector3(-0.1, -0.2, 0.12)
-			model.arm_l.position = model.arm_l.position.lerp(away.lerp(port, at_port), rolled)
+			if model.glove_l:
+				# A hand with bones comes up with a shell between its fingers.
+				model.reach(&"shell", rolled, Vector3(-0.1, -0.2, 0.12) * (1.0 - at_port) * rolled)
+			else:
+				var port: Vector3 = (model.arm_l.get_parent() as Node3D).transform.affine_inverse() * model.mag_hold
+				var away := port + Vector3(-0.1, -0.2, 0.12)
+				model.arm_l.position = model.arm_l.position.lerp(away.lerp(port, at_port), rolled)
 		return [offset, turn]
 
 	# Canted with the magazine well towards the hand that changes it.
@@ -1010,7 +1064,11 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		model.mag.position += drop
 		if model.arm_l:
 			var reach := smoothstep(0.03, MAG_OUT, fraction) * (1.0 - smoothstep(MAG_IN + 0.05, BOLT_RELEASE + 0.06, fraction))
-			model.arm_l.position = model.arm_l.position.lerp(model.mag_hold, reach) + drop
+			if model.glove_l:
+				# A hand with bones lets go, takes the magazine and comes back.
+				model.reach(&"mag", reach, drop)
+			else:
+				model.arm_l.position = model.arm_l.position.lerp(model.mag_hold, reach) + drop
 	return [offset, turn]
 
 

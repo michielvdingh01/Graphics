@@ -20,7 +20,12 @@ void fragment() {
 	albedo = mix(albedo, albedo * vec3(0.55, 0.5, 0.45), smoothstep(0.55, 0.8, wide.g) * 0.5);
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
 	ALBEDO = mix(albedo, albedo * 1.8 + 0.02, rim * fuzz);
-	ROUGHNESS = roughness;
+	// A smooth cloth also has a sheen along that rim, which is what gives a
+	// dark glove its shape against a dark hall; a fuzzy one has none.
+	RIM = max(0.0, 0.3 - 0.6 * fuzz);
+	RIM_TINT = 0.5;
+	// Where it is handled the cloth has worn smoother.
+	ROUGHNESS = roughness * mix(0.86, 1.0, wide.r);
 	NORMAL_MAP = texture(grain, UV * grain_scale).rgb;
 	NORMAL_MAP_DEPTH = grain_depth;
 }

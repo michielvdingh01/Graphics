@@ -7,8 +7,11 @@ extends CanvasLayer
 ##
 ## "Play together" hosts a game or joins one, see net.gd. A game with others
 ## does not stop for a menu: the level plays on behind it.
+##
+## "Sandbox" lists the experiments of sandbox.gd. With one of them open the
+## pause menu is where its switches are.
 
-enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER }
+enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER, SANDBOX }
 
 const LEVELS: Array[Dictionary] = [
 	{"name": "Factory", "scene": "res://scenes/factory.tscn", "music": &"level1and2"},
@@ -64,7 +67,7 @@ func _ready() -> void:
 		_device = DEVICES.find("Controller")
 	Net.entering.connect(_on_entering)
 	Net.left.connect(_on_left)
-	if "--play" in OS.get_cmdline_user_args():
+	if "--play" in OS.get_cmdline_user_args() or Sandbox.active:
 		_show(Screen.NONE)
 	else:
 		# Set before the level's own _ready runs, so it knows to stay inert.
@@ -103,13 +106,18 @@ func run_summary(run: Dictionary) -> PackedStringArray:
 
 ## True while the loaded level is only a backdrop for the title screen.
 func at_title() -> bool:
-	return _screen == Screen.TITLE or _screen == Screen.LEVELS or _screen == Screen.TOGETHER or (
+	return _screen == Screen.TITLE or _screen == Screen.LEVELS or _screen == Screen.TOGETHER or _screen == Screen.SANDBOX or (
 		(_screen == Screen.CONTROLS or _screen == Screen.SETTINGS) and _parent == Screen.TITLE
 	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _enabled or not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
+		return
+	# While a level is being loaded there is none: after a death and between
+	# two levels the old one is gone a frame before the new one is there, and
+	# that frame is where a key lands that was pressed during the load.
+	if get_tree().current_scene == null:
 		return
 	match _screen:
 		Screen.NONE:
@@ -120,6 +128,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_show(Screen.TOGETHER if _hosting else Screen.TITLE)
 		Screen.TOGETHER:
 			_leave_together()
+		Screen.SANDBOX:
+			_show(Screen.TITLE)
 		Screen.CONTROLS, Screen.SETTINGS:
 			_show(_parent)
 	get_viewport().set_input_as_handled()
@@ -165,6 +175,8 @@ func _show(screen: Screen) -> void:
 				_button(text, _play.bind(checkpoint.level, false))
 			_button("New game", _choose_level.bind(false))
 			_button("Play together", _show.bind(Screen.TOGETHER))
+			if not Sandbox.experiments.is_empty():
+				_button("Sandbox", _show.bind(Screen.SANDBOX))
 			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
 			_button("Quit", get_tree().quit)
@@ -182,16 +194,24 @@ func _show(screen: Screen) -> void:
 			if _together_note:
 				_note(_together_note)
 			_button("Back", _leave_together)
+		Screen.SANDBOX:
+			_heading("Sandbox", 44)
+			_note("One fight, as often as you like, with something different\nabout it each time. Nothing here is saved.")
+			for experiment: String in Sandbox.experiments:
+				_button(Sandbox.title(experiment), _try.bind(experiment))
+			_button("Back", _show.bind(Screen.TITLE))
 		Screen.PAUSE:
-			_heading("Playing together" if Net.active else "Paused", 44)
+			_heading("Sandbox" if Sandbox.active else "Playing together" if Net.active else "Paused", 44)
 			if Net.active:
 				_note(_company())
 			_button("Resume", _show.bind(Screen.NONE))
-			if Net.is_host():
+			if Sandbox.active:
+				_sandbox()
+			elif Net.is_host():
 				_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
 			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
-			_button("Leave the game" if Net.active else "Quit to title", _quit_to_title)
+			_button("Leave the sandbox" if Sandbox.active else "Leave the game" if Net.active else "Quit to title", _quit_to_title)
 		Screen.CONTROLS:
 			_heading("Controls", 44)
 			_controls()
@@ -249,8 +269,50 @@ func _play(scene: String, fresh: bool) -> void:
 
 func _quit_to_title() -> void:
 	Net.leave()
+	Sandbox.close()
 	_show(Screen.TITLE)
 	get_tree().reload_current_scene()
+
+
+# --- The sandbox ----------------------------------------------------------------
+
+
+func _try(experiment: String) -> void:
+	_show(Screen.NONE)
+	Sandbox.open(experiment)
+
+
+## What the pause menu has to offer while an experiment is open: the round
+## again, with another variant or not, the switches, and an enemy more.
+func _sandbox() -> void:
+	var other := _button("", Sandbox.step.bind(1))
+	var refresh := func() -> void: other.text = "Variant  ·  %s" % Sandbox.variant_name()
+	other.pressed.connect(refresh)
+	refresh.call()
+	_button("Start the round again", _then_resume.bind(Sandbox.restart))
+	_switch("Nothing hurts me", Sandbox.unhurt, func(on: bool) -> void: Sandbox.unhurt = on)
+	_switch("Ammunition never runs out", Sandbox.endless, func(on: bool) -> void: Sandbox.endless = on)
+	_switch("Slow motion", Sandbox.slow, func(on: bool) -> void: Sandbox.slow = on)
+	_switch("Enemies hold still", Sandbox.still, func(on: bool) -> void: Sandbox.still = on)
+	var row := HBoxContainer.new()
+	var caption := Label.new()
+	caption.text = "Put where I look"
+	caption.custom_minimum_size.x = 240
+	row.add_child(caption)
+	for role in Sandbox.ROLES:
+		var button := Button.new()
+		button.text = role.capitalize()
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(_then_resume.bind(Sandbox.put.bind(role)))
+		_focusable(button)
+		row.add_child(button)
+	_column.add_child(row)
+	_button("Load the level again", _then_resume.bind(Sandbox.reload))
+
+
+func _then_resume(action: Callable) -> void:
+	_show(Screen.NONE)
+	action.call()
 
 
 # --- Playing together ---------------------------------------------------------
@@ -546,10 +608,15 @@ func _render_scale() -> void:
 
 
 func _toggle(label: String, key: String) -> void:
+	_switch(label, Settings.get(key), func(on: bool) -> void: Settings.put(key, on))
+
+
+## A switch that stands `on`, and tells `changed` when it is thrown.
+func _switch(label: String, on: bool, changed: Callable) -> void:
 	var toggle := CheckButton.new()
 	toggle.text = label
-	toggle.button_pressed = Settings.get(key)
-	toggle.toggled.connect(func(on: bool) -> void: Settings.put(key, on))
+	toggle.button_pressed = on
+	toggle.toggled.connect(changed)
 	_focusable(toggle)
 	_into.add_child(toggle)
 

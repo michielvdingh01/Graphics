@@ -111,7 +111,7 @@ Blender (5.2, via `brew install --cask blender`) draait alleen zonder venster. D
 
 **Nog open**
 
-- Zombies en clowns zijn plaatshouders. Een realistisch model van een van beide is nergens te krijgen onder een licentie die gebruik in een eigen spel toestaat zonder account; er is een generatiedienst voor nodig. Het manifest heeft per plaatshouder de prompt klaarstaan.
+- Zombies en clowns zijn plaatshouders. Een realistisch model van een van beide is nergens te krijgen onder een licentie die gebruik in een eigen spel toestaat zonder account; er is een generatiedienst voor nodig. Het manifest heeft per plaatshouder de prompt klaarstaan. Wat er per dag kan en in welke volgorde staat onder "Houding en beweging".
 - Eén personage is gegenereerd (`generate.py`, 10 oktober 2026): FLUX.1-schnell (Apache-2.0) schilderde de clown uit de prompt, `cutout.py` maakte hem hier vrijstaand, TRELLIS.2 (MIT) maakte er in een minuut een model van 298 duizend driehoeken van, en de scanroute gaf dat een skelet. Beide draaien als gratis demo op Hugging Face en vragen een (gratis) account: zonder krijg je twee minuten GPU-tijd en drie beurten per dag, en TRELLIS.2 vraagt twee beurten van twee minuten. Het token staat in `~/.cache/huggingface/token`. Reken op ongeveer één model per dag. Wat ervan te leren viel: een gegenereerd model is een holle huls die openstaat bij mouwen en broekspijpen, en de mouwen waren aan de romp vastgegroeid. Het eerste kan de route nu aan. Het tweede niet: wie de armen zijwaarts heft, trekt een vlies mee, zoals op het contactblad in rusthouding te zien is; met de armen omlaag of naar voren valt het weg. Vraag in de prompt dus om armen die 30 tot 45 graden van het lijf staan, en kijk of het plaatje dat ook doet: van drie voldeed er één. Bij de tweede clown (`clown_06`) stond dat in de prompt en zijn de armen vrij: zijn rusthouding heeft geen vlies. Wel hield hij op het plaatje de ellebogen gebogen, en omdat de route een arm als rechte lijn neemt, zit zijn elleboog niet waar de arm knikt en staan de onderarmen krom. Vraag dus ook om gestrekte armen. Een derde model op dezelfde dag lukte niet meer: het gratis rantsoen was na twee modellen en vijf plaatjes op. De kleuren zijn donkerder en blauwer dan op het plaatje, en onder een hak zit een scherfje vloer.
 - Alleen skeletten met de botnamen van 3ds Max zijn echt door de route gegaan, want daar komt de hele bezetting vandaan. De namen van Mixamo, Unreal, Rigify en Quaternius worden herkend op een kaal skelet (`test_names.py`); een model ermee is nog niet geïmporteerd.
 - De scanroute is op nagemaakte scans en op één gegenereerd model geprobeerd, niet op een echte scan. Een echte scan heeft bewegingsonscherpte, haar als klomp en kleren die tegen elkaar aan liggen; wat daarvan misgaat blijkt pas bij de eerste vriend.
@@ -157,7 +157,7 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 
 **Wapens en vijanden**
 
-- De vijf wapens zijn onderdeel voor onderdeel in code opgebouwd (`tools/models/weapons.gd`), omdat er geen gescande of gegenereerde modellen voor zijn: een karabijn met een open richtkijker en een lamp, een dienstpistool, een pompgeweer met reservepatronen op de kast, een pistoolmitrailleur met draadkolf en een scherpschuttersgeweer met kijker en tweepoot. Elk is 14 tot 20 duizend driehoeken, inclusief de handschoenen en mouwen van de schutter. De vingers lopen taps toe met een verdikking bij elk gewricht, de duimmuis loopt over in de hand (het was een bol erop), en over elke kneukel ligt een eigen plaatje (`_hand` en `_finger`; `hose` in de levelbouwer kan daarvoor een dikte per punt aan).
+- De vijf wapens zijn onderdeel voor onderdeel in code opgebouwd (`tools/models/weapons.gd`), omdat er geen gescande of gegenereerde modellen voor zijn: een karabijn met een open richtkijker en een lamp, een dienstpistool, een pompgeweer met reservepatronen op de kast, een pistoolmitrailleur met draadkolf en een scherpschuttersgeweer met kijker en tweepoot. Elk is 36 tot 46 duizend driehoeken, inclusief de handschoenen en mouwen van de schutter: sinds 11 oktober 2026 een hand met een skelet uit Blender in plaats van buizen en blokken, en de wapens zelf op echte maten met een rail naar het echte profiel. Zie "De wapens opnieuw".
 - Een modelbouwer (`tools/model_builder.gd`) gebruikt daarvoor dezelfde bouwstenen als de levelbouwer en verdeelt de driehoeken over onderdelen met een eigen draaipunt, zodat een slede, een grendel, een pomp of een magazijn kan bewegen. Een model wordt één bestand in `scenes/models/`. De levelbouwer heeft er `slab` bij gekregen: een plaat die naar een omtrek is gesneden, met afgeronde randen. Daar zijn de kasten, kolven, grepen en magazijnen van gemaakt.
 - Wapens en robots gebruiken één shader, `shaders/finish.gdshader`: een deklaag (bruinering, anodiseerlaag, lak of het kunststof zelf) die langs de randen tot op het metaal is weggesleten, met krassen en schuurplekken op de vlakken en vet waar het wordt vastgepakt. De randen komen uit dezelfde vertexkleur als bij de lakshader. Handschoenen en mouwen hebben een stofshader met een weefsel (`shaders/cloth.gdshader`). Vier naadloze normal maps voor wat je van een handbreedte afstand ziet (weefsel, korrel van kunststof, gestraald metaal, ruitjes van een greep) worden uit het manifest gegenereerd (soort `grain`).
 - De rode stip van de richtkijker is niet op het glas geschilderd: de shader tekent hem waar de kijklijn door het glas evenwijdig aan de loop loopt, zoals een echte gecollimeerde stip. Hij blijft dus op het doel als het wapen beweegt.
@@ -243,7 +243,7 @@ Gemeten op vaste 60 beelden per seconde, zonder scherm; "eerst" is de stand van 
 | Zoals Michiel speelt: 3456×2160, Ultra, MetalFX Spatial | 46,6–51,4 fps | 46,5–51,4 fps |
 | Elke seconde een explosie, die nu ook kisten breekt | 63,2–66,6 fps, traagste frame 17,0–17,6 ms | 62,8–66,9 fps, 17,0–17,7 ms |
 
-- **De dekking van de vijanden** is op deze branch gevoelig voor elke verandering aan de botsvormen van het level (zie "Dekking die aan het laatste cijfer hing" in de worktree `brave-bose-91ce03`, niet gecommit). Stapels uit dat lichaam halen is zo'n verandering. In alle runs van de selftest bleven vijf van de vijf grunts vanuit dekking vechten; dat is een uitkomst, geen garantie, tot die fix erin zit.
+- **De dekking van de vijanden** was op deze branch gevoelig voor elke verandering aan de botsvormen van het level, en stapels uit dat lichaam halen is zo'n verandering. In alle runs van de selftest bleven vijf van de vijf grunts vanuit dekking vechten; dat was een uitkomst, geen garantie. Sinds 11 oktober zit de fix erin, zie "Dekking die aan het laatste cijfer hing".
 
 **Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
 
@@ -264,6 +264,7 @@ Gemeten op vaste 60 beelden per seconde, zonder scherm; "eerst" is de stand van 
 | Lightmaps bakken: alleen wat sinds de vorige bake veranderd is (de hal duurt twee minuten, het ketelhuis een halve). De bake drukt op de knop van de editor zelf en zet daarvoor eerst de 3D-weergave voor | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
 | Horen welke zones een bake nodig hebben, bepaalde zones bakken wat hun staat ook is, of alles | `tools/bake_lightmaps.sh --list`, `tools/bake_lightmaps.sh res://scenes/factory.tscn boiler,passage`, `tools/bake_lightmaps.sh --all` |
 | Wapens, vijanden of de granaat opnieuw genereren uit `tools/models/<naam>.gd` | `tools/build_model.sh weapons`, `enemies` of `props` |
+| De handschoen van de schutter opnieuw bouwen: Blender zonder venster geeft hem vorm en botten, Godot maakt er `scenes/models/glove.scn` van. Met `--sheet=<map>` rendert Blender hem ook in vijf houdingen, op de CPU. Daarna de wapens opnieuw genereren | `tools/build_hands.sh`, dan `tools/build_model.sh weapons` |
 | Een wapen bekijken zoals de speler het vasthoudt (nummer in de loadout vanaf 0; `,1` erachter is gericht, `,0,0.4` is 40% van het herladen, `,0,0,0.36` is 36% van een klap met het wapen) | `tools/benchmark.sh --quick --weapon=2 --at="2,1.7,3,-120,0"` |
 | Een model of een vijand in een level neerzetten om te bekijken (x,y,z,draaiing,schaal,houding: 1 richt, 2 loopt, 3 ligt in stukken, 4 vuurt, 10 met de plaat voor zich, 11 weggedoken, 12 met een brandend pack) | `tools/benchmark.sh --quick --spawn="res://scenes/enemy_heavy.tscn@-2,0,-1,-100,1,1" --at="2.5,1.7,3,90,-4"` |
 | Een schot bekijken op een exact moment erna (seconden, aantal schoten, spreiding in graden): vlam, tracer en inslag | `tools/benchmark.sh --quick --weapon=0 --shoot=0.01 --at="6.3,1.5,-2.5,-90,-3"` of `--shoot=0.2,4,5` |
@@ -316,11 +317,73 @@ De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 1,
 **Nog open in deze fase**
 
 - De klap met een leeg wapen is één beweging van het hele wapen, voor alle vijf dezelfde; hij is op screenshots van losse momenten bekeken, niet in beweging.
-- De wapens, de handen en de vijanden zijn gebouwd en niet gescand of gegenereerd. De handen zijn handschoenen van buizen en afgeronde blokken, zonder skelet; de steunhand onder de karabijn en het pompgeweer is vanaf de schutter gezien nog steeds een glad vlak met een duim, en bij het pistool is de overgang van duim naar hand rafelig: bij het herladen beweegt de hele arm mee, de vingers niet. De robots lopen procedureel en hebben geen ingestudeerde animaties. Zodra er een generatiedienst is die bruikbare topologie en rigs levert, zijn dit de eerste om te vervangen; de gameplay hoeft daarvoor niet te veranderen, want die kent een wapen en een vijand alleen als een scène met een paar benoemde onderdelen.
+- De wapens, de handen en de vijanden zijn gebouwd en niet gescand of gegenereerd. De handen hebben sinds 11 oktober 2026 een skelet en vingers die bij het herladen bewegen (zie "De wapens opnieuw", ook voor wat daar nog aan open staat). De robots lopen procedureel en hebben geen ingestudeerde animaties. Zodra er een generatiedienst is die bruikbare topologie en rigs levert, zijn dit de eerste om te vervangen; de gameplay hoeft daarvoor niet te veranderen, want die kent een wapen en een vijand alleen als een scène met een paar benoemde onderdelen.
 - Poly Haven heeft geen kubusvormige krat; de kratstapels bestaan daarom uit langwerpige kisten.
 - De machines, containers, tanks en kraan zijn gebouwd en niet gescand. Zodra er een generatiedienst is, zijn na de wapens en de vijanden de machines aan de beurt.
 - Poly Haven heeft sinds juli 2026 een bovenloopkraan met een overspanning van 12,5 m. De kraan in de hal overspant 23 m en is daarom in code gebouwd.
 - De schakelkasten zijn straatkasten die 1,45 keer vergroot zijn; van dichtbij zijn de waarschuwingsstickers daardoor te groot.
+
+## De wapens opnieuw: echte maten en handen met een skelet
+
+De wapens en de handschoenen waren het zwakste wat er te zien is, en ze staan altijd in beeld: een rail van losse blokjes, een vizier van vier balkjes, een steunhand als glad vlak met een duim, vingers die bij het herladen niet bewegen. Op 11 oktober 2026 is eerst alleen de karabijn opnieuw gedaan, langs twee wegen om naast elkaar te leggen. Michiel koos weg (a), verfijnen in code; daarna zijn de andere vier wapens op dezelfde manier gedaan.
+
+**Weg (a): verfijnen in code**
+
+- **De karabijn** is een AR-15 met een loop van 14,5 inch, op de maten van het echte wapen: de bovenkant van de rail 30,7 mm boven de loop, een upper van 33 mm breed met ronde schouders en een hals waar de rail op staat, een lower van 30 mm. De rail is geen rij blokjes meer maar het echte profiel (MIL-STD-1913, `_picatinny` in `tools/models/weapons.gd`): een zwaluwstaart van 21,2 mm breed met een sleuf van 5,2 mm om de 10 mm, 3 mm diep. Het vizier heeft een behuizing met de batterij achter en een kap met ronde hoeken om het glas, met twee knoppen naar de schutter toe, een klem met hendel en stelschroeven. Verder: klapvizieren met scharnier en stelwiel, de laadhendel met zijn pal, een borgmoer met nokken en een eindplaat om de kolfbuis, een kolf met huls, kolfplaat en schoor waartussen de driehoek open is, ribben voor en achter op het magazijn, een uitlopende magazijnschacht, schroeven in de handguard.
+- **Afgeschuinde randen.** `_chamfer` snijdt van een omtrek elke hoek die uitsteekt af, zodat wat ervan gemaakt wordt daar een vlakke afschuining heeft in plaats van een scherpe rand. De slijtageshader ziet die randen en slijt ze blank, zoals bij de rail goed te zien is.
+- **De handschoen is in Blender gemaakt**, zonder venster (`tools/models/hands.py`, `blender -b`). De vorm is niet gemodelleerd maar beschreven: voor elk punt in een blok ruimte hoe ver het van de dichtstbijzijnde van een stel afgeronde vormen ligt (een vingerkootje, de middenhandsbeentjes, de duimmuis), waarbij de vormen in elkaar overvloeien waar ze elkaar raken. Het oppervlak is waar die afstand nul is; OpenVDB, dat met Blender meekomt, maakt er driehoeken van. De platen op de knokkels en de vingers, het dubbele stuk in de vork van de duim en de band om de pols zijn hetzelfde oppervlak een paar millimeter verder naar buiten, op hun omtrek afgesneden; de mouw is een buis waarvan de omvang rimpelt. Samen 16,8 duizend driehoeken per hand.
+- **Het skelet** heeft 17 botten: hand, onderarm, drie per vinger en drie voor de duim. De hand rust ontspannen, niet plat, zodat een greep en een open hand er even ver vanaf liggen. Welk bot een punt van het oppervlak draagt, rekent het script zelf uit langs de lijn waar het omheen ligt: het automatische wegen van Blender liet de vingerbotten de rug van de hand meetrekken. Een plaat volgt wat de handschoen eronder volgt.
+- **`tools/build_hands.sh`** laat Blender de hand bouwen en Godot er `scenes/models/glove.res` (het mesh met zijn drie materialen) en `scenes/models/glove.scn` (het skelet met dat mesh erop) van maken, in twaalf seconden. Alleen dit heeft Blender nodig; `tools/build_model.sh weapons` werkt met wat het achterlaat. Met `--sheet=<map>` rendert Blender de hand in vijf houdingen op de CPU, om hem te bekijken zonder het spel te starten.
+- **Een hand sluit zich zelf.** `_glove` in `tools/models/weapons.gd` legt de handpalm tegen wat hij vasthoudt, op een plek rondom en in de richting van de pols, en buigt dan elke vinger gewricht voor gewricht tot het kootje raakt (`Grasp`). De duim doet hetzelfde of volgt een pad, net als de wijsvinger van de schiethand, die langs de kast ligt. De hand heeft één maat: de oude handen rekten mee met wat ze vasthielden. Een linkerhand is de rechter in een spiegel. Dezelfde regels sluiten de hand om elk ander wapen; alleen de plek van de palm is per greep gekozen.
+- **Herladen met vingers.** De handschoen bewaart zijn grepen (`holds`): om de handguard, om het magazijn, en los. Bij een magazijnwissel laat de linkerhand de handguard los, gaat open, pakt het magazijn van links met de vingers om de voorkant en de duim erachter, neemt het mee naar beneden en komt met het volle terug (`Viewmodel.reach` in `scripts/weapons.gd`). Wanneer het magazijn eruit gaat en erin komt is niet veranderd.
+- **De andere vier wapens** dragen dezelfde handschoen, die zich om elk van hun grepen sluit, en hebben de echte rail en afgeschuinde randen gekregen waar ze die hadden:
+  - het **pompgeweer**: een kast met ronde bovenkant en een ingelaten trekkerplaat, de ghost ring tussen twee oren op de rail, een hitteschild van geperforeerd plaatstaal over de loop, een kolf met afgeschuinde randen. De steunhand gaat met de pomp mee; bij het laden komt hij met een patroon onder de kast en duwt het met de duim naar binnen (greep `shell`);
+  - de **pistoolmitrailleur**: een achtkantige kast van geperst staal met de rail erop, een uitlopende magazijnschacht, een diopter tussen oren en een korrel in een ring, elk op de rail geklemd, een handstop, een kap achterop waar de draadkolf in zit;
+  - het **scherpschuttersgeweer**: de kasten van de karabijn een maat groter, twee rails, de handguard met sleuven op alle acht vlakken, een mondingsrem met afgeschuinde hoeken, ringen met schroeven om de kijker, een wangstuk op de kolf, ribben op het magazijn;
+  - het **pistool** is zelf niet veranderd. De rechterhand ligt om de greep met de duim naar links, de linker ertegenaan met de vingers over die van de rechter; bij het herladen gaat de linker onder de greep en pakt het magazijn.
+- **De stof vangt licht langs zijn rand** (`shaders/cloth.gdshader`): een zwarte handschoen in een donkere hal was anders alleen een silhouet. Het geldt voor gladde stof en niet voor de mouw, die er lichter en geler van werd dan hij is.
+
+**Weg (b): een bestaand CC0-model**
+
+- **Er is geen CC0-pakket met realistische armen, een karabijn en een herlaadanimatie.** Gezocht op Sketchfab, Poly Haven, Poly Pizza, itch.io, BlenderKit, OpenGameArt en GitHub: wat er als geheel is, is low-poly of retro en heeft hooguit een schietanimatie; wat realistisch is en armen heeft, is CC-BY of heeft een eigen licentie. Het dichtst erbij komt een combinatie van twee losse bronnen, die Michiel heeft goedgekeurd (samen 7,6 MB):
+  - het wapen: "M4A1 Assault Rifle" van 3DModelsCC0, waarvan de eigen site niet meer bestaat; de kopie staat op https://opengameart.org/content/m4a1-assault-rifle met "Public Domain CC0" erbij. `m4a1_0.zip`, 3,6 MB (sha256 `ed5779ec82718861964227e2aad2a900978ea087081154365d6d86246be62f0d`): een FBX van 9,2 duizend driehoeken in dertien losse onderdelen en één set texturen van 2048 beeldpunten;
+  - de handen: die van Godot XR Tools door DigitalN8m4r3 (Miodrag Sejic), map `addons/godot-xr-tools/hands` op GitHub, met een eigen `License.md` die er CC0 1.0 van maakt. Gebruikt: `Hand_Glove_R.gltf` (3,5 duizend driehoeken, 26 botten) met de drie texturen van de vingerloze camouflagehandschoen, 3,9 MB.
+- **Hoe het ernaast is gelegd.** Buiten de repo, in een kloon van de worktree: een script zet het wapen met de loop op de as en de trekker waar die van de andere karabijn zit, maakt van magazijn en grendel losse onderdelen, en sluit de gevonden hand met dezelfde regels als de eigen handschoen (palm ertegen, vingers dicht tot ze raken). De gevonden hand houdt bij de pols op; de mouw is die van weg (a). Script en bronnen staan in `benchmark/results/weg-b/`, niet in git. Er is niets van geïmporteerd of in het manifest gezet: de texturen zitten onverpakt in één scènebestand van 16 MB. Dat is genoeg om te kijken, niet om uit te leveren.
+- **Wat het laat zien** (derde rij van `benchmark/results/bladen/karabijn.png`): het wapen heeft een fijner silhouet dan wat in code is gebouwd (een handguard met vier rails, de driehoek van het voorvizier, een opgeklapt achtervizier) en slijtage die erop geschilderd is, maar geen richtkijker, dus geen rode stip, en niet de shader die randen blank slijt: van dichtbij is het vlakker. De hand is een blote hand met een vingerloze handschoen; de vingertoppen steken in de donkere hal fel af. Hij is in rust gespreid en sluit daardoor minder net dan de eigen handschoen.
+- **Wat (b) verder zou vragen:** voor de andere vier wapens moet elk nog een CC0-model gevonden worden (daar is niet naar gezocht), en geen van de gevonden modellen brengt een animatie mee: het herladen blijft in beide wegen van ons.
+
+**Wat het kost.** De handen zijn van 11,9 naar 33,6 duizend driehoeken gegaan (16,8 duizend per hand, voor elk wapen dezelfde), in evenveel tekenopdrachten als eerst:
+
+| Wapen in beeld, in duizenden driehoeken | Ervoor | Erna | Waarvan het wapen zelf |
+|---|---|---|---|
+| Karabijn | 20,0 | 46,1 | 8,1 → 12,5 |
+| Pistool | 14,1 | 35,8 | 2,2 → 2,2 |
+| Pompgeweer | 16,1 | 40,0 | 4,2 → 6,4 |
+| Pistoolmitrailleur | 16,0 | 39,5 | 4,1 → 5,9 |
+| Scherpschuttersgeweer | 19,8 | 45,2 | 7,9 → 11,6 |
+
+Gemeten op 11 oktober 2026 in de fabriek met het wapen in beeld (`--weapon=N --at="2,1.7,3,-120,0"`), om en om met de stand ervoor in een kloon ernaast, terwijl drie andere sessies bouwden en maten (load 3 tot 8):
+
+| | Ervoor | Erna |
+|---|---|---|
+| Karabijn, zoals Michiel speelt (3456×2160, Ultra, MetalFX Spatial), drie ronden | 53,0 / 52,9 / 53,0 fps | 52,2 / 52,2 / 52,0 fps |
+| Karabijn, 1440p met FSR 2 op 67%, drie ronden | 75,2 / 75,1 / 75,3 fps | 74,2 / 74,0 / 74,0 fps |
+| Pistool, zoals Michiel speelt, twee ronden | 52,8 / 53,4 fps | 52,8 / 52,4 fps |
+| Pompgeweer, idem | 52,4 / 52,5 fps | 51,6 / 52,2 fps |
+| Pistoolmitrailleur, idem | 52,9 / 51,8 fps | 52,2 / 52,2 fps |
+| Scherpschuttersgeweer, idem | 52,8 / 49,5 fps | 51,2 / 51,9 fps |
+
+Bij de karabijn is dat 1 fps, 0,2 tot 0,3 ms. Bij de andere vier ligt het tussen niets en 1 fps; die metingen zijn onrustiger (in twee ervan zit een ronde waarin een andere sessie de 1% low van de stand ervoor naar 29 en 46 fps trok). Aan de driehoeken ligt het niet: een handschoen met de helft ervan (9,2 duizend per hand), in een kloon ernaast gezet, haalde in de enige rustige ronde van drie 52,3 fps tegen 52,2. Of het het skelet is, of dat een mesh met botten voor de upscaler twee keer wordt doorgerekend, is niet uitgezocht. De hele selftest, de test van de mensachtige vijanden en die van samen spelen slagen. Wat een ander draagt heeft dezelfde merktekens voor de handen als eerst en is met het wapen meegegroeid.
+
+**Niet kunnen beoordelen, en nog open**
+
+- **Niemand heeft het in beweging gezien.** Alles is op losse beelden bekeken: per wapen een blad met voor en na in rust, gericht en op drie momenten van het herladen (`benchmark/results/bladen/`, niet in git; op dat van de karabijn staat weg (b) eronder) en renders op de CPU. Hoe de hand loslaat, het magazijn of een patroon pakt en terugkomt is op drie momenten bekeken, niet als beweging; op 40% van een magazijnwissel is de hand met het magazijn onder beeld, net als voorheen.
+- **De schiethand** ligt om de greep met de wijsvinger langs de kast en beweegt niet: hij gaat niet naar de trekker bij een schot. Vanuit de schutter is hij nauwelijks te zien.
+- **De hand is stijf waar een echte meegeeft.** De palm is één stuk: om de handguard ligt hij er vlak tegenaan in plaats van eromheen. Waar een gewricht ver buigt, vouwt de binnenkant in zichzelf; dat zit tegen het wapen aan.
+- **Er zit geen patroon in de hand** die het pompgeweer laadt: de hand komt bij de laadopening en gaat weer, het patroon moet je erbij denken. Hetzelfde geldt voor de magazijnen: de hand pakt het magazijn dat erin zat en komt met hetzelfde terug.
+- **Het pistool** heeft als enige zijn oude model gehouden; alleen de handen zijn nieuw.
+- **Wat een ander draagt** (`*_held.scn`) is met de wapens meeveranderd, zonder handen; `_gloved()` in `tools/models/held.gd` houdt de handschoen daar weg. De test van de mensachtige vijanden en die van samen spelen slagen ermee, maar niemand heeft een vijand met het nieuwe pompgeweer bekeken.
+- **Het grove korreltje op de kast** komt uit `materials/gun_receiver.tres` (een gestraalde korrel van ruim een millimeter). Dat bestand hoorde niet bij deze opdracht; fijner zou meer op geanodiseerd aluminium lijken.
 
 ## Geluid (fase 3)
 
@@ -462,13 +525,95 @@ Acht poppen kosten dus 0,2 ms meer dan acht robots, bevroren en in beweging. Bev
 
 - De geluiden zijn niet beluisterd: de runs draaien zonder geluid en ik kan niet horen. Ze zijn afgeleid van de bestaande en bescheiden afgesteld.
 - Er is maar op twee poppen met hetzelfde skelet getest, een man en een vrouw. Een personage met andere verhoudingen, kleding die doorbuigt of een skelet zonder tenen of vingers is nog niet voorbijgekomen; de rig houdt er rekening mee, maar gezien is het niet.
-- De gratis animatieset heeft geen val voorover. Wie in de rug geschoten wordt, zakt daarom op zijn rug ineen, tegen het schot in.
-- Tussen 2 en 3 m/s (een heavy, een grunt die opzij stapt, een zombie) is de loop een gehaaste wandeling met lange passen, omdat er geen cyclus is tussen wandelen en rennen. Een draf van rond 3 m/s lost dat op zonder code: een regel bij `moves` en zijn naam bij `gaits` in `assets/animations/manifest.json`, dan `tools/build_moves.sh`.
-- Slaan met iets in de hand kan niet: daar zijn geen bewegingen voor geknipt (de set heeft wel zwaardslagen). Een rol die van dichtbij vecht draagt dus niets, ook als het thema een wapen noemt.
-- De voeten volgen de vloer niet: op een trap staan ze op de hoogte van het lijf, zoals bij de robots. Bij snel omdraaien schuiven staande voeten in één keer mee zodra het lijf meer dan 35 graden gedraaid is.
+- Bij snel omdraaien schuiven staande voeten in één keer mee zodra het lijf meer dan 35 graden gedraaid is.
+- De val voorover, de draf, het slaan met iets in de hand en de voeten op een trap stonden hier open; ze zijn gebouwd, zie "Houding en beweging".
 - De vingers bewegen niet; ze hebben een greep, een vuist, een klauw of een losse hand.
 - `tools/benchmark.sh --shoot` laat op een personage vonken zien in plaats van bloed, omdat de benchmark het effect zelf kiest en `Fx.robot_hit` aanroept; in het spel gaat een treffer via de vijand en klopt het.
 - Een lijf kan door een muur steken als er in geen enkele richting 1,9 m ruimte is.
+
+## Houding en beweging: robots uit, draf, val, trap en slagwapen
+
+Wat een vijand laat zien, los van wat hij beslist: `scripts/enemy_rig.gd` voor de robots, `scripts/humanoid_rig.gd` voor de mensen. Gebouwd op 11 oktober 2026 op de open punten van "Vijanden die mensen kunnen zijn", "Personages" en "Een route door de levels". Van elk onderdeel staat een blad met voor en na in `assets/animations/sheets/`.
+
+**Wat er staat**
+
+- **Een robot die uit staat** (`robot_uit.jpg`) hangt in zijn gewrichten: benen gestrekt, 21 graden voorover in het middel, het hoofd nog eens 36 graden op de borst, de armen loodrecht omlaag. Vizier, borstlamp en de lampen op het pak van de heavy zijn gedoofd. De rig merkt zelf dat hij uit gaat: `scripts/game.gd` zet een robot op zijn post stil met `PROCESS_MODE_DISABLED`, en de melding daarvan is voor de rig "uit"; de melding dat hij weer loopt is "aan". Er is dus niets aan `game.gd` of `enemy.gd` veranderd. Wie het liever zegt dan laat merken, roept `power(false)` en `power(true)` op de rig aan. Aangezet komt hij in 0,8 s overeind: de lampen slaan haperend aan, het hoofd komt eerst omhoog, dan de romp, dan armen en benen. Een robot die een gereedschap stilzet om hem te bekijken (`--spawn`, het bewegingenblad) blijft aan: die is al stilgezet voor hij in het level staat, of zijn rig is met de hand stilgezet.
+- **Een robot die stilstaat, beweegt niets meer.** Het wiegen van de romp is weg, elke overgang komt nu aan in plaats van eindeloos dichterbij te komen (binnen 0,0005 is aangekomen), en een gewricht dat dezelfde stand krijgt als de vorige keer wordt niet aangeraakt. Daarvoor in de plaats ademt het vizier: de gloed gaat 12% op en neer, en licht werpt geen schaduw. Voorheen verplaatsten bij een stilstaande grunt elk frame 8 van zijn 17 onderdelen (rusher 8 van 16, heavy 11 van 19, bij hem draaiden ook de lopen eeuwig uit); nu geen enkel, en na het lopen staat alles 0,77 s na de laatste stap stil.
+- **Een draf** (`draf.jpg`). De set heeft niets tussen wandelen (1,05 m/s) en rennen (5,9 m/s), dus `tools/build_moves.gd` maakt hem: de wandel- en de rencyclus worden eerst in de pas gebracht en dan over elkaar gelegd, met 35% ren in de benen en 70% in romp en armen, één cyclus per 0,95 s. Dat geeft 3,08 m/s met passen van 1,46 m, 2,1 per seconde, elke voet 24% van de cyclus aan de grond (wandelen 50%, rennen 18%). De bouwer meet de mengcyclus op zoals elke andere. De zombies hebben een eigen draf (`zombie_trot`, 2,93 m/s): dezelfde benen onder het bovenlijf van de schuifelgang. In het manifest is het één regel: `"with"` noemt de tweede clip, `"share"` en `"carried"` de aandelen, `"cycle"` de duur. De rig schakelt nu ook eerder over (`LATE` van 1,25 naar 1,1): een pop van gewone lengte draaft van 2,1 tot 5,0 m/s. De heavy (2,6 m/s) en de zombie (2,4 m/s) draven dus in plaats van te snelwandelen, en de grunt op volle snelheid (4,2 m/s) loopt de draf op 136% waar hij de ren op 71% liep.
+- **Voorover vallen** (`val_voorover.jpg`). Wie van achteren geraakt wordt (meer dan 126 graden uit het midden van voren) valt op zijn gezicht, met het schot mee, als er daar 1,9 m ruimte is; anders zakt hij ineen zoals voorheen. De set heeft die val niet, dus hij is uit stukken gezet (`"pieces"` in het manifest): door de knieën met de clip van iemand die knielt om iets te repareren, in 0,45 s, en dan plat voorover naar de houding van een zwemmer die op de grond is gelegd. Een zware klap in de rug (60 schade in een ogenblik) werpt hem naar voren: de afzet van een duikrol, en dan 1,9 m verder plat neer.
+- **Voeten die de vloer volgen** (`trap.jpg`). Onder elke voet wordt naar de vloer gezocht, tot 0,4 heuphoogte boven en onder waar het lijf staat; de enkel gaat daarheen, de heupen zakken zover als het laagste been nodig heeft, en een hoogteverschil onder de 1,5 cm telt niet, zodat er op een vlakke vloer niets verandert. Op een helling tot 20 graden ligt de voet plat op de helling (de oprit van het depot is 11 graden); op iets steilers blijft hij waterpas, want dat is een trap. De trap in de hal van de fabriek is voor het spel een helling door de voorkanten van de treden: daar staan de voeten op, dus tot één optrede (20 cm) boven het getekende trapvlak, net als het lijf en de speler.
+- **Slaan met iets in de hand** (`slaan.jpg`). Er zijn drie dingen om mee te slaan, gebouwd in `tools/models/enemies.gd`: een stuk stoompijp, een brandbijl en een hakmes (`scenes/models/pipe.scn`, `axe.scn`, `cleaver.scn`; 1440, 232 en 244 driehoeken). Een rol die van dichtbij vecht en in zijn thema zo'n ding als `weapon` heeft, draagt het in de rechterhand en slaat ermee: twee zwaardslagen uit de set (`club_slash`, `club_swing`), de arm in de houding van iemand die een zwaard draagt, de vingers eromheen. Bij dood of paniek valt het. Noemt het thema iets anders, een geweer bijvoorbeeld, dan draagt zo'n rol nog steeds niets. In de thema's hebben nu de rusher van de poppen de pijp, de zombie-heavy (de brandweerman) de bijl en de snelle clown het hakmes. Onderweg bleek een snelle slag na een lange aanloop al terug te zijn voor hij moest aankomen; de rig kiest daarom uit de slagen die op tijd kunnen landen.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| Een robot uit, en wat er gebeurt als hij aan gaat | `tools/benchmark.sh --quick --scene=res://scenes/moves_sheet.tscn --enemies=robots --enemy=res://scenes/enemy.tscn --then=off --lower --at="0,1.15,5.4,0,-3"` (`--then=wake --step=0.12` voor het opstarten) |
+| Een level met de robots uit op hun post | `tools/benchmark.sh --quick --posted` |
+| De draf als rij momenten (0,714 van 4,2 m/s is 3 m/s) | `tools/benchmark.sh --quick --scene=res://scenes/moves_sheet.tscn --enemies=mannequin --enemy=res://scenes/enemy.tscn --walk=0,0.714 --step=0.11 --turn=90 --lower --at="0,1.15,5.4,0,-3"` |
+| Een schot in de rug, of met `--then=thrown` een zware klap | dezelfde, met `--then=back --step=0.2` in plaats van `--walk` en `--lower` |
+| De trap op | dezelfde, met `--stairs --walk=0,0.5 --step=0.5 --count=4 --at="-1.5,1.55,3.3,0,-2"` |
+| Uithalen en slaan met wat hij in de hand heeft | `tools/benchmark.sh --quick --scene=res://scenes/moves_sheet.tscn --enemies=zombies --enemy=res://scenes/enemy_heavy.tscn --then=swing --step=0.12 --turn=20 --at="0,1.15,5.4,0,-3"` (`--then=charge` voor de aanloop) |
+| De dingen om mee te slaan opnieuw bouwen (zet daarna de drie robots terug met `git checkout`, die komen er anders uit zonder anders te zijn) | `tools/build_model.sh enemies` |
+| Wat er van het rantsoen van vandaag over is, zonder iets te versturen | `tools/characters/generate.py --ration` |
+| Het trefgeluid op een mens beluisteren zoals het spel het speelt | `tools/hear.py impact_flesh` |
+
+**Meting** op 11 oktober 2026, M1 Pro, 3456×2160 met MetalFX op automatische schaal, kwaliteit Ultra, om en om met de commit ervoor, vier rondes. Andere sessies draaiden intussen tests zonder venster; runs die daardoor uitschoten staan er tussen haakjes bij.
+
+| De fabriek, alle 16 robots op hun post, standpunt Overview | Frame | Tekenopdrachten | Driehoeken |
+|---|---|---|---|
+| Uit, zoals het spel ze neerzet | 19,84 tot 20,02 ms | 1167 | 1,54 miljoen |
+| Aan en stilstaand, voorheen | 20,16 tot 20,20 ms | 3350 | 4,23 miljoen |
+| Aan en stilstaand, nu | 19,85 tot 19,96 ms | 1169 | 1,54 miljoen |
+
+| De hal, acht robots aan en stilstaand op 6 tot 8 m | Frame | Tekenopdrachten |
+|---|---|---|
+| Lege hal | 18,58 tot 18,90 ms | 775 |
+| Voorheen | 19,30 tot 19,39 ms (en één van 20,74) | 1855 |
+| Nu | 19,25 tot 19,33 ms | 1495 |
+| Nu, bevroren door de benchmark | 19,26 en 19,34 ms (en 19,86 en 21,65) | 1495 |
+
+Een robot die aan staat en stilstaat kost nu wat een robot kost die uit staat: de schaduwen worden niet meer hertekend. Dat scheelt per frame 2180 tekenopdrachten en 2,7 miljoen driehoeken met alle zestien in het level, en 0,28 ms (0,7 fps bij 50). Op deze resolutie bepaalt het beeld zelf de frametijd; de 4 fps die eerder op 1440p voor wiegende robots is gemeten haal ik hier niet terug.
+
+Het poseren van een lopende pop kost 52 microseconden per frame. De twee stralen naar de vloer zijn daarin niet terug te vinden: om en om met en zonder gemeten, twee keer 600 frames elk, is het verschil kleiner dan een microseconde en dus kleiner dan de spreiding.
+
+`tools/test_humanoid.sh` controleert nu ook: dat 3 m/s een eigen pas is (draf, 2,1 passen per seconde, passen 0,99 keer zo lang als gemaakt), dat een schot van voren iemand op zijn rug achter zijn plek legt en een van achteren op zijn gezicht ervoor, dat de rusher zijn pijp in de rechterhand heeft en bij zijn dood loslaat, dat op een vlakke vloer beide voeten met rust gelaten worden, en dat op de trap van de hal een voet die staat hooguit 4,4 cm van de vloer eronder is (26 cm als de voeten op de hoogte van het lijf blijven) met de voeten tot 58 cm boven elkaar. Aan het eind neemt de test de drie robots: stilgezet gaan ze uit, losgelaten komen ze aan, en stilstaand verplaatst geen onderdeel. 54 controles, alle geslaagd; `tools/selftest.sh` ook (312). Daarna is de trunk van 11 oktober binnengehaald (de sandbox, het GPU-slot, `CLAUDE.md`): zonder conflict, en op het geheel slagen `tools/selftest.sh` (315), `tools/test_humanoid.sh` (54) en `tools/test_sandbox.sh`. De metingen en de bladen zijn van vóór dat binnenhalen; de trunk raakte de rigs niet.
+
+**De cast: wat het gratis rantsoen toelaat, en een volgorde**
+
+- **Het rantsoen.** De pagina's van Hugging Face geven een gratis account 5 minuten GPU per dag, geteld vanaf het eerste gebruik en 24 uur daarna weer vol; zonder account 2 minuten, een betaald account (PRO) 40. Een stap begint alleen als er nog over is wat hij hooguit mag gebruiken: 90 s voor een plaatje, 120 s voor elk van de twee stappen van een model. Wat een stap van het rantsoen afhaalt zeggen de demo's niet, en het is veel meer dan hij draait. Op 11 oktober draaide een plaatje 3 tot 8 s en de twee stappen van een model 21 en 22 s; na één model en zes plaatjes, samen 68 s, zei de demo "0s left". Op 10 oktober waren het twee modellen en vijf plaatjes. Mijn eerste rekensom (wat een stap draait gaat eraf, dus vier modellen per dag) was dus fout. Wat vaststaat: één model per dag, en plaatjes zijn niet gratis: schilder er weinig.
+- **`generate.py` houdt de telling zelf bij**, naast het token (`~/.cache/huggingface/zerogpu_ration.json`): wanneer elke stap begon, hoe lang hij liep, en wat een demo zei dat er over was toen hij een stap weigerde. Hoeveel er in een dag gaat neemt hij van de laatste dag die opraakte (nu: 68 s van zijn eigen seconden, dus een model en een stuk of zeven plaatjes). `--ration` zegt wat er over is zonder iets te versturen, en een model dat er niet meer in past wordt niet begonnen (`--anyway` doet het toch). De telling kent alleen wat dit script deed.
+- **`clown_07` is begonnen en niet af.** Het eerste plaatje (de prompt die klaarstond) gaf een clown met open armen, en zijn model (11,5 MB, 283 duizend driehoeken, in een minuut) is niet te riggen: de bovenarmen zitten in de mouw aan het lijf vast en de onderarmen steken horizontaal uit, zodat er op geen enkele hoogte een losse arm naast de romp is. Drie andere zaden gaven dezelfde houding: het ligt aan de prompt ("held out to the sides", "hands open"), niet aan het toeval. De nieuwe prompt vraagt om armen die gestrekt schuin naar de vloer wijzen, de handen op heuphoogte een handbreedte buiten de heupen; zaad 2 daarvan is goed (armen recht en vrij, benen uit elkaar) en staat met die prompt in `build_cast.sh`. Het rantsoen was toen op. Zodra het terug is: `tools/characters/build_cast.sh clown_07`, een minuut of vier; het plaatje ligt in `assets/characters/.source/generated/clown_07/` in de hoofdmap.
+- **`--baggy`** is nieuw in de scanroute, voor een pak dat tot de knieën hangt: bij deze clown komen de benen op 25% van de hoogte samen, waar de route minstens 30% eist om knieën die tegen elkaar staan te weigeren. De heupen komen dan op de vaste verhouding van de lengte en de knie boven het punt waar de pijpen uiteengaan. De route zegt nu ook op welke hoogte de benen samenkomen als hij weigert.
+- **Volgorde.** (1) `clown_07` afmaken: daarmee is elke rol van de clowns een echte clown. (2) Een zombie voor de rol van grunt, want de meeste zombies in een level zijn grunts; die moet nog geschilderd worden. (3) `zombie_07`, de zombie-brandweerman (heavy) die de bijl draagt: zijn plaatje van 10 oktober ligt er al, maar met de onderarmen naar voren, de houding waarop `clown_07` strandde; schilder hem opnieuw met de armen omlaag. (4) De snelle zombie (rusher). Dan heeft ook bij de zombies elke rol een gegenereerd personage en kunnen de plaatshouders uit de rollen. Eén per dag, dus vier dagen, tenzij er een betaald account komt (40 minuten per dag).
+- **Wat de prompt moet zeggen**, geleerd aan drie clowns: armen gestrekt en omlaag, schuin van het lijf af, handen op heuphoogte. Niet "45 graden opzij" en niet "open handen": dat wordt een verwelkomend gebaar met gebogen ellebogen. Bij een dik figuur groeit de bovenarm anders aan de romp vast.
+
+**Op zijn aanwijzing erbij, 11 oktober 's middags**
+
+- **Een schot op een mens heeft een eigen geluid.** Het speelde `impact_soft`, het geluid van een kogel in een kartonnen doos: 0,14 s, bijna alles onder de 200 Hz, in 0,05 s weg. Nu is er `impact_flesh`, en `scripts/enemy.gd` noemt het oppervlak van een mens `flesh` in plaats van `soft`; `Fx.strike()` laat daar niets achter, want het bloed is van de rig. Hoe het klinkt heeft Michiel op het oor gekozen, in vier rondes: een zware vuistslag met het kraken van sneeuw eronder ("moet natter"), dezelfde natter, drie varianten met oplopende blubjes ("nog steeds een raar geluid"), en toen zijn eigen recept: korte ruis die wit begint en snel dof wordt richting bruin. Daarvan koos hij de kaalste. Het is 0,35 s ruis die er meteen is, met een laagdoorlaatfilter van 6 dB per octaaf dat in 40 ms van 16 kHz naar 200 Hz zakt: in de eerste 15 ms zit bijna alles boven de 2 kHz, na 80 ms bijna alles onder de 300 Hz. De bouwer van de geluiden kent dat nu als bouwsteen (`"burst": [seconden, van Hz, naar Hz, valtijd]` in `assets/manifest.json`), ook als laag onder een opname. Beluisteren: `tools/hear.py impact_flesh`.
+- **Pauze tijdens het laden brak het pauzemenu.** `SCRIPT ERROR ... 'scene_file_path' on a base object of type 'null instance'` in `menu.gd`. Na een dood en tussen twee levels is het oude level een frame eerder weg dan het nieuwe er is, en in dat frame landt een toets die tijdens het laden is ingedrukt; het menu vroeg dan het level naar zijn bestand. Daarna stond het spel op pauze met een half menu. Zonder venster nagespeeld (herladen vanuit een timer, pauze in hetzelfde frame): met de fout voor, zonder na. Het menu slaat de toets nu over zolang er geen level is.
+
+**Wat ik niet kon beoordelen**
+
+- Alles hierboven is bekeken als rij stilstaande momenten, niet in beweging. Of de draf vloeiend loopt, of de overgang van wandelen naar draven en van draven naar rennen niet verspringt, en of de val op de knieën niet te beheerst oogt voor iemand die wordt neergeschoten, moet in het spel blijken.
+- De trap is alleen gezien met het lijf met de hand langs de helling bewogen (het blad en de test). In het spel staat het lijf op een capsule en dus een centimeter of zeven boven een helling van 34 graden; de voeten reiken dan dieper. Geen vijand van de route loopt uit zichzelf de trap van de hal op.
+- Of het gevecht er beter van wordt dat een robot die uit staat ook minder opvalt. Het vizier was het helderste aan hem: in een donkere hoek van de hal is hij op 20 m nu een silhouet (onderste rij van `robot_uit.jpg`), terwijl de route erop rekent dat je al ziet staan wat je straks tegenkomt. Van dichtbij leest de houding duidelijk als uit; van voren en van ver nauwelijks.
+- Het ademen van het vizier is klein gehouden (12%); in de bladen is het niet te zien.
+- De bijl en het hakmes zijn op de plaatshouders gezet. Het hakmes is van opzij een streep.
+- Er klinkt niets nieuws: een slag met de bijl klinkt als een vuistslag, en opstarten is stil.
+
+**Nog open**
+
+- Een mens die op zijn post staat te wachten, staat bevroren in de houding waarin hij verscheen. Voor mensen bestaat "uit" niet; een wachthouding die niets kost is er nog niet.
+- Een personage dat stilstaat ademt, en laat dus wel elke lamp zijn schaduw hertekenen. Dat is niet gemeten.
+- De robots volgen de vloer niet: op een trap staan hun voeten op de hoogte van het lijf.
+- De treden van een trap zijn alleen getekend. Voeten die op de treden zelf staan vragen om treden waar de voeten tegen kunnen botsen, in het level.
+- Wie met iets slaat, slaat met één hand. Voor twee handen (een moker, een geweerkolf) zijn geen slagen geknipt.
+- De derde slag uit de set (`Sword_Regular_B`) begint waar de eerste eindigt en is daarom niet los te gebruiken.
+- `tools/build_model.sh enemies` schrijft de drie robots opnieuw weg met andere bytes, ook als er niets aan veranderd is.
+- Wat een stap echt van het rantsoen afhaalt is onbekend; de telling gaat af op wat er de vorige keer in een dag ging.
+- `clown_07` wacht op het rantsoen. Zijn plaatje is goed; of het model het ook is, blijkt dan pas.
+- Het trefgeluid op een mens is door hem gekozen uit losse opnamen, niet in een gevecht gehoord: daar speelt het op afstand en door de galm van de ruimte.
 
 ## Moderne shooter-eisen (fase 4)
 
@@ -563,7 +708,7 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 - De granaat is in de hand niet te zien; alleen de arm die hem gooit beweegt.
 - Een schot in een plas spat niet op: of een punt nat is, weet alleen de vloershader. Ramen hebben geen botsvorm, dus een schot gaat er zonder spoor doorheen.
 - Een stelling heeft één doos als botsvorm; een schot tussen de planken door geeft daarom vonken in de lucht ervoor.
-- Selftests van verschillende checkouts delen één savebestand (`user://selftest_save.cfg`) en laten elkaar falen als ze tegelijk draaien, steeds vanaf "a restart carries on from that checkpoint". Eén tegelijk, of elk met `HOME` naar een eigen map.
+- Selftests van verschillende checkouts deelden één savebestand (`user://selftest_save.cfg`) en lieten elkaar falen als ze tegelijk draaiden, steeds vanaf "a restart carries on from that checkpoint". Sinds 11 oktober heeft elke checkout zijn eigen, zie "Meerdere agents tegelijk".
 - De selftest meet "enemies approach" in echte tijd en faalde één keer op die stap toen de laptop zwaar belast was; drie herhalingen daarna slaagden.
 - Geen instelbare toetsen en geen aim assist voor de controller.
 - De HUD schaalt niet mee op hoge resoluties; de tekst is daar klein.
@@ -620,12 +765,12 @@ Over alle standpunten van beide levels, drie ronden om en om, lag het verschil t
 **Onderweg opgelost**
 
 - De physics-server meldde de speler een frame lang op de plek die hij in het scènebestand heeft, nadat hij al bij de start was neergezet. In de fabriek lag die plek in de hal, zodat de hal bij het laden meteen afging. Een stap van de route controleert nu zelf of de speler erin staat.
-- Een robot die stilstaat, wiegt met zijn romp. Dat is duur: met alle robots wiegend op hun post haalde het standpunt Overview 67,2 fps, tegen 71,3 fps met de robots roerloos, vijf keer om en om en elke keer 2 tot 6 fps verschil. Ik vermoed dat elke lamp met schaduw waar zo'n robot onder staat daardoor elk frame zijn schaduwen opnieuw tekent; dat heb ik niet apart gemeten. Een robot die uit staat, staat daarom helemaal stil: zijn knoop staat op `PROCESS_MODE_DISABLED`, met `disable_mode` zo dat hij te raken blijft. Voor een robot die aan staat en even niets doet, geldt het nog.
+- Een robot die stilstaat, wiegt met zijn romp. Dat is duur: met alle robots wiegend op hun post haalde het standpunt Overview 67,2 fps, tegen 71,3 fps met de robots roerloos, vijf keer om en om en elke keer 2 tot 6 fps verschil. Ik vermoed dat elke lamp met schaduw waar zo'n robot onder staat daardoor elk frame zijn schaduwen opnieuw tekent; dat heb ik niet apart gemeten. Een robot die uit staat, staat daarom helemaal stil: zijn knoop staat op `PROCESS_MODE_DISABLED`, met `disable_mode` zo dat hij te raken blijft. Voor een robot die aan staat en even niets doet, gold het nog tot 11 oktober; zie "Houding en beweging".
 
 **Nog open**
 
 - Een robot die uit staat, komt alleen in actie als de speler zijn zone binnenloopt of op een robot van die zone schiet. Staat hij in het zicht terwijl er in de zone ernaast wordt gevochten, dan staat hij erbij. Vanaf waar je de containerrijen van het depot binnenloopt staat er zo één op het perron in het zicht, op 21 m; vanaf de deur van de aanbouw staat er in de hal geen robot van het westelijke deel meer in het zicht. Verderop in een zone kan dat anders zijn: de selftest kijkt alleen vanaf waar een zone wordt binnengelopen.
-- Aan een robot is niet te zien dat hij uit staat: zijn vizier gloeit zoals altijd en hij staat in de houding waarin hij ook stilstaat als hij aan is. Een eigen houding en een gedoofd vizier horen bij het model, dus bij `scripts/enemy_rig.gd`.
+- Aan een robot was niet te zien dat hij uit staat. Nu wel: zie "Houding en beweging".
 - De zon is gebakken. Als de laaddeur omhoog gaat zie je het voorterrein in de avondzon, maar op de vloer van de hal valt geen zonlicht naar binnen.
 - De deur heeft geen eigen geluid: bij de lamp en als hij boven is klinkt `clang`. Achter de laaddeur ligt een leeg voorterrein met twee containers; meer dan een seconde zie je er niet van.
 - Wie doorrent, stapelt gevechten: elke zone waar je doorheen loopt gaat aan, en de robots lopen de speler het hele level door achterna.
@@ -1046,7 +1191,7 @@ Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het sa
 - **Rijen kamers aan een gang zien elkaar.** Uit een kamer kijk je door je eigen deur schuin de deuren aan de overkant in. De westgang ziet zo acht ruimtes. Occlusion culling zou tekenen wat echt in beeld is; nu is het alles of niets per zone.
 - De kantoren zijn kaal: een bureau, een stoel en een kast op ruim 90 m². De schermen zijn overal dezelfde drie stapels pallets.
 - De schaduwsortering kijkt bij het laden. Een model dat in de schaduw stond van iets dat wordt opgeblazen, werpt daarna nog steeds geen zonneschaduw.
-- De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is nog steeds niet nagekeken.
+- De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is op 11 oktober nagekeken: 10 GiB, zie "Meerdere agents tegelijk".
 - **`bouwdoos` is op 11 oktober 2026 samengevoegd met `fase-2-vertical-slice`**, op Michiels woord: de renderschaal, de stemmen, wat stuk kan en de beweging van het beeld zitten er nu in. Het botste op de twee regels die de proef al gaf. In `_ready()` van `scripts/game.gd` staan ze allebei: eerst krijgt wat stuk kan zijn lichamen, dan wordt uitgezocht wat in de schaduw staat. In de levellijst van `scripts/menu.gd` staat het fabrieksterrein tussen de fabriek en het depot met hetzelfde muziekstuk als die twee, zodat het doorspeelt in plaats van het langste level stil te laten; dat is niet op het gehoor gekozen. `scripts/shade.gd` laat wat stuk kan buiten wat de zon tegenhoudt: zes modellen, vier in de fabriek en twee op het fabrieksterrein, stonden alleen in de schaduw doordat er een stapel kisten tussen hen en de zon stond, en bleven buiten de schaduw van de zon als die stapel was weggeschoten. Er staan er nu 198 en 755 in de schaduw, tegen 202 en 757. Op het geheel slagen `tools/selftest.sh` (264 controles), `tools/test_humanoid.sh` en `tools/nettest.sh`; een herbouw geeft de bewaarde levels terug en `tools/bake_lightmaps.py --list` noemt elke zone bij. Er is niets herbouwd of opnieuw gebakken. De framerate van het fabrieksterrein is dezelfde als ervoor (72 tot 95 fps op 1440p met FSR 2 op 67%). Nog te doen: het contactblad opnieuw maken, want kratten en lampen kunnen nu stuk en de tekenopdrachten zijn op een paar standpunten een handvol hoger, zie "De repetitie verschuift de teller van tekenopdrachten" onder "Wat er kapot kan". Een worktree die de hoofdbranch binnenhaalt moet de nieuwe geluiden nog inlezen (`godot --headless --path . --import`).
 - Elke kamer een eigen gevecht, in plaats van een vleugel als één gevecht, geeft 21 kleine gevechten en houdt alle robots. Dan moet de speler elke kamer in, en de regel dat de route door elk gevecht loopt vervalt. Dat is niet besloten.
 
@@ -1194,6 +1339,7 @@ De branch `gevecht` voegt eerst `looproute` (de route) en `speelbaar` (de person
 
 **Wat de selftest ervan controleert** (138 controles, was 103; de test van de personages 26):
 
+- dat er vanaf waar de speler staat dekking is om achter te staan en om achter te bukken, en dat een collider erbij ver van het gevecht of dezelfde colliders in een andere volgorde daar niets aan veranderen (sinds 10 oktober, zie "Dekking die aan het laatste cijfer hing");
 - dat een grunt naar dekking rent en daar van hoofd tot borst niet te zien is, eruit komt om te schieten als het zijn beurt is en teruggaat;
 - dat van vijf grunts er nooit meer dan het toegestane aantal tegelijk aanvalt, dat ze wel aanvallen, en dat er één omtrekt en niet meer;
 - dat een grunt wegrent van een granaat aan zijn voeten en dat overleeft, en uit een brand loopt;
@@ -1206,7 +1352,7 @@ Een deel van de test dat op een scriptfout halverwege ophoudt, telde tot nu toe 
 
 **Wat het kost**
 
-- Het opzoeken van de dekking: 44 ms voor de fabriek, één keer, terwijl het beeld uit zwart opkomt. Het navmesh van een level is vooral het terrein eromheen (24 duizend plekken); er wordt alleen in de zones gekeken (1569 plekken).
+- Het opzoeken van de dekking: 44 ms voor de fabriek, één keer, terwijl het beeld uit zwart opkomt (dat het één keer is en dan gebeurt, klopt pas sinds 10 oktober, zie verderop). Het navmesh van een level is vooral het terrein eromheen (24 duizend plekken); er wordt alleen in de zones gekeken (1569 plekken).
 - Een keer dekking zoeken: 0,3 tot 0,4 ms, hooguit 1 ms. Vijf grunts in gevecht doen dat samen 10 keer in 12 seconden.
 - Een heel gevecht: gemeten op 10 oktober 2026 op 1440p met FSR 2 op 67%, vanaf de oostkant van de hal, met alle zestien robots van de fabriek tegelijk aan en op de speler af (`--awake`) tegen dezelfde zestien roerloos op hun post (`--posted`), twee keer om en om terwijl de laptop zwaar in gebruik was (load 5 tot 6): 71,6 en 74,2 fps roerloos, 70,1 en 67,3 fps in gevecht. Dat is 2 tot 7 fps voor zestien robots; een zone heeft er hooguit zes. De 1% low liep in die runs uiteen van 46 tot 67 fps, in beide soorten; daar is niets uit af te lezen.
 - De grunt is met zijn plaat 9,4 duizend driehoeken in 17 onderdelen, de heavy met zijn pack 8,7 duizend in 19. De cel en het blik zijn 1,1 en 1,5 duizend, met elk een licht zonder schaduw.
@@ -1216,6 +1362,64 @@ Een deel van de test dat op een scriptfout halverwege ophoudt, telde tot nu toe 
 - Het navmesh zweeft tot een halve meter boven de vloer. De dekkingsplekken lagen daardoor te hoog en een "lage" dekking werd op heuphoogte gemeten. Elke plek wordt nu met een straal op de vloer gezet.
 - Een schot dat de plaat tegenhoudt kost de robot geen health, en het spel zag aan zijn health dat er op hem geschoten was. Een zone begon dus niet als je op een plaat schoot. Een vijand meldt nu zelf dat hij geraakt is (signaal `disturbed`), wat ook het open punt uit de route oplost dat het spel te veel van een robot las.
 - De test van de personages ging nog uit van waves en faalde op de samengevoegde branch op drie punten. Hij speelt nu het eerste gevecht van de route.
+
+**Dekking die aan het laatste cijfer hing (10 oktober 2026)**
+
+Of de grunts dekking vonden, hing af van iets dat met elke wijziging aan de colliders van een level verschoof. Met één vuilniszak erbij in het ketelhuis, ruim dertig meter en twee zones van het gevecht in de hal, vochten van de vijf grunts in de test er nog twee vanuit dekking in plaats van vijf, en zochten ze 56 tot 59 keer dekking in 12 seconden in plaats van 8 tot 12 keer. Dezelfde colliders in een andere volgorde deden hetzelfde, en de bestaande vuilniszak weghalen ook. Aan het navmesh lag het niet: dat was met de zak erbij dezelfde 612 polygonen.
+
+De oorzaak heeft twee schakels:
+
+- **Waar het verschil vandaan komt.** Alle colliders van een level zijn vormen van één body (294 in de fabriek), en Jolt bewaart elke vorm ten opzichte van het zwaartepunt van allemaal samen, in getallen van 32 bit. Een vorm erbij verschuift dat punt en een andere volgorde rondt de som anders af; daarna komt elke straal een haar anders terug. Dat is af te lezen aan `center_of_mass_local` van de body: een volgorde die dat punt tot op het laatste cijfer gelijk liet, liet ook elke straal gelijk. Met de zak verschoof het zwaartepunt 0,27 mm en de treffers tot 0,000005 m; met een doos van 60 m op een kilometer afstand werd dat 0,0001 tot 0,0003 m. De vloer van de hal lag zo op +0,0000001 m of op −0,0000001 m.
+- **Wat eraan hing.** Wie staand dekking neemt schiet van een stap opzij, en `_suits()` keurde die stap goed als het navmesh niet verder dan 0,45 m van die plek lag. Die afstand werd schuin gemeten, van de plek op de vloer naar het navmesh erboven, en het navmesh zweeft in de hal precies 0,45 m boven de vloer. Bij een vloer op +0,0000001 was het 0,4499999 en goed, bij −0,0000001 was het 0,4500001 en afgekeurd: voor alle plekken in de hal tegelijk. Tegen zes standpunten in de hal voldeed 127 keer een plek om achter te staan; met de zak 0 keer. De plekken zelf waren toen op 0,000005 m dezelfde 361, met dezelfde richtingen. Het vermoeden dat de survey andere plekken opleverde klopte voor de zak dus niet; de survey had wel dezelfde kwaal, zie verderop.
+
+Dat die twee getallen samenvielen is geen toeval van dit ene level. Het navmesh ligt op lagen van 0,25 m, geteld vanaf het laagste punt van alle colliders, en komt een kwart tot een halve meter boven een vloer uit. In de fabriek en in het depot ligt dat punt op −1,05 m, wat boven de begane grond 0,45 m geeft. Nagemeten met een collider buiten het level waarvan de onderkant 10 cm dieper ligt dan de rest: het navmesh zweeft dan 0,35 m boven de hal en de oude regel had 28 cm speling. Op de tussenvloer zweeft het 0,50 m, net als op 202 plekken in het depot; daar kon de oude regel nooit slagen. De 0,45 m was kennelijk als speling over de vloer bedoeld, uit de tijd dat de plekken nog op het navmesh lagen (zie "Onderweg gevonden").
+
+De survey had dezelfde kwaal in het klein. De plekken liggen op hele meters en een level is op hele en halve meters gebouwd: de 164 dozen die recht staan hebben 44 vlakken in x en 91 in z precies op een hele meter. Een straal vanaf zo'n plek loopt dan precies langs een vlak en raakt een hoek, eindigt precies op de muur die 1,6 m verderop begint, en midden in een gang is het naar links even ver als naar rechts. Wat zo'n straal oplevert beslist het laatste cijfer. Met alleen de regel hierboven gerepareerd verdwenen over twaalf verstoringen (dozen ver weg, de vormen gehusseld) samen 80 plekken, kwamen er 23 bij en stond er bij 52 iets anders omheen.
+
+Wat er veranderd is, alles in `scripts/squad.gd`:
+
+- Hoe ver een punt van het navmesh van een punt op de vloer ligt, wordt over de vloer gemeten. Tot 0,6 m hoger of lager is het dezelfde vloer (`HOVER`).
+- De survey kijkt van een haar naast elke plek en nooit vanaf de plek zelf (`ASIDE`: 5,6 en 11,3 mm opzij, 3,8 mm hoger). Dat geldt voor de stralen om de plek heen, de straal naar de vloer, de vraag aan het navmesh waar de plek naartoe schuift en het vakje waarin twee plekken als dezelfde tellen. Geen straal loopt zo nog langs een vlak of door een hoek van iets dat op het raster staat.
+- Twee afstanden die minder dan 1,5 mm verschillen zijn dezelfde afstand (`HAIR`). Midden tussen twee muren wint de eerste richting, wat het laatste cijfer ook zegt.
+
+Wat het oplevert, gemeten door in het draaiende spel colliders toe te voegen en te husselen en de survey over te doen:
+
+| | Was | Nu |
+|---|---|---|
+| Plekken in de fabriek | 361 | 353 |
+| Keer dat een plek voldoet om achter te staan, tegen zes standpunten in de hal | 127, of 0 | 141 |
+| Om achter te bukken | 33 | 32 |
+| Verschil na een verstoring in de fabriek: zes dozen, van een vuilniszak dichtbij tot 60 m op een kilometer, en veertig keer 50 vormen achteraan gezet | tot 9 plekken weg en 8 met iets anders eromheen | geen plek, geen richting, geen oordeel over een plek |
+| Hetzelfde in het depot (576 plekken, zes dozen en dertig keer husselen) | niet gemeten | geen |
+
+Er voldoen nu meer plekken om achter te staan dan in het gunstige geval van vroeger, omdat de stap opzij echt tot 0,45 m naast het navmesh mag uitkomen. De acht plekken minder bestonden bij de gratie van een straal die een hoek schampte. De survey zelf is iets duurder geworden: 31 tot 33 ms tegen 29 tot 32 ms in de fabriek en 47 tot 52 ms tegen 43 tot 44 ms in het depot (mediaan van negen, vier keer om en om gemeten).
+
+`tools/selftest.sh --fights` per variant van het level, voor de oude code één keer gedraaid en voor de nieuwe twee of drie keer:
+
+| Level | Was | Nu |
+|---|---|---|
+| Zoals het is | 5 van de 5 vanuit dekking, 8 tot 12 keer zoeken | 5 van 5, 12 tot 15 keer |
+| Vuilniszak erbij in het ketelhuis | 2 van 5, 56 tot 59 keer | 5 van 5, 10 tot 13 keer |
+| Dezelfde colliders in omgekeerde volgorde | 2 van 5, 53 keer | 5 van 5 en één keer 4 van 5, 11 tot 14 keer |
+| De bestaande vuilniszak weg | 2 van 5, 58 keer | 5 van 5, 11 keer |
+| Een doos van 10 m op 140 m van de hal erbij | 5 van 5, 10 keer | 5 van 5, 10 tot 11 keer |
+| Een collider 10 cm dieper dan de rest (het navmesh zweeft dan 0,35 m) | 5 van 5, 11 keer | 5 van 5, 9 tot 11 keer |
+
+Die ene keer had één grunt op het moment van tellen geen dekking; waardoor heb ik niet nagegaan. De test vraagt er drie.
+
+De selftest kijkt er nu zelf naar, vóór het eerste gevecht: of er vanaf waar de speler staat dekking is om achter te staan en om achter te bukken (18 en 3 plekken), en of een doos van 30 m op 300 m afstand of dezelfde vormen in een andere volgorde daar iets aan veranderen. Met de oude `squad.gd` falen daarvan twee controles in het level zoals het is en alle drie met de vuilniszak erbij. De hele selftest telt nu 141 controles en slaagt, net als de test van de personages (26) en die van samen spelen (58).
+
+Onderweg gevonden:
+
+- De survey bij het laden kwam te vroeg. Een navmesh dat net gebakken is, staat pas een paar frames later op de kaart waar de vragen aan gesteld worden; `prepare()` keek op frame 3, de kaart had het op frame 6. Dat kostte 28 ms voor 369 plekken waarvan er geen tegen zijn dekking was aangeschoven, en de echte survey (44 ms) kwam bij de eerste vraag om dekking, midden in het eerste gevecht. De survey wacht nu tot het navmesh op de kaart staat en gebeurt één keer, terwijl het beeld opkomt.
+- In het depot stond één plek nu eens links en dan weer rechts van een pilaar die precies op zijn rasterlijn staat, 11 cm uit elkaar. Daarom gaat ook de vraag aan het navmesh een haar opzij.
+
+Nog open hiervan:
+
+- De haar opzij maakt toeval onwaarschijnlijk, niet onmogelijk: iets dat zelf 5,6 mm naast een rasterlijn begint, ligt weer op de rand. De controle in de selftest is er om dat te merken.
+- `_suits()` kijkt vanaf de ogen van de speler. Die staan in het spel nooit precies op het raster, in de test wel. In geen van de verstoringen hierboven gaf dat een ander oordeel.
+- Op twee plekken wordt nog schuin gemeten tussen de vloer en het navmesh: of een pad bij een plek uitkomt, met 1,0 m als grens. Met een navmesh dat hooguit een halve meter zweeft is daar een halve meter speling; dat is zo gelaten.
+- Het is niet gespeeld. Staand dekking nemen kan nu op meer plekken dan in het gunstige geval van vroeger. Op de tussenvloer scheelt het weinig, want daar staat weinig hoogs: tegen drie standpunten daarboven voldoet nu één plek om achter te staan, eerst geen.
 
 **Nog open**
 
@@ -1280,3 +1484,74 @@ Het spel is met meer spelers over het netwerk te spelen: samen de route door de 
 - **Het duurt lang.** Het script deed er de eerste keer 20 minuten over, met alle cores: beide exports importeerden alles opnieuw. Of een tweede keer sneller gaat, zoals de bedoeling van de kopie is, is niet gemeten.
 - **Niet ondertekend.** Windows waarschuwt bij het starten en een Mac weigert de eerste keer; `LEESMIJ.txt` zegt hoe je erdoor komt. Zonder waarschuwing kost een Apple Developer-account.
 - Er is nog geen plek waar de zips staan, en het spel heeft geen eigen icoon.
+
+## Meerdere agents tegelijk
+
+Op 11 oktober 2026 gevraagd: de repo klaarmaken voor agents die tegelijk bouwen, elk in een eigen worktree. Gebouwd op de branch `klaarzetten`. Terwijl dit gebouwd werd, begonnen er drie (`houding`, `wapens`, `zestig`); hun branches zijn van vóór dit werk.
+
+**Wat er nu is**
+
+- **`CLAUDE.md`**, dat elke sessie te lezen krijgt: de werkafspraken, en wat dit plan leert over worktrees, de GPU, meten en bakken.
+- **Het GPU-slot** (`tools/gpu_slot.sh`). Wat tekent, neemt eerst het slot en wacht zolang een ander het heeft. `tools/godot.sh` doet dat voor elke run, met of zonder venster, dus ook voor `tools/benchmark.sh`, `tools/shots.sh`, `tools/zone_sheet.py` en `tools/level_cost.sh`. Het slot is een slot (`lockf`) op één bestand dat elke checkout deelt, `~/Library/Application Support/Godot/gpu-slot`. Het blijft dicht zolang het proces leeft dat het nam, met alles wat dat startte, en gaat open zodra die weg zijn, hoe ze ook eindigden: er blijft niets achter om op te ruimen. In het bestand staat wie het heeft, en wie wacht zegt dat op stderr. Na 30 minuten wachten (`GPU_SLOT_WAIT`) stopt een run met status 75.
+- **Een bake houdt het slot zolang hij duurt.** `tools/bake_lightmaps.py` neemt het zodra er iets te bakken is, vóór het naar andere Godots kijkt, en geeft het pas terug als de editor klaar is; de run van `tools/godot.sh` daarbinnen neemt het niet nog eens (`GPU_SLOT_HELD`). `--list` en `--mark` raken het niet. Op dezelfde manier houdt een reeks het slot van de eerste tot de laatste run: `tools/gpu_slot.sh sh -c '...'`.
+- **Eigen testbestanden per checkout.** `SelfTest.own_file()` geeft een test een bestand in `user://selftest/<map>-<getal>/`, met de map van de checkout en een getal uit het hele pad. Daar staan nu de save van een testrun (`save.cfg`) en het logboek van de sandboxtest (`sandbox.jsonl`). De test van samen spelen telt op dezelfde manier door naar een eigen poort, 24599 tot 24998.
+- **De dekkingsfix** uit de worktree `brave-bose-91ce03`, zie "Dekking die aan het laatste cijfer hing". Op de trunk botste alleen `scripts/selftest.gd`; beide blokken functies staan erin. Met de kisten en lampen uit het lichaam van het level komen dezelfde getallen terug als toen: 353 plekken, 18 om achter te staan en 3 om achter te bukken.
+- **De sandbox** uit de worktree `sandbox`, zie hieronder. Op de trunk botste alleen `take_damage()` in `scripts/player.gd`: de parameter heet `direction`, die het beeld gebruikt, en de test is `if dead or invulnerable:`.
+
+**De sandbox**
+
+Eén gevecht in één zone van een level, zo vaak als je wilt, met elke keer iets anders eraan: om te beslissen hoe iets moet spelen. Nergens beschreven tot nu toe; dit is wat de code doet.
+
+- "Sandbox" op het titelscherm, of `--sandbox=<experiment>` (met `:2` erachter voor de derde variant). `assets/sandbox.json` noemt de experimenten: een level, de zone die de arena is, eventueel wie er op de posten staat, en de varianten. Een variant is een thema zoals `scripts/enemy_themes.gd` dat leest; wat je vergelijkt moet dus een `@export` van `scripts/enemy.gd` zijn. Daarvoor zijn de drie getallen van de paniek dat geworden (`panic_health`, `panic_radius`, `panic_pace`).
+- Er zijn er drie: hoe ver paniek zich verspreidt (laadperron van de fabriek, 8 m, de hele ruimte of niet), hoe hard ze dan rennen (de hal, vijf vijanden, 1,35, 1 of 2 keer hun loopsnelheid) en tegen wie je vecht bij de poort van het depot (robots, soldaten, zombies, clowns, paniekclowns).
+- T begint de ronde opnieuw, Q en E met de vorige of volgende variant, F en X noteren of de ronde goed was. Het pauzemenu heeft de rest: niets doet pijn, munitie raakt niet op, slow motion, vijanden staan stil, een vijand erbij waar je kijkt, en het level opnieuw laden, wat terugbrengt wat ontplofte of brak.
+- Wat het spel had opgeslagen staat zolang opzij en is daarna terug. Elke ronde laat één regel achter in `user://sandbox.jsonl`: variant, afloop, seconden, schade, schoten, treffers en het oordeel.
+- `tools/test_sandbox.sh`, 30 controles, speelt het eerste experiment zonder een schot te lossen en opent het laatste. Het middelste opent hij niet; zijn zone (`hall`) bestaat.
+
+**Gemeten**
+
+Twee checkouts naast elkaar, de tweede een paar seconden na de eerste gestart, met de code van vóór de eigen testbestanden en erna:
+
+| Test | Ervoor | Erna |
+|---|---|---|
+| `tools/selftest.sh --routes`, 17 s na elkaar | de ene 183 van 183, de andere 10 fout vanaf "a restart carries on from that checkpoint" | allebei 183 van 183 |
+| `tools/nettest.sh`, 5 s na elkaar | de ene 62 van 62, de andere 3 fout: de host kan niet hosten en de gast komt in het spel van de ander | allebei 62 van 62 |
+| `tools/test_sandbox.sh`, 3 s na elkaar | de ene 30 van 30, de andere 1 fout | allebei 30 van 30 |
+
+Op hetzelfde moment gestart slaagden de twee oude routetests allebei: ze lopen dan gelijk op en schrijven hetzelfde weg. Het ging dus mis zodra twee sessies niet toevallig tegelijk begonnen.
+
+Het slot, door de echte scripts heen met een script van vijf regels op de plaats van Godot (`GODOT=`), dat zegt wanneer het begint en eindigt:
+
+- Een run uit de ene checkout en een seconde later een uit de andere: de tweede zegt op wie hij wacht en begint in de seconde dat de eerste eindigt. Elk geeft de eigen afloop door (3 en 0).
+- Een run met venster (`GODOT_WINDOW=1`) neemt het slot ook. `tools/bake_lightmaps.sh --list` wacht nergens op.
+- Een bake in de ene checkout, anderhalve seconde later een meting in de andere: de meting begint als de bake klaar is.
+- Een bake die begint terwijl een meting loopt, wacht daarop en kijkt dan pas naar andere Godots. Hij weigerde toen, terecht: de editor stond open en een andere sessie mat zonder slot.
+- Wie het slot heeft en gestopt wordt terwijl iets dat hij startte nog leeft, houdt het tot dat ook weg is. Genest (`tools/gpu_slot.sh tools/gpu_slot.sh ...`) start meteen.
+
+De hele selftest slaagt (315 controles), net als `--fights` (5 van 5 vanuit dekking), de test van samen spelen (62), van de personages (36) en van de sandbox (30).
+
+**Onderweg gevonden**
+
+- **De importcache van de hoofdcheckout liep achter.** De centrale is erin gevoegd zonder haar geïmporteerde bestanden: de elf lightmaps en vijf opschriften, 32 bestanden in `.godot/imported/`. Elke worktree die daarna met `cp -cR .godot` begon, laadde de centrale met foutmeldingen en zonder lightmaps; de selftest slaagt dan toch, want die kijkt daar niet naar. Zelf importeren (`--import`) vult aan wat ontbreekt en niets anders, maar was na tien minuten op vier cores bij de vijfde lightmap van elf. Uit de worktree `centrale` klonen kost een seconde. In `CLAUDE.md` staat nu dat wie lightmaps of texturen in de hoofdcheckout voegt, die bestanden meekloont.
+
+**Git LFS bij GitHub**
+
+- Een account op GitHub Free of Pro heeft 10 GiB opslag en 10 GiB download per maand (docs.github.com, "Git Large File Storage billing", gelezen op 11 oktober 2026). Daarboven wordt zonder betaalmiddel niets meer geaccepteerd.
+- In de geschiedenis staan 97 LFS-objecten, samen 542 MB; allemaal op commits die gepusht zijn. De stand van nu is daarvan 525 MB in 88 bestanden: het fabrieksterrein 229 MB, de centrale 138, de fabriek 68, het depot 49 en de vleugel 41. Dat is ongeveer een twintigste van de 10 GiB, als dit het enige project met LFS op het account is.
+- Elke lightmap die verandert telt bij een push opnieuw voor zijn hele grootte, en wat eenmaal gepusht is blijft meetellen. Alles opnieuw bakken en pushen kost dus een halve GiB per keer: daar is ruimte voor een kleine twintig keer.
+- **Wat GitHub zelf als verbruik telt, heb ik niet kunnen lezen.** Dat vraagt het recht `user` op de inlog van `gh`, en dat heeft hij niet. Los daarvan is de gewone geschiedenis bij GitHub 1,0 GB (`size` van de repo), vooral lightmaps van vóór LFS: van de 400 grootste bestanden in de geschiedenis is 790 MB een `.exr`.
+
+**Opruimen: niets gedaan, dat wacht op Michiels woord**
+
+- Volledig in de trunk en zonder eigen werk: de worktrees en branches `beeld`, `bouwdoos`, `centrale` en `claude/admiring-bassi-66e193`, en op GitHub `origin/bouwdoos`. In `admiring-bassi` staat één bestand klaargezet en niet gecommit, een leeg `benchmark/.gdignore`; de trunk heeft het al.
+- `claude/brave-bose-91ce03` en `sandbox`: hun commits zaten al in de trunk, hun ongecommitte werk nu ook. Ze kunnen weg zodra `klaarzetten` in de trunk zit.
+- `origin/claude/relaxed-wozniak-wpi9ky` zit er niet in: twee commits uit fase 1, een eerdere opzet van de gunfeel met een eigen rooktest, afgetakt bij het bouwplan.
+- `main` staat 141 commits achter de trunk en heeft niets eigens: doorschuiven kan zonder merge. Het is de standaardbranch op GitHub, dus wie de repo kloont krijgt nu het spel van fase 1.
+- In `user://` blijven `selftest_save.cfg` en `sandbox_test.jsonl` liggen. Branches van vóór dit werk gebruiken ze nog.
+
+**Nog open**
+
+- **Eén echte run is door het slot gegaan, een bake niet.** Tijdens het bouwen was de GPU negen minuten lang geen moment vrij: de drie andere sessies maten aan één stuk, twee keer met twee tegelijk. Michiel draaide daarna zelf `tools/benchmark.sh --quick --at="-23,2.2,9,0,-5"` vanuit de worktree: het beeld staat er, het slot noemde de run en was daarna weer vrij. Dat die run op een ander wachtte is op de GPU niet gezien, alleen met de nagemaakte Godot. Bakken is aan de agent van "Kit-ruimtes".
+- **Het slot ziet alleen wie het neemt.** De editor, het spel dat Michiel daaruit speelt en een branch van vóór dit werk tekenen erbuiten. `ps` blijft dus nodig, en `houding`, `wapens` en `zestig` wachten pas op elkaar als ze de trunk binnenhalen.
+- Een Godot die bij het afsluiten blijft hangen, zoals op 10 oktober, houdt het slot vermoedelijk vast zolang hij in de proceslijst staat. Dan wacht alles, wat toen ook het beste was; wie wacht leest wie het heeft. Dat is niet uitgeprobeerd.
+- De sandbox en de dekkingsfix zijn niet gespeeld.

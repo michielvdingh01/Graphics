@@ -29,6 +29,7 @@ is passed on to prepare.py; the ones that matter:
     --route=scan        treat it as a statue even though it has a skeleton
     --look=zombie       paint it up as a zombie or a clown
     --no-delight        scan: leave the light that is baked into the texture
+    --baggy             scan: the legs are in one garment down to the knees
     --keep=DIR          leave the Blender scene and the textures there
     --report=FILE       leave what Blender measured there, joints and all
     --no-manifest       a try-out: do not put it in the manifest
