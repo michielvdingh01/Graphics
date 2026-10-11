@@ -29,7 +29,6 @@ signal changed
 const THEMES := preload("res://scripts/enemy_themes.gd")
 const FILE := "res://assets/sandbox.json"
 const LOG := "user://sandbox.jsonl"
-const TEST_LOG := "user://sandbox_test.jsonl"
 ## How fast the game runs in slow motion.
 const SLOW := 0.3
 ## Seconds between two looks at the ammunition that never runs out.
@@ -111,8 +110,9 @@ func _ready() -> void:
 			else:
 				push_warning("%s: the experiment %s names no level or no variants" % [FILE, key])
 	if SelfTest.active:
-		_log = TEST_LOG
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_LOG))
+		# A test keeps a log of its own, and starts with none.
+		_log = SelfTest.own_file("sandbox.jsonl")
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_log))
 	_build()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--sandbox="):

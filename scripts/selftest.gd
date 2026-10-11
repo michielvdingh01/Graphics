@@ -50,6 +50,23 @@ func _ready() -> void:
 		_run.call_deferred()
 
 
+## The checkout this runs from, by a name no other has: the folder it is in
+## and a number made of the whole path to it, "Graphics-1c9a04e7".
+func checkout() -> String:
+	var folder := ProjectSettings.globalize_path("res://").trim_suffix("/")
+	return "%s-%08x" % [folder.get_file(), folder.hash()]
+
+
+## Where a test keeps a file called `file`: in a folder of this checkout's
+## own under user://selftest/. Every checkout of the project has the same
+## user://, and tests of two of them run at the same time: with one file
+## between them each found there what the other had just written.
+func own_file(file: String) -> String:
+	var folder := "user://selftest/%s" % checkout()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
+	return "%s/%s" % [folder, file]
+
+
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.

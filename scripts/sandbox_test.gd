@@ -178,8 +178,8 @@ func _arena(game: Node) -> RefCounted:
 
 func _lines() -> Array:
 	var lines := []
-	if FileAccess.file_exists(Sandbox.TEST_LOG):
-		for line in FileAccess.get_file_as_string(Sandbox.TEST_LOG).split("\n", false):
+	if FileAccess.file_exists(Sandbox._log):
+		for line in FileAccess.get_file_as_string(Sandbox._log).split("\n", false):
 			lines.append(JSON.parse_string(line))
 	return lines
 
