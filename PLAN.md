@@ -563,7 +563,7 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 - De granaat is in de hand niet te zien; alleen de arm die hem gooit beweegt.
 - Een schot in een plas spat niet op: of een punt nat is, weet alleen de vloershader. Ramen hebben geen botsvorm, dus een schot gaat er zonder spoor doorheen.
 - Een stelling heeft één doos als botsvorm; een schot tussen de planken door geeft daarom vonken in de lucht ervoor.
-- Selftests van verschillende checkouts delen één savebestand (`user://selftest_save.cfg`) en laten elkaar falen als ze tegelijk draaien, steeds vanaf "a restart carries on from that checkpoint". Eén tegelijk, of elk met `HOME` naar een eigen map.
+- Selftests van verschillende checkouts deelden één savebestand (`user://selftest_save.cfg`) en lieten elkaar falen als ze tegelijk draaiden, steeds vanaf "a restart carries on from that checkpoint". Sinds 11 oktober heeft elke checkout zijn eigen, zie "Meerdere agents tegelijk".
 - De selftest meet "enemies approach" in echte tijd en faalde één keer op die stap toen de laptop zwaar belast was; drie herhalingen daarna slaagden.
 - Geen instelbare toetsen en geen aim assist voor de controller.
 - De HUD schaalt niet mee op hoge resoluties; de tekst is daar klein.
@@ -1046,7 +1046,7 @@ Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het sa
 - **Rijen kamers aan een gang zien elkaar.** Uit een kamer kijk je door je eigen deur schuin de deuren aan de overkant in. De westgang ziet zo acht ruimtes. Occlusion culling zou tekenen wat echt in beeld is; nu is het alles of niets per zone.
 - De kantoren zijn kaal: een bureau, een stoel en een kast op ruim 90 m². De schermen zijn overal dezelfde drie stapels pallets.
 - De schaduwsortering kijkt bij het laden. Een model dat in de schaduw stond van iets dat wordt opgeblazen, werpt daarna nog steeds geen zonneschaduw.
-- De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is nog steeds niet nagekeken.
+- De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is op 11 oktober nagekeken: 10 GiB, zie "Meerdere agents tegelijk".
 - **`bouwdoos` is op 11 oktober 2026 samengevoegd met `fase-2-vertical-slice`**, op Michiels woord: de renderschaal, de stemmen, wat stuk kan en de beweging van het beeld zitten er nu in. Het botste op de twee regels die de proef al gaf. In `_ready()` van `scripts/game.gd` staan ze allebei: eerst krijgt wat stuk kan zijn lichamen, dan wordt uitgezocht wat in de schaduw staat. In de levellijst van `scripts/menu.gd` staat het fabrieksterrein tussen de fabriek en het depot met hetzelfde muziekstuk als die twee, zodat het doorspeelt in plaats van het langste level stil te laten; dat is niet op het gehoor gekozen. `scripts/shade.gd` laat wat stuk kan buiten wat de zon tegenhoudt: zes modellen, vier in de fabriek en twee op het fabrieksterrein, stonden alleen in de schaduw doordat er een stapel kisten tussen hen en de zon stond, en bleven buiten de schaduw van de zon als die stapel was weggeschoten. Er staan er nu 198 en 755 in de schaduw, tegen 202 en 757. Op het geheel slagen `tools/selftest.sh` (264 controles), `tools/test_humanoid.sh` en `tools/nettest.sh`; een herbouw geeft de bewaarde levels terug en `tools/bake_lightmaps.py --list` noemt elke zone bij. Er is niets herbouwd of opnieuw gebakken. De framerate van het fabrieksterrein is dezelfde als ervoor (72 tot 95 fps op 1440p met FSR 2 op 67%). Nog te doen: het contactblad opnieuw maken, want kratten en lampen kunnen nu stuk en de tekenopdrachten zijn op een paar standpunten een handvol hoger, zie "De repetitie verschuift de teller van tekenopdrachten" onder "Wat er kapot kan". Een worktree die de hoofdbranch binnenhaalt moet de nieuwe geluiden nog inlezen (`godot --headless --path . --import`).
 - Elke kamer een eigen gevecht, in plaats van een vleugel als één gevecht, geeft 21 kleine gevechten en houdt alle robots. Dan moet de speler elke kamer in, en de regel dat de route door elk gevecht loopt vervalt. Dat is niet besloten.
 
@@ -1339,3 +1339,75 @@ Het spel is met meer spelers over het netwerk te spelen: samen de route door de 
 - **Het duurt lang.** Het script deed er de eerste keer 20 minuten over, met alle cores: beide exports importeerden alles opnieuw. Of een tweede keer sneller gaat, zoals de bedoeling van de kopie is, is niet gemeten.
 - **Niet ondertekend.** Windows waarschuwt bij het starten en een Mac weigert de eerste keer; `LEESMIJ.txt` zegt hoe je erdoor komt. Zonder waarschuwing kost een Apple Developer-account.
 - Er is nog geen plek waar de zips staan, en het spel heeft geen eigen icoon.
+
+## Meerdere agents tegelijk
+
+Op 11 oktober 2026 gevraagd: de repo klaarmaken voor agents die tegelijk bouwen, elk in een eigen worktree. Gebouwd op de branch `klaarzetten`. Terwijl dit gebouwd werd, begonnen er drie (`houding`, `wapens`, `zestig`); hun branches zijn van vóór dit werk.
+
+**Wat er nu is**
+
+- **`CLAUDE.md`**, dat elke sessie te lezen krijgt: de werkafspraken, en wat dit plan leert over worktrees, de GPU, meten en bakken.
+- **Het GPU-slot** (`tools/gpu_slot.sh`). Wat tekent, neemt eerst het slot en wacht zolang een ander het heeft. `tools/godot.sh` doet dat voor elke run, met of zonder venster, dus ook voor `tools/benchmark.sh`, `tools/shots.sh`, `tools/zone_sheet.py` en `tools/level_cost.sh`. Het slot is een slot (`lockf`) op één bestand dat elke checkout deelt, `~/Library/Application Support/Godot/gpu-slot`. Het blijft dicht zolang het proces leeft dat het nam, met alles wat dat startte, en gaat open zodra die weg zijn, hoe ze ook eindigden: er blijft niets achter om op te ruimen. In het bestand staat wie het heeft, en wie wacht zegt dat op stderr. Na 30 minuten wachten (`GPU_SLOT_WAIT`) stopt een run met status 75.
+- **Een bake houdt het slot zolang hij duurt.** `tools/bake_lightmaps.py` neemt het zodra er iets te bakken is, vóór het naar andere Godots kijkt, en geeft het pas terug als de editor klaar is; de run van `tools/godot.sh` daarbinnen neemt het niet nog eens (`GPU_SLOT_HELD`). `--list` en `--mark` raken het niet. Op dezelfde manier houdt een reeks het slot van de eerste tot de laatste run: `tools/gpu_slot.sh sh -c '...'`.
+- **Eigen testbestanden per checkout.** `SelfTest.own_file()` geeft een test een bestand in `user://selftest/<map>-<getal>/`, met de map van de checkout en een getal uit het hele pad. Daar staan nu de save van een testrun (`save.cfg`) en het logboek van de sandboxtest (`sandbox.jsonl`). De test van samen spelen telt op dezelfde manier door naar een eigen poort, 24599 tot 24998.
+- **De dekkingsfix** uit de worktree `brave-bose-91ce03`, zie "Dekking die aan het laatste cijfer hing". Op de trunk botste alleen `scripts/selftest.gd`; beide blokken functies staan erin. Met de kisten en lampen uit het lichaam van het level komen dezelfde getallen terug als toen: 353 plekken, 18 om achter te staan en 3 om achter te bukken.
+- **De sandbox** uit de worktree `sandbox`, zie hieronder. Op de trunk botste alleen `take_damage()` in `scripts/player.gd`: de parameter heet `direction`, die het beeld gebruikt, en de test is `if dead or invulnerable:`.
+
+**De sandbox**
+
+Eén gevecht in één zone van een level, zo vaak als je wilt, met elke keer iets anders eraan: om te beslissen hoe iets moet spelen. Nergens beschreven tot nu toe; dit is wat de code doet.
+
+- "Sandbox" op het titelscherm, of `--sandbox=<experiment>` (met `:2` erachter voor de derde variant). `assets/sandbox.json` noemt de experimenten: een level, de zone die de arena is, eventueel wie er op de posten staat, en de varianten. Een variant is een thema zoals `scripts/enemy_themes.gd` dat leest; wat je vergelijkt moet dus een `@export` van `scripts/enemy.gd` zijn. Daarvoor zijn de drie getallen van de paniek dat geworden (`panic_health`, `panic_radius`, `panic_pace`).
+- Er zijn er drie: hoe ver paniek zich verspreidt (laadperron van de fabriek, 8 m, de hele ruimte of niet), hoe hard ze dan rennen (de hal, vijf vijanden, 1,35, 1 of 2 keer hun loopsnelheid) en tegen wie je vecht bij de poort van het depot (robots, soldaten, zombies, clowns, paniekclowns).
+- T begint de ronde opnieuw, Q en E met de vorige of volgende variant, F en X noteren of de ronde goed was. Het pauzemenu heeft de rest: niets doet pijn, munitie raakt niet op, slow motion, vijanden staan stil, een vijand erbij waar je kijkt, en het level opnieuw laden, wat terugbrengt wat ontplofte of brak.
+- Wat het spel had opgeslagen staat zolang opzij en is daarna terug. Elke ronde laat één regel achter in `user://sandbox.jsonl`: variant, afloop, seconden, schade, schoten, treffers en het oordeel.
+- `tools/test_sandbox.sh`, 30 controles, speelt het eerste experiment zonder een schot te lossen en opent het laatste. Het middelste opent hij niet; zijn zone (`hall`) bestaat.
+
+**Gemeten**
+
+Twee checkouts naast elkaar, de tweede een paar seconden na de eerste gestart, met de code van vóór de eigen testbestanden en erna:
+
+| Test | Ervoor | Erna |
+|---|---|---|
+| `tools/selftest.sh --routes`, 17 s na elkaar | de ene 183 van 183, de andere 10 fout vanaf "a restart carries on from that checkpoint" | allebei 183 van 183 |
+| `tools/nettest.sh`, 5 s na elkaar | de ene 62 van 62, de andere 3 fout: de host kan niet hosten en de gast komt in het spel van de ander | allebei 62 van 62 |
+| `tools/test_sandbox.sh`, 3 s na elkaar | de ene 30 van 30, de andere 1 fout | allebei 30 van 30 |
+
+Op hetzelfde moment gestart slaagden de twee oude routetests allebei: ze lopen dan gelijk op en schrijven hetzelfde weg. Het ging dus mis zodra twee sessies niet toevallig tegelijk begonnen.
+
+Het slot, door de echte scripts heen met een script van vijf regels op de plaats van Godot (`GODOT=`), dat zegt wanneer het begint en eindigt:
+
+- Een run uit de ene checkout en een seconde later een uit de andere: de tweede zegt op wie hij wacht en begint in de seconde dat de eerste eindigt. Elk geeft de eigen afloop door (3 en 0).
+- Een run met venster (`GODOT_WINDOW=1`) neemt het slot ook. `tools/bake_lightmaps.sh --list` wacht nergens op.
+- Een bake in de ene checkout, anderhalve seconde later een meting in de andere: de meting begint als de bake klaar is.
+- Een bake die begint terwijl een meting loopt, wacht daarop en kijkt dan pas naar andere Godots. Hij weigerde toen, terecht: de editor stond open en een andere sessie mat zonder slot.
+- Wie het slot heeft en gestopt wordt terwijl iets dat hij startte nog leeft, houdt het tot dat ook weg is. Genest (`tools/gpu_slot.sh tools/gpu_slot.sh ...`) start meteen.
+
+De hele selftest slaagt (315 controles), net als `--fights` (5 van 5 vanuit dekking), de test van samen spelen (62), van de personages (36) en van de sandbox (30).
+
+**Onderweg gevonden**
+
+- **De importcache van de hoofdcheckout liep achter.** De centrale is erin gevoegd zonder haar geïmporteerde bestanden: de elf lightmaps en vijf opschriften, 32 bestanden in `.godot/imported/`. Elke worktree die daarna met `cp -cR .godot` begon, laadde de centrale met foutmeldingen en zonder lightmaps; de selftest slaagt dan toch, want die kijkt daar niet naar. Zelf importeren (`--import`) vult aan wat ontbreekt en niets anders, maar was na tien minuten op vier cores bij de vijfde lightmap van elf. Uit de worktree `centrale` klonen kost een seconde. In `CLAUDE.md` staat nu dat wie lightmaps of texturen in de hoofdcheckout voegt, die bestanden meekloont.
+
+**Git LFS bij GitHub**
+
+- Een account op GitHub Free of Pro heeft 10 GiB opslag en 10 GiB download per maand (docs.github.com, "Git Large File Storage billing", gelezen op 11 oktober 2026). Daarboven wordt zonder betaalmiddel niets meer geaccepteerd.
+- In de geschiedenis staan 97 LFS-objecten, samen 542 MB; allemaal op commits die gepusht zijn. De stand van nu is daarvan 525 MB in 88 bestanden: het fabrieksterrein 229 MB, de centrale 138, de fabriek 68, het depot 49 en de vleugel 41. Dat is ongeveer een twintigste van de 10 GiB, als dit het enige project met LFS op het account is.
+- Elke lightmap die verandert telt bij een push opnieuw voor zijn hele grootte, en wat eenmaal gepusht is blijft meetellen. Alles opnieuw bakken en pushen kost dus een halve GiB per keer: daar is ruimte voor een kleine twintig keer.
+- **Wat GitHub zelf als verbruik telt, heb ik niet kunnen lezen.** Dat vraagt het recht `user` op de inlog van `gh`, en dat heeft hij niet. Los daarvan is de gewone geschiedenis bij GitHub 1,0 GB (`size` van de repo), vooral lightmaps van vóór LFS: van de 400 grootste bestanden in de geschiedenis is 790 MB een `.exr`.
+
+**Opruimen: niets gedaan, dat wacht op Michiels woord**
+
+- Volledig in de trunk en zonder eigen werk: de worktrees en branches `beeld`, `bouwdoos`, `centrale` en `claude/admiring-bassi-66e193`, en op GitHub `origin/bouwdoos`. In `admiring-bassi` staat één bestand klaargezet en niet gecommit, een leeg `benchmark/.gdignore`; de trunk heeft het al.
+- `claude/brave-bose-91ce03` en `sandbox`: hun commits zaten al in de trunk, hun ongecommitte werk nu ook. Ze kunnen weg zodra `klaarzetten` in de trunk zit.
+- `origin/claude/relaxed-wozniak-wpi9ky` zit er niet in: twee commits uit fase 1, een eerdere opzet van de gunfeel met een eigen rooktest, afgetakt bij het bouwplan.
+- `main` staat 141 commits achter de trunk en heeft niets eigens: doorschuiven kan zonder merge. Het is de standaardbranch op GitHub, dus wie de repo kloont krijgt nu het spel van fase 1.
+- In `user://` blijven `selftest_save.cfg` en `sandbox_test.jsonl` liggen. Branches van vóór dit werk gebruiken ze nog.
+
+**Nog open**
+
+- **Er is nog niets op de GPU door het slot gegaan.** De echte Godot is er alleen met `--version` doorheen gestart; alles wat wacht en doorgeeft is getest met een nagemaakte. Voor één beeld door het slot heb ik negen minuten naar een vrij moment gezocht en er was er geen: de drie andere sessies maten aan één stuk, twee keer met twee tegelijk. Eén commando als de GPU vrij is: `tools/benchmark.sh --quick --at="-23,2.2,9,0,-5"` moet een beeld geven in `benchmark/results/`.
+- **Een bake is niet door het slot gegaan**, om dezelfde reden en omdat bakken aan de agent van "Kit-ruimtes" is.
+- **Het slot ziet alleen wie het neemt.** De editor, het spel dat Michiel daaruit speelt en een branch van vóór dit werk tekenen erbuiten. `ps` blijft dus nodig, en `houding`, `wapens` en `zestig` wachten pas op elkaar als ze de trunk binnenhalen.
+- Een Godot die bij het afsluiten blijft hangen, zoals op 10 oktober, houdt het slot vermoedelijk vast zolang hij in de proceslijst staat. Dan wacht alles, wat toen ook het beste was; wie wacht leest wie het heeft. Dat is niet uitgeprobeerd.
+- De sandbox en de dekkingsfix zijn niet gespeeld.
