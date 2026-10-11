@@ -11,6 +11,12 @@ extends "res://tools/model_builder.gd"
 ## marker Muzzle is where its shots leave. Shield is the plate the grunt
 ## holds in front of it and can have shot off its arm, and Pack the
 ## ammunition on the heavy's back that goes off when it is holed.
+##
+## After the robots come the things the people among the enemies strike with
+## (scripts/humanoid_rig.gd, _wield()): a pipe, an axe and a cleaver. Such a
+## thing lies along -Z, the way a barrel points, with its grip at the origin
+## and what cuts turned down; the tag "wield" says that it is one, and the
+## marker HandR how a right hand closes round it.
 
 const FRAME := "robot_frame"
 const STEEL := "gun_steel"
@@ -23,6 +29,11 @@ const SIDE := Basis(Vector3.FORWARD, Vector3.UP, Vector3.RIGHT)
 ## of it, in radians. The plate is bolted on so that it then faces ahead; the
 ## rig reads the angle off the model.
 const GUARD := 0.75
+## The wrist of a hand that holds something by its grip at the origin: -Z of
+## a hand runs along its back to the knuckles, +Y out of the back of it. The
+## thing then sticks out of the fist on the side of the thumb, and the
+## knuckles are on the side it cuts with.
+const FIST := Transform3D(Basis(Vector3.BACK, Vector3.RIGHT, Vector3.UP), Vector3(0.025, 0.085, 0.0))
 
 ## How tall and how broad the robot being built is next to the grunt, and the
 ## paint on its armour.
@@ -35,6 +46,9 @@ func _describe() -> void:
 	_robot("grunt", 1.0, 1.0, "robot_grey", "rifle")
 	_robot("rusher", 0.86, 0.8, "robot_orange", "blades")
 	_robot("heavy", 1.15, 1.32, "robot_olive", "cannon")
+	_pipe()
+	_axe()
+	_cleaver()
 
 
 ## One robot: `tall` and `broad` scale the grunt's frame, `arms` is what it
@@ -288,3 +302,52 @@ func _pack() -> void:
 	for side: float in [-1.0, 1.0]:
 		_turned(GLOW, _p(side * 0.174, 1.37, 0.33), Vector3.RIGHT * side, [Vector2(0.05 * _broad, 0), Vector2(0.05 * _broad, 0.008), Vector2(0, 0.014)], 12)
 	_turned(GLOW, _p(0, 1.37, 0.443 ), Vector3.BACK, [Vector2(0.03 * _broad, 0), Vector2(0.03 * _broad, 0.006), Vector2(0, 0.01)], 12)
+
+
+## Starts something to strike with.
+func _struck_with(tool_name: String) -> void:
+	model(tool_name)
+	_tall = 1.0
+	_broad = 1.0
+	tag("wield", true)
+	marker("HandR", FIST)
+
+
+## A length of steam pipe, a coupling still screwed onto the end of it.
+func _pipe() -> void:
+	_struck_with("pipe")
+	_bar("galvanised", Vector3(0, 0, 0.15), Vector3(0, 0, -0.6), 0.017, 12)
+	for i in 4:
+		_ring("dark_steel", Vector3(0, 0, 0.14 - i * 0.011), Vector3.BACK, 0.0172, 0.003)
+	_bar("dark_steel", Vector3(0, 0, -0.5), Vector3(0, 0, -0.585), 0.027, 6)
+	_bar("dark_steel", Vector3(0, 0, -0.585), Vector3(0, 0, -0.6), 0.021, 12)
+	_bar("rubber", Vector3(0, 0, -0.6), Vector3(0, 0, -0.602), 0.013, 10)
+
+
+## A fire axe: a red head with a pick at the back of it, on a wooden haft.
+func _axe() -> void:
+	_struck_with("axe")
+	_bar("wood", Vector3(0, 0, 0.2), Vector3(0, 0, -0.64), 0.0165, 10)
+	_bar("wood", Vector3(0, 0, 0.2), Vector3(0, 0, 0.245), 0.021, 10)
+	_shell("enamel_red", [
+		Vector2(0.545, 0.03), Vector2(0.548, -0.035), Vector2(0.512, -0.118), Vector2(0.662, -0.118), Vector2(0.628, -0.035),
+		Vector2(0.628, 0.03), Vector2(0.602, 0.1), Vector2(0.587, 0.125), Vector2(0.572, 0.1),
+	], 0.03, 0.011)
+	# The edge, ground bright.
+	_shell("bare_steel", [
+		Vector2(0.512, -0.116), Vector2(0.5, -0.134), Vector2(0.545, -0.15), Vector2(0.587, -0.155), Vector2(0.63, -0.15),
+		Vector2(0.675, -0.134), Vector2(0.662, -0.116),
+	], 0.016, 0.0075)
+	_bar("bare_steel", Vector3(0, 0, -0.64), Vector3(0, 0, -0.646), 0.012, 8)
+
+
+## A butcher's cleaver, bigger than a butcher has any use for.
+func _cleaver() -> void:
+	_struck_with("cleaver")
+	_block("wood", Vector3(0, 0, 0.005), Vector3(0.03, 0.036, 0.14), 0.011)
+	for z: float in [0.035, -0.03]:
+		_bar("brass", Vector3(-0.016, 0, z), Vector3(0.016, 0, z), 0.005, 8)
+	_shell("bare_steel", [
+		Vector2(0.06, 0.042), Vector2(0.06, -0.012), Vector2(0.085, -0.095), Vector2(0.36, -0.095), Vector2(0.375, -0.075), Vector2(0.375, 0.042),
+	], 0.006, 0.0028)
+	_shell("dark_steel", [Vector2(0.06, 0.042), Vector2(0.06, 0.03), Vector2(0.375, 0.03), Vector2(0.375, 0.042)], 0.0085, 0.002)

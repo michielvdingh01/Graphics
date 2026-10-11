@@ -2,17 +2,34 @@
 """Has a character made from a description, by two free demos on Hugging Face.
 
     tools/characters/generate.py <id> "<prompt>" [--seed=1] [--image=concept.png]
+    tools/characters/generate.py --ration
 
 FLUX.1-schnell (Apache-2.0) paints the character from the prompt, and
 TRELLIS.2 (MIT) turns that picture into a textured model of a few hundred
 thousand triangles. Both run on a GPU that Hugging Face shares out in daily
-rations. A visitor without an account gets two minutes and three turns, which
-is three pictures and never a model: TRELLIS.2 asks for two turns of two
-minutes. With a (free) account it fits, about one model a day: make a token at
+rations: two minutes for a visitor, five for a (free) account and forty for
+a paying one, its pages say, counted from the first use and back 24 hours
+after it. A step only starts if what it may take at most is still there: a
+minute and a half for a picture, two minutes for each of the two steps of a
+model. So a visitor gets pictures and never a model. Make a token at
 https://huggingface.co/settings/tokens and put it in the file
 ~/.cache/huggingface/token, where Hugging Face's own tools keep it, or in the
 environment as HF_TOKEN. It is sent to the two demos and nowhere else, and
 never printed.
+
+How much a step takes off the ration the demos do not say, and it is more
+than the time it runs: on 11 October 2026 a picture ran for 3 to 8 seconds
+and the two steps of a model for 21 and 22, and after one model and six
+pictures, 68 seconds in all, there was nothing left; the day before it was
+two models and five pictures. So paint few pictures, and reckon on one model
+a day.
+
+The script keeps count next to the token (zerogpu_ration.json): when each
+step began and how long it ran, and what a demo said was left when it turned
+a step away. From the last day that ran dry it takes how much goes into a
+day. --ration says what is left by that count without going over the line,
+and a model that would not fit is not begun (--anyway begins it all the
+same). The count is of this script only.
 What goes over the line is the prompt and the picture made from it: never use
 this for a photo of a real person without their say-so.
 
@@ -27,9 +44,11 @@ import datetime
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -45,6 +64,79 @@ _token = os.environ.get("HF_TOKEN") or (TOKEN_FILE.read_text().strip() if TOKEN_
 if _token:
     AGENT["Authorization"] = "Bearer " + _token
 BLENDER = os.environ.get("BLENDER") or shutil.which("blender") or "/Applications/Blender.app/Contents/MacOS/Blender"
+# Seconds of GPU a day by Hugging Face's pages, which is not what fits (see
+# above): the count goes by the last day that ran dry, and by this until one has.
+RATION = 300 if _token else 120
+# What a step took when nothing has been counted yet: a guess on the safe side.
+TOOK = {"infer": 10, "image_to_3d": 60, "extract_glb": 45}
+LEDGER = TOKEN_FILE.with_name("zerogpu_ration.json")
+DAY = datetime.timedelta(hours=24)
+
+
+def _counted() -> list:
+    try:
+        return json.loads(LEDGER.read_text())
+    except (OSError, ValueError):
+        return []
+
+
+def _count(entry: dict) -> None:
+    entries = _counted()
+    entries.append(dict(entry, at=datetime.datetime.now().isoformat(timespec="seconds")))
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    LEDGER.write_text(json.dumps(entries[-200:], indent="\t") + "\n")
+
+
+def ration() -> dict:
+    """The day's ration by the count: the seconds of steps that went into it
+    so far (spent) and that go into a day (allowance: what had run when a
+    day last ran dry, or the pages' figure until one has), whether a demo has
+    said it is used up (dry), when the day began and what each step took the
+    last time it ran."""
+    began = None
+    spent = 0.0
+    dry = False
+    allowance = float(RATION)
+    took = dict(TOOK)
+    for entry in _counted() + [{"at": datetime.datetime.now().isoformat(), "now": True}]:
+        at = datetime.datetime.fromisoformat(entry["at"])
+        if began is not None and at - began >= DAY:
+            began = None
+            spent = 0.0
+            dry = False
+        if "now" in entry:
+            break
+        if began is None:
+            began = at
+        if "left" in entry:
+            # A demo turned a step away: what had run by then is what fits.
+            if not dry:
+                allowance = spent + float(entry["left"])
+            dry = dry or float(entry["left"]) < 1.0
+        else:
+            spent += entry["seconds"]
+            took[entry["step"]] = entry["seconds"]
+    return {"spent": spent, "allowance": allowance, "left": 0.0 if dry else max(allowance - spent, 0.0), "dry": dry, "began": began, "took": took}
+
+
+def fits(steps: list) -> bool:
+    """True if these steps still go into the day, by the count."""
+    state = ration()
+    return state["left"] >= sum(state["took"][step] for step in steps)
+
+
+def report() -> str:
+    state = ration()
+    lines = ["%d of %d seconds left by the count%s" % (
+        state["left"], state["allowance"], "" if state["began"] is None else ", back in full at " + (state["began"] + DAY).strftime("%H:%M on %d %B"))]
+    if state["dry"]:
+        lines.append("a demo has said that today's ration is used up")
+    lines.append("a step took, the last time: " + ", ".join("%s %d s" % (step, state["took"][step]) for step in TOOK))
+    model = state["took"]["image_to_3d"] + state["took"]["extract_glb"]
+    models = int(state["left"] // model)
+    pictures = int((state["left"] - models * model) // state["took"]["infer"])
+    lines.append("that is room for %d model%s and then %d picture%s" % (models, "" if models == 1 else "s", pictures, "" if pictures == 1 else "s"))
+    return "\n".join(lines)
 
 
 class Demo:
@@ -63,6 +155,7 @@ class Demo:
         with urllib.request.urlopen(request) as reply:
             event = json.load(reply)["event_id"]
         stream = urllib.request.Request(self.host + "/gradio_api/queue/data?session_hash=" + self.visit, headers=AGENT)
+        began = time.monotonic()
         with urllib.request.urlopen(stream, timeout=900) as reply:
             for line in reply:
                 if not line.startswith(b"data:"):
@@ -73,10 +166,20 @@ class Demo:
                 kind = message.get("msg")
                 if kind == "estimation" and message.get("rank", 0) > 0:
                     print("  %s: number %d in the queue" % (name, message["rank"] + 1), file=sys.stderr)
+                elif kind == "process_starts":
+                    began = time.monotonic()
                 elif kind == "process_completed":
                     if not message.get("success", False):
                         output = message.get("output") or {}
-                        raise RuntimeError("%s refused: %s" % (name, output.get("error") or output.get("title") or json.dumps(output)[:400]))
+                        refusal = str(output.get("error") or output.get("title") or json.dumps(output)[:400])
+                        # "... (120s requested vs. 85s left) ...": the demo's own count.
+                        said = re.search(r"vs\.?\s*(\d+)\s*s left", refusal)
+                        if said:
+                            _count({"left": int(said.group(1))})
+                        raise RuntimeError("%s refused: %s" % (name, refusal))
+                    if name in TOOK:
+                        # From leaving the queue to the answer: no less than the GPU ran for it.
+                        _count({"step": name, "seconds": round(time.monotonic() - began, 1)})
                     return message["output"]["data"]
                 elif kind in ("queue_full", "unexpected_error"):
                     raise RuntimeError("%s: %s" % (name, message.get("message") or kind))
@@ -128,13 +231,20 @@ def sculpt(picture: pathlib.Path, seed: int, resolution: str, target: pathlib.Pa
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("id")
-    parser.add_argument("prompt")
+    parser.add_argument("id", nargs="?")
+    parser.add_argument("prompt", nargs="?")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--image", default="", help="use this picture instead of having one painted")
     parser.add_argument("--resolution", choices=("512", "1024", "1536"), default="1024")
     parser.add_argument("--only-image", action="store_true", help="stop after the picture, to look at it first")
+    parser.add_argument("--ration", action="store_true", help="say what is left of the day's ration by the count, and stop")
+    parser.add_argument("--anyway", action="store_true", help="begin a model even if the count says it will not fit")
     args = parser.parse_args()
+    if args.ration:
+        print(report())
+        return
+    if not args.id or args.prompt is None:
+        parser.error("an id and a prompt, or --ration")
     folder = ROOT / "assets/characters/.source/generated" / args.id
     folder.mkdir(parents=True, exist_ok=True)
     picture = folder / "concept.webp"
@@ -153,6 +263,9 @@ def main() -> None:
             print(picture)
             return
         model = folder / (args.id + ".glb")
+        if not args.anyway and not fits(["image_to_3d", "extract_glb"]):
+            sys.exit("generate: a model does not fit in what is left of the day's ration, and half a model is a turn wasted.\n%s\n"
+                     "The picture is kept; run this again then, or with --anyway if the count is wrong." % report())
         print("%s: %s makes the model, which takes a minute or two" % (args.id, SCULPTOR["name"]), file=sys.stderr)
         sculpt(picture, args.seed, args.resolution, model)
         note["models"].append("%s (%s) at %s" % (SCULPTOR["name"], SCULPTOR["license"], args.resolution))
