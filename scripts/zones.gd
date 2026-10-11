@@ -220,7 +220,7 @@ static func shaded(layers: int) -> int:
 	return layers if layers & SHADE_MASK else 1 << (SHADE_LAYER - 1)
 
 
-## Holds every lamp of the level to the zones its light can get to.
+## Holds the lamps of the level to the zones their light can get to.
 ##
 ## A lamp lights whatever lies within its range, and the renderer works that
 ## out for every pixel there: behind a wall as well, in the room next door,
@@ -239,6 +239,11 @@ static func shaded(layers: int) -> int:
 ##
 ## Only the level itself stops a ray: what can be shot to pieces, blown up or
 ## rolled open is looked through, and so is a robot.
+##
+## This goes for the lamps that cast a shadow, whose light never got past
+## the wall. A lamp without one does light the room behind the wall, and is
+## left to: holding those as well left half of a room of the powerhouse dark
+## that had its light from the corridor next to it.
 func _bind_lamps() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
@@ -286,6 +291,11 @@ func _bind_lamps() -> void:
 				for box in near:
 					boxes.append(box)
 					owners.append(i)
+		if not light.shadow_enabled:
+			# Without a shadow its light goes through walls and is there to be
+			# seen, in the room next door as well: it keeps all it lit.
+			reached.append_array(missed)
+			missed.clear()
 		if not missed.is_empty():
 			var aims := PackedVector3Array()
 			for point in openings:
@@ -444,3 +454,11 @@ func _wall_off() -> void:
 	_occluder.name = "Walls"
 	_occluder.occluder = walls
 	add_child(_occluder)
+	# Only what is drawn itself is left out behind a wall. A lightmap, a lamp,
+	# a reflection probe and a decal are known to the renderer by a box, and
+	# that box being hidden says nothing of what they light or colour: with
+	# the box of its lightmap behind a wall, seen from a corner, a room was
+	# drawn without its baked light.
+	for node: VisualInstance3D in find_children("*", "VisualInstance3D", true, false):
+		if not node is GeometryInstance3D:
+			RenderingServer.instance_geometry_set_flag(node.get_instance(), RenderingServer.INSTANCE_FLAG_IGNORE_OCCLUSION_CULLING, true)
