@@ -32,6 +32,8 @@ const MARGIN := 0.6
 const WARM_FRAMES := 4
 ## Group of what walks about in the level.
 const WALKERS := &"enemy"
+## How many lightmaps the renderer uses in one frame.
+const MAX_LIGHTMAPS := 8
 
 ## Render layers. Layer 1 is whatever belongs to no zone, 2 the weapon in view
 ## (scripts/weapons.gd) and 3 what belongs to no zone and stands in the shade
@@ -100,6 +102,8 @@ var _shown := {}
 ## What walks about and is not drawn at the moment. One of them may be shot
 ## to pieces by a blast and leave the group while it still lies there.
 var _unseen: Array[Node3D] = []
+## The zones whose lightmap is switched on at the moment, by zone name.
+var _lit := {}
 ## The lamps that are held to their zones, with the layers each one lights.
 var _held := {}
 var _occluder: OccluderInstance3D
@@ -120,6 +124,7 @@ func _ready() -> void:
 			"node": node,
 			"contents": node.get_node("Contents"),
 			"shells": _shells(node),
+			"lightmap": node.get_node_or_null("LightmapGI"),
 		})
 	# A benchmark can ask for either to be left as it was, see UNDO in
 	# scripts/settings.gd; the level builder loads this without the game.
@@ -172,6 +177,7 @@ func _process(_delta: float) -> void:
 		for zone in _zones:
 			shown[zone.name] = true
 	_hide_walkers(shown)
+	_light(shown, at)
 	if shown == _shown:
 		return
 	_shown = shown
@@ -183,6 +189,42 @@ func _process(_delta: float) -> void:
 				GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on
 				else GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 			)
+
+
+## Switches on the lightmaps of the zones that are drawn, and of no others.
+##
+## The renderer uses MAX_LIGHTMAPS lightmaps in a frame. With the boxes of
+## more than that in view it takes the first it comes across, and a zone that
+## is left over is drawn without its baked light: lit flat and far too bright
+## by the sky, with no shadow in it. The lightmap of a zone that is switched
+## off counted as well, for as long as its box was in view, and which zones
+## were left over shifted as zones went on and off. From a corner of the
+## stores of the works, looking down the length of the building, the stores
+## themselves were one of them.
+##
+## Where more zones are drawn than there are lightmaps to be had, the zones
+## nearest the camera have theirs.
+func _light(shown: Dictionary, at: Vector3) -> void:
+	var lit := shown
+	if shown.size() > MAX_LIGHTMAPS:
+		var nearest: Array[Array] = []
+		for zone in _zones:
+			if not shown.has(zone.name):
+				continue
+			var away := INF
+			for box: AABB in zone.boxes:
+				away = minf(away, at.distance_squared_to(at.clamp(box.position, box.end)))
+			nearest.append([away, zone.name])
+		nearest.sort()
+		lit = {}
+		for i in MAX_LIGHTMAPS:
+			lit[nearest[i][1]] = true
+	if lit == _lit:
+		return
+	_lit = lit
+	for zone in _zones:
+		if zone.lightmap:
+			zone.lightmap.visible = lit.has(zone.name)
 
 
 ## Draws what walks about only where it stands in a zone that is drawn, or
@@ -456,9 +498,10 @@ func _wall_off() -> void:
 	add_child(_occluder)
 	# Only what is drawn itself is left out behind a wall. A lightmap, a lamp,
 	# a reflection probe and a decal are known to the renderer by a box, and
-	# that box being hidden says nothing of what they light or colour: with
-	# the box of its lightmap behind a wall, seen from a corner, a room was
-	# drawn without its baked light.
+	# that box being hidden says nothing of what they light or colour. With
+	# the lightmaps left in, a wall changed which of them the renderer took:
+	# it uses eight to a frame, a level has more, and rooms came out with or
+	# without their baked light other than they did before. See PLAN.md.
 	for node: VisualInstance3D in find_children("*", "VisualInstance3D", true, false):
 		if not node is GeometryInstance3D:
 			RenderingServer.instance_geometry_set_flag(node.get_instance(), RenderingServer.INSTANCE_FLAG_IGNORE_OCCLUSION_CULLING, true)
