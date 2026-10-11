@@ -7,9 +7,10 @@ extends Node3D
 ## The clips say how a body walks, strikes, flinches and falls. On top of them
 ## this script turns the legs the way the body is going, so that one walk
 ## serves forwards, sideways and backwards; keeps a foot that is down where
-## it came down; puts a weapon to the shoulder with both hands on it; and
-## throws the arms up of one that has lost its head. For those there are no
-## clips.
+## it came down, at the height the floor has there, so that it climbs a stair
+## one foot above the other; puts a weapon to the shoulder with both hands on
+## it; and throws the arms up of one that has lost its head. For those there
+## are no clips.
 ##
 ## Everything it works out about bones is in the space of the skeleton, in
 ## which the character looks along +Z with its left arm along +X.
@@ -21,7 +22,7 @@ const GLINT: Shader = preload("res://shaders/glint.gdshader")
 const MODELS := "res://scenes/models/"
 const WEAPON_DATA := "res://weapons/"
 const FLINCHES: Array[String] = ["hit_chest", "hit_head"]
-const FALLS: Array[String] = ["death", "death_mirror", "knockback"]
+const FALLS: Array[String] = ["death", "death_mirror", "knockback", "fall_forward", "thrown_forward"]
 const SIDES: Array[String] = ["Left", "Right"]
 const TORSO: Array[String] = ["Spine", "Chest", "UpperChest"]
 const ARM: Array[String] = ["Shoulder", "UpperArm", "LowerArm", "Hand"]
@@ -48,15 +49,29 @@ const SHORTEST := 0.75
 const LONGEST := 1.45
 ## Cycles per second the legs never exceed, however far behind they are.
 const TOP_PACE := 1.7
-## It breaks into the next faster cycle a little late: a hurried walk looks
-## better than a run in slow motion.
-const LATE := 1.25
+## It breaks into the next faster cycle a little late: a cycle that is
+## hurried looks better than the next one in slow motion.
+const LATE := 1.1
 ## A foot that is down lets go when it is this many hip heights from where the
 ## clip wants it, or when the body has turned this far over it.
 const FOOT_REACH := 0.38
 const FOOT_TURN := 0.6
+## The slowest and the fastest a blow is played to land in time.
+const PACED := Vector2(0.5, 2.5)
 ## Damage within a moment that throws a body off its feet.
 const BLOW := 60.0
+## A shot that came in further round than this, in radians from straight in
+## front, came from behind: the body goes down on its face.
+const BEHIND := 2.2
+## A foot is put no further above or below the floor under the body than
+## this, in hip heights; a floor that is less than SLACK metres higher or
+## lower is the same floor. Feet lie flat on a floor up to the first of
+## LEVEL, in radians, and stay level on one steeper than the second: that
+## is a stair.
+const STEP_UP := 0.4
+const STEP_DOWN := 0.4
+const SLACK := 0.015
+const LEVEL := Vector2(0.35, 0.5)
 ## Seconds a body lies there before it fades, and how long fading takes. The
 ## enemy that owns it is freed a little later, see LINGER in enemy.gd.
 const CORPSE_TIME := 4.9
@@ -78,6 +93,7 @@ const FLINCH_CLIP := &"parameters/flinch_clip/transition_request"
 const FLINCH := &"parameters/flinch/request"
 const FALL_CLIP := &"parameters/fall_clip/transition_request"
 const FALL := &"parameters/fall/blend_amount"
+const CARRY := &"parameters/carry/blend_amount"
 
 
 ## Two bones and what they end in: an arm with its hand, a leg with its foot.
@@ -123,6 +139,10 @@ var _set: Dictionary = _sets["default"]
 var _melee := false
 var _windup := 0.3
 var _hold := Hold.NONE
+## True for one that fights hand to hand with something in its right hand,
+## and where that sits in the hand: from the wrist to the thing.
+var _wielding := false
+var _haft := Transform3D()
 
 # Bones, by index; -1 for one the character does not have.
 var _parent := PackedInt32Array()
@@ -177,6 +197,12 @@ var _planted: Array[bool] = [false, false]
 var _plant_at: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
 var _plant_yaw: Array[float] = [0.0, 0.0]
 var _slip: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+## How far the floor under each foot is above the floor under the body, in
+## metres, and how that floor lies; `follow_floor` off leaves both feet at
+## the height of the body, as tools/test_humanoid.sh does to compare.
+var follow_floor := true
+var _rise: Array[float] = [0.0, 0.0]
+var _lie: Array[Vector3] = [Vector3.UP, Vector3.UP]
 ## Metres the feet have slid while they were down, and the seconds they were
 ## down for: what tools/test_humanoid.sh checks, with `measure` on. It
 ## switches `lock_feet` off to see what the clips do by themselves.
@@ -260,11 +286,13 @@ func setup(cast: Dictionary) -> bool:
 	var voice: String = _set.voice
 	sounds[&"alert"] = StringName(voice + "_alert")
 	sounds[&"death"] = StringName(voice + "_death")
-	# Whoever fights hand to hand carries nothing: there are no clips for
-	# striking with something in the hand.
+	# Whoever fights hand to hand strikes with what the theme gives it, if
+	# that is something to strike with, and with its hands otherwise.
 	var weapon: String = cast.get("weapon", "")
 	if weapon != "" and not _melee:
 		_arm(weapon)
+	elif weapon != "" and _set.has("strikes"):
+		_wield(weapon)
 	if _weapon == null and not _melee:
 		# Nothing in its hands, yet it shoots: it points, and its shots leave
 		# from its fingers.
@@ -294,7 +322,10 @@ func _ready() -> void:
 	_tree.active = true
 
 	_fingers("hand_relaxed", [0, 1])
-	if _hold == Hold.NONE:
+	if _wielding:
+		_fingers(_set.grip, [1])
+		_tree.set(CARRY, 1.0)
+	elif _hold == Hold.NONE:
 		if _melee:
 			_fingers(_set.fingers, [0, 1])
 	else:
@@ -385,6 +416,9 @@ func panic() -> void:
 	_charging = false
 	_tree.set(ACT, AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT)
 	_drop_weapon(Vector3.ZERO)
+	if _wielding:
+		_wielding = false
+		_tree.set(CARRY, 0.0)
 	if _muzzle:
 		# It was pointing, and its shots left from there.
 		_muzzle.queue_free()
@@ -428,18 +462,23 @@ func collapse(push: Vector3) -> void:
 	_charging = false
 	var blown := _hurt >= BLOW and _time - _hurt_at < 0.15
 	var fall: String = "knockback" if blown else ["death", "death_mirror"].pick_random()
+	_spin = _room_to_fall(push)
+	if is_nan(_spin):
+		# From behind, and there is room in front of it: down on its face.
+		fall = "thrown_forward" if blown else "fall_forward"
+		_spin = _room_ahead(push)
 	_fall_length = _facts[fall].length
 	_tree.set(FALL_CLIP, fall)
 	_tree.set(ACT, AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT)
 	if _glint:
 		_glint.visible = false
 	_drop_weapon(push)
+	_wielding = false
 	if is_instance_valid(_scream):
 		# Cut short, but not with a click.
 		var hush := _scream.create_tween()
 		hush.tween_property(_scream, ^"volume_db", -60.0, 0.08)
 		hush.tween_callback(_scream.queue_free)
-	_spin = _room_to_fall(push)
 	if not can_process():
 		# Nothing is running: this is a pose for a screenshot.
 		_fall(0.0)
@@ -470,7 +509,9 @@ func _pose(delta: float) -> void:
 		_went = _went * fade + step
 		_due = _due * fade + _body.velocity * delta
 		_was_at = _body.global_position
-		_on_the_spot = _due.length() > 0.15 and (_went - _due).length() > 0.5 * _due.length()
+		# Over the ground: up a stair it goes further than its speed says.
+		var short := Vector2(_went.x - _due.x, _went.z - _due.z).length()
+		_on_the_spot = _due.length() > 0.15 and short > 0.5 * _due.length()
 	var facing := _aim_yaw * _raised
 	var want := facing + float(STANCE[_hold])
 	if speed > STILL:
@@ -571,6 +612,12 @@ func _shape(delta: float, hold_on: float) -> void:
 	if _aiming and _hold == Hold.NONE:
 		_aim_yaw = lerpf(_aim_yaw, _bearing(_global(_head).origin).x, 1.0 - exp(-12.0 * delta))
 	_look(hold_on)
+	if _wielding and _weapon:
+		# It goes where the hand goes: the wrist has -Z along the fingers and
+		# +Y out of the back of the hand, as the marker on the model has.
+		var hand := _global(_arms[1].end)
+		var grasp := hand.basis.orthonormalized() * _hand_fix[1].inverse()
+		_weapon.transform = Transform3D(Basis(grasp.z, grasp.y, -grasp.x), hand.origin) * _haft
 
 
 ## Holds the weapon, or points: where it goes follows from what it is aimed
@@ -674,12 +721,16 @@ func _look(hold_on: float) -> void:
 
 
 ## Fits the legs to the ground: steps are made as long as the pace asks, a
-## foot that is down stays where it came down, and the hips come down as far
-## as it takes for both legs to reach. The ankles go where that puts them and
-## the legs bend to fit. Called when only the hips have been placed.
+## foot that is down stays where it came down, each foot is as high as the
+## floor is under it, and the hips come down as far as it takes for both legs
+## to reach. The ankles go where that puts them and the legs bend to fit.
+## Called when only the hips have been placed.
 func _walk(delta: float) -> void:
 	var to_world := _skeleton.global_transform
 	var to_model := to_world.basis.inverse()
+	var space: PhysicsDirectSpaceState3D = null
+	if follow_floor and _body and is_inside_tree() and not _on_the_spot:
+		space = get_world_3d().direct_space_state
 	var heading := atan2(to_world.basis.z.x, to_world.basis.z.z) + _yaw
 	var phase := fposmod(_cycles, 1.0)
 	var reach := FOOT_REACH * _hip_height * _figure.scale.y
@@ -717,8 +768,16 @@ func _walk(delta: float) -> void:
 		_slip[side] = shift
 		_was_down[side] = down
 		ankle += to_model * shift
+		# The floor under this foot, next to the floor the body stands on.
+		var under := _floor(space, ball + shift, to_world.origin.y)
+		var settle := 1.0 - exp(-30.0 * delta)
+		_rise[side] = lerpf(_rise[side], under[0], settle)
+		_lie[side] = _lie[side].lerp(under[1], settle).normalized()
+		if under[0] == 0.0 and absf(_rise[side]) < 0.0005:
+			_rise[side] = 0.0
+		ankle += to_model * Vector3(0.0, _rise[side], 0.0)
 		_ankle[side] = ankle
-		_bent[side] = _stretch != 1.0 or _sink > 0.0005 or shift.length_squared() > 0.000001
+		_bent[side] = _stretch != 1.0 or _sink > 0.0005 or shift.length_squared() > 0.000001 or _rise[side] != 0.0
 
 		# How far the hips have to come down for this leg to reach that far.
 		var hip := _global(leg.upper).origin + Vector3.UP * _sink
@@ -726,8 +785,9 @@ func _walk(delta: float) -> void:
 		var longest := (leg.upper_length + leg.lower_length) * 0.985
 		deepest = maxf(deepest, hip.y - ankle.y - sqrt(maxf(longest * longest - flat, 0.0)))
 
-	# Down at once, up again at leisure.
-	deepest = minf(deepest, 0.2 * _hip_height)
+	# Down at once, up again at leisure. A foot that stands lower than the
+	# body may take the hips that much further down.
+	deepest = minf(deepest, 0.2 * _hip_height + maxf(-minf(_rise[0], _rise[1]), 0.0) / _figure.scale.y)
 	var sink := lerpf(_sink, deepest, 1.0 - exp(-(45.0 if deepest > _sink else 10.0) * delta))
 	var drop := Vector3.DOWN * (sink - _sink)
 	_sink = sink
@@ -752,6 +812,11 @@ func _walk(delta: float) -> void:
 			var keep := foot.basis
 			if _planted[side]:
 				keep = Basis(Vector3.UP, angle_difference(heading, _plant_yaw[side])) * keep
+			# Flat on a floor that slopes; level on a stair.
+			var lie := (to_model * _lie[side]).normalized()
+			var slope := Vector3.UP.angle_to(lie)
+			if slope > 0.01 and slope < LEVEL.y:
+				keep = Basis(Vector3.UP.cross(lie).normalized(), slope * (1.0 - smoothstep(LEVEL.x, LEVEL.y, slope))) * keep
 			_turn_to(leg.end, keep)
 		if measure:
 			# How far the foot really moved while the clip had it on the ground.
@@ -761,6 +826,22 @@ func _walk(delta: float) -> void:
 				stood += delta
 			_measured[side] = _was_down[side]
 			_ball_was[side] = now
+
+
+## The floor under `at`, a point of the level: how far it is above `level`,
+## the height the body stands at, in metres, and its normal. A floor that is
+## out of reach of a foot, or that there is no `space` to look for in, is the
+## floor the body stands on.
+func _floor(space: PhysicsDirectSpaceState3D, at: Vector3, level: float) -> Array:
+	if space == null:
+		return [0.0, Vector3.UP]
+	var leg := _hip_height * _figure.scale.y
+	var from := Vector3(at.x, level + STEP_UP * leg, at.z)
+	var found := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, Vector3(at.x, level - STEP_DOWN * leg, at.z), 1))
+	if found.is_empty():
+		return [0.0, Vector3.UP]
+	var rise: float = found.position.y - level
+	return [signf(rise) * maxf(absf(rise) - SLACK, 0.0), found.normal]
 
 
 ## What is left of a life: the fall, and then nothing.
@@ -803,18 +884,36 @@ func _fade(amount: float) -> void:
 # --- Fighting ------------------------------------------------------------------
 
 
-## Starts a blow. Wound up, it is paced to land when the wind-up is over.
+## Starts a blow. Wound up, it is paced to land when the wind-up is over, and
+## it is one of the blows that can be: a quick one after a long wind-up would
+## have landed and be on its way back by then.
 func _swing(wound_up: bool) -> void:
-	var attacks: Array = _set.attacks
+	var attacks := _blows()
+	if wound_up:
+		var timely := attacks.filter(func(blow: String) -> bool: return _pace(blow) == clampf(_pace(blow), PACED.x, PACED.y))
+		if timely.is_empty():
+			# None of them: the one that comes nearest.
+			timely = [attacks.reduce(func(best: String, blow: String) -> String: return blow if absf(log(_pace(blow))) < absf(log(_pace(best))) else best)]
+		attacks = timely
 	var attack: String = attacks[_attack % attacks.size()]
 	_attack += 1 + randi() % 2
 	var lands: float = _facts[attack].hit
 	_tree.set(ACT_CLIP, attack)
-	_tree.set(ACT_PACE, clampf(lands / maxf(_windup, 0.05), 0.5, 2.5) if wound_up else 1.0)
+	_tree.set(ACT_PACE, clampf(_pace(attack), PACED.x, PACED.y) if wound_up else 1.0)
 	_tree.set(ACT, AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 	if not wound_up and not can_process():
 		_tree.advance(0.0)
 		_tree.advance(lands)
+
+
+## How many times as fast a blow has to be played to land as its wind-up ends.
+func _pace(blow: String) -> float:
+	return _facts[blow].hit / maxf(_windup, 0.05)
+
+
+## The blows it has: with what it holds, or with its hands.
+func _blows() -> Array:
+	return _set.strikes if _wielding else _set.attacks
 
 
 ## The bearing of the target from a point: x to its left, y up, in radians.
@@ -865,13 +964,17 @@ func _drop_weapon(push: Vector3) -> void:
 	_glint = null
 
 
-## The clips fall onto the back. This is how far to turn first, so that the
-## body goes down away from the shot and not into a wall.
+## Most clips fall onto the back. This is how far to turn first, so that the
+## body goes down away from the shot and not into a wall. NAN for one that
+## was shot from behind and has room to go down on its face instead, see
+## _room_ahead().
 func _room_to_fall(push: Vector3) -> float:
 	var along := global_basis.inverse() * push
 	var away := atan2(along.x, along.z)
-	# Shot in the back it just goes down as it stands.
-	if absf(away) > 2.2:
+	if absf(away) > BEHIND:
+		if not is_nan(_room_ahead(push)):
+			return NAN
+		# Nowhere to fall to in front of it: it goes down as it stands.
 		away = 0.0
 	away = clampf(away, -1.0, 1.0)
 	if not is_inside_tree() or _body == null:
@@ -883,6 +986,22 @@ func _room_to_fall(push: Vector3) -> float:
 		if space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + back * 1.9, 1)).is_empty():
 			return away + offset
 	return away
+
+
+## How far to turn one that falls on its face, so that it goes down the way
+## the shot went; NAN if something stands in the way there.
+func _room_ahead(push: Vector3) -> float:
+	var along := global_basis.inverse() * push
+	var turn := clampf(wrapf(atan2(along.x, along.z) - PI, -PI, PI), -1.0, 1.0)
+	if not is_inside_tree() or _body == null:
+		return turn
+	var space := get_world_3d().direct_space_state
+	var from := global_position + Vector3.UP * 0.6
+	for offset: float in [0.0, 0.6, -0.6]:
+		var ahead := global_basis * Basis(Vector3.UP, turn + offset) * Vector3.FORWARD
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + ahead * 1.9, 1)).is_empty():
+			return turn + offset
+	return NAN
 
 
 # --- Bones ---------------------------------------------------------------------
@@ -1049,6 +1168,25 @@ func _arm(weapon: String) -> void:
 			sounds[&"shot"] = data.shot_sound
 
 
+## Puts something to strike with in its right hand: a model that says of
+## itself that it is one (the tag "wield"), with the marker HandR where the
+## hand closes round it. Anything else it leaves where it is.
+func _wield(weapon: String) -> void:
+	var path := MODELS + weapon + ".scn"
+	if not ResourceLoader.exists(path):
+		push_warning("No weapon model %s" % weapon)
+		return
+	var model: Node3D = (load(path) as PackedScene).instantiate()
+	var hand := model.find_child("HandR", true, false) as Node3D
+	if hand == null or not model.get_meta("wield", false):
+		model.free()
+		return
+	_weapon = model
+	_skeleton.add_child(_weapon)
+	_haft = _within(hand, _weapon).affine_inverse()
+	_wielding = true
+
+
 ## The box around everything a model is made of, in its own space.
 func _bounds(model: Node3D) -> AABB:
 	var box := AABB()
@@ -1120,7 +1258,7 @@ func _library() -> AnimationLibrary:
 ## a blow over that from the waist up, a flinch over that, and the fall
 ## over everything.
 func _blend_tree() -> AnimationNodeBlendTree:
-	var key: String = _set.idle
+	var key: String = _set.idle + ("+" + _set.carry if _wielding else "")
 	if _trees.has(key):
 		return _trees[key]
 	var tree := AnimationNodeBlendTree.new()
@@ -1144,11 +1282,23 @@ func _blend_tree() -> AnimationNodeBlendTree:
 	for side in SIDES:
 		for part in ARM:
 			upper_body.append(side + part)
-	_choice(tree, &"act_clip", _set.attacks)
+	var below := &"move"
+	if _wielding:
+		# What it strikes with it carries at the ready, whatever its legs do.
+		var carry := AnimationNodeBlend2.new()
+		carry.set_filter_enabled(true)
+		for part in ARM:
+			carry.set_filter_path(NodePath(".:Right" + part), true)
+		tree.add_node(&"carry", carry)
+		tree.add_node(&"carry_clip", _clip(_set.carry))
+		tree.connect_node(&"carry", 0, &"move")
+		tree.connect_node(&"carry", 1, &"carry_clip")
+		below = &"carry"
+	_choice(tree, &"act_clip", _blows())
 	tree.add_node(&"act_pace", AnimationNodeTimeScale.new())
 	tree.connect_node(&"act_pace", 0, &"act_clip")
 	tree.add_node(&"act", _one_shot(upper_body, 0.08, 0.2))
-	tree.connect_node(&"act", 0, &"move")
+	tree.connect_node(&"act", 0, below)
 	tree.connect_node(&"act", 1, &"act_pace")
 
 	_choice(tree, &"flinch_clip", FLINCHES)

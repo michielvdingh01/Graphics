@@ -3,12 +3,37 @@ extends Node3D
 ## its legs to match how the body moves, raises and fires its weapon arm,
 ## flinches when it is hit and falls apart when it dies. What the enemy does
 ## is decided in enemy.gd; this script only makes it visible.
+##
+## A robot that stands still does not move a joint: one that so much as sways
+## makes every lamp around it draw its shadows again, frame after frame. What
+## shows that it is running is its visor, which casts no shadow. Switched off
+## (see power()) the visor is out and it hangs in its joints.
 
 const GLOW := preload("res://materials/robot_glow.tres")
 ## Seconds the pieces of a destroyed robot lie about.
 const DEBRIS_TIME := 7.0
 const GLOW_IDLE := 3.0
 const GLOW_CHARGED := 14.0
+## How far the glow of one that stands about rises and falls, and how fast.
+const GLOW_BREATH := 0.12
+const BREATH_PACE := 1.3
+## Seconds it takes to come on.
+const WAKE_TIME := 0.8
+## How it stands switched off, joint by joint, as _turn() takes it: its legs
+## locked, bent over at the waist with its head on its chest, and its arms
+## hanging plumb from its shoulders. A joint that is not named stays as it is.
+const SLUMP := {
+	"Hips": Vector3.ZERO, "Torso": Vector3(-0.36, 0.0, 0.0), "Head": Vector3(-0.62, 0.0, 0.0),
+	"ArmR": Vector3(0.36, 0.0, 0.03), "ArmL": Vector3(0.36, 0.0, -0.03), "ForearmR": Vector3(0.04, 0.0, 0.0), "ForearmL": Vector3(0.04, 0.0, 0.0),
+	"ThighR": Vector3(0.0, 0.0, 0.03), "ThighL": Vector3(0.0, 0.0, -0.03), "ShinR": Vector3.ZERO, "ShinL": Vector3.ZERO,
+	"FootR": Vector3.ZERO, "FootL": Vector3.ZERO,
+}
+## Between which moments of coming on a joint leaves that for what it does
+## when it is running, as shares of WAKE_TIME: the head comes up first, the
+## arms last. Whatever is not named takes the whole of it.
+const WAKES := {"Head": Vector2(0.1, 0.55), "Torso": Vector2(0.25, 0.8), "Hips": Vector2(0.25, 0.8)}
+## A pose this close to where it is going has arrived.
+const ARRIVED := 0.0005
 ## Footsteps are heard from this far.
 const STEP_RANGE := 30.0
 
@@ -35,6 +60,13 @@ var crouch_drop := 0.68
 
 var _joints := {}
 var _rest := {}
+## What each joint was last turned and shifted by: one that is asked for the
+## same again is left alone.
+var _turned := {}
+var _shifted := {}
+## False while it is switched off, and how far it has come on: 0 off, 1 running.
+var _on := true
+var _power := 1.0
 var _meshes: Array[MeshInstance3D] = []
 var _glow_mat: StandardMaterial3D
 ## Length of one step, and whether it fights with blades instead of a gun.
@@ -101,6 +133,33 @@ func _ready() -> void:
 func set_glow(color: Color) -> void:
 	_glow_mat.emission = color
 	_glow_mat.albedo_color = color * 0.08
+
+
+## Switches it off where it stands, or on again. Off, its lamps are out and
+## it hangs in its joints; coming on, the lamps catch and it straightens up.
+func power(on: bool) -> void:
+	if on == _on or _joints.is_empty():
+		return
+	_on = on
+	if not on:
+		# Nothing runs in a robot that is off, so it is off at once.
+		_power = 0.0
+		_aiming = false
+		_charging = false
+		_raised = 0.0
+		_charge = 0.0
+		_moving = 0.0
+		_pose(0.0)
+
+
+func _notification(what: int) -> void:
+	# game.gd stands a robot at its post and stops it there until the fight
+	# for its zone begins: that is a robot switched off. One whose rig was
+	# stopped by hand is being posed for a picture, and stays as it is.
+	if what == NOTIFICATION_DISABLED and is_processing():
+		power(false)
+	elif what == NOTIFICATION_ENABLED:
+		power(true)
 
 
 ## Brings the weapon to bear on a point; lower() lets it hang again.
@@ -245,12 +304,14 @@ func _process(delta: float) -> void:
 
 func _pose(delta: float) -> void:
 	_time += delta
+	if _on and _power < 1.0:
+		_power = minf(_power + delta / WAKE_TIME, 1.0)
 	var body := get_parent() as CharacterBody3D
 	var local := global_basis.inverse() * body.velocity if body else Vector3.ZERO
 	var speed := Vector2(local.x, local.z).length()
 	var along := -local.z / maxf(speed, 0.01)
 	var across := local.x / maxf(speed, 0.01)
-	_moving = lerpf(_moving, clampf(speed / 1.5, 0.0, 1.0), 1.0 - exp(-10.0 * delta))
+	_moving = _near(_moving, clampf(speed / 1.5, 0.0, 1.0), 10.0, delta)
 	# One step for every stride it covers; backwards the legs run in reverse.
 	_phase += delta * speed / _stride * PI * (-1.0 if along < -0.3 else 1.0)
 	var reach := lerpf(0.28, 0.62, clampf(speed / 6.0, 0.0, 1.0)) * _moving
@@ -262,19 +323,21 @@ func _pose(delta: float) -> void:
 			Sfx.play_at(&"robot_step", global_position, -16.0 + 6.0 * _bulk)
 	_steps = steps
 
-	_raised = lerpf(_raised, 1.0 if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
+	_raised = _near(_raised, 1.0 if _aiming else 0.0, 9.0, delta)
 	if _aiming:
 		var shoulder: Vector3 = global_transform * (_rest["Torso"] as Transform3D).origin + Vector3.UP * 0.35
 		var to := _target - shoulder
 		var flat := Vector2(to.x, to.z).length()
-		_pitch = lerpf(_pitch, clampf(atan2(to.y, flat), -0.7, 0.7), 1.0 - exp(-12.0 * delta))
+		_pitch = _near(_pitch, clampf(atan2(to.y, flat), -0.7, 0.7), 12.0, delta)
 		_toe_in = atan2(0.3 * _bulk, maxf(flat, 1.0))
-	_recoil = lerpf(_recoil, 0.0, 1.0 - exp(-(7.0 if _melee else 14.0) * delta))
+	_recoil = _near(_recoil, 0.0, 7.0 if _melee else 14.0, delta)
 	_flinch = _flinch.lerp(Vector3.ZERO, 1.0 - exp(-8.0 * delta))
-	_charge = lerpf(_charge, 1.0 if _charging else 0.0, 1.0 - exp(-14.0 * delta))
-	_glow_mat.emission_energy_multiplier = lerpf(GLOW_IDLE, GLOW_CHARGED, _charge) * (0.9 + 0.1 * sin(_time * 40.0) * _charge)
-	_crouch = lerpf(_crouch, 1.0 if _crouching else 0.0, 1.0 - exp(-9.0 * delta))
-	_guard = lerpf(_guard, 1.0 if _guarding else 0.0, 1.0 - exp(-10.0 * delta))
+	if _flinch.length_squared() < ARRIVED * ARRIVED:
+		_flinch = Vector3.ZERO
+	_charge = _near(_charge, 1.0 if _charging else 0.0, 14.0, delta)
+	_glow_mat.emission_energy_multiplier = _lit() * lerpf(GLOW_IDLE * (0.9 + GLOW_BREATH * sin(_time * BREATH_PACE)), GLOW_CHARGED * (0.9 + 0.1 * sin(_time * 40.0)), _charge)
+	_crouch = _near(_crouch, 1.0 if _crouching else 0.0, 9.0, delta)
+	_guard = _near(_guard, 1.0 if _guarding else 0.0, 10.0, delta)
 	if _flash > 0.0 or delta == 0.0:
 		_flash = maxf(_flash - delta * 7.0, 0.0)
 		for mesh in _meshes:
@@ -300,13 +363,12 @@ func _pose(delta: float) -> void:
 
 	# The body sinks a little on bent knees, bobs with every step, leans into
 	# its run and twists against its legs.
-	var sway := sin(_time * 1.3) * 0.012
 	var hunch := -0.32 if _melee else 0.0
 	var bob := -0.028 * _stride - 0.035 * _stride * (1.0 - absf(cos(_phase))) * _moving
 	# The legs fold up under it by this much.
 	var sink := -0.8 * _stride * _crouch
 	_turn("Hips", Vector3(-0.1 * along * _moving + hunch * 0.4, sin(_phase) * 0.07 * _moving, -0.07 * across * _moving), Vector3(0.0, bob + sink, 0.0))
-	_turn("Torso", Vector3(_pitch * 0.25 * _raised + hunch * 0.6 + sway + _flinch.z * -0.3 - 0.4 * _crouch, -sin(_phase) * 0.1 * _moving, _flinch.x * -0.3))
+	_turn("Torso", Vector3(_pitch * 0.25 * _raised + hunch * 0.6 + _flinch.z * -0.3 - 0.4 * _crouch, -sin(_phase) * 0.1 * _moving, _flinch.x * -0.3))
 	_turn("Head", Vector3(_pitch * 0.5 * _raised - hunch * 0.9 + 0.3 * _crouch, -_flinch.x * 0.3, 0.0))
 
 	var stride_r := -sin(_phase) * 0.3 * _moving
@@ -329,13 +391,44 @@ func _pose(delta: float) -> void:
 	_turn("ArmL", arm_l.lerp(Vector3(_guard_raise, 0.0, 0.0), _guard))
 	_turn("ForearmL", forearm_l.lerp(Vector3(PI * 0.5, -PI * 0.5, 0.0), _guard))
 	if _joints.has("Barrels"):
-		_spin_speed = lerpf(_spin_speed, 18.0 if _charging else 0.0, 1.0 - exp(-3.0 * delta))
+		_spin_speed = _near(_spin_speed, 18.0 if _charging else 0.0, 3.0, delta, 0.02)
 		_spin += _spin_speed * delta
 		_turn("Barrels", Vector3(0.0, _spin, 0.0))
 
 
-## Turns a joint by `angles` from how it was built, and shifts it by `shift`.
+## Turns a joint by `angles` from how it was built, and shifts it by `shift`:
+## what it does when it is running. As far as it is switched off, it hangs
+## as SLUMP has it instead.
 func _turn(joint: String, angles: Vector3, shift := Vector3.ZERO) -> void:
+	if _power < 1.0 and SLUMP.has(joint):
+		var wakes: Vector2 = WAKES.get(joint, Vector2(0.4, 1.0))
+		var slack := 1.0 - smoothstep(wakes.x, wakes.y, _power)
+		angles = angles.lerp(SLUMP[joint], slack)
+		shift = shift.lerp(Vector3.ZERO, slack)
+	# Asked for the same again, the joint is left alone, and so is everything
+	# that hangs from it: what has not moved has no shadow to draw again.
+	if _turned.get(joint) == angles and _shifted.get(joint) == shift:
+		return
+	_turned[joint] = angles
+	_shifted[joint] = shift
 	var node: Node3D = _joints[joint]
 	node.position = (_rest[joint] as Transform3D).origin + shift
 	node.rotation = angles
+
+
+## How brightly its lamps burn for how far it has come on: out, then catching
+## with a stutter, then steady.
+func _lit() -> float:
+	if _power >= 1.0:
+		return 1.0
+	if _power <= 0.0:
+		return 0.0
+	var caught := smoothstep(0.0, 0.5, _power)
+	return caught * (0.25 if _power < 0.4 and fmod(_power * 9.0, 1.0) < 0.45 else 1.0)
+
+
+## Eases `from` towards `to` and arrives there. A pose that only ever gets
+## nearer never stands still.
+func _near(from: float, to: float, rate: float, delta: float, close := ARRIVED) -> float:
+	var next := lerpf(from, to, 1.0 - exp(-rate * delta))
+	return to if absf(next - to) < close else next

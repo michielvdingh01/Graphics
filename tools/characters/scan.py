@@ -599,20 +599,20 @@ def rig(source: bpy.types.Object, args, report: dict) -> tuple:
         if args.yaw is not None:
             yaw = math.radians(args.yaw)
         else:
-            ahead = landmarks.facing(landmarks.Slices(coordinates(hull.data)))
+            ahead = landmarks.facing(landmarks.Slices(coordinates(hull.data)), args.baggy)
             yaw = math.atan2(-ahead[0], -ahead[1])
         turn = Matrix.Rotation(yaw, 4, "Z")
         source.data.transform(turn)
         hull.data.transform(turn)
         measures = {}
-        joints = landmarks.fit(coordinates(hull.data), measures)
+        joints = landmarks.fit(coordinates(hull.data), measures, args.baggy)
         if args.yaw is None and abs(measures["skew"]) < math.radians(25.0):
             # Feet rarely point exactly ahead. A trunk is broadest straight
             # across: turn the last few degrees by that.
             turn = Matrix.Rotation(-measures["skew"], 4, "Z")
             source.data.transform(turn)
             hull.data.transform(turn)
-            joints = landmarks.fit(coordinates(hull.data))
+            joints = landmarks.fit(coordinates(hull.data), None, args.baggy)
             yaw -= measures["skew"]
     except landmarks.PoseError as error:
         sys.exit("import_character: this does not look like a person standing for a scan: %s" % error)
