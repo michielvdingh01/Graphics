@@ -66,7 +66,11 @@ What an entry can say besides its source:
             pitch: the air in a room, and with a highpass steam. A third
             number, up to 1, lets it come and go in gusts: wind; "hum":
             [seconds, Hz, Hz ...] is those tones together, each drifting a
-            little, for what turns or runs on the mains. An echo needs
+            little, for what turns or runs on the mains. Or it has
+            "burst": [seconds, from Hz, to Hz, fall]: noise that is there at
+            once and white, and turns brown within `fall` seconds as it dies
+            away, which is what a shot does that lands in something soft
+            and wet. An echo needs
             nothing new: it is the recording again as a layer, later,
             quieter and duller. A layer can say lowpass and highpass
             (Hz, 24 dB per octave), length (seconds), gain (dB against the
@@ -255,6 +259,8 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
         return [air(*spec["air"], seed=seed) for seed in range(4)]
     if "hum" in spec:
         return [hum(spec["hum"][0], spec["hum"][1:], seed) for seed in range(4)]
+    if "burst" in spec:
+        return [[burst(*spec["burst"], seed)] for seed in range(5)]
     source = spec["source"]
     patterns = spec["files"] if isinstance(spec["files"], list) else [spec["files"]]
     sources = []
@@ -417,7 +423,7 @@ def tiled(take: list, count: int, wide: bool) -> list:
 
 def made(spec: dict) -> bool:
     """True for what is generated here instead of recorded."""
-    return any(kind in spec for kind in ("sweep", "rumble", "air", "hum"))
+    return any(kind in spec for kind in ("sweep", "rumble", "air", "hum", "burst"))
 
 
 def pitched(samples: list, speed: float) -> list:
@@ -466,6 +472,26 @@ def rumble(seconds: float, start: float, end: float, seed: int) -> list:
                 level *= 0.5 - 0.5 * math.cos(math.pi * i / attack)
             channel.append(two * level)
         out.append(channel)
+    return out
+
+
+def burst(seconds: float, start: float, end: float, fall: float, seed: int) -> list:
+    """Noise that begins at once and white and dies away by 60 dB over
+    `seconds`, while a low-pass of 6 dB per octave comes down over it from
+    `start` to `end` within `fall` seconds: what is left then is brown. A
+    low-pass takes level away with the treble; most of that is given back,
+    or the brown end would be a whisper after the white."""
+    count = int(seconds * RATE)
+    attack, release = 0.001 * RATE, 0.15 * count
+    noise = random.Random(1000 + seed)
+    low = 0.0
+    out = []
+    for i in range(count):
+        pitch = end + (start - end) * math.exp(-3.0 * i / (fall * RATE))
+        pull = 1.0 - math.exp(-math.tau * pitch / RATE)
+        low += pull * (noise.uniform(-1.0, 1.0) - low)
+        level = math.exp(-6.9 * i / count) * min(1.0, i / attack, (count - i) / release)
+        out.append(low * level * (pull / (2.0 - pull)) ** -0.45)
     return out
 
 

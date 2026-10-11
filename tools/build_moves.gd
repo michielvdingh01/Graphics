@@ -25,6 +25,12 @@ const FINGERS: Array[String] = [
 	"LittleProximal", "LittleIntermediate", "LittleDistal",
 ]
 const SIDES: Array[String] = ["Left", "Right"]
+## What a body carries on its legs: where two walk cycles are laid over one
+## another, these bones can take a share of their own.
+const CARRIED: Array[String] = ["Spine", "Chest", "UpperChest", "Neck", "Head", "Shoulder", "UpperArm", "LowerArm", "Hand"]
+## Bones that are close under the skin: one of them is the lowest of a body
+## that lies down.
+const SKIN: Array[String] = ["Hips", "Chest", "UpperChest", "Head", "LeftLowerLeg", "RightLowerLeg", "LeftToes", "RightToes", "LeftHand", "RightHand"]
 ## The hips travel is kept under this name in a pose.
 const TRAVEL := "@"
 ## Samples of a walk cycle that are looked at to measure it.
@@ -62,7 +68,7 @@ func _initialize() -> void:
 	var facts := {}
 	for move_name: String in manifest.moves:
 		var move: Dictionary = manifest.moves[move_name]
-		if not (_players[move.source] as AnimationPlayer).has_animation(move.clip):
+		if not move.has("pieces") and not (_players[move.source] as AnimationPlayer).has_animation(move.clip):
 			push_error("%s: %s has no clip %s" % [move_name, move.source, move.clip])
 			continue
 		var fact := {"kind": move.kind}
@@ -80,7 +86,7 @@ func _initialize() -> void:
 		print("%-14s %s" % [move_name, fact])
 	for set_name: String in manifest.sets:
 		var way: Dictionary = manifest.sets[set_name]
-		for move: String in [way.idle, way.fingers] + way.gaits + way.attacks:
+		for move: String in [way.idle, way.fingers] + way.gaits + way.attacks + way.get("strikes", []) + [way.get("carry", way.idle), way.get("grip", way.fingers)]:
 			if not facts.has(move):
 				push_error("set %s names a move that is not there: %s" % [set_name, move])
 	library.set_meta("moves", facts)
@@ -190,8 +196,14 @@ func _bake(length: float, loop: bool, pose_at: Callable) -> Animation:
 	return animation
 
 
-## A clip as it is, trimmed, followed by another, reversed or mirrored.
+## A clip as it is, trimmed, followed by another, reversed or mirrored; or a
+## move put together from pieces, see _pieces().
 func _plain(move: Dictionary, fact: Dictionary) -> Animation:
+	if move.has("pieces"):
+		var made := _pieces(move)
+		if move.kind == "once":
+			fact["hit"] = move["hit"] if move.has("hit") else _reach(made[0], made[1])
+		return _bake(made[0], move.kind == "loop", made[1])
 	var parts := [[_clip(move), float(move.get("from", 0.0)), float(move.get("to", _clip(move).length))]]
 	if move.has("then"):
 		parts.append([_clip(move, "then"), 0.0, _clip(move, "then").length])
@@ -215,6 +227,62 @@ func _plain(move: Dictionary, fact: Dictionary) -> Animation:
 	return _bake(length, loop, pose_at)
 
 
+## A move put together from pieces of clips, one after the other, for what
+## the sources have no clip of. A piece is its clip between `from` and `to`
+## seconds, made to last `takes` seconds; with `from` and `to` the same it is
+## a pose that is held. Over the first `fade` seconds of a piece the pose the
+## one before it ended in gives way to it: slowly at first and then faster,
+## as something that falls. `lying` lays a piece down that was made up in the
+## air, such as a swimmer: the lowest of its bones comes that many hip heights
+## above the ground, with the hips `ahead` of where the move began. Returns
+## [length, the pose at a moment].
+func _pieces(move: Dictionary) -> Array:
+	var pieces: Array = move.pieces
+	var length := 0.0
+	for piece: Dictionary in pieces:
+		length += float(piece.takes)
+	var within := func(index: int, time: float) -> Dictionary:
+		var piece: Dictionary = pieces[index]
+		var clip := _clip({"source": piece.get("source", move.source), "clip": piece.clip})
+		var from := float(piece.get("from", 0.0))
+		var to := float(piece.get("to", clip.length))
+		var pose := _pose(clip, lerpf(from, to, clampf(time / float(piece.takes), 0.0, 1.0)))
+		if piece.has("lying"):
+			pose[TRAVEL] = Vector3(0.0, (pose[TRAVEL] as Vector3).y, float(piece.get("ahead", 0.0)))
+			_strike(pose)
+			var lowest := INF
+			for bone in SKIN:
+				lowest = minf(lowest, _where(bone).y)
+			pose[TRAVEL] += Vector3.UP * (float(piece.lying) - lowest / _hips)
+		return pose
+	var pose_at := func(time: float) -> Dictionary:
+		var index := 0
+		while index < pieces.size() - 1 and time > float(pieces[index].takes):
+			time -= float(pieces[index].takes)
+			index += 1
+		var pose: Dictionary = within.call(index, time)
+		var fade := float(pieces[index].get("fade", 0.0))
+		if index > 0 and time < fade:
+			var given := time / fade
+			pose = _blended(within.call(index - 1, float(pieces[index - 1].takes)), pose, given * given * (3.0 - 2.0 * given) * given, -1.0)
+		return pose
+	return [length, pose_at]
+
+
+## Two poses laid over one another: `share` of the second in the first. What a
+## body carries on its legs takes `carried` of it instead, unless that is
+## negative.
+func _blended(first: Dictionary, second: Dictionary, share: float, carried: float) -> Dictionary:
+	var pose := {}
+	for bone: String in first:
+		if bone == TRAVEL:
+			pose[bone] = (first[bone] as Vector3).lerp(second[bone], share)
+			continue
+		var part := bone.trim_prefix("Left").trim_prefix("Right")
+		pose[bone] = (first[bone] as Quaternion).slerp(second[bone], carried if carried >= 0.0 and CARRIED.has(part) else share)
+	return pose
+
+
 ## The moment a hand is furthest out in front of the chest: when a blow lands.
 func _reach(length: float, pose_at: Callable) -> float:
 	var best := 0.0
@@ -233,19 +301,45 @@ func _reach(length: float, pose_at: Callable) -> float:
 
 
 ## A walk cycle: brought to one second, starting as the left foot comes down,
-## and measured. A foot is down while its heel or the ball of the foot is on
-## the ground and the ball travels back under the body; how fast it does that
-## is how far the walk gets in a cycle.
+## and measured. With `with` it is two clips laid over one another once both
+## are in step, for a pace the sources have no clip of: `share` of the other
+## clip in the legs and `carried` of it in what the legs carry, stepping once
+## every `cycle` seconds.
 func _gait(move: Dictionary, fact: Dictionary) -> Animation:
 	var clip := _clip(move)
 	var length := clip.length
+	var walk := _in_step(func(phase: float) -> Dictionary: return _pose(clip, phase * clip.length))
+	if move.has("with"):
+		var other := _clip({"source": move.get("with_source", move.source), "clip": move.with})
+		var first: Callable = walk.pose_at
+		var second: Callable = _in_step(func(phase: float) -> Dictionary: return _pose(other, phase * other.length)).pose_at
+		var share := float(move.share)
+		var carried := float(move.get("carried", share))
+		walk = _in_step(func(phase: float) -> Dictionary: return _blended(first.call(phase), second.call(phase), share, carried))
+		length = float(move.get("cycle", lerpf(clip.length, other.length, share)))
+	# In hip heights, so that a taller character takes longer steps.
+	fact["stride"] = snappedf(walk.stride / _hips, 0.001)
+	fact["speed"] = snappedf(walk.stride / length / _hips, 0.001)
+	fact["cycle"] = snappedf(length, 0.001)
+	for side in SIDES:
+		fact["down_" + side.to_lower()] = walk.down[side]
+	return _bake(1.0, true, walk.pose_at)
+
+
+## Measures a walk cycle that `pose_at` gives for a phase from 0 to 1. A foot
+## is down while its heel or the ball of the foot is on the ground and the
+## ball travels back under the body; how fast it does that is how far the walk
+## gets in a cycle. Returns the same cycle beginning as the left foot comes
+## down (pose_at), the metres it covers (stride) and between which phases
+## each foot is down (down).
+func _in_step(pose_at: Callable) -> Dictionary:
 	var heels := {}
 	var balls := {}
 	for side in SIDES:
 		heels[side] = []
 		balls[side] = []
 	for i in GAIT_SAMPLES:
-		_strike(_pose(clip, length * i / GAIT_SAMPLES))
+		_strike(pose_at.call(float(i) / GAIT_SAMPLES))
 		for side in SIDES:
 			heels[side].append(_where(side + "Foot"))
 			balls[side].append(_where(side + "Toes"))
@@ -290,14 +384,11 @@ func _gait(move: Dictionary, fact: Dictionary) -> Animation:
 					best = Vector2i(from, run)
 		down[side] = best
 	var begin: float = float(down["Left"].x) / GAIT_SAMPLES
-	# In hip heights, so that a taller character takes longer steps.
-	fact["stride"] = snappedf(stride / _hips, 0.001)
-	fact["speed"] = snappedf(stride / length / _hips, 0.001)
-	fact["cycle"] = snappedf(length, 0.001)
+	var spans := {}
 	for side in SIDES:
 		var from := fposmod(float(down[side].x) / GAIT_SAMPLES - begin, 1.0)
-		fact["down_" + side.to_lower()] = [snappedf(from, 0.001), snappedf(from + float(down[side].y) / GAIT_SAMPLES, 0.001)]
-	return _bake(1.0, true, func(phase: float) -> Dictionary: return _pose(clip, fposmod(begin + phase, 1.0) * length))
+		spans[side] = [snappedf(from, 0.001), snappedf(from + float(down[side].y) / GAIT_SAMPLES, 0.001)]
+	return {"pose_at": func(phase: float) -> Dictionary: return pose_at.call(fposmod(begin + phase, 1.0)), "stride": stride, "down": spans}
 
 
 ## The height a point of a foot is at while it stands on the ground: the

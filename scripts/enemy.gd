@@ -211,7 +211,7 @@ func _ready() -> void:
 		_rig.set_script(RIG)
 		add_child(_rig)
 	# What a shot sounds like on it: a person is not the steel a robot is.
-	$CollisionShape3D.set_meta(&"surface", "soft" if _rig is HUMANOID else "metal")
+	$CollisionShape3D.set_meta(&"surface", "flesh" if _rig is HUMANOID else "metal")
 	_rig.set_glow(visor_color)
 	_los_timer = randf() * 0.15
 	_danger_timer = randf() * 0.2

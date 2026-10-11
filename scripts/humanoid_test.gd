@@ -6,7 +6,12 @@ extends Node
 ## checks for robots: that they come for the player, hit, and die, and that
 ## one of them fights from cover. On top of that it has some lose their
 ## heads, walks one in every direction and measures how far its feet slide
-## while they are down, and it looks at what is left of one that has died.
+## while they are down, and it looks at what is left of one that has died:
+## on its back, or on its face if the shot came from behind. It walks one up
+## the stairs of the hall to see its feet follow them, and looks at what one
+## that fights hand to hand holds. Last come the robots, for what their rig
+## does by itself: switched off where they are posted, and not moving a joint
+## when they stand still.
 
 const HUMANOID := preload("res://scripts/humanoid_rig.gd")
 const THEMES := preload("res://scripts/enemy_themes.gd")
@@ -14,6 +19,12 @@ const THEMES := preload("res://scripts/enemy_themes.gd")
 const RANGE_TARGET := Vector3(1, 0, -7.5)
 ## Metres a second a foot may slide while it is down.
 const SLIDE := 0.05
+## The stairs of the hall: between these two the floor slopes, and they are
+## climbed going west.
+const STAIRS_FOOT := Vector3(2.5, 0, -10.9)
+const STAIRS_HEAD := Vector3(-1.7, 0, -10.9)
+## Metres a foot that is down may be off the floor under it.
+const OFF_FLOOR := 0.06
 
 ## True for a run of this test.
 var active := false
@@ -75,6 +86,7 @@ func _run() -> void:
 	_check("the first zone of the route is posted", enemies.size() >= 3 and enemies.size() == first.robots.size()
 		and enemies.all(func(e: Node) -> bool: return not e.can_process()))
 	_check("with characters", enemies.all(_is_character))
+	_check("who sound like flesh where a shot lands", Sfx.has(&"impact_flesh") and enemies.all(func(e: Node) -> bool: return e.get_node("CollisionShape3D").get_meta(&"surface") == "flesh"))
 	_check("who carry no plate and no pack, and do not duck", enemies.all(func(e: Node) -> bool: return e._shield == 0.0 and e._pack == 0.0 and e._drop == 0.0))
 	game._start(first)
 
@@ -139,9 +151,44 @@ func _run() -> void:
 	await _wait(3.5)
 	if _is_character(rusher) and rusher.melee:
 		_check("a rusher closes in and strikes", hits[0] > before and rusher.global_position.distance_to(player.global_position) < 2.5)
+		var arm: Node3D = rusher._rig
+		if arm._wielding:
+			var held: Node3D = arm._weapon
+			var hand: Vector3 = arm._skeleton.global_transform * arm._global(arm._arms[1].end).origin
+			_check("with what it holds in its right hand", arm._blows() == arm.get(&"_set").strikes and held.global_position.distance_to(hand) < 0.2)
+			rusher.take_damage(1e6, rusher.global_position + Vector3.UP, Vector3.LEFT)
+			_check("which it lets go of when it dies", arm._weapon == null and not arm.is_ancestor_of(held))
+		else:
+			print("  [--] the rusher of this theme strikes with its hands")
 	else:
 		print("  [--] the rusher of this theme does not fight hand to hand, or is a robot")
 	rusher.queue_free()
+
+	# Shot from in front it goes down on its back, shot from behind on its face.
+	var falls := []
+	for from_behind: bool in [false, true]:
+		var one: CharacterBody3D = game.GRUNT.instantiate()
+		one.position = RANGE_TARGET + Vector3(0, 0, 3.0 if from_behind else 0.0)
+		game.add_child(one)
+		one.set_physics_process(false)
+		falls.append(one)
+		if _is_character(one):
+			# An enemy looks along -Z.
+			one.take_damage(1e6 if from_behind else one.health, one.global_position + Vector3.UP * 1.2, one.global_basis.z * (-1.0 if from_behind else 1.0))
+	if falls.all(_is_character):
+		await _wait(2.6)
+		var ways := []
+		for one: CharacterBody3D in falls:
+			var body: Node3D = one._rig
+			var ribs: int = body._torso[-1]
+			body._g.clear()
+			var lies: Transform3D = body._skeleton.global_transform * body._global(ribs)
+			# Which way the chest faces, and how far in front of where it stood it lies.
+			ways.append([(lies.basis * body._rest_global(ribs).basis.inverse() * Vector3.BACK).y, (one.global_basis.inverse() * (lies.origin - one.global_position)).z])
+		_check("shot from in front it lies on its back, behind where it stood", ways[0][0] > 0.5 and ways[0][1] > 0.2)
+		_check("shot from behind it lies on its face, in front of where it stood", ways[1][0] < -0.5 and ways[1][1] < -0.2)
+	for one: CharacterBody3D in falls:
+		one.queue_free()
 	var slim := true
 	for scene: PackedScene in [game.GRUNT, game.RUSHER, game.HEAVY]:
 		var one: CharacterBody3D = scene.instantiate()
@@ -264,7 +311,7 @@ func _run() -> void:
 		var fast: float = _walker.speed
 		var worst := 0.0
 		for lap: Array in [["forwards", Vector3.FORWARD, fast], ["to its right", Vector3.RIGHT, fast * 0.5], ["to its left", Vector3.LEFT, fast * 0.5],
-				["backwards", Vector3.BACK, fast * 0.5], ["forwards and left", Vector3(-0.7, 0, -0.7), fast * 0.7]]:
+				["backwards", Vector3.BACK, fast * 0.5], ["forwards and left", Vector3(-0.7, 0, -0.7), fast * 0.7], ["forwards at a trot", Vector3.FORWARD, 3.0]]:
 			var slides := []
 			for locked: bool in [false, true]:
 				legs.lock_feet = locked
@@ -282,23 +329,104 @@ func _run() -> void:
 					# Two steps to a cycle; between 1 and 4 a second is a walk or a run.
 					var steps := absf(legs._cycles - cycles) * 2.0 / 1.6
 					_check("walks %s in step (%.1f steps a second at %.1f m/s)" % [lap[0], steps, lap[2]], steps > 1.0 and steps < 4.0)
+					if lap[2] == 3.0:
+						# Neither a walk in a hurry nor a run slowed down.
+						var cycle: String = legs.get(&"_set").gaits[legs._gait]
+						_check("3 m/s is a pace of its own (%s, steps %.2f times as long as made)" % [cycle, legs._stretch], cycle.ends_with("trot") and absf(legs._stretch - 1.0) < 0.15)
 			worst = maxf(worst, slides[1])
 			print("    feet slide %.3f m/s %s; left to the clips they would slide %.3f m/s" % [slides[1], lap[0], slides[0]])
 		_check("feet that are down stay put (worst %.3f m/s)" % worst, worst < SLIDE)
-		# What a frame of all that costs in script and animation, for the record.
+		_walker.global_position = RANGE_TARGET
+		_stride = Vector3.RIGHT * 2.0
+		_walker.velocity = _stride
+		await _wait(1.0)
+		_check("on a level floor both feet are left at the height of the body", legs._rise[0] == 0.0 and legs._rise[1] == 0.0)
+
+		# Up the stairs of the hall: each foot that is down stands on the floor
+		# there is under it. The body is moved along the slope by hand.
+		var foot_of := Vector3(STAIRS_FOOT.x, _floor_at(STAIRS_FOOT), STAIRS_FOOT.z)
+		var head_of := Vector3(STAIRS_HEAD.x, _floor_at(STAIRS_HEAD), STAIRS_HEAD.z)
+		var climb := (head_of - foot_of).normalized() * 2.0
+		var off := []
+		for follow: bool in [false, true]:
+			legs.follow_floor = follow
+			legs.lock_feet = true
+			_walker.global_position = foot_of
+			_walker.look_at(Vector3(head_of.x, foot_of.y, head_of.z))
+			legs.aim(_walker.global_position + Vector3(-30, 8, 0))
+			_stride = climb
+			_walker.velocity = climb
+			await _wait(0.5)
+			var worst_off := 0.0
+			var apart := 0.0
+			for i in 24:
+				await _wait(0.05)
+				legs._g.clear()
+				var balls := []
+				for side in 2:
+					var ball: Vector3 = legs._skeleton.global_transform * legs._global(legs._balls[side]).origin
+					balls.append(ball.y)
+					if legs._planted[side]:
+						worst_off = maxf(worst_off, absf(ball.y - _floor_at(ball) - 0.03))
+				apart = maxf(apart, absf(balls[0] - balls[1]))
+			off.append([worst_off, apart])
+		_stride = Vector3.ZERO
+		_check("the stairs rise (%.1f m over %.1f m)" % [head_of.y - foot_of.y, foot_of.x - head_of.x], head_of.y - foot_of.y > 2.0)
+		print("    on the stairs a foot that is down is at most %.3f m off the floor under it; left at the height of the body, %.3f m" % [off[1][0], off[0][0]])
+		_check("feet follow the stairs, one above the other (up to %.2f m)" % off[1][1], off[1][0] < OFF_FLOOR and off[0][0] > OFF_FLOOR * 2.0 and off[1][1] > 0.15)
+		_walker.global_position = RANGE_TARGET
+		_walker.rotation = Vector3.ZERO
+		# What a frame of all that costs in script and animation, for the record:
+		# back and forth over the floor of the hall, with and without looking
+		# for the floor under each foot.
 		legs.set_process(false)
-		var began := Time.get_ticks_usec()
-		for i in 600:
-			_walker.global_position += _stride / 60.0
-			legs._pose(1.0 / 60.0)
-		var whole := (Time.get_ticks_usec() - began) / 600.0
-		began = Time.get_ticks_usec()
+		var cost := []
+		for follow: bool in [false, true, false, true]:
+			legs.follow_floor = follow
+			_walker.global_position = RANGE_TARGET
+			var began := Time.get_ticks_usec()
+			for i in 600:
+				_walker.velocity = Vector3.RIGHT * 2.5 * (1.0 if i % 240 < 120 else -1.0)
+				_walker.global_position += _walker.velocity / 60.0
+				legs._pose(1.0 / 60.0)
+			cost.append((Time.get_ticks_usec() - began) / 600.0)
+		var blend := Time.get_ticks_usec()
 		for i in 600:
 			legs._tree.advance(1.0 / 60.0)
-		print("    posing it takes %d microseconds a frame, %d of them to blend the clips" % [whole, (Time.get_ticks_usec() - began) / 600.0])
+		print("    posing it takes %d microseconds a frame, %d of them to blend the clips and %d to find the floor under its feet" % [
+			(cost[1] + cost[3]) * 0.5, (Time.get_ticks_usec() - blend) / 600.0, (cost[1] + cost[3] - cost[0] - cost[2]) * 0.5])
 	else:
 		_check("the grunt of this theme is a character", false)
 	_walker.queue_free()
+
+	# The robots: what their rig does without being asked. One that is stopped
+	# where it stands is switched off, as game.gd stops those it posts: its
+	# lamps out and its head on its chest. Started again it comes on, and once
+	# it stands still nothing of it moves, so no lamp has a shadow to draw again.
+	Settings.enemy_theme = THEMES.ROBOTS
+	for scene: PackedScene in [game.GRUNT, game.RUSHER, game.HEAVY]:
+		var robot: CharacterBody3D = scene.instantiate()
+		robot.position = RANGE_TARGET
+		game.add_child(robot)
+		robot.set_physics_process(false)
+		var frame: Node3D = robot._rig
+		var kind: String = robot.role
+		var visor: MeshInstance3D = frame._joints["GlowVisor"]
+		var middle := visor.get_aabb().get_center()
+		var up := (visor.global_transform * middle).y
+		robot.process_mode = Node.PROCESS_MODE_DISABLED
+		var lamps: StandardMaterial3D = frame._glow_mat
+		_check("a %s that is stopped where it stands is switched off: lamps out, head down" % kind, lamps.emission_energy_multiplier == 0.0 and (visor.global_transform * middle).y < up - 0.03)
+		robot.process_mode = Node.PROCESS_MODE_INHERIT
+		await _wait(frame.WAKE_TIME + 0.6)
+		_check("started again it comes on", lamps.emission_energy_multiplier > 1.0 and absf((visor.global_transform * middle).y - up) < 0.005)
+		var stood := {}
+		for mesh: MeshInstance3D in frame._meshes:
+			stood[mesh] = mesh.global_transform
+		await _wait(0.5)
+		_check("and standing still it does not move a joint", frame._meshes.all(func(mesh: MeshInstance3D) -> bool: return mesh.global_transform == stood[mesh]))
+		robot.free()
+	Settings.enemy_theme = theme
 
 	# The setting in the menu steps through the themes.
 	Menu._show(Menu.Screen.SETTINGS)
@@ -326,3 +454,10 @@ func _check(label: String, ok: bool) -> void:
 
 func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds, true, true).timeout
+
+
+## How high the floor of the level is under `at`.
+func _floor_at(at: Vector3) -> float:
+	var space := (get_tree().current_scene as Node3D).get_world_3d().direct_space_state
+	var found := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(at.x, 6.0, at.z), Vector3(at.x, -1.0, at.z), 1))
+	return found.position.y if found else 0.0

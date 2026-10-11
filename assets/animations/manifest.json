@@ -1,5 +1,5 @@
 {
-	"_doc": "Where the moves of the humanoid enemies come from. tools/fetch_animations.py downloads the sources (no account needed), Godot imports them through the bone maps next to them onto its humanoid profile, and tools/build_moves.sh cuts the moves listed here out of them into moves.res. A move is a clip of a source: 'gait' is a walk cycle, brought to one second a cycle that starts as the left foot comes down and measured for how far it travels; 'loop' repeats as it is; 'once' plays through, with 'then' for a clip that follows on, 'from' and 'to' to trim it in seconds, 'reverse' and 'mirror'; 'hit' is the moment in seconds that a strike lands; 'hands' is the pose of the fingers at 'at' seconds, taken from one hand ('from_hand') for both. 'sets' are the ways of moving a theme can ask for: the clip to stand still to, the walk cycles from slow to fast, the blows, how the fingers are held for those and whose voice it has. Every set flinches with hit_chest and hit_head and falls with death, death_mirror and knockback.",
+	"_doc": "Where the moves of the humanoid enemies come from. tools/fetch_animations.py downloads the sources (no account needed), Godot imports them through the bone maps next to them onto its humanoid profile, and tools/build_moves.sh cuts the moves listed here out of them into moves.res. A move is a clip of a source: 'gait' is a walk cycle, brought to one second a cycle that starts as the left foot comes down and measured for how far it travels, and with 'with' it is two cycles laid over one another in step, for a pace no clip was made at: 'share' of the other clip ('with_source' if it comes from another source) in the legs, 'carried' of it in what the legs carry, one cycle every 'cycle' seconds; 'loop' repeats as it is; 'once' plays through, with 'then' for a clip that follows on, 'from' and 'to' to trim it in seconds, 'reverse' and 'mirror', or instead of a clip with 'pieces' of clips one after the other, for a move no clip was made of: each lasts 'takes' seconds, blends in from the one before over 'fade' seconds, and with 'lying' is laid on the ground that many hip heights up and 'ahead' of where the move began; 'hit' is the moment in seconds that a strike lands; 'hands' is the pose of the fingers at 'at' seconds, taken from one hand ('from_hand') for both. 'sets' are the ways of moving a theme can ask for: the clip to stand still to, the walk cycles from slow to fast, the blows, how the fingers are held for those and whose voice it has; and for one that has something to strike with in its hand the blows with that ('strikes'), how its arm carries it ('carry') and how its fingers hold it ('grip'). Every set flinches with hit_chest and hit_head and falls with death, death_mirror and knockback, or with fall_forward and thrown_forward if it was hit from behind.",
 	"sources": [
 		{
 			"id": "ual1",
@@ -50,26 +50,40 @@
 	"moves": {
 		"idle": {"source": "ual1", "clip": "Idle", "kind": "loop"},
 		"walk": {"source": "ual1", "clip": "Walk", "kind": "gait"},
+		"trot": {"source": "ual1", "clip": "Walk", "with": "Jog_Fwd", "share": 0.35, "carried": 0.7, "cycle": 0.95, "kind": "gait"},
 		"jog": {"source": "ual1", "clip": "Jog_Fwd", "kind": "gait"},
 		"sprint": {"source": "ual1", "clip": "Sprint", "kind": "gait"},
 		"zombie_idle": {"source": "ual2", "clip": "Zombie_Idle", "kind": "loop"},
 		"zombie_walk": {"source": "ual2", "clip": "Zombie_Walk_Fwd", "kind": "gait"},
+		"zombie_trot": {"source": "ual2", "clip": "Zombie_Walk_Fwd", "with_source": "ual1", "with": "Jog_Fwd", "share": 0.35, "carried": 0.15, "cycle": 0.95, "kind": "gait"},
 		"punch_jab": {"source": "ual1", "clip": "Punch_Jab", "kind": "once"},
 		"punch_cross": {"source": "ual1", "clip": "Punch_Cross", "kind": "once"},
 		"hook": {"source": "ual2", "clip": "Melee_Hook", "then": "Melee_Hook_Rec", "kind": "once"},
 		"zombie_scratch": {"source": "ual2", "clip": "Zombie_Scratch", "kind": "once", "hit": 0.68},
+		"club_idle": {"source": "ual1", "clip": "Sword_Idle", "kind": "loop"},
+		"club_slash": {"source": "ual2", "clip": "Sword_Regular_A", "then": "Sword_Regular_A_Rec", "kind": "once"},
+		"club_swing": {"source": "ual1", "clip": "Sword_Attack", "kind": "once"},
 		"hit_chest": {"source": "ual1", "clip": "Hit_Chest", "kind": "once"},
 		"hit_head": {"source": "ual1", "clip": "Hit_Head", "kind": "once"},
 		"knockback": {"source": "ual2", "clip": "Hit_Knockback", "kind": "once"},
 		"death": {"source": "ual1", "clip": "Death01", "kind": "once"},
 		"death_mirror": {"source": "ual1", "clip": "Death01", "kind": "once", "mirror": true},
+		"fall_forward": {"source": "ual1", "kind": "once", "pieces": [
+			{"clip": "Fixing_Kneeling", "from": 0.0, "to": 0.8, "takes": 0.45},
+			{"clip": "Swim_Fwd", "from": 0.3, "to": 0.3, "takes": 1.75, "fade": 0.5, "lying": 0.1, "ahead": 0.55}
+		]},
+		"thrown_forward": {"source": "ual1", "kind": "once", "pieces": [
+			{"clip": "Roll_RM", "from": 0.05, "to": 0.27, "takes": 0.24},
+			{"clip": "Swim_Fwd", "from": 0.3, "to": 0.3, "takes": 1.2, "fade": 0.3, "lying": 0.1, "ahead": 2.1}
+		]},
 		"hand_relaxed": {"source": "ual1", "clip": "Idle", "kind": "hands", "at": 0.0, "from_hand": "Right"},
 		"hand_grip": {"source": "ual1", "clip": "Pistol_Idle", "kind": "hands", "at": 0.0, "from_hand": "Right"},
 		"hand_fist": {"source": "ual1", "clip": "Punch_Cross", "kind": "hands", "at": 0.3, "from_hand": "Right"},
+		"hand_hold": {"source": "ual1", "clip": "Sword_Idle", "kind": "hands", "at": 0.0, "from_hand": "Right"},
 		"hand_claw": {"source": "ual2", "clip": "Zombie_Idle", "kind": "hands", "at": 0.0, "from_hand": "Right"}
 	},
 	"sets": {
-		"default": {"idle": "idle", "gaits": ["walk", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "voice": "human"},
-		"zombie": {"idle": "zombie_idle", "gaits": ["zombie_walk", "jog"], "attacks": ["zombie_scratch"], "fingers": "hand_claw", "voice": "zombie"}
+		"default": {"idle": "idle", "gaits": ["walk", "trot", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "strikes": ["club_slash", "club_swing"], "carry": "club_idle", "grip": "hand_hold", "voice": "human"},
+		"zombie": {"idle": "zombie_idle", "gaits": ["zombie_walk", "zombie_trot", "jog"], "attacks": ["zombie_scratch"], "fingers": "hand_claw", "strikes": ["club_slash", "club_swing"], "carry": "club_idle", "grip": "hand_hold", "voice": "zombie"}
 	}
 }

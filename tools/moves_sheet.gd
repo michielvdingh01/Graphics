@@ -14,17 +14,29 @@ extends Node3D
 ## --walk=right,ahead is the way it goes, as a share of its speed (0,1 runs
 ## forwards, 0.5,0 steps to its right), and the poses are --step= seconds
 ## apart. --then=die, blast, hit, charge or swing makes that happen first, so
-## that the row shows what follows. --lower leaves its weapon down.
+## that the row shows what follows; --then=back kills it with a shot from
+## behind and --then=thrown with a blast from behind, --then=off switches a
+## robot off and --then=wake switches it on again after that. --lower leaves
+## its weapon down.
+## --stairs has it walk to the right up a flight of stairs like the one in
+## the hall of the factory, treads over a ramp that is all the game collides
+## with, and leaves each figure of the row where it has got to; give it
+## --turn=90 --walk=0,0.5 --step=0.5, and a camera further back.
 
 const MOVES := preload("res://assets/animations/moves.res")
 const SPACING := 1.3
 const TICK := 0.02
+## The flight of stairs: where it begins, and how far a step goes and rises.
+const STAIR_FOOT := -3.0
+const TREAD := 0.3
+const RISER := 0.2
+const STEPS := 28
 
 
 func _ready() -> void:
 	var options := {
 		"move": "walk", "count": "8", "turn": "0", "character": "res://assets/animations/ual1.glb", "hands": "hand_relaxed",
-		"enemy": "", "walk": "0,0", "step": "0.1", "then": "", "lower": "",
+		"enemy": "", "walk": "0,0", "step": "0.1", "then": "", "lower": "", "stairs": "",
 	}
 	for arg in OS.get_cmdline_user_args():
 		var key := arg.get_slice("=", 0).trim_prefix("--")
@@ -65,13 +77,18 @@ func _ready() -> void:
 	ground.add_child(slab)
 	add_child(ground)
 
+	if options.stairs != "":
+		_stairs()
+		# Feet find the floor through the colliders, which are there a frame late.
+		await get_tree().physics_frame
+		await get_tree().physics_frame
 	var count := int(options.count)
 	for i in count:
 		var place := Vector3((i - (count - 1) * 0.5) * SPACING, 0, 0)
 		var time := 0.0
 		if options.enemy != "":
 			time = i * float(options.step)
-			_enemy(options, place, time)
+			place = _enemy(options, place, time)
 		else:
 			var move: Animation = MOVES.get_animation(options.move)
 			time = move.length * i / maxi(count - 1, 1)
@@ -103,9 +120,41 @@ func _figure(options: Dictionary, place: Vector3, time: float) -> void:
 				skeleton.set_bone_pose_position(bone, animation.position_track_interpolate(track, time) * skeleton.motion_scale)
 
 
+## A flight of stairs up to the right: treads to look at, and under them the
+## ramp through their front edges that the game collides with.
+func _stairs() -> void:
+	var paint := StandardMaterial3D.new()
+	paint.albedo_color = Color(0.3, 0.33, 0.36)
+	paint.roughness = 0.7
+	var tread := BoxMesh.new()
+	tread.size = Vector3(TREAD, 0.04, 2.2)
+	tread.material = paint
+	for i in STEPS:
+		var step := MeshInstance3D.new()
+		step.mesh = tread
+		step.position = Vector3(STAIR_FOOT + TREAD * (i + 0.5), RISER * (i + 1) - 0.02, 0)
+		add_child(step)
+	var run := Vector3(TREAD * STEPS, RISER * STEPS, 0)
+	var ramp := StaticBody3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(run.length(), 0.2, 2.2)
+	var collider := CollisionShape3D.new()
+	collider.shape = shape
+	collider.position = Vector3(0, -0.1, 0)
+	ramp.add_child(collider)
+	ramp.transform = Transform3D(Basis(Vector3.BACK, atan2(run.y, run.x)), Vector3(STAIR_FOOT, 0, 0) + run * 0.5)
+	add_child(ramp)
+
+
+## How high the ramp of the stairs is at `x`.
+func _ramp(x: float) -> float:
+	return clampf((x - STAIR_FOOT) / TREAD, 0.0, STEPS) * RISER
+
+
 ## An enemy that has been going for a second and then `time` seconds more,
-## moved back to its place in the row.
-func _enemy(options: Dictionary, place: Vector3, time: float) -> void:
+## moved back to its place in the row; on the stairs it reaches the foot of
+## them after that second and stays where it gets to. Returns where it stands.
+func _enemy(options: Dictionary, place: Vector3, time: float) -> Vector3:
 	var enemy: CharacterBody3D = (load(options.enemy) as PackedScene).instantiate()
 	enemy.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(enemy)
@@ -122,6 +171,15 @@ func _enemy(options: Dictionary, place: Vector3, time: float) -> void:
 	var before := 1.0
 	if options.then == "":
 		before += time
+	if options.stairs != "":
+		enemy.global_position = Vector3(STAIR_FOOT, 0, 0) - going
+		var climb := going + Vector3.UP * going.x * RISER / TREAD
+		for tick in int(before / TICK):
+			var at := enemy.global_position + going * TICK
+			enemy.velocity = climb if at.x > STAIR_FOOT else going
+			enemy.global_position = Vector3(at.x, _ramp(at.x), at.z)
+			rig._pose(TICK)
+		return enemy.global_position
 	for tick in int(before / TICK):
 		enemy.global_position += going * TICK
 		rig._pose(TICK)
@@ -135,10 +193,20 @@ func _enemy(options: Dictionary, place: Vector3, time: float) -> void:
 				enemy.take_damage(10.0, enemy.global_position + Vector3.UP * 1.2, enemy.global_basis.z.rotated(Vector3.UP, 0.4))
 			"blast":
 				enemy.take_damage(1e6, enemy.global_position + Vector3.UP * 1.2, enemy.global_basis.z.rotated(Vector3.UP, 0.4))
+			"back":
+				enemy.health = 1.0
+				enemy.take_damage(10.0, enemy.global_position + Vector3.UP * 1.2, -enemy.global_basis.z.rotated(Vector3.UP, 0.3))
+			"thrown":
+				enemy.take_damage(1e6, enemy.global_position + Vector3.UP * 1.2, -enemy.global_basis.z.rotated(Vector3.UP, 0.3))
 			"hit":
 				enemy.take_damage(1.0, enemy.global_position + Vector3.UP * 1.2, enemy.global_basis.z)
 			"charge":
 				rig.charge(true)
+			"off":
+				rig.power(false)
+			"wake":
+				rig.power(false)
+				rig.power(true)
 			"swing":
 				rig.charge(true)
 				for tick in int(enemy.telegraph_time / TICK):
@@ -150,3 +218,4 @@ func _enemy(options: Dictionary, place: Vector3, time: float) -> void:
 		rig.set_process(false)
 		enemy.process_mode = Node.PROCESS_MODE_DISABLED
 	enemy.global_position = place
+	return place

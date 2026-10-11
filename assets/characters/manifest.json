@@ -1,5 +1,5 @@
 {
-	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing, moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]). Every role says whether it fights hand to hand, because the scene of a role has a default of its own; where the eyes are and where the head begins is left to the rig, which measures the figure as it stands. A theme can instead be 'like' another one, with a 'tuning' that goes on top of that of each of its roles: the clowns who panic are the clowns. 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again; assets/characters/sheets/<id>.jpg shows each.",
+	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing (one that fights hand to hand strikes with it if it is a thing to strike with, such as 'pipe', 'axe' or 'cleaver', and with its hands otherwise), moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]). Every role says whether it fights hand to hand, because the scene of a role has a default of its own; where the eyes are and where the head begins is left to the rig, which measures the figure as it stands. A theme can instead be 'like' another one, with a 'tuning' that goes on top of that of each of its roles: the clowns who panic are the clowns. 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again; assets/characters/sheets/<id>.jpg shows each.",
 	"themes": {
 		"soldiers": {
 			"grunt": {
@@ -114,7 +114,7 @@
 				"characters": [
 					"zombie_05"
 				],
-				"weapon": "",
+				"weapon": "axe",
 				"moves": "zombie",
 				"voice": "zombie",
 				"tuning": {
@@ -164,7 +164,7 @@
 				"characters": [
 					"clown_06"
 				],
-				"weapon": "",
+				"weapon": "cleaver",
 				"moves": "default",
 				"voice": "clown",
 				"tuning": {

@@ -11,7 +11,7 @@
 			},
 			"rusher": {
 				"characters": ["res://assets/animations/ual1.glb", "res://assets/animations/mannequin_f.glb"],
-				"weapon": "",
+				"weapon": "pipe",
 				"moves": "default",
 				"tuning": {"size": 0.93},
 				"tint": {"M_Main": "c9762a", "M_Joints": "2b2d30"}
