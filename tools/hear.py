@@ -230,13 +230,21 @@ def ambience(kind: str) -> list:
     """Twelve seconds in a kind of space: its bed going round, what sounds
     in it now and then from where the game would have it, and three shots of
     the player's own rifle to hear it against."""
-    bed = sorted((ROOT / "assets/audio" / f"ambience_{kind}").glob("*.wav"))
+    folder = ROOT / "assets/audio" / f"ambience_{kind}"
+    bed = sorted(folder.glob("*.wav")) + sorted(folder.glob("*.ogg"))
     if not bed:
         raise SystemExit(f"no bed in assets/audio/ambience_{kind}/")
-    with wave.open(str(bed[0])) as take:
-        length = take.getnframes() / take.getframerate()
+    take = bed[0]
+    if take.suffix == ".ogg":
+        # The renderer plays WAVs: unpack it, with the tool that came with
+        # the encoder.
+        OUT.mkdir(parents=True, exist_ok=True)
+        take = OUT / f"ambience_{kind}.bed.wav"
+        subprocess.run(["oggdec", "-Q", "-o", str(take), str(bed[0])], check=True)
+    with wave.open(str(take)) as reader:
+        length = reader.getnframes() / reader.getframerate()
     begin = random.uniform(0.0, max(length - 12.0, 0.0))
-    events = [{"t": 0.0, "file": str(bed[0]), "bus": "Ambience", "db": 0.0, "pitch": 1.0, "from": begin}]
+    events = [{"t": 0.0, "file": str(take), "bus": "Ambience", "db": 0.0, "pitch": 1.0, "from": begin}]
     if (ROOT / "assets/audio" / f"ambience_{kind}_spot").is_dir():
         reach = pair("SPOT_REACH")
         for at in (2.0, 9.5):

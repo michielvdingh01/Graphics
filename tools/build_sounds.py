@@ -92,6 +92,9 @@ What an entry can say besides its source:
             takes for width
     rate    the sample rate the takes are written at, 22050 for half the
             size: for a sound with nothing in it above 10 kHz
+    ogg     write the takes as Ogg Vorbis of this quality, 0 to 10, a tenth
+            of the size at 3: for a bed, which is long and has no edge that
+            the coding could blur. Needs oggenc (brew install vorbis-tools)
     rms     how loud the take is to be, in dB below full scale averaged over
             its length, instead of with its peak at full scale: a bed is as
             loud in its file as it is in the game
@@ -99,7 +102,7 @@ What an entry can say besides its source:
 A pack is downloaded once into .cache/sounds/ and checked against the checksum
 in the manifest; only the files a sound names are unpacked. A pack may also be
 one sound file instead of an archive. Needs macOS
-(afconvert, bsdtar) and Godot for Ogg files.
+(afconvert, bsdtar) and Godot for reading Ogg files.
 """
 import array
 import hashlib
@@ -121,6 +124,7 @@ CACHE = ROOT / ".cache/sounds"
 OUT = ROOT / "assets/audio"
 RECORDINGS = ROOT / "assets/recordings"
 GODOT = os.environ.get("GODOT", "/Applications/Godot.app/Contents/MacOS/Godot")
+OGGENC = os.environ.get("OGGENC", "oggenc")
 HEADERS = {"User-Agent": "GraphicsFPS-asset-fetch/0.1"}
 
 RATE = 44100
@@ -137,36 +141,41 @@ WIDE = 0.37  # how far round its loop the right channel of a bed runs ahead
 
 def unpack(name: str, pack: dict, wanted: str) -> pathlib.Path:
     """The folder a pack is unpacked in, with the files that match `wanted` in
-    it: the pack is downloaded if need be, and only those are unpacked."""
+    it: the pack is downloaded if need be, and only those are unpacked. A
+    pack that is offered as loose files names them all, "url" and "sha256"
+    each a list."""
     folder = CACHE / name
     files = folder / "files"
     if any(files.glob(wanted)):
         return files
-    archive = folder / urllib.parse.unquote(pack["url"].rsplit("/", 1)[1])
-    if not archive.exists():
-        folder.mkdir(parents=True, exist_ok=True)
-        print(f"downloading {archive.name}")
-        partial = archive.with_name(archive.name + ".part")
-        with urllib.request.urlopen(urllib.request.Request(pack["url"], headers=HEADERS)) as response:
-            with open(partial, "wb") as out:
-                shutil.copyfileobj(response, out)
-        partial.rename(archive)
-    digest = hashlib.sha256()
-    with open(archive, "rb") as data:
-        for chunk in iter(lambda: data.read(1 << 20), b""):
-            digest.update(chunk)
-    if digest.hexdigest() != pack["sha256"]:
-        raise SystemExit(f"checksum mismatch for {archive}")
-    if archive.suffix.lower() in (".wav", ".ogg", ".mp3", ".flac"):
-        files.mkdir(parents=True, exist_ok=True)
-        shutil.copy(archive, files / archive.name)
-        return files
-    # bsdtar reads both zip and 7z, and refuses to write outside the folder.
-    with tempfile.TemporaryDirectory(dir=folder) as partial:
-        subprocess.run(["bsdtar", "-xf", str(archive), "-C", partial, wanted], check=True)
-        # Some archives hold read-only folders, which could then never be removed.
-        subprocess.run(["chmod", "-R", "u+rwX", partial], check=True)
-        shutil.copytree(partial, files, dirs_exist_ok=True)
+    urls = pack["url"] if isinstance(pack["url"], list) else [pack["url"]]
+    sums = pack["sha256"] if isinstance(pack["sha256"], list) else [pack["sha256"]]
+    for url, checksum in zip(urls, sums):
+        archive = folder / urllib.parse.unquote(url.rsplit("/", 1)[1])
+        if not archive.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+            print(f"downloading {archive.name}")
+            partial = archive.with_name(archive.name + ".part")
+            with urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS)) as response:
+                with open(partial, "wb") as out:
+                    shutil.copyfileobj(response, out)
+            partial.rename(archive)
+        digest = hashlib.sha256()
+        with open(archive, "rb") as data:
+            for chunk in iter(lambda: data.read(1 << 20), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != checksum:
+            raise SystemExit(f"checksum mismatch for {archive}")
+        if archive.suffix.lower() in (".wav", ".ogg", ".mp3", ".flac"):
+            files.mkdir(parents=True, exist_ok=True)
+            shutil.copy(archive, files / archive.name)
+            continue
+        # bsdtar reads both zip and 7z, and refuses to write outside the folder.
+        with tempfile.TemporaryDirectory(dir=folder) as partial:
+            subprocess.run(["bsdtar", "-xf", str(archive), "-C", partial, wanted], check=True)
+            # Some archives hold read-only folders, which could then never be removed.
+            subprocess.run(["chmod", "-R", "u+rwX", partial], check=True)
+            shutil.copytree(partial, files, dirs_exist_ok=True)
     return files
 
 
@@ -643,9 +652,10 @@ def build(sound: dict, packs: dict, scratch: pathlib.Path) -> None:
 
     out = OUT / sound["id"]
     out.mkdir(parents=True, exist_ok=True)
+    kind = ".ogg" if "ogg" in sound else ".wav"
     # A take that is rewritten keeps its .import file, and with it its uid.
-    keep = {f"{sound['id']}_{i + 1}.wav" for i in range(len(takes))}
-    for stale in out.glob(f"{sound['id']}_*.wav*"):
+    keep = {f"{sound['id']}_{i + 1}{kind}" for i in range(len(takes))}
+    for stale in out.glob(f"{sound['id']}_*"):
         if stale.name.removesuffix(".import") not in keep:
             stale.unlink()
     rate = sound.get("rate", RATE)
@@ -665,11 +675,15 @@ def build(sound: dict, packs: dict, scratch: pathlib.Path) -> None:
         frames = array.array("h", bytes(2 * len(take) * len(take[0])))
         for c, channel in enumerate(take):
             frames[c::len(take)] = array.array("h", [int(sample * PEAK) for sample in channel])
-        with wave.open(str(out / f"{sound['id']}_{i + 1}.wav"), "wb") as writer:
+        path = out / f"{sound['id']}_{i + 1}.wav"
+        with wave.open(str(path), "wb") as writer:
             writer.setnchannels(len(take))
             writer.setsampwidth(2)
             writer.setframerate(rate)
             writer.writeframes(frames.tobytes())
+        if kind == ".ogg":
+            subprocess.run([OGGENC, "--quiet", "-q", str(sound["ogg"]), "-o", str(path.with_suffix(".ogg")), str(path)], check=True)
+            path.unlink()
     lengths = " ".join(f"{len(take[0]) / RATE:.2f}" for take in takes)
     print(f"{sound['id']:16s} {len(takes):2d} takes  {lengths}")
 
@@ -686,7 +700,7 @@ def main() -> None:
         if wanted:
             if "--all" not in wanted and sound["id"] not in wanted:
                 continue
-        elif any((OUT / sound["id"]).glob("*.wav")):
+        elif any((OUT / sound["id"]).glob("*.wav")) or any((OUT / sound["id"]).glob("*.ogg")):
             continue
         with tempfile.TemporaryDirectory() as scratch:
             build(sound, manifest["packs"], pathlib.Path(scratch))

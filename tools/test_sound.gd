@@ -188,7 +188,7 @@ func _run() -> void:
 		for i in 4:
 			await physics_frame
 		_check("the hall's bed goes round on its own bus", _sfx._beds.has(&"hall") and _sfx._beds[&"hall"].playing and _sfx._beds[&"hall"].bus == _sfx.AMBIENCE
-			and _sfx._beds[&"hall"].stream.loop_mode == AudioStreamWAV.LOOP_FORWARD)
+			and (_sfx._beds[&"hall"].stream.get(&"loop") == true or _sfx._beds[&"hall"].stream.get(&"loop_mode") == AudioStreamWAV.LOOP_FORWARD))
 		change_scene_to_file("res://scenes/depot.tscn")
 		await scene_changed
 		_check("and is gone with the level", _sfx._beds.is_empty())
