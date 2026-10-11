@@ -6,6 +6,7 @@ extends Node
 ## comparable; a benchmark takes --quality=, --upscaler= and --scale= on the
 ## command line instead. They draw at the full size of the window unless told
 ## otherwise; --scale=auto gives a benchmark the scale a player starts with.
+## --undo= has a benchmark do something the way it was done before, see UNDO.
 
 signal changed
 
@@ -39,19 +40,58 @@ const RULES: Array[Dictionary] = [
 ]
 const THEMES := preload("res://scripts/enemy_themes.gd")
 
-# Per quality level: [SSAO, SSIL, SSR, volumetric fog, MSAA, sun shadow atlas,
-# soft shadow quality, chromatic aberration]
-# SSIL is left to Ultra: next to baked lightmaps it is all but invisible, and
-# it takes 1.25 ms of a 14 ms frame. So is the chromatic aberration of the
-# lens pass, the one part of it that has to read the frame back.
+# Per quality level: [SSAO, SSIL, SSR, volumetric fog, MSAA, soft shadow
+# quality of the sun, soft shadow quality of the lamps, chromatic aberration]
+#
+# Ultra is held to 60 frames a second on the full screen of a 16 inch MacBook
+# Pro, drawn at half scale, where it ran at 44 to 52. It kept its MSAA, the
+# soft shadows of the sun and its chromatic aberration, though that is made
+# another way (see apply()), and gave up three things. What each of them
+# cost there and how little of the picture it changed is in PLAN.md, and
+# UNDO puts any of them back for a run.
+# - SSIL is on no level any more: next to baked lightmaps it is all but
+#   invisible, and it took 1.4 to 1.8 ms of a frame.
+# - The shadow of a lamp is looked up for every pixel within its range, with
+#   sixteen samples at the highest quality and eight below it, and a pixel is
+#   in the range of several lamps: that step took 1.0 to 2.3 ms. The sun
+#   keeps the highest, which costs nothing that can be measured.
+# - The sun shadow atlas of 8192, see SUN_ATLAS.
 const QUALITY := [
-	[false, false, false, false, Viewport.MSAA_DISABLED, 2048, RenderingServer.SHADOW_QUALITY_SOFT_LOW, false],
-	[true, false, false, true, Viewport.MSAA_DISABLED, 4096, RenderingServer.SHADOW_QUALITY_SOFT_LOW, false],
-	[true, false, true, true, Viewport.MSAA_2X, 4096, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, false],
-	[true, true, true, true, Viewport.MSAA_4X, 8192, RenderingServer.SHADOW_QUALITY_SOFT_HIGH, true],
+	[false, false, false, false, Viewport.MSAA_DISABLED, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_LOW, false],
+	[true, false, false, true, Viewport.MSAA_DISABLED, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_LOW, false],
+	[true, false, true, true, Viewport.MSAA_2X, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, false],
+	[true, false, true, true, Viewport.MSAA_4X, RenderingServer.SHADOW_QUALITY_SOFT_HIGH, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, true],
 ]
+## The size of the sun's shadow atlas, on every quality level. The sun of a
+## level is baked: its light and its shadow on walls, floors and containers
+## are in the lightmaps, and the shadow map that is drawn every frame only
+## falls on what has no lightmap: models, robots, the weapon, and the ground
+## outside a level that is cut into zones. At 8192, as Ultra had it, that map
+## took 2.1 to 3.1 ms of a frame; at 4096, as Medium and High had it, 0.3 ms
+## more than at this size. Inside a level, with the soldiers at their posts,
+## pictures at the three sizes differ no more than two pictures at one size;
+## outside, the edge of a building's shadow on the ground moves a few pixels.
+const SUN_ATLAS := 2048
+## What it was per quality level, for UNDO.
+const SUN_ATLAS_BEFORE: Array[int] = [2048, 4096, 4096, 8192]
+## What a benchmark can do the way it was done before, to measure what a change
+## is worth or to take a picture of what it changed: --undo=ssil,lamp_filter
+## and so on, or --undo=all.
+## - ssil: SSIL on, on Ultra;
+## - lamp_filter: the shadows of the lamps filtered like those of the sun,
+##   on Ultra;
+## - sun_atlas: the sun shadow atlas the size it was, see SUN_ATLAS_BEFORE;
+## - fringe: the chromatic aberration done by the lens pass, on every pixel
+##   of the window and with its own grain, see scripts/lens_fringe.gd;
+## - glow: the glow enlarged with a bicubic filter, and
+## - ssao: SSAO at medium quality, as project.godot had them: it now asks for
+##   a linear filter and low quality, 0.2 ms each and nothing to be seen;
+## - lamps: every lamp lights whatever is in its range, see scripts/zones.gd;
+## - occlusion: what a wall hides is drawn all the same, see scripts/zones.gd.
+const UNDO: Array[String] = ["ssil", "lamp_filter", "sun_atlas", "fringe", "glow", "ssao", "lamps", "occlusion"]
 const LENS := preload("res://shaders/post.gdshader")
 const LENS_ABERRATION := preload("res://shaders/post_aberration.gdshader")
+const FRINGE := preload("res://scripts/lens_fringe.gd")
 const ENV_TOGGLES: Array[String] = ["ssao_enabled", "ssil_enabled", "ssr_enabled", "volumetric_fog_enabled"]
 ## What the 3D scene is drawn at when the render scale sets itself: the pixels
 ## of 1920 × 1080, whatever the size of the window. The screen of a 16 inch
@@ -110,6 +150,11 @@ var enemies: int:
 	set(value):
 		enemy_theme = enemy_themes[clampi(value, 0, enemy_themes.size() - 1)]
 
+## What this run does the way it was done before: names from UNDO.
+var _undone: Array[String] = []
+## The chromatic aberration as it hangs on the environment of a level.
+var _fringe_effect: CompositorEffect
+
 
 func _ready() -> void:
 	for theme in enemy_themes:
@@ -129,6 +174,11 @@ func _ready() -> void:
 		push_warning("No enemies called '%s'; choose from %s. They will be robots." % [enemy_theme, ", ".join(enemy_themes)])
 		enemy_theme = THEMES.ROBOTS
 	apply()
+
+
+## Whether this run does `what`, one of UNDO, the way it was done before.
+func undone(what: String) -> bool:
+	return what in _undone
 
 
 ## What the difficulty that is set comes down to: see RULES.
@@ -193,9 +243,14 @@ func apply() -> void:
 	viewport.scaling_3d_scale = render_scale
 	# Temporal upscalers resolve edges themselves and do not combine with MSAA.
 	viewport.msaa_3d = Viewport.MSAA_DISABLED if temporal_upscaling() else preset[4]
-	RenderingServer.directional_shadow_atlas_set_size(preset[5], true)
-	RenderingServer.directional_soft_shadow_filter_set_quality(preset[6])
-	RenderingServer.positional_soft_shadow_filter_set_quality(preset[6])
+	var ultra := quality == QUALITY.size() - 1
+	RenderingServer.directional_shadow_atlas_set_size(SUN_ATLAS_BEFORE[quality] if undone("sun_atlas") else SUN_ATLAS, true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(preset[5])
+	RenderingServer.positional_soft_shadow_filter_set_quality(preset[5] if ultra and undone("lamp_filter") else preset[6])
+	if undone("glow"):
+		RenderingServer.environment_glow_set_use_bicubic_upscale(true)
+	if undone("ssao"):
+		RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_MEDIUM, true, 0.5, 2, 50.0, 300.0)
 
 	var environment := viewport.find_world_3d().environment
 	if environment:
@@ -209,9 +264,15 @@ func apply() -> void:
 		var authored: Dictionary = environment.get_meta(&"authored")
 		for i in ENV_TOGGLES.size():
 			environment.set(ENV_TOGGLES[i], authored[ENV_TOGGLES[i]] and preset[i])
+		if ultra and undone("ssil"):
+			environment.ssil_enabled = authored["ssil_enabled"]
 
+	# The chromatic aberration is done on the 3D scene before it is enlarged,
+	# where the renderer lets a script in there; elsewhere by the lens pass,
+	# on every pixel of the window.
+	var early := _fringe(preset[7] and not undone("fringe"))
 	for lens: CanvasItem in get_tree().get_nodes_in_group(&"lens"):
-		(lens.material as ShaderMaterial).shader = LENS_ABERRATION if preset[7] else LENS
+		(lens.material as ShaderMaterial).shader = LENS_ABERRATION if preset[7] and not early else LENS
 
 	# A bus's fader comes after its effects: the slider turns the finished mix
 	# down and leaves how hard the limiter works alone.
@@ -229,6 +290,29 @@ func apply() -> void:
 		if get_window().mode != mode:
 			get_window().mode = mode
 	changed.emit()
+
+
+## Hangs the chromatic aberration on the environment of the level that is
+## loaded (scripts/lens_fringe.gd), or takes it off. Says whether it hangs
+## there now.
+func _fringe(on: bool) -> bool:
+	var scene := get_tree().current_scene
+	if scene == null or RenderingServer.get_rendering_device() == null:
+		return false
+	var hung := false
+	for world: WorldEnvironment in scene.find_children("*", "WorldEnvironment", true, false):
+		if world.compositor == null:
+			if not on:
+				continue
+			world.compositor = Compositor.new()
+		var effects := world.compositor.compositor_effects.filter(func(effect: CompositorEffect) -> bool: return not effect is FRINGE)
+		if on:
+			if _fringe_effect == null:
+				_fringe_effect = FRINGE.new()
+			effects.append(_fringe_effect)
+			hung = true
+		world.compositor.compositor_effects = effects
+	return hung
 
 
 ## The window changed size, which a render scale that sets itself goes along
@@ -287,3 +371,14 @@ func _read_args() -> void:
 		elif arg.begins_with("--scale="):
 			auto_scale = value == "auto"
 			render_scale = clampf(value.to_float(), 0.25, 1.0)
+		elif arg.begins_with("--undo="):
+			for what in value.split(",", false):
+				if what == "all":
+					_undone.assign(UNDO)
+				elif what in UNDO:
+					_undone.append(what)
+				else:
+					# Measuring a change that was never undone would pass for
+					# a change that is worth nothing.
+					push_error("Nothing called '%s' to undo; choose from %s" % [what, ", ".join(UNDO)])
+					get_tree().quit(1)

@@ -206,6 +206,8 @@ common/physics_ticks_per_second=120
 
 [rendering]
 
+environment/ssao/quality=1
+environment/glow/upscale_mode=0
 lights_and_shadows/positional_shadow/atlas_quadrant_0_subdiv=3
 lights_and_shadows/positional_shadow/atlas_quadrant_1_subdiv=3
 

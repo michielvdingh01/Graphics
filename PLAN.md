@@ -813,6 +813,188 @@ De benchmark neemt hiervoor opties aan: `tools/benchmark.sh --res=2560x1440 --up
 - De renderschaal die zichzelf instelt is alleen op de M1 Pro gemeten. FSR 1 als begin buiten Apple-hardware is een keuze op papier: op Windows is er niets van geprobeerd. Onder de 50% gaat hij niet, dus op een scherm van 5K tekent hij meer dan de pixels van 1920×1080.
 - Of de schakelaar Fullscreen in het menu iets doet in het Game-venster van de editor, waar het spel draait als je daar op Play drukt, is niet bekend.
 
+## Zestig beelden op het volle scherm
+
+Op 11 oktober 2026 gevraagd: alle vier de levels op de instellingen waarmee gespeeld wordt (3456×2160, Ultra, MetalFX Spatial, renderschaal vanzelf) naar 60 fps, of laten zien wat Ultra daarvoor moet inleveren. Ze haalden 44 tot 52 fps. Het is allebei geworden: twee dingen die het beeld gelijk laten, drie instellingen waar niets van te zien is, en drie dingen die Ultra inlevert. Elk vast standpunt van elk level haalde daarmee 60 fps of meer, het krapste 61; na twee correcties die daarna nog kwamen (zie "Onderweg gevonden") is alleen de fabriek opnieuw gemeten. Gebouwd op branch `zestig` en op 11 oktober, op Michiels woord, in `fase-2-vertical-slice` gezet om het te kunnen spelen, voordat het meten af was. Er is niets herbouwd en niets gebakken: alles gebeurt bij het laden of in het spel.
+
+De twee punten bovenaan "Nog open" van stap 5 zijn hiermee gedaan: de kamers die elkaar allemaal tekenen, en de lampen die door muren heen rekenen, voor zover ze een schaduw hebben.
+
+**De benchmark tekende meer dan het scherm**
+
+`tools/benchmark.sh --res=3456x2160` geeft zonder venster een beeld van 3840×2160: het venster zonder venster is 16:9, en het spel vult de gevraagde 16:10 aan tot het past. Dat is 11% meer pixels dan het scherm van de MacBook. Alle cijfers "op 3456×2160" in dit plan, ook die van 10 oktober, zijn zo gemeten, en op het scherm zelf loopt het spel een beeld of vier sneller dan ze zeggen. `tools/godot.sh --resolution 1728x1080 -- --benchmark --res=3456x2160 …` tekent wel 3456×2160; `tools/zone_sheet.py` kan dat niet meekrijgen. De tabellen hieronder geven beide. `scripts/benchmark.gd` is niet aangepast: dat bestand hoorde niet bij deze opdracht.
+
+**Waar de tijd zat**
+
+Gemeten door in één run, per standpunt, één ding om en om aan en uit te zetten (twee of drie keer, 100 frames per keer), op de instellingen van hierboven. In milliseconden per frame, laagste en hoogste standpunt; de centrale is gemeten toen de lampen al aan hun ruimtes gebonden waren:
+
+| | Fabriek | Depot | Centrale |
+|---|---|---|---|
+| Het hele frame, voor | 19,6–21,8 | 18,8–21,8 | 19,5–21,8 |
+| De schaduw van de zon | 1,9–2,6 | 2,9–3,1 | 2,1–2,6 |
+| waarvan de atlas van 8192 in plaats van 4096 | 1,1–1,6 | 1,9–2,1 | 1,3–1,6 |
+| en 4096 in plaats van 2048 | 0,3 | 0,5 | 0,3 |
+| De schaduwen van de lampen: het breedste filter in plaats van de stand eronder | 1,0–1,6 | 1,0–2,2 | 1,2–2,3 |
+| SSIL | 1,6 | 1,4–1,6 | 1,5–1,8 |
+| SSR | 1,6–1,8 | 1,4–1,7 | 1,5–1,9 |
+| MSAA 4× in plaats van 2× | 1,0–1,4 | 1,0–1,3 | 0,9–1,2 |
+| MSAA 4× in plaats van geen | 2,5–3,5 | | 2,4–3,0 |
+| De lenspass | 1,3–1,4 | | 1,2–1,6 |
+| waarvan de kleurzweem | 0,7–0,9 | | 0,7–0,9 |
+| Glow | 0,6–0,7 | 0,6–0,7 | 0,5–0,6 |
+| Mist | 0,4–0,5 | 0,6 | 0,6 |
+| SSAO | 0,3–0,7 | 0,4–0,5 | 0,5–0,6 |
+| MetalFX in plaats van bilineair vergroten | 0,3 | | 0,3 |
+
+- **De schaduw van een lamp wordt per pixel opgezocht**, voor elke lamp binnen wiens bereik de pixel ligt, met zestien monsters op de hoogste filterstand en acht op de stand eronder. Het was de grootste post die aan één instelling hing. De schaduwen helemaal uitzetten levert minder op dan het filter halveren: wat in de schaduw lag, wordt dan door elke lamp volledig belicht.
+- **De zon is gebakken.** Haar licht en haar schaduw op muren, vloeren en containers staan in de lightmaps. De zon van het spel verlicht alleen wat geen lightmap heeft: modellen, robots, het wapen, de mist, en de grond buiten een level dat in zones is geknipt. Haar schaduwkaart, vier keer 4096×4096 op Ultra, werd elk frame opnieuw getekend voor de schaduwranden op die dingen.
+- **De lenspass van Ultra las het hele beeld terug** om rood en blauw uit elkaar te trekken: elk pixel van het volle scherm kopiëren en drie keer lezen. Die van de andere niveaus vermenigvuldigt alleen, met vignet en korrel.
+- **Het fabrieksterrein heeft de vaste standpunten van de fabriek.** Twee van de vijf (Overview en Boiler) staan daardoor buiten het gebouw en kijken over de daken, en Hall staat met de neus tegen een rij kluisjes. Ze zeggen weinig over het level; het contactblad met zijn 56 standpunten zegt meer.
+
+**Wat er staat**
+
+- **Een lamp met schaduw blijft in de ruimtes waar zijn licht komt** (`_bind_lamps()` in `scripts/zones.gd`). Als het level geladen is, gaan er van elke lamp lijnen uit: naar elke deuropening en elk raam binnen zijn bereik (de panelen van de bake en de ruiten wijzen ze aan) en driehonderd in het rond. Een zone waar zo'n lijn doorheen gaat voor hij op het level stuit, is een zone waar de lamp komt. Daarna krijgen de zones renderlagen, zo dat geen lamp de ene zone bereikt en een andere met dezelfde laag binnen zijn bereik niet, en de lamp belicht alleen de lagen van zijn eigen zones. Zijn schaduw tekent hij ook alleen nog van wat daar staat. Op het fabrieksterrein worden zo 43 van de 83 lampen losgemaakt van samen 120 zones waar ze doorheen rekenden, in de centrale 19 van de 43 van 44, in de fabriek 6 van de 18 van 7. Met acht kleuren blijven er op het fabrieksterrein 6 van die 120 over die een kleur delen. Het kost bij het laden hooguit 86 ms, op het fabrieksterrein. Robots, het wapen en alles wat het spel zelf maakt horen bij geen zone en worden door elke lamp belicht, zoals voorheen. Een lamp zonder schaduw ook: zie "Onderweg gevonden".
+- **De muren zijn occluders** (`_wall_off()` in `scripts/zones.gd`). Van de botsvormen van het level gaan de dozen van baksteen, beton en pleister die dun zijn en minstens 1,2 m lang en hoog, als één occluder naar de renderer: 77 muren in de fabriek, 245 op het fabrieksterrein, 165 in de centrale. Zo'n doos is door de levelbouwer samen met de muur gemaakt en dus even dicht. Van een zone in het zicht wordt daarna alleen getekend wat niet achter een muur staat, model voor model. Lightmaps, lampen, reflectieprobes en decals doen daar niet aan mee: zie "Onderweg gevonden". Een stelling, een hek of een betonblok, waarvan de botsvorm een doos is om iets waar je doorheen of overheen kijkt, verbergt niets. Het gaat aan na de eerste vier frames, waarin het level alles één keer tekent.
+- **De schaduwsortering deelt die lagen** (`scripts/shade.gd`): wat in de schaduw staat krijgt de schaduwlaag van zijn zone in plaats van één laag voor alles. Acht kleuren voor wat de zon mag raken, acht voor wat in de schaduw staat, drie voor wat bij geen zone hoort: negentien van de twintig lagen waar een camera, een decal en een reflectieprobe naar kijken.
+- **Drie instellingen waar niets van te zien is**, op elk kwaliteitsniveau:
+  - *De atlas van de zonneschaduw is 2048* (`SUN_ATLAS` in `scripts/settings.gd`), in plaats van 8192 op Ultra en 4096 op Medium en High.
+  - *Glow wordt lineair vergroot* in plaats van bicubisch, en *SSAO staat op lage kwaliteit* in plaats van medium (`project.godot`).
+- **Ultra levert drie dingen in** (`QUALITY` in `scripts/settings.gd`):
+  - *SSIL.* Staat nu op geen enkel niveau meer aan.
+  - *Het breedste filter op de schaduwen van de lampen.* Ze worden gefilterd als op High. De zon houdt het breedste, wat niets kost.
+  - *Zijn eigen lenspass.* De kleurzweem wordt nu gemaakt vóór het vergroten (`scripts/lens_fringe.gd`, een `CompositorEffect` dat `scripts/settings.gd` aan de omgeving van het level hangt): dezelfde verschuiving van rood en blauw naar de randen, maar op het beeld zoals het getekend is, een kwart van de pixels, en vóór de tonemapping, zodat de zweem langs een lamp met die lamp meegloeit. Vignet en korrel komen daarna van de lenspass van de andere niveaus. Die kan alleen vermenigvuldigen, waar de oude korrel optelde: het beeld is er 3% donkerder door (gemeten: het gemiddelde van twee standpunten zakt van 155,5 naar 151,0 en van 137,3 naar 133,2 op 255), en de korrel is in het donker fijner dan in het licht in plaats van overal even sterk. Korrel optellen vraagt het beeld terug te lezen, en dat was juist de post. Waar de renderer geen script toelaat (de Compatibility-renderer) doet de oude lenspass het als voorheen.
+- **Ultra houdt MSAA 4×, de kleurzweem en de zachte zonneschaduw.** Dat is nu het verschil met High.
+- **Elke maatregel is voor een meting terug te zetten**: `--undo=ssil,lamp_filter,sun_atlas,fringe,glow,ssao,lamps,occlusion`, of `--undo=all` (`UNDO` in `scripts/settings.gd`). Het werkt op `tools/benchmark.sh` en, omdat die elke optie doorgeeft, op `tools/zone_sheet.py`.
+
+**Gemeten** op 11 oktober 2026, M1 Pro, om en om met een kopie van de branch zoals hij was, terwijl andere sessies tests draaiden. Ultra, MetalFX Spatial, renderschaal vanzelf (50%), de karabijn in beeld. Gemiddelde fps, tussen haakjes de 1% low. "Voor" en "Na" zijn zoals de benchmark tekent, op 3840×2160.
+
+**De tabellen zijn van vóór de twee correcties**: alle lampen waren nog gebonden, ook die zonder schaduw, en de occluders verborgen ook lightmaps. Op de vaste standpunten was van geen van beide iets te zien; de eerste kost in de fabriek niets (daar zijn het dezelfde zes lampen) en op het fabrieksterrein en in de centrale een deel van de winst van de lampen. Daarna is alleen de fabriek opnieuw gemeten, terwijl de laptop zwaar in gebruik was: voor 46,5 tot 49,7 fps, na 57,8 tot 70,5, met Platform op 57,8 en een 1% low van 48 waar de rustige meting 60,9 en 59 gaf. De rest stond in de rij toen Michiel wilde spelen.
+
+**Fabriek**, de vaste standpunten
+
+| Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
+|---|---|---|---|---|
+| Overview | 49,3 (47) | 63,8 (61) | 53,0 (51) | 69,8 (66) |
+| Corridor | 50,0 (48) | 68,0 (64) | 53,8 (52) | 74,3 (70) |
+| Platform | 46,5 (45) | 60,9 (59) | 50,2 (48) | 67,0 (64) |
+| Hall | 50,5 (48) | 66,0 (63) | 54,2 (52) | 72,1 (68) |
+| Boiler | 51,4 (49) | 70,1 (66) | 55,7 (54) | 77,5 (72) |
+
+**Fabrieksterrein**, de vaste standpunten
+
+| Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
+|---|---|---|---|---|
+| Overview | 66,2 (29) | 95,1 (50) | 72,2 (29) | 104,3 (52) |
+| Corridor | 61,5 (59) | 86,0 (81) | 66,9 (63) | 94,7 (89) |
+| Platform | 57,2 (55) | 83,5 (79) | 60,5 (58) | 89,1 (84) |
+| Hall | 48,3 (44) | 74,5 (70) | 52,6 (49) | 81,6 (77) |
+| Boiler | 69,6 (66) | 98,1 (92) | 76,7 (72) | 109,3 (103) |
+
+**Depot**, de vaste standpunten
+
+| Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
+|---|---|---|---|---|
+| Overview | 52,4 (49) | 74,1 (71) | 56,2 (53) | 80,6 (76) |
+| Lane | 46,3 (43) | 67,3 (63) | 50,3 (46) | 74,3 (70) |
+| Dock | 47,1 (44) | 67,1 (63) | 50,6 (47) | 73,0 (68) |
+| Yard | 53,3 (51) | 75,4 (71) | 57,2 (54) | 82,0 (77) |
+
+**Centrale**, de vaste standpunten
+
+| Standpunt | Voor | Na | Voor, op 3456×2160 | Na, op 3456×2160 |
+|---|---|---|---|---|
+| Yard | 51,7 (50) | 70,9 (67) | 56,0 (54) | 76,0 (66) |
+| PumpHouse | 48,2 (46) | 67,1 (64) | 51,5 (48) | 73,2 (69) |
+| BoilerHouse | 48,8 (46) | 67,9 (64) | 52,5 (50) | 72,8 (69) |
+| ControlRoom | 44,7 (43) | 64,4 (61) | 48,5 (46) | 70,9 (67) |
+| TurbineHall | 47,7 (46) | 64,4 (61) | 51,0 (49) | 68,7 (62) |
+
+Het contactblad, `tools/zone_sheet.py <level> --res=3456x2160 --upscaler=metalfx --scale=0.5 --quality=3`, zonder wapen in beeld en gemeten over dertig frames per standpunt. De regels "na" van het fabrieksterrein en de centrale zijn van vóór de correctie van de occluders: 13 en 4 van hun standpunten zijn daar zonder lightmap getekend en tellen te licht. Die twee bladen moeten opnieuw; de fabriek en het depot kloppen.
+
+| Level | Fps voor | Fps na | Onder de 60 voor | na | Tekenopdrachten voor | na | Zwaarste standpunt na |
+|---|---|---|---|---|---|---|---|---|
+| Fabriek | 10 | 48 tot 59 | 64 tot 82 | 10 | 0 | 343 tot 839 | 337 tot 813 | hall 2: 64 fps |
+| Fabrieksterrein | 56 | 43 tot 63 | 62 tot 87 | 55 | 0 | 147 tot 951 | 147 tot 916 | workshop 3: 62 fps |
+| Depot | 4 | 48 tot 57 | 69 tot 81 | 4 | 0 | 334 tot 391 | 336 tot 391 | level 3: 69 fps |
+| Centrale | 25 | 46 tot 56 | 66 tot 79 | 25 | 0 | 216 tot 1098 | 216 tot 1085 | turbine_hall 3: 66 fps |
+
+Een gevecht, in de fabriek, met alle zestien soldaten tegelijk aan en op de speler af (`--awake`) tegen dezelfde zestien op hun post (`--posted`), vanaf Overview en Hall, twee keer om en om. Gemeten vóór de laatste drie instellingen erbij kwamen:
+
+| | Op hun post | In gevecht | 1% low op hun post | 1% low in gevecht |
+|---|---|---|---|---|
+| Voor | 48,4–49,7 | 48,8–51,5 | 46–48 | 45–46 |
+| Na | 60,9–62,7 | 61,5–62,5 | 59–60 | 56–57 |
+
+Het gemiddelde blijft gelijk; de 1% low zakt twee tot drie fps, voor en na evenveel. Dat is wat de soldaten die lopen aan schaduwen laten hertekenen.
+
+**Wat elke maatregel oplevert en hoeveel van het beeld erdoor verandert**
+
+De winst is gemeten als hierboven, om en om in één run. De pixels zijn geteld tussen twee screenshots van 3840×2160 (8,3 miljoen pixels) van hetzelfde standpunt, een seconde na elkaar, één met en één zonder de maatregel: het aantal dat meer dan 3% verschilt, in het vaste standpunt waar dat het meest is. De eerste regel is wat twee screenshots zonder enig verschil al uit elkaar liggen, door stof, mist en korrel.
+
+| Maatregel | Winst per frame | Fabriek | Fabrieksterrein | Depot | Centrale |
+|---|---|---|---|---|---|
+| Twee keer hetzelfde | | 2 764 | 3 491 | 249 | 1 367 |
+| Lampen met schaduw in hun eigen ruimtes | 0–0,1 ms in de fabriek; met alle lampen gebonden 0–1,6 op het fabrieksterrein en 0,1–0,7 in de centrale, nu minder en niet opnieuw gemeten | 1 654 | 4 371 | | 2 342 |
+| Muren als occluders | 0–0,1, 0–1,3 en 0–0,4 ms | 1 450 | 3 952 | | 1 183 |
+| Atlas van de zon van 8192 naar 4096 | 1,1–2,1 ms | 1 980 | 5 674 | 256 | 945 |
+| en van 4096 naar 2048 | 0,3–0,5 ms | 2 381 | 8 683 | 191 | 1 199 |
+| Glow lineair vergroot | 0,2 ms | 1 750 | 3 897 | 211 | 998 |
+| SSAO op lage kwaliteit | 0,15 ms | 1 515 | 4 075 | 298 | 929 |
+| Ultra: SSIL uit | 1,4–1,8 ms | 9 891 | 32 804 | 2 078 | 3 028 |
+| Ultra: filter van de lampschaduwen een stand lager | 1,0–2,3 ms | 1 938 | 4 141 | 1 340 | 4 209 |
+| Ultra: kleurzweem vóór het vergroten, korrel van High | 0,3 ms | 7 498 | 34 624 | 5 459 | 16 909 |
+| Niet gedaan: MSAA 2× in plaats van 4× | 0,9–1,4 ms | 7 267 | 5 534 | 3 769 | 7 225 |
+
+- Het meeste is 34 624 pixels, 0,4% van het beeld. Voor het fabrieksterrein is Overview buiten de telling gehouden, zie hieronder.
+- **De kleurzweem** verschilt langs randen: hij wordt nu gemaakt op het halve beeld en daarna vergroot, in plaats van op het vergrote beeld. De 3% die het hele beeld donkerder wordt, telt deze telling niet mee: ze blijft per pixel onder de drempel. Het is de maatregel die het minst oplevert en het meest verandert.
+- **SSIL** maakte wat in de zon staat een fractie lichter: de cementzakken in de gang van de fabriek, de kluisjes op het fabrieksterrein.
+- **De atlas van de zon** is binnen niet terug te vinden, ook niet met de soldaten op hun post in het depot en de fabriek (hooguit 268 en 2 476 pixels, tegen 208 en 2 643 voor twee keer hetzelfde). Buiten het fabrieksterrein verschuift de rand van de schaduw van het gebouw op de grond een paar pixels: dat zijn de 8 683.
+- **Het filter van de lampschaduwen** verschilt langs een handvol schaduwranden.
+- **De lampen en de muren** veranderen het beeld niet. De getallen in de tabel zijn van de vaste standpunten, vóór de correcties. Erna zijn alle 91 standpunten van de contactbladen bekeken, op 1920×1080 (2,1 miljoen pixels), elk met en zonder: hooguit 1 039, 513 en 701 pixels verschil voor de lampen in de fabriek, op het fabrieksterrein en in de centrale, en 1 031, 500 en 715 voor de occluders, tegen 1 031, 503 en 696 voor twee keer hetzelfde.
+
+De bladen met voor, na en het verschil, per maatregel het standpunt van elk level waar het meest verandert, staan in `benchmark/results/zestig/` van de worktree `.claude/worktrees/zestig` (niet in Git).
+
+**Onderweg gevonden**
+
+- **Achter een occluder verdween het gebakken licht.** De vijf vaste standpunten lieten niets zien. Screenshots vanaf elk standpunt van het contactblad, met en zonder de occluders, wel: in 13 van de 56 standpunten van het fabrieksterrein en 4 van de 25 van de centrale was een ruimte zonder haar lightmap getekend, tot een vijfde van het beeld. De renderer kent een lightmap aan de doos van haar probes; vanuit een hoek van de ruimte staat de camera daarbuiten, en dan telde die doos als verborgen. Alles wat niet zelf getekend wordt, een lightmap, een lamp, een reflectieprobe en een decal, laten de occluders nu met rust. Daarna is over alle 91 standpunten gemeten wat hieronder staat.
+- **Een lamp zonder schaduw verlicht de ruimte achter de muur, en dat is te zien.** De eerste versie bond elke lamp. In zes standpunten van het fabrieksterrein en drie van de centrale werd het daar donkerder van: de linkerhelft van de ontvangst van de centrale had haar licht van een buis in de kabelgang ernaast. Dat is een lek, maar het is het licht waarmee het level is gemaakt en bekeken. Alleen de lampen met schaduw worden nu gebonden; bij hen kwam er achter de muur niets aan.
+- **De sortering in de schaduw en de zon zelf leveren verder niets op.** Zeventien van de 38 zones krijgen geen zon. Alles wat in de schaduw staat buiten het licht van de zon houden: niets te meten, want de schil van een zone slaat de gebakken zon al over. Twee schaduwkaarten in plaats van vier: 0,1 ms, en te zien.
+- **Een rij runs zonder pauze laat andere sessies wachten.** Mijn runs volgden elkaar binnen een seconde op; een andere sessie, die netjes wachtte tot de GPU vrij was, kwam een uur niet aan de beurt en meldde het. Sindsdien start een run pas als er een tijd lang geen andere Godot heeft getekend.
+- **Michiel speelde zelf, in een venster, en dat zag mijn controle niet**: die keek alleen naar Godot zonder venster. Twee minuten lang liep een contactblad naast zijn spel. Die metingen zijn weggegooid en opnieuw gedaan; de controle telt nu elke Godot die tekent.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh` slaagt op de branch zoals hij is samengevoegd, met de hoofdbranch van dat moment erin; `tools/nettest.sh` slaagde vóór de twee correcties. Met een eigen `HOME`, omdat andere sessies tegelijk testten.
+- Met `--undo=all` haalt de branch in de fabriek de cijfers van ervoor: 46,2 tot 51,2 fps tegen 46,5 tot 51,4.
+- **Niemand heeft het op het scherm gezien.** Alles is gemeten zonder venster en vergeleken in screenshots, door pixels te tellen en door de bladen te bekijken. Of de schaduwen van de lampen en de kleurzweem er in beweging hetzelfde uitzien, is niet beoordeeld.
+- De frametijden zijn die van een camera die stilstaat. In beweging komen daar de schaduwen bij die een lamp opnieuw tekent als er iets onder beweegt; dat is alleen in het ene gevecht hierboven gemeten.
+- **Een standpunt buiten het level is niet te vertrouwen.** Staat de camera in geen enkele zone, dan tekent het level alle zones tegelijk, en dan zijn er meer lampen met schaduw in beeld dan de atlas plaats heeft. Welke lamp dan zonder schaduw blijft, wisselt van keer tot keer: op het dak van het magazijn van het fabrieksterrein scheelde dat 30 duizend pixels tussen twee runs die verder gelijk waren. Dat was er al, en in het spel komt de camera daar niet. Ik hield het eerst voor een fout van de lampen per zone.
+- De eerste keer dat iets getekend wordt kan haperen. De occluders stellen dat moment uit voor wat achter een muur staat; het is niet geteld met de teller van pipelines.
+- Samen spelen is niet geprobeerd. Lagen en maskers zijn op elke machine eigen en gaan niet over het net.
+- De Compatibility-renderer, waar de kleurzweem terugvalt op de lenspass, is niet gestart.
+- **Na de correcties is alleen de fabriek opnieuw gemeten**, en de contactbladen van het fabrieksterrein en de centrale niet opnieuw gemaakt. Wat er nog moet: de vier levels voor en na, om en om, en die twee bladen, met de opdrachten onder Werkwijze.
+- Low, Medium en High zijn niet opnieuw gemeten. Ze krijgen de lampen per zone, de occluders en de drie instellingen ook.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Een level op de instellingen waarmee gespeeld wordt | `tools/benchmark.sh --res=3456x2160 --scale=auto --upscaler=metalfx --quality=3 --weapon=0 --scene=res://scenes/works.tscn` |
+| Hetzelfde op de maat van het scherm | `tools/godot.sh --resolution 1728x1080 -- --benchmark --res=3456x2160 --scale=auto --upscaler=metalfx --quality=3 --weapon=0 --scene=res://scenes/works.tscn` |
+| Eén maatregel terugzetten, of alle | dezelfde opdracht met `--undo=lamp_filter` of `--undo=all` |
+| Het contactblad op die instellingen | `tools/zone_sheet.py works --res=3456x2160 --upscaler=metalfx --scale=0.5 --quality=3` |
+| Wachten op de GPU als er meer sessies meten | `tools/godot.sh` neemt sinds de samenvoeging met de hoofdbranch zelf het slot (`tools/gpu_slot.sh`). Een spel dat Michiel uit de editor of een terminal start kent dat slot niet: daarvoor met `ps` kijken, ook naar een Godot met venster, en stoppen zodra hij begint |
+
+**Nog open**
+
+- **MSAA 4× is wat Ultra nog kost**: 0,9 tot 1,4 ms boven 2×. Wie meer marge wil dan er nu is, vindt die daar; het is op de bladen het best te zien van alles wat overwogen is.
+- **SSR kost 1,4 tot 1,9 ms**, op High en op Ultra. Het halve aantal stappen scheelt 0,25 ms en is te zien; verder is er niet naar gekeken.
+- **De schaduwen van de lampen blijven de grootste post per pixel.** Een pixel betaalt voor elke lamp met schaduw binnen wiens bereik hij ligt, ook waar die lamp nauwelijks nog licht geeft. Korter bereik of minder lampen met schaduw verandert het licht en vraagt de levelbouwer.
+- **Een robot hoort bij geen zone.** Loopt hij door een gang, dan tekenen de lampen in de kamers ernaast, binnen wiens bereik hij door de muur heen ligt, hun schaduw opnieuw. De zone waarin hij staat is elk frame bekend; zijn laag kan die volgen.
+- **De zon helemaal uit waar geen zonlicht in beeld kan zijn** zou nog een halve milliseconde schelen, maar vraagt te weten wat er door elk raam te zien is.
+- **De lampen zonder schaduw schijnen door muren**: 36 van de 83 op het fabrieksterrein, 20 van de 43 in de centrale. Ze een schaduw geven kost plaats in de atlas, ze een korter bereik geven verandert het licht; allebei is het werk van de levelbouwer. Daarna kunnen ook zij aan hun ruimte gebonden worden.
+- **De occluders kijken met een grof beeld**: de renderer bepaalt wat verborgen is op zo'n 95 bij 54 punten. Een robot die alleen door een kier ver weg te zien is, kan een frame wegvallen. Niet gezien in de screenshots, en niet in beweging bekeken; `rendering/occlusion_culling/occlusion_rays_per_thread` in `project.godot` maakt het fijner.
+- De benchmark tekent 3840×2160 als er 3456×2160 gevraagd wordt, en het fabrieksterrein heeft de standpunten van de fabriek: beide zijn van `scripts/benchmark.gd` en `scenes/works.tscn`.
+
 ## Een route door de levels
 
 Een level had geen begin en geen eind: waves verschenen op willekeurige punten en een checkpoint was een wavenummer. Nu loopt er door elk level een route. De speler begint op een vaste plek, vecht zich door een reeks zones en bereikt een uitgang. De fabriek eindigt bij de laaddeur in de westwand, daarna laadt het depot, en de uitgang van het depot sluit af met een eindscherm.

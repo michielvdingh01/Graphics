@@ -15,9 +15,10 @@ extends RefCounted
 ## it as before: a camera, a lamp, a decal and a reflection probe look at
 ## every layer unless told otherwise.
 
-## The render layer of what stands in the shade. Layer 2 is the weapon in
-## the player's hands, see scripts/weapons.gd.
-const LAYER := 3
+## The render layers of what stands in the shade are those of
+## scripts/zones.gd, which gives every zone layers of its own: layer 3 for
+## what belongs to no zone, and one for every colour a zone can have.
+const ZONES := preload("res://scripts/zones.gd")
 ## What stops the sun: the colliders of the level.
 const WORLD := 1
 ## How far towards the sun is looked for something in the way.
@@ -81,7 +82,7 @@ static func sort(scene: Node, level: Node) -> int:
 			if in_shade:
 				shaded += 1
 				for mesh: GeometryInstance3D in meshes:
-					mesh.layers = 1 << (LAYER - 1)
+					mesh.layers = ZONES.shaded(mesh.layers)
 	for sun: DirectionalLight3D in suns:
-		sun.shadow_caster_mask &= ~(1 << (LAYER - 1))
+		sun.shadow_caster_mask &= ~ZONES.SHADE_MASK
 	return shaded
