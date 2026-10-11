@@ -471,7 +471,7 @@ Op 11 oktober 2026 gevraagd, gebouwd op de branch `geluid`: omgevingsgeluid per 
 
 - Een gevecht in de turbinehal zoals het spel het afspeelt (het eigen salvo, vijf salvo's van robots op 12 tot 35 m, een explosie op 14 m, drie kogels die langsgaan, het bed): de uitgang piekt op -1,0 dBFS met geen enkele sample erboven, de bus `Far` zit gemiddeld 14 dB onder World en het geheel is 0,2 tot 0,3 dB luider dan zonder de extra galm.
 - Elk bed gaat rond zonder sprong: de stap van de laatste sample naar de eerste is kleiner dan 99% van de gewone stappen erin. Links en rechts hebben niets gemeen (correlatie 0,0): een opname loopt rechts 37% van haar lus voor op links.
-- Alle 37 controles van `tools/test_sound.sh` slagen, net als de hele selftest (315), de test van de personages (36), van de sandbox (30) en van samen spelen (62).
+- Alle 37 controles van `tools/test_sound.sh` slagen, net als de hele selftest (315), de test van de personages (55), van de sandbox (30) en van samen spelen (62), ook nadat de trunk van die middag erin was gevoegd. Daarbij botsten twee bestanden: `scripts/humanoid_rig.gd` op de stem, en `tools/build_sounds.py`, waar de trunk intussen `burst` aan had toegevoegd voor een treffer in iemand.
 
 **Buiten mijn bestanden geraakt**, in een eigen commit zodat het los te laten is:
 
@@ -490,6 +490,7 @@ Op 11 oktober 2026 gevraagd, gebouwd op de branch `geluid`: omgevingsgeluid per 
 - Een schot van een medespeler (`scripts/puppet.gd`) hoor je niet langsgaan: alleen dat van een vijand meldt zich.
 - In een level zonder zones hangt de galm af van wat de stralen raken: naast een stapel kratten is de kamer kleiner.
 - De waarschuwingstoon van een robot is één take per soort: dat is zo bedoeld, het is een signaal.
+- Een run zonder venster die stopt terwijl er een level geladen is, eindigt nu meestal met `WARNING: ... ObjectDB instances were leaked at exit` en soms met `ERROR: ... resources still in use at exit`: dat is wat nog speelt als de engine stopt, en met een bed en wat er af en toe klinkt is dat er nu bijna altijd. Voorheen stonden die regels er alleen als er toevallig net een geluid klonk. De test slaagt er even goed om. Alles stoppen in `_exit_tree()` is geprobeerd en maakte het erger.
 
 ## Vijanden die mensen kunnen zijn
 

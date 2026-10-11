@@ -222,7 +222,8 @@ func _run() -> void:
 	fight.free()
 
 	# Whatever still plays when the engine quits is reported as a leak.
-	for player in _players(_sfx, _sfx.MUSIC) + _players(_sfx, _sfx.WORLD) + _players(_sfx, _sfx.FAR_BUS) + _players(_sfx, _sfx.AMBIENCE):
+	_sfx._on_scene_changed()
+	for player in _players(_sfx, _sfx.MUSIC):
 		player.stop()
 		player.stream = null
 	await process_frame
