@@ -375,14 +375,14 @@ Alle geluid werd bij het opstarten gesynthetiseerd uit ruis en een toon. Sinds 9
 - Boven 150 Hz is de knal van vier van de vijf wapens iets zwakker dan in de eerste versie: het laag neemt ruimte in onder dezelfde piek. Op kleine luidsprekers blijft vooral de winst tussen de schoten over.
 - In de stereotakes loopt het rechterkanaal 1 tot 2 ms voor op het linker; dat zit in de opnames. Op een koptelefoon kan de knal daardoor iets rechts van het midden staan.
 - Een explosie is niet het luidste wat er gebeurt: alles op World loopt tegen dezelfde clipper aan.
-- De galm is op elke afstand even sterk ten opzichte van het directe geluid. In een echte hal is een robot op 20 m vooral galm.
-- De kamers waarin de galm omschakelt zijn dozen met vaste coördinaten in `scripts/sfx.gd`. Verhuist de aanbouw in `tools/levels/factory.gd`, dan moeten ze mee. Door het raam van kamer B kom je buiten te staan in de galm van de hal.
-- Geluid dat nog klinkt als je naar het titelscherm gaat of opnieuw begint vanaf een checkpoint, klinkt verder aan het begin van het volgende spel.
+- ~~De galm is op elke afstand even sterk ten opzichte van het directe geluid.~~ Sinds 11 oktober niet meer: zie "Geluid: ruimte, omgeving en stemmen".
+- ~~De kamers waarin de galm omschakelt zijn dozen met vaste coördinaten in `scripts/sfx.gd`.~~ De galm wordt sinds 11 oktober uit de zones gelezen.
+- ~~Geluid dat nog klinkt als je naar het titelscherm gaat of opnieuw begint vanaf een checkpoint, klinkt verder aan het begin van het volgende spel.~~ Opgeruimd op 11 oktober.
 - De begrenzer van Godot komt na een ingreep nooit helemaal terug (0,2 dB van elke 3 dB blijft staan). Daarom blijft de mix eronder en hoort hij alleen bij uitschieters in te grijpen.
 - De vuursnelheid wordt afgerond op hele frames: op 60 fps vuurt de pistoolmitrailleur 720 in plaats van 900 schoten per minuut en de karabijn 600 in plaats van 620 (nagerekend, niet in het spel gemeten).
 - Elk wapen heeft drie tot vijf takes.
-- Robots hebben geen stem en de stemmen van personages zijn gesynthetiseerd; er is geen omgevingsgeluid, geen muziek en geen geluid van een schot dat langs je heen gaat.
-- De galm kent het ketelhuis en de doorgang van de fabriek niet: daar klinkt het als in de hal.
+- ~~Robots hebben geen stem en de stemmen van personages zijn gesynthetiseerd; er is geen omgevingsgeluid, geen muziek en geen geluid van een schot dat langs je heen gaat.~~ Zie "Geluid: ruimte, omgeving en stemmen".
+- ~~De galm kent het ketelhuis en de doorgang van de fabriek niet: daar klinkt het als in de hal.~~ Elke zone heeft nu haar eigen galm.
 
 ### Volgende ronde geluid (plan, 10 oktober 2026)
 
@@ -415,6 +415,81 @@ Zes dingen die bij het spelen nep klonken. Dat was gespeeld op een stand zonder 
 **Volgorde.** Stap 0, dan 4 en 3 (alleen het manifest, geen nieuwe bron), dan de bron zoeken en 2, 1 en 5 in één keer, dan 6. Na elke stap `tools/hear.py` voor Michiel: hij oordeelt op het oor.
 
 **Wat het kost.** Punt 3 en 4 zijn regels in het manifest en opnieuw bouwen. Punt 1, 2 en 5 zijn een nieuw pakket, zo'n 25 takes erbij (ongeveer 1,5 MB in `assets/audio/`) en code in `weapons.gd`, `weapon_data.gd`, `fx.gd` en `grenade.gd`. Punt 6 is één bestand van 3 MB, een functie in `sfx.gd`, een schuif en een keuze van Michiel.
+
+## Geluid: ruimte, omgeving en stemmen
+
+Op 11 oktober 2026 gevraagd, gebouwd op de branch `geluid`: omgevingsgeluid per soort ruimte, een kogel die rakelings langsgaat, een eigen geluid voor de roldeur, opnames voor de drie geluiden die nog gesynthetiseerd waren, stemmen voor zombies, clowns en robots, galm die met de afstand toeneemt en uit de zones van een level wordt afgelezen, en het afspelen van een tweede muzieklaag die aanzwelt bij een gevecht. **Niets hiervan is beluisterd**: alles is op meting gebouwd, en Michiel oordeelt op het oor. De commando's staan onderaan.
+
+**Er is geen nieuw pakket opgehaald.** Het voorstel (acht CC0-pakketten van OpenGameArt, samen 15,5 MB) is voorgelegd en wacht op antwoord; zie "Nog open". Alles hieronder komt uit de pakketten die er al waren en uit wat `tools/build_sounds.py` zelf kan maken. De stemmen, de bedden, de roldeur en de kogel zijn daardoor eerste versies: ze werken, ze zijn op niveau en lengte gemeten, en waar een echte opname ontbreekt staat dat erbij.
+
+**Wat er nu is**
+
+- **Galm uit de zones.** De vaste dozen in `scripts/sfx.gd` zijn weg. Bij het laden leest `Sfx` van elke zone van het level de dozen (`bounds`) en, als de zone als ruimte is aangelegd, wat voor ruimte het is (`space`). Hoe lang een ruimte naklinkt volgt uit haar inhoud gedeeld door haar oppervlak, zoals bij Sabine: `0,908 × (V/S)^0,889` seconden onder 1 kHz, gepast op de twee ruimtes die op meting en op het oor waren afgesteld, de hal van de fabriek (2,6 s) en de aanbouw (1,0 s). Die twee klinken dus precies als voorheen; al het andere ligt ertussen of eronder. Helderheid en niveau van de galm schuiven mee tussen "kamer" en "hal". Een zone onder de open lucht krijgt een echo waarvan de afstand uit haar grootte volgt (het terrein van de werkplaats 163 ms, de schakeltuin van de centrale 148 ms). Buiten elke zone, door een raam of over een muur, blijft het klinken als de zone die je verliet.
+
+| Zone | Was | Nu |
+|---|---|---|
+| Fabriek, hal | hal, 2,6 s | 2,6 s |
+| Fabriek, aanbouw | kamer, 1,0 s | 1,0 s |
+| Fabriek, ketelhuis | als de hal, 2,6 s | 1,4 s |
+| Fabriek, doorgang | als de hal, 2,6 s | 0,6 s |
+| Centrale, turbinehal | hal, 2,6 s | 2,3 s |
+| Centrale, ketelhuis | hal, 2,6 s | 2,1 s |
+| Centrale, kabelgang | kamer, 1,0 s | 0,6 s |
+| Werkplaats, montagehal | hal, 2,6 s | 2,1 s |
+| Werkplaats, kantoor | kamer, 1,0 s | 0,9 s |
+
+  `tools/test_sound.sh --zones` geeft de hele lijst, 43 zones in vier levels.
+- **Een level zonder zones** (het depot, de showroom) wordt afgetast vanaf de camera, vier keer per seconde: is er een dak, en hoe ver zijn de wanden. Geen dak, of een dak met twee open zijden: buitenlucht. Anders een ruimte van die maten. Het poortgebouw van het depot is zo een kamer zonder dat iemand zijn coördinaten kent.
+- **Meer galm van verder weg.** Tot 8 m is er niets veranderd: het geluid en zijn galm zakken samen. Voorbij 8 m zakt alleen het geluid zelf nog, met 6 dB per verdubbeling; de galm blijft zo luid als hij op 8 m is, tot 24 m, en zakt daarna ook. Een hal antwoordt immers niet zachter omdat de bron verder weg staat. Dat loopt over een nieuwe bus `Far` met een eigen galm (alleen nat, even afgesteld als die op World): een geluid van voorbij 8 m speelt daar een tweede keer, zonder afstandsdemping, op het niveau dat ontbreekt.
+
+| Schot van een robot, in de hal | 8 m | 12 m | 16 m | 20 m | 30 m |
+|---|---|---|---|---|---|
+| Geluid zelf tegenover zijn galm, voorheen | +5,5 dB | +5,4 | +5,3 | +5,3 | +5,3 |
+| Nu | +5,5 dB | +1,8 | -0,7 | -2,7 | -4,3 |
+| Alles samen, tegenover voorheen | 0 dB | +1,1 | +2,2 | +3,4 | +4,5 |
+
+  Op 16 m zijn schot en galm even sterk, op 20 m is het vooral de hal. Buiten is het minder: op 20 m is het schot daar nog 2 dB sterker dan zijn echo.
+- **Omgevingsgeluid.** Vijf bedden: hal, kamer, terrein, ketelhuis en turbinehal, elk een lus van 16 tot 22 s die zonder naad rondgaat, op een eigen bus `Ambience` zonder galm of clipper. Welk bed een zone heeft volgt uit wat voor ruimte ze is; een zone met "boiler" of "turbine" in haar naam krijgt het ketelhuis of de turbinehal. Wat je hoort is het bed van de zone waar je staat, en daaronder dat van elke zone die van daaruit te zien is: 8 dB zachter op de drempel en 1,2 dB zachter per meter daarvandaan. De turbinehal hoor je dus aankomen. Om de 6 tot 16 s klinkt er iets in de ruimte zelf, op 9 tot 22 m van de camera: een klap op metaal in een hal, een klep die afblaast in het ketelhuis, een schakelaar die invalt in de turbinehal. Op het titelscherm en in het pauzemenu staat het stil.
+
+| Bed | Niveau (RMS) | Onder 80 Hz | 80 tot 250 | 250 tot 1000 | Daarboven |
+|---|---|---|---|---|---|
+| Kamer | -40 dBFS | 40% | 29% | 28% | 3% |
+| Hal | -32 dBFS | 39% | 36% | 23% | 2% |
+| Terrein | -33 dBFS, van -38 tot -29,5 met de wind | 13% | 35% | 43% | 10% |
+| Ketelhuis | -27 dBFS | 19% | 56% | 15% | 10% |
+| Turbinehal | -24 dBFS | 24% | 48% | 22% | 6% |
+
+- **De roldeur.** `Sfx` kijkt zelf naar de deuren van de uitgang (de groep `exit_door`) en speelt `roller_door` vanaf de deur zolang die beweegt; `scripts/game.gd` is er niet voor aangeraakt en speelt aan het eind nog zijn eigen klap. Een deur die in één keer ergens anders staat, zoals bij het laden met de uitgang al open, maakt geen geluid.
+- **Een kogel die langsgaat.** `Sfx.passing(van, naar)`: gaat een schot binnen 3 m langs de camera en minstens anderhalve meter verder, dan klinkt `whiz` op het punt waar het het dichtst langskwam, dus links of rechts, harder naarmate het dichterbij was. Een schot dat bij de camera eindigt was raak en een schot dat ervoor eindigt trof de muur ertussen: die hoor je niet langsgaan. Niet vaker dan eens per 70 ms.
+- **De drie die gesynthetiseerd waren.** `dry_fire` is een klik uit de opname van uitrusting met een doffere tik eronder, `switch` rammelende uitrusting over een mouw, `slide` een stap in sneeuw op halve snelheid met geritsel, een dreun en ruis eronder zolang de sliding duurt. Gesynthetiseerd zijn nu alleen nog `reload` en `reload_end`, de tik bij een checkpoint en de terugval van een wapen zonder eigen herlaadgeluid.
+- **Stemmen.** Zombies zijn de mannenstemmen op twee derde snelheid met een ratel erin, clowns dezelfde stemmen een derde sneller en neuziger; hun lach is een lange schreeuw die zes keer per seconde wordt afgeknepen. Robots hebben een blaf uit een blik (een schreeuw vermenigvuldigd met een toon van 92 Hz, wat de keel eruit haalt, in een pijp van 4 ms) bij het zien van de speler en bij het omtrekken, een alarm van vier piepen, en per soort een motor die oploopt voor een salvo, zo lang als de waarschuwing duurt. Een thema zegt per rol wiens stem zijn mensen hebben (`"voice"` in `assets/characters/manifest.json`); zonder dat klinkt iemand zoals hij beweegt. Daardoor klinken de zombies die rennen nu ook als zombies: die hadden de stem van een mens.
+- **De tweede muzieklaag.** Ligt er naast `assets/music/<stuk>.mp3` een `<stuk>_fight.mp3` (of `.ogg`), dan start die tegelijk met het stuk, onhoorbaar, en zwelt in 1,2 s aan tot het niveau van het stuk zodra het level zegt dat er gevochten wordt (`fighting()` in `scripts/game.gd`); 5 s na het gevecht is hij weer weg. Het stuk zelf blijft zoals het is. De twee bestanden moeten even lang zijn: elk loopt in zijn eigen lus rond. Er is nog geen laag: de nummers komen van Michiel.
+- **Wat bleef doorklinken.** Een geluid dat nog klonk bij het verlaten van een level ging verder aan het begin van het volgende spel. `Sfx` ruimt nu op bij elke wissel van level.
+- **Gereedschap.** `tools/hear.py` kan een geluid van een afstand laten horen (`--at=20`), in een andere ruimte (`--in=room`, `--in=powerhouse/turbine_hall`), en heeft `ambience <soort>`, `door`, `whiz`, `voice <wie>` en `music <stuk>`. `tools/build_sounds.py` kan een bed maken (`bed`, `rms`, `rate`), een stuk uit een opname nemen (`trim`), de toonhoogte laten glijden (`glide`), omkeren, een stem tot machine maken (`ring`, `comb`), een ratel strooien uit losse tikken (`scatter`) en ruis en brom maken die niet wegsterven (`air`, `hum`). `tools/test_sound.sh` loopt dit alles na, 37 controles, zonder geluidskaart.
+
+**Gemeten**
+
+- Een gevecht in de turbinehal zoals het spel het afspeelt (het eigen salvo, vijf salvo's van robots op 12 tot 35 m, een explosie op 14 m, drie kogels die langsgaan, het bed): de uitgang piekt op -1,0 dBFS met geen enkele sample erboven, de bus `Far` zit gemiddeld 14 dB onder World en het geheel is 0,2 tot 0,3 dB luider dan zonder de extra galm.
+- Elk bed gaat rond zonder sprong: de stap van de laatste sample naar de eerste is kleiner dan 99% van de gewone stappen erin. Links en rechts hebben niets gemeen (correlatie 0,0): een opname loopt rechts 37% van haar lus voor op links.
+- Alle 37 controles van `tools/test_sound.sh` slagen, net als de hele selftest (315), de test van de personages (36), van de sandbox (30) en van samen spelen (62).
+
+**Buiten mijn bestanden geraakt**, in een eigen commit zodat het los te laten is:
+
+- `scripts/enemy.gd`: één regel in `_show_shot()`, `Sfx.passing(muzzle, end)`. Zonder die regel weet het geluid niet waar een schot heen ging.
+- `scripts/enemy_themes.gd` (één regel en het commentaar), `scripts/humanoid_rig.gd` (de stem komt uit de rol en anders uit de bewegingen) en `assets/characters/manifest.json` (`"voice"` bij negen rollen): zonder klinken clowns als soldaten.
+- `tools/render_mix.gd`, de renderer achter `tools/hear.py`: een geplaatst geluid zonder afstandsdemping, en een geluid dat halverwege begint of wordt afgekapt.
+
+**Nog open**
+
+- **De pakketten.** Voorgelegd, niet opgehaald: 30 CC0 SFX loops (rubberduck, 3,5 MB: machines, pompen), Steam release sounds (bart, 0,6 MB), wind whoosh loop (SketchMan3, 0,25 MB), Zombies Sound Pack (artisticdude, 4,7 MB), Evil Laughs Pack (Eldritch Grim, 2,2 MB), Robot Voice Pack (Cough-E, 3,7 MB), old elevator door (sinny, 0,1 MB) en Mechanical Sounds (BMacZero, 0,4 MB), alle van opengameart.org, alle CC0. Daarmee worden de bedden echte machines en echte wind, de lach een lach, de zombie een zombie en de roldeur een deur. Een opname van een kogel die langsgaat vond ik niet onder CC0 zonder account; Freesound heeft ze.
+- **Wat er nu in de bedden zit** zijn de synthesizerlussen uit het sciencefictionpakket van Kenney met ruis en brom erbij; de wind op het terrein is ruis die aanzwelt en afneemt. Voor een bed als Ogg is een encoder nodig die er niet is (`brew install vorbis-tools`, voorgelegd): nu is een bed een WAV van 1,4 MB op 22 kHz, en `assets/audio/` is van 16 naar 28 MB gegaan.
+- De niveaus van de bedden zijn gekozen, niet beluisterd: `"rms"` per bed in het manifest. Er is geen schuif voor.
+- Een geluid uit een andere zone klinkt in de galm van de zone waar je zelf staat, en gaat door muren heen: er is geen demping door wat ertussen staat.
+- Wat er af en toe klinkt in een ruimte kan achter een muur vandaan komen: de plek wordt niet tegen het level gehouden.
+- De roldeur eindigt met de klap van een vat (`clang`) uit `scripts/game.gd`.
+- Een schot van een medespeler (`scripts/puppet.gd`) hoor je niet langsgaan: alleen dat van een vijand meldt zich.
+- In een level zonder zones hangt de galm af van wat de stralen raken: naast een stapel kratten is de kamer kleiner.
+- De waarschuwingstoon van een robot is één take per soort: dat is zo bedoeld, het is een signaal.
 
 ## Vijanden die mensen kunnen zijn
 
