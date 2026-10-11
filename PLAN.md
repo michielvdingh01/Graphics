@@ -527,7 +527,7 @@ Het poseren van een lopende pop kost 52 microseconden per frame. De twee stralen
 
 **Op zijn aanwijzing erbij, 11 oktober 's middags**
 
-- **Een schot op een mens klinkt als vlees.** Het speelde `impact_soft`, het geluid van een kogel in een kartonnen doos: 0,14 s, bijna alles onder de 200 Hz, in 0,05 s weg. Nu is er `impact_flesh`: een zware vuistslag een vijfde lager afgespeeld, daaronder het kraken van een stap in de sneeuw op 60% snelheid voor wat scheurt, een doffe bons en een toon die van 140 naar 50 Hz zakt voor het gewicht. Het duurt 0,45 s, valt in 0,18 s 20 dB, en heeft 12 dB meer tussen 200 Hz en 2 kHz en 32 dB meer daarboven dan het karton. Er is geen opname van vlees in de pakketten die er liggen; dit is het dichtste dat ervan te maken was. `scripts/enemy.gd` noemt het oppervlak van een mens nu `flesh` in plaats van `soft`, en `Fx.strike()` laat daar niets achter: het bloed is van de rig. Ik kan het niet horen: `tools/hear.py impact_flesh`, en `tools/hear.py impact_soft` voor hoe het was.
+- **Een schot op een mens heeft een eigen geluid.** Het speelde `impact_soft`, het geluid van een kogel in een kartonnen doos: 0,14 s, bijna alles onder de 200 Hz, in 0,05 s weg. Nu is er `impact_flesh`, en `scripts/enemy.gd` noemt het oppervlak van een mens `flesh` in plaats van `soft`; `Fx.strike()` laat daar niets achter, want het bloed is van de rig. Hoe het klinkt heeft Michiel op het oor gekozen, in vier rondes: een zware vuistslag met het kraken van sneeuw eronder ("moet natter"), dezelfde natter, drie varianten met oplopende blubjes ("nog steeds een raar geluid"), en toen zijn eigen recept: korte ruis die wit begint en snel dof wordt richting bruin. Daarvan koos hij de kaalste. Het is 0,35 s ruis die er meteen is, met een laagdoorlaatfilter van 6 dB per octaaf dat in 40 ms van 16 kHz naar 200 Hz zakt: in de eerste 15 ms zit bijna alles boven de 2 kHz, na 80 ms bijna alles onder de 300 Hz. De bouwer van de geluiden kent dat nu als bouwsteen (`"burst": [seconden, van Hz, naar Hz, valtijd]` in `assets/manifest.json`), ook als laag onder een opname. Beluisteren: `tools/hear.py impact_flesh`.
 - **Pauze tijdens het laden brak het pauzemenu.** `SCRIPT ERROR ... 'scene_file_path' on a base object of type 'null instance'` in `menu.gd`. Na een dood en tussen twee levels is het oude level een frame eerder weg dan het nieuwe er is, en in dat frame landt een toets die tijdens het laden is ingedrukt; het menu vroeg dan het level naar zijn bestand. Daarna stond het spel op pauze met een half menu. Zonder venster nagespeeld (herladen vanuit een timer, pauze in hetzelfde frame): met de fout voor, zonder na. Het menu slaat de toets nu over zolang er geen level is.
 
 **Wat ik niet kon beoordelen**
@@ -550,7 +550,7 @@ Het poseren van een lopende pop kost 52 microseconden per frame. De twee stralen
 - `tools/build_model.sh enemies` schrijft de drie robots opnieuw weg met andere bytes, ook als er niets aan veranderd is.
 - Wat een stap echt van het rantsoen afhaalt is onbekend; de telling gaat af op wat er de vorige keer in een dag ging.
 - `clown_07` wacht op het rantsoen. Zijn plaatje is goed; of het model het ook is, blijkt dan pas.
-- Het vlezige trefgeluid is gemeten, niet beluisterd.
+- Het trefgeluid op een mens is door hem gekozen uit losse opnamen, niet in een gevecht gehoord: daar speelt het op afstand en door de galm van de ruimte.
 
 ## Moderne shooter-eisen (fase 4)
 
