@@ -135,23 +135,28 @@ func _plan() -> void:
 	keep_clear("switch_room", Rect2(43.0, 55.0, 10.4, 1.6))
 
 	start_in("lodge")
+	# A wing that is fought over as one sends everybody in it at the player
+	# the moment he steps into its corridor, where nothing stands to hide
+	# behind. So it holds no more than a fight of the factory or the depot
+	# does, three to six, and the first of the level as few as the first of
+	# the factory: with eight in each, the first lasted under a minute.
 	fight("offices", "the offices", {
-		"west_corridor": ["grunt", "rusher"], "office_a": ["grunt", "grunt"], "office_b": ["grunt"],
-		"archive": ["grunt", "rusher"], "locker_room": ["grunt"],
+		"west_corridor": [], "office_a": ["grunt"], "office_b": ["grunt"],
+		"archive": ["rusher"], "locker_room": [],
 	}, "vestibule")
 	fight("stores", "the stores", {
-		"stores": ["grunt", "grunt", "grunt", "rusher"], "tool_room": ["grunt", "grunt"], "compressor_room": ["grunt", "heavy"],
+		"stores": ["grunt", "grunt", "rusher"], "tool_room": ["grunt"], "compressor_room": ["grunt"],
 	}, "west_corridor")
 	checkpoint_in("stores", "Stores")
 	fight("workshop", "the workshop", {"workshop": ["grunt", "grunt", "grunt", "grunt", "rusher", "rusher", "heavy"]}, "compressor_room")
 	fight("yard", "the yard", {"yard": ["grunt", "grunt", "grunt", "grunt", "rusher", "rusher", "heavy", "heavy"]}, "workshop")
 	checkpoint_in("yard", "Yard")
 	fight("canteen", "the canteen", {
-		"south_corridor_w": ["rusher"], "canteen": ["grunt", "grunt", "grunt", "rusher"], "kitchen": ["grunt", "grunt", "rusher"],
+		"south_corridor_w": [], "canteen": ["grunt", "grunt", "rusher"], "kitchen": ["grunt", "grunt"],
 	}, "yard")
 	checkpoint_in("canteen", "Canteen")
 	fight("boiler_house", "the boiler house", {
-		"south_corridor_e": ["grunt"], "boiler_house": ["grunt", "grunt", "rusher", "heavy"], "switch_room": ["grunt", "grunt", "rusher"],
+		"south_corridor_e": [], "boiler_house": ["grunt", "grunt", "heavy"], "switch_room": ["grunt", "rusher"],
 	}, "south_corridor_w")
 	fight("east_corridor", "the east corridor", {"east_corridor": ["grunt", "rusher"]}, "south_corridor_e")
 	checkpoint_in("east_corridor", "East corridor")

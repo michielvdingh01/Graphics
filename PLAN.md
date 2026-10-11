@@ -611,7 +611,7 @@ De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in cod
 | 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na. Zie hieronder |
 | 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | Klaar zonder streamen: het proeflevel haalt het zo. Zie hieronder |
 | 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | Klaar: de vleugel is gebouwd, gebakken en bekeken. Gespeeld is hij nog niet. Zie hieronder |
-| 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | Klaar: het fabrieksterrein, 23 ruimtes en 73 robots, gebouwd, gebakken en gemeten. Gespeeld is het nog niet. Zie hieronder |
+| 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | Gebouwd, gebakken en gemeten: het fabrieksterrein, 23 ruimtes en 59 robots. Twee keer kort gespeeld, in een build die de renderschaal van de hoofdbranch nog mist. Zie hieronder |
 
 **Wat is afgesproken**
 
@@ -851,7 +851,7 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 
 **Wat er staat**
 
-- **Het fabrieksterrein** (`tools/levels/works.gd`, `scenes/works.tscn`), het level tussen de fabriek en het depot: 23 ruimtes op 84 bij 57 meter. Kantoren aan een gang aan de westkant; magazijn, gereedschapskamer, compressorruimte en werkplaats ten noorden van een ommuurd binnenterrein; kantine, keuken, ketelhuis en schakelruimte ten zuiden ervan; aan de oostkant de montagehal, de spuiterij, de expeditie en het laadperron, met de laaddeur als uitgang. 73 robots in elf gevechten, vijf checkpoints.
+- **Het fabrieksterrein** (`tools/levels/works.gd`, `scenes/works.tscn`), het level tussen de fabriek en het depot: 23 ruimtes op 84 bij 57 meter. Kantoren aan een gang aan de westkant; magazijn, gereedschapskamer, compressorruimte en werkplaats ten noorden van een ommuurd binnenterrein; kantine, keuken, ketelhuis en schakelruimte ten zuiden ervan; aan de oostkant de montagehal, de spuiterij, de expeditie en het laadperron, met de laaddeur als uitgang. 59 robots in elf gevechten, vijf checkpoints; het waren er eerst 73, zie "Na de eerste keer spelen".
 - **Het zit in het spel.** De levelkeuze is Factory, Works, Depot; de uitgang van de fabriek leidt naar het fabrieksterrein en die van het fabrieksterrein naar het depot. Een ruimte galmt naar haar soort: `scripts/sfx.gd` leest dat van de zone af voor een level dat het niet zelf opgeeft.
 - **Twee soorten ruimte erbij**: `canteen`, met tafels en stoelen, en `yard`, een ommuurd terrein onder de open lucht met schijnwerpers op masten en containers.
 - **De robots staan niet meer open en bloot.** `fight` noemt per ruimte welke soorten er staan; hun post krijgen ze pas als alles staat, bij de opmeting (`_garrison` in `tools/kit/rooms.gd`). Een plek telt als verborgen als hij binnen 16 m niet te zien is vanaf waar de speler binnenkomt (de eerste 2,4 m achter de deur, over de hele breedte van de deuropening), vanaf de start of vanaf een checkpoint dat voor het gevecht ligt. Verborgen plekken gaan voor, zo ver mogelijk van de deur en uit elkaar. In de ruimte waar de speler binnenkomt zet de bouwer er iets hoogs voor neer, waar ze twee aan twee achter wachten: drie stapels pallets, een kast in een kantoor of een container op het terrein.
@@ -907,6 +907,23 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 - **Gespeeld is het niet.** Of elf gevechten met 73 robots een kwartier boeiend blijven, of de schermen eerlijk aanvoelen en of de checkpoints goed liggen, weet ik niet.
 - Met de robots op hun post haalt één standpunt 59 fps. Dat is met alle 73 nog overeind; wie in de spuiterij staat heeft de montagehal al leeg. Een gevecht zelf is op het fabrieksterrein niet gemeten.
 
+**Na de eerste keer spelen**, 11 oktober 2026
+
+Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het savebestand eindigde de tweede beurt na 41 seconden, met een dood en zonder het eerste checkpoint. Twee dingen zaten hem in de weg, en geen van beide is het level zelf.
+
+- **Deze branch mist de renderschaal die zichzelf instelt.** Die kwam op 10 oktober op `fase-2-vertical-slice`, nadat `bouwdoos` was afgetakt. Zijn instellingen (Ultra, MetalFX, `auto_scale`) leest deze build als een renderschaal van 100%. Gemeten aan het begin van het fabrieksterrein, van de portiersloge tot de deur van het magazijn:
+
+| Op zijn instellingen | Fps |
+|---|---|
+| Volledig scherm, 3456×2160 op 100%: wat deze build doet | 13 tot 17 |
+| In het venster van 1920×1080 op 100% | 42 tot 54 |
+| Volledig scherm op 50%: wat de hoofdbranch ervan maakt | 38 tot 47 |
+
+- De fabriek haalt op de hoofdbranch met die instellingen 44 tot 50 fps (gemeten door de sessie die de renderschaal bouwde). Het budget van 60 fps hierboven is dat van High; op Ultra zit het fabrieksterrein er net als de fabriek onder, en aan de deur van het magazijn het verst.
+- **De gevechten waren te groot.** De fabriek stuurt er 3, 3, 4 en 6 op de speler af en het depot 4, 6 en 5. Het fabrieksterrein begon met 8, uit vier kamers tegelijk een gang in waar niets staat om achter te schuilen, en had zes gevechten van 8. De vleugels die als één gevecht tellen zijn teruggebracht naar die maat: de kantoren 3 (twee grunts en een rusher, zoals de fabriek begint), het magazijn met gereedschapskamer en compressorruimte 5, de kantine met keuken 5, het ketelhuis met schakelruimte 5. Samen 59 robots in plaats van 73. Er verschoof niets dat gebakken is: alle lightmaps zijn nog bij, en de selftest en de nettest slagen.
+- De vier grote ruimtes staan nog op 7 en 8 (werkplaats, binnenterrein, montagehal, laadperron). Daar staat dekking, en ze naar 6 brengen verplaatst de schermen, wat een bake vraagt.
+- De meting met de robots op hun post, hierboven, is die met 73.
+
 **Werkwijze**
 
 | Stap | Hoe |
@@ -925,7 +942,8 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 - De kantoren zijn kaal: een bureau, een stoel en een kast op ruim 90 m². De schermen zijn overal dezelfde drie stapels pallets.
 - De schaduwsortering kijkt bij het laden. Een model dat in de schaduw stond van iets dat wordt opgeblazen, werpt daarna nog steeds geen zonneschaduw.
 - De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is nog steeds niet nagekeken.
-- `bouwdoos` is nog niet samengevoegd met `fase-2-vertical-slice`, waar `scripts/settings.gd` en `scripts/game.gd` intussen veranderd zijn.
+- **`bouwdoos` loopt 34 commits achter op `fase-2-vertical-slice`**: de renderschaal, de stemmen, wat stuk kan, de beweging van het beeld. Proef samengevoegd botst het op twee regels (`scripts/game.gd` en de levellijst in `scripts/menu.gd`). De sessie mocht het niet zelf samenvoegen; dat wacht op Michiel. Daarna moeten de nieuwe geluiden worden ingelezen, de tests opnieuw draaien en het contactblad opnieuw gemaakt, want kratten en lampen kunnen dan stuk.
+- Elke kamer een eigen gevecht, in plaats van een vleugel als één gevecht, geeft 21 kleine gevechten en houdt alle robots. Dan moet de speler elke kamer in, en de regel dat de route door elk gevecht loopt vervalt. Dat is niet besloten.
 
 ## Gevechten: dekking, beurten en schaarste
 
