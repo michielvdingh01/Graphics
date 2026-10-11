@@ -86,6 +86,7 @@ func _run() -> void:
 	_check("the first zone of the route is posted", enemies.size() >= 3 and enemies.size() == first.robots.size()
 		and enemies.all(func(e: Node) -> bool: return not e.can_process()))
 	_check("with characters", enemies.all(_is_character))
+	_check("who sound like flesh where a shot lands", Sfx.has(&"impact_flesh") and enemies.all(func(e: Node) -> bool: return e.get_node("CollisionShape3D").get_meta(&"surface") == "flesh"))
 	_check("who carry no plate and no pack, and do not duck", enemies.all(func(e: Node) -> bool: return e._shield == 0.0 and e._pack == 0.0 and e._drop == 0.0))
 	game._start(first)
 

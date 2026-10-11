@@ -198,8 +198,9 @@ func tracer(from: Vector3, to: Vector3, tint := Color(1.0, 0.7, 0.35)) -> void:
 	_spawn(streak, length / TRACER_SPEED + 0.05)
 
 
-## What a ray hit is made of: "concrete", "brick", "metal", "wood" or "soft".
-## The level builder marks every collider that is not concrete.
+## What a ray hit is made of: "concrete", "brick", "metal", "wood" or "soft",
+## or "flesh" for somebody. The level builder marks every collider that is
+## not concrete.
 func surface_of(hit: Dictionary) -> String:
 	var body := hit.collider as CollisionObject3D
 	if body == null or body.get_shape_owners().is_empty():
@@ -243,6 +244,9 @@ func strike(position: Vector3, normal: Vector3, incoming: Vector3, surface := "c
 		"soft":
 			_burst(_puffs, frame, 1.3, {&"tint": Color(0.7, 0.69, 0.66, 0.45), &"speed": 1.6, &"size": Vector2(0.04, 0.26), &"life": 1.1, &"rise": -0.05, &"amount": 0.7 * share})
 			_hole("soft", frame, 0.035)
+		"flesh":
+			# Somebody: what a hit does to them is theirs to show, see blood().
+			pass
 		_:
 			# Concrete and brick: a puff of dust, chips, and now and then a
 			# spark off the jacket of the bullet.
