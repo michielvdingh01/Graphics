@@ -1,13 +1,13 @@
 {
-	"boiler_house": "cbc07a251bae88d78a7e30399cdc67ad96c14f4c",
-	"cable_corridor": "f103beb111615c7db29e2a98745dbae6d6ab1958",
-	"control_room": "fd22eea1e80b32268eb03681126c8719d8922848",
-	"fuel_store": "9946cc64d7ab7b49c3088022d1fe2fb964abc0a1",
-	"passage": "9e639f5734f2ce8cc6087eb2965c735167a00627",
-	"pump_house": "f0f32d2dbfdbe0d939e2805c51e133a02af715be",
-	"receiving": "f03d72c4d8b58068421591e270109619d680642c",
-	"switch_room": "b2923ceb0caf36eb10538155251fde9a75547c84",
-	"switch_yard": "04a20bddf18a276c33ecd1b6725bf3e312644835",
-	"turbine_hall": "61200ae5170cf26c21403300462c33ff861d2ac7",
-	"workshop": "a8c8c1bfe96b75806c27c1d7d1e85e33a2e1ba27"
+	"boiler_house": "de440e3a1f591f30bbde0e85e05e5bce63ed56a4",
+	"cable_corridor": "79ed5ee8c897bd4151db6c9d75ef9513ed854ee5",
+	"control_room": "123568d0199753adfb7c6e7a2cef13d625573a50",
+	"fuel_store": "b3fd60c65c9aaa9022fb71b72deea5c3505c25c2",
+	"passage": "1f7cd9269b84f9110bc39725c625fbd2817234c5",
+	"pump_house": "6cacfd493a93bac61c9d713db03b93858d02abcf",
+	"receiving": "36de1c30c9a9d3eb7b1f47f6f00469671a411a59",
+	"switch_room": "1c74a7fe101634f91b48c4a0ce2769add41b3e24",
+	"switch_yard": "38047a179bc7b5249de9317e11186d272a1ea122",
+	"turbine_hall": "9d1ba320d7b57f5836972da09db1cd1ff7e84f5c",
+	"workshop": "471043c6cf8fe8353f3feb72f0d9fd4bb4daa7f1"
 }
