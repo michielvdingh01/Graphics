@@ -48,6 +48,7 @@ const ROOM_KINDS := {
 	"corridor": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 5.0, "stock": "corridor", "dust": false},
 	"office": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "office", "dust": false},
 	"canteen": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "canteen", "dust": false},
+	"control": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.0, "stock": "", "dust": false},
 	"storage": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 5.0, "stock": "storage", "dust": false},
 	"yard": {"wall": "brick", "ceiling": "", "thick": 0.4, "lamp": "mast", "every": 0.0, "stock": "yard", "dust": false},
 }
@@ -147,8 +148,10 @@ func start_in(room_name: String) -> void:
 ## ["grunt", "grunt"]}. The fight begins when the player walks into the
 ## rectangle the rooms make together, which he does from the room
 ## `entered_from`; `title` is what the HUD calls the place, as in "Clear the
-## offices". Has to come after the doors of those rooms.
-func fight(id: String, title: String, posted: Dictionary, entered_from := "") -> void:
+## offices". Has to come after the doors of those rooms. Without `screens`
+## nothing is stood in the room the player walks into for its robots to wait
+## behind: for a room where what goes in by hand hides them.
+func fight(id: String, title: String, posted: Dictionary, entered_from := "", screens := true) -> void:
 	var area := Rect2()
 	var high := 0.0
 	var entry := Vector2.INF
@@ -176,7 +179,8 @@ func fight(id: String, title: String, posted: Dictionary, entered_from := "") ->
 	# The room the player walks into has nothing between the door and its
 	# robots but what is put there: something tall for each to wait behind,
 	# unless the room is deep enough to stand far off.
-	_plan_screens(first, (posted[first] as Array).size(), entry)
+	if screens:
+		_plan_screens(first, (posted[first] as Array).size(), entry)
 	_fights.append({"id": id, "posted": posted, "entry": entry, "steps_in": steps_in})
 	area = area.grow(-0.2)
 	# The robots are posted when everything stands, see _garrison().
