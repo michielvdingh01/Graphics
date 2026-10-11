@@ -456,9 +456,10 @@ func _wall_off() -> void:
 	add_child(_occluder)
 	# Only what is drawn itself is left out behind a wall. A lightmap, a lamp,
 	# a reflection probe and a decal are known to the renderer by a box, and
-	# that box being hidden says nothing of what they light or colour: with
-	# the box of its lightmap behind a wall, seen from a corner, a room was
-	# drawn without its baked light.
+	# that box being hidden says nothing of what they light or colour. With
+	# the lightmaps left in, a wall changed which of them the renderer took:
+	# it uses eight to a frame, a level has more, and rooms came out with or
+	# without their baked light other than they did before. See PLAN.md.
 	for node: VisualInstance3D in find_children("*", "VisualInstance3D", true, false):
 		if not node is GeometryInstance3D:
 			RenderingServer.instance_geometry_set_flag(node.get_instance(), RenderingServer.INSTANCE_FLAG_IGNORE_OCCLUSION_CULLING, true)
