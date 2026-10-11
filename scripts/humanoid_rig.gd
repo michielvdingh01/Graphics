@@ -212,6 +212,8 @@ var _time := randf() * 10.0
 var _panicking := false
 var _thrown_up := 0.0
 var _scream: AudioStreamPlayer3D
+## Whose voice it has: the sounds <voice>_alert, _hurt, _death and _panic.
+var _voice := "human"
 var _breath := 0.0
 
 # Dying.
@@ -257,9 +259,12 @@ func setup(cast: Dictionary) -> bool:
 	_set = _sets.get(cast.get("moves", "default"), _sets["default"])
 	_melee = cast.get("melee", false)
 	_windup = cast.get("windup", 0.3)
-	var voice: String = _set.voice
-	sounds[&"alert"] = StringName(voice + "_alert")
-	sounds[&"death"] = StringName(voice + "_death")
+	# Whose voice it has is the theme's to say; else it sounds as it moves.
+	_voice = cast.get("voice", "")
+	if _voice.is_empty():
+		_voice = _set.voice
+	sounds[&"alert"] = StringName(_voice + "_alert")
+	sounds[&"death"] = StringName(_voice + "_death")
 	# Whoever fights hand to hand carries nothing: there are no clips for
 	# striking with something in the hand.
 	var weapon: String = cast.get("weapon", "")
@@ -417,7 +422,7 @@ func hit(at: Vector3, direction: Vector3, amount := 0.0) -> void:
 		_tree.set(FLINCH, AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 	if _time - _cried > 0.5:
 		_cried = _time
-		Sfx.play_at(StringName(_set.voice + "_hurt"), global_position, -4.0)
+		Sfx.play_at(StringName(_voice + "_hurt"), global_position, -4.0)
 
 
 ## Dies: it lets go of its weapon and falls, away from the shot that came in
@@ -651,7 +656,7 @@ func _wail(delta: float) -> void:
 	_breath -= delta
 	if _breath <= 0.0:
 		_breath = randf_range(BREATH.x, BREATH.y)
-		_scream = Sfx.play_on(StringName(_set.voice + "_panic"), self, Vector3.UP * fit.eyes, SCREAM_DB)
+		_scream = Sfx.play_on(StringName(_voice + "_panic"), self, Vector3.UP * fit.eyes, SCREAM_DB)
 
 
 ## The head turns to what it is aiming at.

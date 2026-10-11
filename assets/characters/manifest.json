@@ -72,6 +72,7 @@
 				],
 				"weapon": "",
 				"moves": "zombie",
+				"voice": "zombie",
 				"tuning": {
 					"melee": true,
 					"max_health": 90.0,
@@ -93,6 +94,7 @@
 				],
 				"weapon": "",
 				"moves": "default",
+				"voice": "zombie",
 				"tuning": {
 					"melee": true,
 					"max_health": 45.0,
@@ -114,6 +116,7 @@
 				],
 				"weapon": "",
 				"moves": "zombie",
+				"voice": "zombie",
 				"tuning": {
 					"melee": true,
 					"max_health": 380.0,
@@ -139,6 +142,7 @@
 				],
 				"weapon": "pistol",
 				"moves": "default",
+				"voice": "clown",
 				"tuning": {
 					"melee": false,
 					"max_health": 90.0,
@@ -162,6 +166,7 @@
 				],
 				"weapon": "",
 				"moves": "default",
+				"voice": "clown",
 				"tuning": {
 					"melee": true,
 					"max_health": 55.0,
@@ -183,6 +188,7 @@
 				],
 				"weapon": "shotgun",
 				"moves": "default",
+				"voice": "clown",
 				"tuning": {
 					"melee": false,
 					"max_health": 300.0,
@@ -215,6 +221,7 @@
 				],
 				"weapon": "",
 				"moves": "zombie",
+				"voice": "zombie",
 				"tuning": {
 					"melee": true,
 					"max_health": 90.0,
@@ -236,6 +243,7 @@
 				],
 				"weapon": "",
 				"moves": "default",
+				"voice": "zombie",
 				"tuning": {
 					"melee": true,
 					"max_health": 45.0,
@@ -257,6 +265,7 @@
 				],
 				"weapon": "",
 				"moves": "zombie",
+				"voice": "zombie",
 				"tuning": {
 					"melee": true,
 					"max_health": 380.0,
