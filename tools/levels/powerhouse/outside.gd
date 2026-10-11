@@ -23,12 +23,8 @@ func _describe() -> void:
 		wire(arm, arm + Vector3(-30.0, 3.0, -90.0), 5.0, 0.02)
 
 	# The turbine hall stands higher than the wall of the switch yard: its
-	# west wall and the edge of its roof, as the yard sees them over that wall.
-	var hall: Rect2 = _floor_plan["turbine_hall"].rect
-	var top: float = _floor_plan["turbine_hall"].height + 0.3
-	var over: float = _floor_plan["switch_yard"].height + 0.12
-	box("brick", Vector3(hall.position.x - 0.1, (over + top) * 0.5, hall.get_center().y), Vector3(0.2, top - over, hall.size.y), Vector3.ZERO, DETAIL | NO_COLLIDE)
-	box("roof", Vector3(hall.position.x - 0.1, top + 0.06, hall.get_center().y), Vector3(0.5, 0.12, hall.size.y + 0.3), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	# west gable and the edge of its roof, as the yard sees them over that wall.
+	wall_above("turbine_hall", WEST, _floor_plan["switch_yard"].height + 0.12)
 
 	# The stacks of the two boilers, where their flues come through the roof.
 	var roof: float = _floor_plan["boiler_house"].height + 0.3

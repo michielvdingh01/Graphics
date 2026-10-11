@@ -1,26 +1,38 @@
-extends "res://tools/kit/fittings.gd"
-## Fifth drawer of the kit, see tools/kit.gd: a level laid out as rooms.
+extends "res://tools/kit/furniture.gd"
+## Ninth and last drawer of the kit, see tools/kit.gd: a level laid out as
+## rooms.
 ##
 ## The plan of such a level names its rooms, each a rectangle on the ground
 ## with a kind and a height, the doorways between them and the way through:
 ##
 ##     room("store", "storage", Rect2(0, 6, 8, 9), 3.4)
+##     room("hall", "hall", Rect2(11, 0, 27, 30), 8.0, {"roof": "sawtooth"})
 ##     room("corridor", "corridor", Rect2(8, 0, 3, 20), 3.0)
 ##     door("store", "corridor", 10.0)
 ##     window("store", WEST, 10.5, 3.0)
-##     keep_clear("store", Rect2(1, 7, 3, 3))
+##     keep_clear("hall", Rect2(15, 2, 6, 4))
 ##     start_in("lobby")
 ##     fight("store", "the storeroom", {"store": ["grunt", "grunt"]}, "corridor")
-##     exit_through("workshop", EAST, 7.0, "Leave by the loading door")
+##     exit_through("hall", EAST, 7.0, "Leave by the loading door")
 ##
 ## The rectangle is the room with its walls, so two rooms that share a wall
 ## have rectangles that touch. build_rooms() then makes every room: a zone of
-## its own, closed by its own floor, walls and ceiling; its doorways and
+## its own, closed by its own floor, walls and roof; its doorways and
 ## windows, with a panel that shuts each doorway while its lightmap is baked;
 ## lamps and a reflection probe. Unless the level is `_bare` it also hangs the
-## doors, dirties the walls and the floor and stands about what a room of
-## that kind has standing about: clear of its doors and of what the plan
+## doors with a sign over each, divides the walls, runs pipes and ducts under
+## the ceiling, dirties the walls and the floor and stands about what a room
+## of that kind has standing about: clear of its doors and of what the plan
 ## keeps clear.
+##
+## What a room is like follows from its kind, see ROOM_KINDS, and a plan can
+## say otherwise for one room in the last argument of room(): another roof,
+## another stock, what its sign says.
+##
+## The lamps follow a rule, see _room_lamps(): the dice leave some of them
+## out, but never so that a part of the floor lies in the dark, and the first
+## thing the plan keeps the floor clear for, which is what there is to see in
+## the room, has a lamp over the side of it the player comes to.
 ##
 ## The robots are posted last, when everything stands (see _garrison()): out
 ## of sight of where the player walks into their fight, starts or carries on,
@@ -33,33 +45,45 @@ extends "res://tools/kit/fittings.gd"
 ##
 ## A level is laid out and played bare first, then fitted out, then baked.
 
-const NORTH := 0  # towards -Z
-const SOUTH := 1
-const WEST := 2  # towards -X
-const EAST := 3
-
-## What a kind of room is made of and fitted with: the material of its walls
-## and its ceiling (none for one under the open sky), how thick its walls
-## are, which lamps it has and how far apart, and what stands about in it
-## (see _room_stock()).
+## What a kind of room is made of and fitted with: the material of its walls,
+## the form of its roof (none for one under the open sky, see roof() in
+## tools/kit/structure.gd) and what a slab over it is made of, how thick its
+## walls are, which lamps it has and how far apart, and what stands about in
+## it (see _room_stock()).
 const ROOM_KINDS := {
-	"hall": {"wall": "brick", "ceiling": "roof", "thick": 0.4, "lamp": "hanging", "every": 8.0, "stock": "works", "dust": true},
-	"plant": {"wall": "brick", "ceiling": "concrete", "thick": 0.4, "lamp": "hanging", "every": 7.0, "stock": "", "dust": true},
-	"corridor": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 5.0, "stock": "corridor", "dust": false},
-	"office": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "office", "dust": false},
-	"canteen": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "canteen", "dust": false},
-	"control": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.0, "stock": "", "dust": false},
-	"storage": {"wall": "plaster_dado", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 5.0, "stock": "storage", "dust": false},
-	"yard": {"wall": "brick", "ceiling": "", "thick": 0.4, "lamp": "mast", "every": 0.0, "stock": "yard", "dust": false},
+	"hall": {"wall": "brick", "roof": "trusses", "ceiling": "roof", "thick": 0.4, "lamp": "hanging", "every": 8.0, "stock": "works", "dust": true},
+	"plant": {"wall": "brick", "roof": "slab", "ceiling": "concrete", "thick": 0.4, "lamp": "hanging", "every": 7.0, "stock": "plant", "dust": true},
+	"corridor": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 5.0, "stock": "corridor", "dust": false},
+	"office": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "office", "dust": false},
+	"canteen": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "canteen", "dust": false},
+	"kitchen": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "kitchen", "dust": false},
+	"changing": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.5, "stock": "changing", "dust": false},
+	"control": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 4.0, "stock": "", "dust": false},
+	"storage": {"wall": "plaster_dado", "roof": "flat", "ceiling": "concrete", "thick": 0.2, "lamp": "tube", "every": 5.0, "stock": "storage", "dust": false},
+	"yard": {"wall": "brick", "roof": "", "ceiling": "", "thick": 0.4, "lamp": "mast", "every": 0.0, "stock": "yard", "dust": false},
 }
 ## How near a robot may stand in view of where the player walks into its
 ## fight, starts or carries on. scripts/selftest.gd holds a level to the same.
 const POST_DISTANCE := 14.0
+## The light rule, by the kind of lamp: how far from a lamp that burns the
+## floor of a room may lie, and what share of its lamps the dice leave out
+## before that is looked at.
+const LAMP_REACH := {"tube": 4.6, "hanging": 6.2}
+## How much further from anything else something on the floor of a room
+## stands than the two reach together: the way between them, which a robot
+## needs a good metre of.
+const WAY_BETWEEN := 0.6
+const LAMPS_OUT := {"tube": 0.2, "hanging": 0.3}
 
-## The rooms of the plan, by name: {kind, rect, height, doors, windows, kept,
-## stood, screens}. A door is {side, along, width, height, to}; `to` is the
-## room on the other side, or empty for the way out. `stood` is what the
-## builder has put down on the floor so far: x, z and how far it reaches.
+## The rooms of the plan, by name: {kind, rect, height, fit, doors, windows,
+## kept, features, stood, screens, posts, roof, piers, walled, entry}. A door
+## is {side, along, width, height, to}; `to` is the room on the other side,
+## or empty for the way out. `fit` is what the plan said of this room in
+## particular. `stood` is what the builder has put down on the floor so far:
+## x, z and how far it reaches. `walled` is what stands or hangs against the
+## walls: the side, and from where to where along it. `features` is what the
+## plan keeps the floor clear for, `roof` the roof as roof() made it, `piers`
+## where a pier stands, and `entry` the door the player first comes in by.
 ## `screens` is where something tall has to stand for a robot to wait
 ## behind, {at, turn, along_x}, and `posts` where those robots were meant to
 ## wait when the room was planned.
@@ -71,22 +95,36 @@ var _fights: Array[Dictionary] = []
 ## Set for a level that is still being laid out: the rooms come without
 ## doors, dirt or anything standing about, to walk and fight through first.
 var _bare := false
+## The room the player starts in.
+var _start_room := ""
 
 
 # --- The plan -----------------------------------------------------------------
 
 
 ## A room: `rect` is its place on the ground (x and z) with its walls, and
-## `kind` one of ROOM_KINDS. It is a zone of that name from here on.
-func room(room_name: String, kind: String, rect: Rect2, height: float) -> void:
+## `kind` one of ROOM_KINDS. It is a zone of that name from here on. `fit`
+## says what this room has that its kind has not: any key of ROOM_KINDS, as
+## in {"stock": "archive"}, whatever roof() takes, as in {"roof": "sawtooth",
+## "glazed": WEST}, and "sign" for what the plates over its doors say.
+func room(room_name: String, kind: String, rect: Rect2, height: float, fit := {}) -> void:
 	if not ROOM_KINDS.has(kind):
 		push_error("room: there is no kind of room called '%s'" % kind)
 		return
-	_floor_plan[room_name] = {"kind": kind, "rect": rect, "height": height, "doors": [], "windows": [], "kept": [], "stood": [], "screens": [], "posts": []}
+	_floor_plan[room_name] = {
+		"kind": kind, "rect": rect, "height": height, "fit": fit, "doors": [], "windows": [], "kept": [], "features": [],
+		"stood": [], "screens": [], "posts": [], "roof": {}, "piers": [], "walled": [], "entry": {},
+	}
 	zone(room_name, [AABB(Vector3(rect.position.x, -1.0, rect.position.y), Vector3(rect.size.x, height + 1.5, rect.size.y))])
 	# What it sounds like in there, for scripts/sfx.gd to pick its reverb by.
 	var space := {"hall": &"hall", "plant": &"hall", "yard": &"yard"}
 	(_zones[room_name].node as Node).set_meta(&"space", space.get(kind, &"room"))
+
+
+## What a room has by its kind, or by what the plan said of it.
+func _fit(room_name: String, key: String) -> Variant:
+	var plan: Dictionary = _floor_plan[room_name]
+	return plan.fit.get(key, ROOM_KINDS[plan.kind][key])
 
 
 ## A doorway between two rooms that share a wall. `along` is where its
@@ -118,9 +156,18 @@ func window(room_name: String, side: int, along: float, width: float, sill := 1.
 
 
 ## Keeps a part of the floor of a room (x and z in the level) free of
-## whatever the builder would stand there: for what goes in by hand.
+## whatever the builder would stand there: for what goes in by hand. The
+## first of a room is taken for what there is to see in it, and gets a lamp
+## that burns, see _room_lamps(); eye_catcher() says otherwise.
 func keep_clear(room_name: String, area: Rect2) -> void:
 	_floor_plan[room_name].kept.append(area)
+	_floor_plan[room_name].features.append(area)
+
+
+## Names what the player should see first in a room: the part of its floor
+## (x and z in the level) that it stands on.
+func eye_catcher(room_name: String, area: Rect2) -> void:
+	_floor_plan[room_name].features.push_front(area)
 
 
 ## A spot in a room: `x` and `z` metres from its north-west corner, walls
@@ -128,6 +175,47 @@ func keep_clear(room_name: String, area: Rect2) -> void:
 func spot_in(room_name: String, x: float, z: float, y := 0.0) -> Vector3:
 	var rect: Rect2 = _floor_plan[room_name].rect
 	return Vector3(rect.position.x + x, y, rect.position.y + z)
+
+
+## Where the piers of a room stand along one of its walls: for what goes in
+## by hand and wants to rest on them, the corbels of a crane say.
+func piers_along(room_name: String, side: int) -> Array[float]:
+	var found: Array[float] = []
+	for stood: Dictionary in _floor_plan[room_name].piers:
+		if stood.side == side:
+			found.append(stood.along)
+	found.sort()
+	return found
+
+
+## The outside of a wall of a room from `from_y` up, as it shows over a
+## lower neighbour or over the wall of a yard while the room itself is not
+## drawn: its brick up to the eaves, the gable if a pitched roof ends on
+## that side, and the edge of its roof. For the file of a level that builds
+## what is always drawn, see in_zone(); to be called once the rooms stand.
+func wall_above(room_name: String, side: int, from_y: float) -> void:
+	var plan: Dictionary = _floor_plan[room_name]
+	var rect: Rect2 = plan.rect
+	var high: float = plan.height
+	var mat: String = ROOM_KINDS[plan.kind].wall
+	var flags := DETAIL | NO_COLLIDE
+	var out := -_normal_in(side)
+	var across := Vector3(absf(out.z), 0, absf(out.x))
+	var north_south := side == NORTH or side == SOUTH
+	var long := rect.size.x if north_south else rect.size.y
+	# The middle of the outer face of that wall, on the ground, a hand off it.
+	var foot := Vector3(rect.get_center().x, 0, rect.get_center().y) + out * ((rect.size.y if north_south else rect.size.x) * 0.5 + 0.1)
+	if high > from_y:
+		box(mat, foot + Vector3.UP * (from_y + high) * 0.5, across * long + out.abs() * 0.2 + Vector3.UP * (high - from_y), Vector3.ZERO, flags)
+	var over: Dictionary = plan.roof
+	if over.get("form", "") == "trusses" and over.along_x != north_south:
+		var rise: float = over.rise
+		var half := long * 0.5
+		extrude(mat, PackedVector2Array([Vector2(-half, 0), Vector2(half, 0), Vector2(0, rise)]), 0.2, Transform3D(Basis(across, Vector3.UP, across.cross(Vector3.UP)), foot + Vector3.UP * high), flags)
+		for end: float in [-1.0, 1.0]:
+			beam("roof", foot + across * end * (half + 0.1) + Vector3.UP * (high + 0.05), foot + Vector3.UP * (high + rise + 0.07), 0.5, flags, 0.14)
+	else:
+		box("roof", foot + Vector3.UP * (high + 0.36), across * (long + 0.3) + out.abs() * 0.5 + Vector3.UP * 0.12, Vector3.ZERO, flags)
 
 
 # --- The way through, in the order the player goes ------------------------------
@@ -138,7 +226,8 @@ func start_in(room_name: String) -> void:
 	var middle := _room_middle(room_name)
 	var doors: Array = _floor_plan[room_name].doors
 	var look := _door_spot(room_name, doors[0], 0.0) if not doors.is_empty() else middle + Vector2.RIGHT
-	keep_clear(room_name, Rect2(middle - Vector2.ONE, Vector2.ONE * 2.0))
+	_floor_plan[room_name].kept.append(Rect2(middle - Vector2.ONE, Vector2.ONE * 2.0))
+	_start_room = room_name
 	route_start(Vector3(middle.x, 0, middle.y), Vector3(look.x, 0, look.y))
 
 
@@ -194,7 +283,7 @@ func checkpoint_in(room_name: String, title: String) -> void:
 	var doors: Array = _floor_plan[room_name].doors
 	var look := _door_spot(room_name, doors[-1], 0.0) if not doors.is_empty() else middle + Vector2.RIGHT
 	var inner := _room_inside(room_name)
-	keep_clear(room_name, Rect2(middle - Vector2.ONE, Vector2.ONE * 2.0))
+	_floor_plan[room_name].kept.append(Rect2(middle - Vector2.ONE, Vector2.ONE * 2.0))
 	route_checkpoint(room_name, title, Vector3(middle.x, 0, middle.y), Vector3(look.x, 0, look.y), AABB(Vector3(inner.position.x, 0, inner.position.y), Vector3(inner.size.x, 3.0, inner.size.y)))
 
 
@@ -220,6 +309,7 @@ func exit_through(room_name: String, side: int, along: float, title: String, nex
 
 ## Builds every room of the plan.
 func build_rooms() -> void:
+	_find_entries()
 	for room_name: String in _floor_plan:
 		build_room(room_name)
 
@@ -228,17 +318,42 @@ func build_room(room_name: String) -> void:
 	# Dice of its own for every room: what changes in one leaves the lamps
 	# and the crates of the next as they were, and its lightmap with them.
 	_seed_dice("%s/%s" % [_level_name(), room_name])
+	# Whatever a room builds is its own, also what rises over its eaves.
+	in_zone(room_name)
 	_room_shell(room_name)
 	_room_lamps(room_name)
-	if _bare:
+	if not _bare:
+		_room_doors(room_name)
+		_room_structure(room_name)
+		_room_stock(room_name)
+		_room_fittings(room_name)
+		_room_services(room_name)
+		_room_dirt(room_name)
+	by_position()
+
+
+## Finds for every room the door the player first comes in by: the one on
+## the shortest way from where he starts.
+func _find_entries() -> void:
+	if _start_room == "":
 		return
-	_room_doors(room_name)
-	_room_dirt(room_name)
-	_room_stock(room_name)
+	var reached := {_start_room: true}
+	var todo: Array[String] = [_start_room]
+	while not todo.is_empty():
+		var from: String = todo.pop_front()
+		for way: Dictionary in _floor_plan[from].doors:
+			if way.to == "" or reached.has(way.to):
+				continue
+			reached[way.to] = true
+			# The same doorway, as the room beyond has it.
+			for back: Dictionary in _floor_plan[way.to].doors:
+				if back.to == from and is_equal_approx(back.along, way.along):
+					_floor_plan[way.to].entry = back
+			todo.append(way.to)
 
 
-## Floor, ceiling and four walls with the doorways and windows cut out, a
-## panel in every doorway for the bake, glazing in the windows and a probe.
+## Floor, roof and four walls with the doorways and windows cut out, a panel
+## in every doorway for the bake, glazing in the windows and a probe.
 func _room_shell(room_name: String) -> void:
 	var plan: Dictionary = _floor_plan[room_name]
 	var kind: Dictionary = ROOM_KINDS[plan.kind]
@@ -247,8 +362,12 @@ func _room_shell(room_name: String) -> void:
 	var high: float = plan.height
 	var middle := rect.get_center()
 	box("floor", Vector3(middle.x, -0.25, middle.y), Vector3(rect.size.x, 0.5, rect.size.y))
-	if kind.ceiling != "":
-		box(kind.ceiling, Vector3(middle.x, high + 0.15, middle.y), Vector3(rect.size.x, 0.3, rect.size.y))
+	var form: String = _fit(room_name, "roof")
+	if form != "":
+		var fit: Dictionary = (plan.fit as Dictionary).duplicate()
+		fit["ceiling"] = _fit(room_name, "ceiling")
+		fit["wall"] = kind.wall
+		plan.roof = roof(form, rect, thick, high, fit)
 	for side in 4:
 		var openings: Array = []
 		for way: Dictionary in plan.doors:
@@ -266,7 +385,7 @@ func _room_shell(room_name: String) -> void:
 				wall(kind.wall, false, rect.position.x + thick * 0.5, thick, rect.position.y + thick, rect.end.y - thick, 0.0, high, openings)
 			EAST:
 				wall(kind.wall, false, rect.end.x - thick * 0.5, thick, rect.position.y + thick, rect.end.y - thick, 0.0, high, openings)
-		if kind.ceiling == "":
+		if form == "":
 			# A wall under the open sky ends in coping stones.
 			var along_x := side == NORTH or side == SOUTH
 			var span := _wall_span(room_name, side)
@@ -288,7 +407,10 @@ func _room_shell(room_name: String) -> void:
 		var ledge := Vector3(pane.width + 0.2, 0.08, thick + 0.2) if along_x else Vector3(thick + 0.2, 0.08, pane.width + 0.2)
 		box("concrete", _wall_spot(room_name, pane.side, pane.along, -thick * 0.5 + 0.05, pane.sill - 0.04), ledge, Vector3.ZERO, NO_COLLIDE)
 	var inner := _room_inside(room_name)
-	probe(room_name.to_pascal_case(), Vector3(middle.x, high * 0.5, middle.y), Vector3(inner.size.x, high, inner.size.y), Vector3.ZERO)
+	# The probe takes in the space under a pitched roof, and looks from the
+	# middle of what lies under the eaves.
+	var rise: float = plan.roof.get("rise", 0.0)
+	probe(room_name.to_pascal_case(), Vector3(middle.x, (high + rise) * 0.5, middle.y), Vector3(inner.size.x, high + rise, inner.size.y), Vector3(0, -rise * 0.5, 0))
 	if kind.dust:
 		dust(AABB(Vector3(inner.position.x, 0.2, inner.position.y), Vector3(inner.size.x, high - 0.6, inner.size.y)), int(inner.get_area() * 4.0))
 
@@ -305,45 +427,138 @@ func _room_exit(room_name: String, way: Dictionary) -> void:
 	box("steel", _wall_spot(room_name, way.side, way.along, 0.1, way.height + 0.1), across * (way.width + 0.4) + inwards.abs() * 0.2 + Vector3.UP * 0.25)
 
 
-## Tubes under a low ceiling, hall lamps under a high one, floodlights on
-## masts under the open sky: about as far apart as the kind of room says,
-## most of them still working.
+## The lamps of a room: tubes under a low ceiling, hall lamps under a high
+## one, floodlights on masts under the open sky, about as far apart as the
+## kind of room says. The dice leave some of them out, and then the rule:
+##
+##   - no part of the floor lies further from a lamp that burns than its
+##     light carries (LAMP_REACH): a lamp that was out comes on for it;
+##   - what there is to see in the room, see keep_clear(), has a lamp a
+##     step in front of the side of it the player comes to, and that one
+##     always burns;
+##   - that lamp and the one nearest to the door the player comes in by are
+##     the two that cast a shadow.
 func _room_lamps(room_name: String) -> void:
 	var plan: Dictionary = _floor_plan[room_name]
 	var kind: Dictionary = ROOM_KINDS[plan.kind]
 	var inner := _room_inside(room_name)
 	var high: float = plan.height
-	var lit := 0
+	var entry := _entry_spot(room_name, 1.5)
+	var sight := _eye_catcher(room_name)
 	if kind.lamp == "mast":
-		# One in each of two corners, across the yard from each other.
+		# One in each of two corners, across the yard from each other. The
+		# one nearer to what there is to see lights that.
 		var middle := Vector3(inner.get_center().x, 0, inner.get_center().y)
-		for corner: Vector2 in [inner.position + Vector2.ONE * 1.2, inner.end - Vector2.ONE * 1.2]:
-			var foot := Vector3(corner.x, 0, corner.y)
-			floodlight(foot, foot.lerp(middle, 0.7))
-			plan.stood.append(Vector3(corner.x, corner.y, 0.8))
+		var corners: Array[Vector2] = [inner.position + Vector2.ONE * 1.2, inner.end - Vector2.ONE * 1.2]
+		var nearer := 0 if sight == Vector2.INF or corners[0].distance_to(sight) <= corners[1].distance_to(sight) else 1
+		for i in 2:
+			var foot := Vector3(corners[i].x, 0, corners[i].y)
+			var target := foot.lerp(middle, 0.7)
+			if sight != Vector2.INF and i == nearer:
+				target = Vector3(sight.x, 1.0, sight.y)
+			floodlight(foot, target)
+			_stand(room_name, corners[i], 0.8)
 		return
-	if kind.lamp == "tube":
-		var along_x := inner.size.x >= inner.size.y
-		var length := inner.size.x if along_x else inner.size.y
-		var count := maxi(1, roundi(length / kind.every))
-		for i in count:
-			var on := i == 0 or _rng.randf() < 0.75
-			var spot := inner.get_center()
-			if along_x:
-				spot.x = inner.position.x + length * (i + 0.5) / count
-			else:
-				spot.y = inner.position.y + length * (i + 0.5) / count
-			tube(Vector3(spot.x, high - 0.08, spot.y), along_x, on, lit < 2)
-			lit += int(on)
-		return
-	var across := maxi(1, roundi(inner.size.x / kind.every))
-	var down := maxi(1, roundi(inner.size.y / kind.every))
+	var hanging: bool = kind.lamp == "hanging"
+	var every: float = _fit(room_name, "every")
+	var along_x := inner.size.x >= inner.size.y
+	var across := maxi(1, roundi(inner.size.x / every))
+	var down := maxi(1, roundi(inner.size.y / every))
+	if not hanging:
+		# A row of tubes lights a strip to either side of it: rows lie
+		# further apart than the tubes of one row, but never so far that
+		# the walls on either side are out of their reach.
+		if along_x:
+			down = maxi(1, ceili((inner.size.y - 1.0) / (every * 1.5)))
+		else:
+			across = maxi(1, ceili((inner.size.x - 1.0) / (every * 1.5)))
+	var lamps: Array[Dictionary] = []
 	for i in across:
 		for j in down:
-			var on := lit == 0 or _rng.randf() < 0.6
 			var spot := inner.position + inner.size * Vector2(i + 0.5, j + 0.5) / Vector2(across, down)
-			lamp(Vector3(spot.x, high - 0.9, spot.y), high, on, on and lit < 2)
-			lit += int(on)
+			lamps.append({"at": spot, "on": _rng.randf() >= LAMPS_OUT[kind.lamp], "shadows": false})
+	# What there is to see: a lamp of the grid that hangs near enough moves
+	# to a good step in front of the side of it the player comes to, so that
+	# its face is lit and not only its top, or else one is hung there.
+	if sight != Vector2.INF:
+		var area: Rect2 = plan.features[0]
+		var towards := (entry - sight).normalized()
+		var edge := minf(area.size.x * 0.5 / maxf(absf(towards.x), 0.01), area.size.y * 0.5 / maxf(absf(towards.y), 0.01))
+		var over := sight + towards * minf(entry.distance_to(sight), edge + (1.6 if hanging else 0.8))
+		over = over.clamp(inner.position + Vector2.ONE * 0.8, inner.end - Vector2.ONE * 0.8)
+		var nearest := _nearest_lamp(lamps, over, false)
+		if (lamps[nearest].at as Vector2).distance_to(over) < (3.0 if hanging else 2.2):
+			lamps[nearest].at = over
+		else:
+			lamps.append({"at": over, "on": true, "shadows": true})
+			nearest = lamps.size() - 1
+		lamps[nearest].on = true
+		lamps[nearest].shadows = true
+	# The floor, a spot every metre and a half: none of it in the dark.
+	var reach: float = LAMP_REACH[kind.lamp] * (maxf(1.0, (high - 0.9) / 5.0) if hanging else 1.0)
+	var floor_spots: Array[Vector2] = []
+	var x := inner.position.x + 0.75
+	while x < inner.end.x:
+		var z := inner.position.y + 0.75
+		while z < inner.end.y:
+			floor_spots.append(Vector2(x, z))
+			z += 1.5
+		x += 1.5
+	while true:
+		var dark := floor_spots.filter(func(spot: Vector2) -> bool:
+			return not lamps.any(func(lit: Dictionary) -> bool: return lit.on and (lit.at as Vector2).distance_to(spot) <= reach))
+		var best := -1
+		var most := 0
+		for k in lamps.size():
+			if lamps[k].on:
+				continue
+			var lights := dark.filter(func(spot: Vector2) -> bool: return (lamps[k].at as Vector2).distance_to(spot) <= reach).size()
+			if lights > most:
+				most = lights
+				best = k
+		if best < 0:
+			break
+		lamps[best].on = true
+	var first := _nearest_lamp(lamps, entry, true)
+	if first < 0:
+		first = _nearest_lamp(lamps, entry, false)
+		lamps[first].on = true
+	lamps[first].shadows = true
+	for lit: Dictionary in lamps:
+		var spot: Vector2 = lit.at
+		if hanging:
+			# Up between the trusses of a pitched roof, where a crane passes
+			# underneath; a little under a flat one.
+			var under := roof_height(plan.roof, spot.x, spot.y)
+			var hangs := maxf(high - 0.9, minf(under - 0.7, high + 0.3))
+			lamp(Vector3(spot.x, hangs, spot.y), under - 0.03, lit.on, lit.shadows)
+		else:
+			tube(Vector3(spot.x, high - 0.08, spot.y), along_x, lit.on, lit.shadows, 6.5)
+
+
+## The lamp of `lamps` nearest to a spot on the floor, of those that burn if
+## `lit`; -1 if there is none.
+func _nearest_lamp(lamps: Array[Dictionary], spot: Vector2, lit: bool) -> int:
+	var nearest := -1
+	for k in lamps.size():
+		if lit and not lamps[k].on:
+			continue
+		if nearest < 0 or (lamps[k].at as Vector2).distance_to(spot) < (lamps[nearest].at as Vector2).distance_to(spot):
+			nearest = k
+	return nearest
+
+
+## Where the player stands when he has come `off` into a room by its door,
+## or in its middle if he starts there (x and z).
+func _entry_spot(room_name: String, off: float) -> Vector2:
+	var way: Dictionary = _floor_plan[room_name].entry
+	return _room_middle(room_name) if way.is_empty() else _door_spot(room_name, way, off)
+
+
+## The middle of what there is to see in a room (x and z), or Vector2.INF.
+func _eye_catcher(room_name: String) -> Vector2:
+	var features: Array = _floor_plan[room_name].features
+	return Vector2.INF if features.is_empty() else (features[0] as Rect2).get_center()
 
 
 ## Floodlight mast aimed at a point on the ground.
@@ -375,9 +590,15 @@ func floodlight(foot: Vector3, target: Vector3) -> void:
 
 ## Hangs the doors: double steel doors where the doorway has their measure,
 ## and a steel lintel over any other. Each doorway is hung once, by the room
-## it was named first for.
+## it was named first for. Over every doorway, on this side of it, a plate
+## says what lies beyond.
 func _room_doors(room_name: String) -> void:
-	for way: Dictionary in _floor_plan[room_name].doors:
+	var plan: Dictionary = _floor_plan[room_name]
+	for way: Dictionary in plan.doors:
+		var text := "EXIT" if way.to == "" else _sign(way.to)
+		var over: float = way.height + (0.3 if is_equal_approx(way.height, 2.2) else 0.44)
+		if text != "" and over + 0.16 < plan.height:
+			sign_plate(_wall_spot(room_name, way.side, way.along, 0.0, over), _normal_in(way.side), text)
 		if not way.hangs or way.to == "":
 			continue
 		var mine := _thick(room_name)
@@ -392,6 +613,52 @@ func _room_doors(room_name: String) -> void:
 		else:
 			var across := Vector3(absf(out.z), 0, absf(out.x))
 			box("steel", spot + Vector3.UP * (way.height + 0.08), across * (way.width + 0.4) + out.abs() * (mine + theirs + 0.06) + Vector3.UP * 0.16, Vector3.ZERO, NO_COLLIDE)
+
+
+## What the plate over a door into a room says: its name, unless the plan
+## said otherwise. A corridor has none.
+func _sign(room_name: String) -> String:
+	var plan: Dictionary = _floor_plan[room_name]
+	if plan.fit.has("sign"):
+		return plan.fit.sign
+	return "" if plan.kind == "corridor" else room_name.replace("_", " ").to_upper()
+
+
+## What divides the walls of a room: a pier under whatever its roof rests
+## on, or a corbel where a door or a window is in the way of one; a plinth
+## of concrete along the foot of brick and a kerb along plaster; and
+## buttresses against the walls of a yard.
+func _room_structure(room_name: String) -> void:
+	var plan: Dictionary = _floor_plan[room_name]
+	var brick: bool = ROOM_KINDS[plan.kind].wall == "brick"
+	for bearing: Dictionary in plan.roof.get("bearings", []):
+		var side := _side_of(bearing.inwards)
+		var along: float = bearing.at.x if side == NORTH or side == SOUTH else bearing.at.z
+		if brick and _wall_clear(room_name, side, along, 0.45):
+			pier(Vector3(bearing.at.x, 0, bearing.at.z), bearing.inwards, bearing.at.y)
+			plan.piers.append({"side": side, "along": along})
+		else:
+			corbel(bearing.at, bearing.inwards, 0.1, "concrete" if brick else "plaster")
+	if plan.roof.is_empty():
+		for side in 4:
+			for span: Vector2 in _free_spans(room_name, side, 1.4, false):
+				var count := int((span.y - span.x) / 6.5)
+				for i in count:
+					var along := span.x + (span.y - span.x) * (i + 0.5) / count
+					var foot := _wall_spot(room_name, side, along, 0.0)
+					var front := _wall_spot(room_name, side, along, 0.4)
+					if _wall_clear(room_name, side, along, 0.6) and _room_free(room_name, Vector2(front.x, front.z), 0.5):
+						buttress(foot, _normal_in(side), plan.height)
+						plan.piers.append({"side": side, "along": along})
+						_stand(room_name, Vector2(front.x, front.z), 0.6)
+	for side in 4:
+		for span: Vector2 in _free_spans(room_name, side, 0.04, false, 1.05 if brick else 0.2):
+			var from := _wall_spot(room_name, side, span.x, 0.0)
+			var to := _wall_spot(room_name, side, span.y, 0.0)
+			if brick:
+				plinth(from, to, _normal_in(side), 1.0, 0.08)
+			else:
+				plinth(from, to, _normal_in(side), 0.15, 0.03)
 
 
 ## Grime where the walls meet the floor, rain under the windows and stains on
@@ -415,93 +682,176 @@ func _room_dirt(room_name: String) -> void:
 		floor_decal(_pick("stain"), Vector3(spot.x, 0, spot.y), Vector2(size, size * _decal_rng.randf_range(0.7, 1.3)), _decal_rng.randf_range(0, 360))
 
 
-## What stands about in a room of its kind.
+# --- What stands about ----------------------------------------------------------
+
+
+## What a robot can wait behind, by the stock of the room it stands in: see
+## _room_screens(). A room has them in turn, so that two in one room differ.
+const SCREENS := {
+	"works": ["cases", "screens", "pallets", "plates", "drums"],
+	"paint": ["booth", "screens", "cases"],
+	"bay": ["cases", "pallets", "drums"],
+	"plant": ["cases", "drums"],
+	"storage": ["cases", "pallets", "shelving"],
+	"tools": ["shelving", "cases"],
+	"despatch": ["cases", "pallets"],
+	"archive": ["shelving"],
+	"office": ["cupboard", "shelving"],
+	"lodge": ["cupboard", "shelving"],
+	"canteen": ["cupboard"],
+	"kitchen": ["cupboard"],
+	"changing": ["lockers"],
+	"yard": ["container"],
+}
+
+
+## What stands about in a room, by its stock.
 func _room_stock(room_name: String) -> void:
 	var plan: Dictionary = _floor_plan[room_name]
+	var high: float = plan.height
+	var inner := _room_inside(room_name)
+	var along_x := inner.size.x >= inner.size.y
 	_room_screens(room_name)
-	match ROOM_KINDS[plan.kind].stock:
+	match _fit(room_name, "stock"):
 		"storage":
 			# Racks along the walls, and what would not fit on them in between.
-			var racks := 0
-			for side in 4:
-				for span: Vector2 in _free_spans(room_name, side, 1.0, true):
-					var count := int((span.y - span.x) / 3.3)
-					for i in count:
-						var spot := _wall_spot(room_name, side, span.x + (span.y - span.x) * (i + 0.5) / count, 0.45)
-						if racks < 10 and _room_free(room_name, Vector2(spot.x, spot.z), 0.4):
-							shelf(spot, _yaw_in(side), _rng.randf() < 0.6)
-							plan.stood.append(Vector3(spot.x, spot.z, 1.5))
-							racks += 1
-			_room_islands(room_name, 3.8, ["crates", "crates", "pallet", "bags"], 2, 4)
+			_line_walls(room_name, [
+				[3.0, 3.0, 0.75, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, true)],
+				[3.0, 3.0, 0.65, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, false)],
+				[2.0, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+				[1.5, 1.3, 0.65, func(at: Vector3, yaw: float) -> void: _piles("industrial_pastic_container", at, yaw, 2)],
+				[1.2, 1.9, 1.0, func(at: Vector3, yaw: float) -> void: place("old_military_crate", at, yaw)],
+			], 10, 0.75)
+			_room_islands(room_name, 3.8, ["crates", "crates", "pallet", "bags", "totes", "plastic", "case", "drum"], 2, 4)
+		"archive":
+			# Rows of shelves down the room, and cabinets along its walls.
+			_room_rows(room_name, 2.0, func(at: Vector3, yaw: float) -> void: _shelving_pair(at, yaw, 2.0))
+			_line_walls(room_name, [
+				[3.0, 1.4, 0.62, func(at: Vector3, yaw: float) -> void: filing_cabinets(at, yaw, 3)],
+				[2.0, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+				[1.0, 1.4, 0.6, func(at: Vector3, yaw: float) -> void: place("wooden_bookshelf_worn", at, yaw)],
+				[1.0, 0.9, 0.6, func(at: Vector3, yaw: float) -> void: _boxes(at, yaw)],
+			], 8, 0.6)
+		"tools":
+			_line_walls(room_name, [
+				[3.0, 3.0, 0.65, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, false)],
+				[2.0, 2.3, 0.8, func(at: Vector3, yaw: float) -> void: bench(at, yaw)],
+				[2.0, 1.0, 0.6, func(at: Vector3, yaw: float) -> void: cupboard("machine", at, yaw, Vector3(0.98, 1.9, 0.6))],
+				[1.5, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+				[1.0, 0.75, 0.45, func(at: Vector3, yaw: float) -> void: place("metal_tool_chest", at, yaw)],
+				[1.0, 1.3, 0.8, func(at: Vector3, yaw: float) -> void: place("tool_cart", at, yaw)],
+				[1.0, 0.8, 0.4, func(at: Vector3, yaw: float) -> void: _cans(at, yaw)],
+			], 8, 0.75)
+			_room_islands(room_name, 4.0, ["crates", "cart", "case", "plastic"], 2, 3)
+		"despatch":
+			_line_walls(room_name, [
+				[3.0, 3.0, 0.75, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, true)],
+				[2.0, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+				[2.0, 1.9, 0.82, func(at: Vector3, yaw: float) -> void: _table_with(at, yaw, ["clipboard", "office_notepads"])],
+				[1.5, 1.9, 0.65, func(at: Vector3, yaw: float) -> void: _piles("industrial_pastic_container", at, yaw, 3)],
+			], 8, 0.6)
+			_room_islands(room_name, 3.8, ["pallet", "totes", "case", "bags", "cart", "plastic", "pallet"], 2, 4)
 		"works":
 			# Something against a wall every few metres, and cover on the floor.
-			for side in 4:
-				for span: Vector2 in _free_spans(room_name, side, 1.2, true):
-					var count := int((span.y - span.x) / 4.5) if span.y - span.x >= 4.5 else int(span.y - span.x >= 3.2)
-					for i in count:
-						var along := span.x + (span.y - span.x) * (i + 0.5) / count
-						var spot := _wall_spot(room_name, side, along, 0.5)
-						if not _room_free(room_name, Vector2(spot.x, spot.z), 1.0):
-							continue
-						plan.stood.append(Vector3(spot.x, spot.z, 1.5))
-						match _rng.randi_range(0, 4):
-							0, 1:
-								shelf(_wall_spot(room_name, side, along, 0.45), _yaw_in(side), true)
-							2:
-								cabinets(_wall_spot(room_name, side, along, 0.5), _yaw_in(side))
-							3:
-								tyres(_wall_spot(room_name, side, along, 0.6), _rng.randi_range(2, 4))
-							4:
-								for k in 3:
-									barrel(_wall_spot(room_name, side, along + (k - 1) * 0.75, 0.55 + (k % 2) * 0.35))
-			_room_islands(room_name, 4.0, ["crates", "crates", "barrier", "barrier", "pallet", "bags", "barrels"], 3, 5)
+			_line_walls(room_name, [
+				[2.0, 3.0, 0.75, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, true)],
+				[1.0, 3.0, 0.65, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, false)],
+				[2.0, 3.0, 0.9, func(at: Vector3, yaw: float) -> void: cabinets(at, yaw)],
+				[2.0, 2.3, 0.8, func(at: Vector3, yaw: float) -> void: bench(at, yaw)],
+				[1.5, 2.4, 1.0, func(at: Vector3, yaw: float) -> void: _barrel_row(at, yaw)],
+				[1.5, 1.0, 0.9, func(at: Vector3, yaw: float) -> void: tyres(at, _rng.randi_range(2, 4))],
+				[1.5, 1.0, 0.6, func(at: Vector3, yaw: float) -> void: cupboard("machine", at, yaw, Vector3(0.98, 1.9, 0.6))],
+				[1.0, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+			], 99, 0.45)
+			_room_big(room_name, ["plates"], 1)
+			_room_islands(room_name, 4.0, ["crates", "crates", "barrier", "barrier", "pallet", "bags", "barrels", "case", "drum", "cart", "generator"], 3, 5)
+		"paint":
+			# The booth stands where robots wait in it, see _room_screens(), or
+			# against a wall when nobody does. Then what is waiting to be
+			# sprayed, or to dry.
+			if (plan.screens as Array).is_empty():
+				_line_walls(room_name, [[1.0, 3.6, 2.2, func(at: Vector3, yaw: float) -> void: spray_booth(at, yaw, high)]], 1, 1.0)
+			_line_walls(room_name, [
+				[2.0, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+				[2.0, 1.9, 0.82, func(at: Vector3, yaw: float) -> void: _table_with(at, yaw, ["spray_paint_bottles", "spray_paint_bottles", "cleaner_tin_01", "spray_paint_bottles"])],
+				[1.5, 2.4, 1.0, func(at: Vector3, yaw: float) -> void: _barrel_row(at, yaw)],
+				[1.0, 1.0, 0.6, func(at: Vector3, yaw: float) -> void: cupboard("machine", at, yaw, Vector3(0.98, 1.9, 0.6))],
+				[1.0, 0.8, 0.4, func(at: Vector3, yaw: float) -> void: _cans(at, yaw)],
+			], 6, 0.5)
+			_room_islands(room_name, 4.0, ["panels", "pallet", "barrels", "case", "panels"], 2, 3)
+		"bay":
+			# What came in or goes out: a car under a sheet, and goods on pallets.
+			_room_big(room_name, ["car"], 1)
+			_line_walls(room_name, [
+				[2.0, 3.0, 0.75, func(at: Vector3, yaw: float) -> void: shelf(at, yaw, true)],
+				[1.5, 2.4, 1.0, func(at: Vector3, yaw: float) -> void: _barrel_row(at, yaw)],
+				[1.5, 1.0, 0.9, func(at: Vector3, yaw: float) -> void: tyres(at, _rng.randi_range(2, 4))],
+				[1.0, 2.3, 0.8, func(at: Vector3, yaw: float) -> void: bench(at, yaw)],
+			], 99, 0.4)
+			_room_islands(room_name, 4.0, ["pallet", "totes", "case", "barrier", "cart", "crates", "drum", "bags"], 3, 5)
 		"yard":
 			# Containers first, one or two high, then smaller things between them.
 			var colours: Array[String] = ["container_red", "container_green", "container_blue", "container_orange", "container_grey"]
 			for spot in _room_spread(room_name, 3.2, 9.0, 3.6):
-				var along_x := _rng.randf() < 0.5
+				var lengthwise := _rng.randf() < 0.5
 				var on_ground := Vector3(spot.x, 0, spot.y)
-				container(colours[_rng.randi_range(0, colours.size() - 1)], on_ground, along_x)
+				container(colours[_rng.randi_range(0, colours.size() - 1)], on_ground, lengthwise)
 				if _rng.randf() < 0.4:
-					var nudge := Vector3(_rng.randf_range(-0.3, 0.3), 2.6, 0) if along_x else Vector3(0, 2.6, _rng.randf_range(-0.3, 0.3))
-					container(colours[_rng.randi_range(0, colours.size() - 1)], on_ground + nudge, along_x)
-			_room_islands(room_name, 4.5, ["crates", "barrier", "barrier", "pallet", "barrels", "bags"], 3, 5)
-		"office":
-			var doors: Array = plan.doors
-			var facing: int = (doors[0].side ^ 1) if not doors.is_empty() else NORTH
-			var longest := _longest(_free_spans(room_name, facing, 0.8, false))
-			if longest.y - longest.x >= 2.0:
-				var along := (longest.x + longest.y) * 0.5
-				place(DESK, _wall_spot(room_name, facing, along, 0.5), _yaw_in(facing))
-				place("plastic_monobloc_chair_01", _wall_spot(room_name, facing, along + 0.2, 1.4), _yaw_in(facing) + 180.0 + _rng.randf_range(-25.0, 25.0))
-			var beside := [WEST, EAST] if facing == NORTH or facing == SOUTH else [NORTH, SOUTH]
-			for side: int in beside:
-				var span := _longest(_free_spans(room_name, side, 0.8, true))
-				if span.y - span.x < 1.6:
-					continue
-				cupboard("machine", _wall_spot(room_name, side, span.x + 0.8, 0.33), _yaw_in(side), Vector3(0.98, 1.9, 0.6))
-				if span.y - span.x >= 3.2:
-					var size: Vector3 = _model("cardboard_box_01").box.size
-					var corner := _wall_spot(room_name, side, span.y - 0.6, 0.45)
-					place("cardboard_box_01", corner, _yaw_in(side) + 8.0)
-					place("cardboard_box_01", corner + Vector3(0.02, size.y, 0.02), _yaw_in(side) - 14.0)
+					var nudge := Vector3(_rng.randf_range(-0.3, 0.3), 2.6, 0) if lengthwise else Vector3(0, 2.6, _rng.randf_range(-0.3, 0.3))
+					container(colours[_rng.randi_range(0, colours.size() - 1)], on_ground + nudge, lengthwise)
+			_room_big(room_name, ["car"], 1)
+			_room_islands(room_name, 4.5, ["crates", "barrier", "barrier", "pallet", "barrels", "bags", "drum", "case", "generator", "stove", "bins"], 3, 5)
+		"office", "lodge":
+			_stock_office(room_name)
+		"changing":
+			_line_walls(room_name, [
+				[3.0, 2.6, 0.5, func(at: Vector3, yaw: float) -> void: lockers("machine_blue", at, yaw, 7, _ajar(7))],
+				[2.0, 1.9, 0.5, func(at: Vector3, yaw: float) -> void: lockers("machine", at, yaw, 5, _ajar(5))],
+				[1.5, 1.9, 0.5, func(at: Vector3, yaw: float) -> void: wash_trough(at, yaw, 1.8)],
+				[1.5, 1.8, 0.36, func(at: Vector3, yaw: float) -> void: slat_bench(at, yaw, 1.8, true)],
+				[0.8, 0.8, 0.4, func(at: Vector3, yaw: float) -> void: _cans(at, yaw)],
+			], 9, 0.85)
+			for spot in _room_spread(room_name, 1.7, 3.2, 1.1):
+				slat_bench(Vector3(spot.x, 0, spot.y), 0.0 if along_x else 90.0, 1.8)
+		"kitchen":
+			# The range first and the cupboard with the oven on it, then
+			# worktops and sinks, and a table in the middle.
+			_line_walls(room_name, [[1.0, 2.1, 0.9, func(at: Vector3, yaw: float) -> void: kitchen_range(at, yaw, high)]], 1, 1.0)
+			_line_walls(room_name, [[1.0, 1.25, 0.62, func(at: Vector3, yaw: float) -> void: _cabinet_with(at, yaw, "vintage_microwave", 0.55)]], 1, 1.0)
+			_line_walls(room_name, [
+				[3.0, 2.4, 0.7, func(at: Vector3, yaw: float) -> void: counter(at, yaw, 2.4, "galvanised")],
+				[2.0, 1.9, 0.5, func(at: Vector3, yaw: float) -> void: wash_trough(at, yaw, 1.8)],
+				[1.0, 1.15, 0.5, func(at: Vector3, yaw: float) -> void: place("steel_frame_shelves_01", at, yaw, true, 0.1)],
+				[1.5, 1.2, 0.45, func(at: Vector3, yaw: float) -> void: _piles("plastic_crate_02", at, yaw, 2)],
+				[1.0, 0.8, 0.4, func(at: Vector3, yaw: float) -> void: _cans(at, yaw)],
+			], 8, 0.8)
+			_room_islands(room_name, 3.6, ["table", "plastic", "table", "bins"], 2, 3)
 		"canteen":
-			# Tables in rows with chairs at them, and a cupboard against a wall.
-			var table: Vector3 = _model("WoodenTable_03").box.size
+			# Tables in rows with chairs at them, the hatch and a trolley by the walls.
+			var tables: Array[String] = ["WoodenTable_03", "dining_table", "WoodenTable_03"]
+			var chairs: Array[String] = ["plastic_monobloc_chair_01", "SchoolChair_01"]
 			for spot in _room_spread(room_name, 1.8, 3.4, 1.5):
+				var model := tables[_rng.randi_range(0, tables.size() - 1)]
+				var size: Vector3 = _model(model).box.size
 				var turn := 90.0 if _rng.randf() < 0.5 else 0.0
 				var facing := Basis(Vector3.UP, deg_to_rad(turn))
-				place("WoodenTable_03", Vector3(spot.x, 0, spot.y), turn)
+				place(model, Vector3(spot.x, 0, spot.y), turn)
+				var seats := 2 if size.x > 1.8 else 1
 				for seat: float in [-1.0, 1.0]:
-					if _rng.randf() < 0.8:
-						place("plastic_monobloc_chair_01", Vector3(spot.x, 0, spot.y) + facing * Vector3(_rng.randf_range(-0.3, 0.3), 0, seat * (table.z * 0.5 + 0.45)), turn + (180.0 if seat > 0.0 else 0.0) + _rng.randf_range(-20.0, 20.0))
-			for side in 4:
-				var span := _longest(_free_spans(room_name, side, 0.8, true))
-				if span.y - span.x >= 2.0:
-					cupboard("machine", _wall_spot(room_name, side, span.x + 0.8, 0.33), _yaw_in(side), Vector3(0.98, 1.9, 0.6))
-					break
+					for k in seats:
+						if _rng.randf() < 0.8:
+							var aside := (k - (seats - 1) * 0.5) * 0.9 + _rng.randf_range(-0.15, 0.15)
+							place(chairs[_rng.randi_range(0, chairs.size() - 1)], Vector3(spot.x, 0, spot.y) + facing * Vector3(aside, 0, seat * (size.z * 0.5 + 0.45)), turn + (180.0 if seat > 0.0 else 0.0) + _rng.randf_range(-20.0, 20.0))
+			_line_walls(room_name, [[1.0, 3.2, 0.7, func(at: Vector3, yaw: float) -> void: counter(at, yaw, 3.0, "wood", "machine_grey", 1.05)]], 1, 1.0)
+			_line_walls(room_name, [[1.0, 2.3, 1.1, func(at: Vector3, yaw: float) -> void: place("CoffeeCart_01", at, yaw)]], 1, 1.0)
+			_line_walls(room_name, [
+				[2.0, 1.25, 0.62, func(at: Vector3, yaw: float) -> void: _cabinet_with(at, yaw, "Television_01", 1.0)],
+				[2.0, 1.2, 0.5, func(at: Vector3, yaw: float) -> void: place("painted_wooden_bench", at, yaw)],
+				[1.0, 1.0, 0.6, func(at: Vector3, yaw: float) -> void: cupboard("machine", at, yaw, Vector3(0.98, 1.9, 0.6))],
+			], 5, 0.3)
 		"corridor":
-			# A fire point by every other door, and pipes under the ceiling.
+			# A fire point by every other door, and now and then a bench or a
+			# cupboard along the wall.
 			var count := 0
 			for way: Dictionary in plan.doors:
 				count += 1
@@ -513,14 +863,193 @@ func _room_stock(room_name: String) -> void:
 					beside = way.along - way.width * 0.5 - 0.7
 				place("korean_fire_extinguisher_01", _wall_spot(room_name, way.side, beside, 0.2), _yaw_in(way.side))
 				mount("fire_alarm", _wall_spot(room_name, way.side, beside + 0.35, 0.0, 1.4), _yaw_in(way.side), true)
-			var inner := _room_inside(room_name)
-			var high: float = plan.height
-			if inner.size.x >= inner.size.y:
-				cylinder("pipe", Vector3(inner.position.x, high - 0.4, inner.position.y + 0.3), 0.09, inner.size.x, NO_COLLIDE, Vector3(0, 0, -90))
-				cylinder("steel", Vector3(inner.position.x, high - 0.3, inner.position.y + 0.55), 0.05, inner.size.x, NO_COLLIDE, Vector3(0, 0, -90))
-			else:
-				cylinder("pipe", Vector3(inner.position.x + 0.3, high - 0.4, inner.position.y), 0.09, inner.size.y, NO_COLLIDE, Vector3(90, 0, 0))
-				cylinder("steel", Vector3(inner.position.x + 0.55, high - 0.3, inner.position.y), 0.05, inner.size.y, NO_COLLIDE, Vector3(90, 0, 0))
+				_wall(room_name, way.side, beside - 0.3, beside + 0.6)
+			_line_walls(room_name, [
+				[2.0, 1.8, 0.36, func(at: Vector3, yaw: float) -> void: slat_bench(at, yaw, 1.8)],
+				[2.0, 1.2, 0.5, func(at: Vector3, yaw: float) -> void: place("painted_wooden_bench", at, yaw)],
+				[1.0, 1.0, 0.45, func(at: Vector3, yaw: float) -> void: cupboard("machine_grey", at, yaw, Vector3(0.98, 1.9, 0.42))],
+				[1.0, 1.4, 0.62, func(at: Vector3, yaw: float) -> void: filing_cabinets(at, yaw, 3)],
+			], maxi(1, int(maxf(inner.size.x, inner.size.y) / 9.0)), 0.05)
+
+
+## An office: a desk with its chair at the wall across from the door, with
+## what lay on it, cabinets and shelves along the other walls, and in a
+## large one a table to sit round. A lodge has a counter and a set besides.
+func _stock_office(room_name: String) -> void:
+	var plan: Dictionary = _floor_plan[room_name]
+	var doors: Array = plan.doors
+	var facing: int = (doors[0].side ^ 1) if not doors.is_empty() else NORTH
+	var longest := _longest(_free_spans(room_name, facing, 0.8, false))
+	if longest.y - longest.x >= 2.4:
+		var along := (longest.x + longest.y) * 0.5
+		var at := _wall_spot(room_name, facing, along, 0.62)
+		if _room_free(room_name, Vector2(at.x, at.z), 0.6):
+			_desk(at, _yaw_in(facing))
+			_stand(room_name, Vector2(at.x, at.z), 1.3)
+			_wall(room_name, facing, along - 1.1, along + 1.1)
+	if _fit(room_name, "stock") == "lodge":
+		_line_walls(room_name, [[1.0, 2.6, 0.7, func(at: Vector3, yaw: float) -> void: counter(at, yaw, 2.4, "wood", "machine", 1.05)]], 1, 1.0)
+		_line_walls(room_name, [[1.0, 1.25, 0.62, func(at: Vector3, yaw: float) -> void: _cabinet_with(at, yaw, "Television_01", 1.0)]], 1, 1.0)
+		_line_walls(room_name, [[1.0, 1.2, 0.5, func(at: Vector3, yaw: float) -> void: place("painted_wooden_bench", at, yaw)]], 1, 1.0)
+	_line_walls(room_name, [
+		[3.0, 1.4, 0.62, func(at: Vector3, yaw: float) -> void: filing_cabinets(at, yaw, 3)],
+		[1.5, 0.95, 0.62, func(at: Vector3, yaw: float) -> void: filing_cabinets(at, yaw, 2, "machine")],
+		[2.0, 1.4, 0.6, func(at: Vector3, yaw: float) -> void: place("wooden_bookshelf_worn", at, yaw)],
+		[2.0, 1.15, 0.5, func(at: Vector3, yaw: float) -> void: place("steel_frame_shelves_01", at, yaw, true, 0.1)],
+		[1.5, 1.0, 0.28, func(at: Vector3, yaw: float) -> void: place("Shelf_01", at, yaw)],
+		[1.5, 1.0, 0.6, func(at: Vector3, yaw: float) -> void: cupboard("machine", at, yaw, Vector3(0.98, 1.9, 0.6))],
+		[1.0, 2.0, 0.45, func(at: Vector3, yaw: float) -> void: shelving(at, yaw, 2.0, 2.1, true)],
+		[1.0, 0.9, 0.6, func(at: Vector3, yaw: float) -> void: _boxes(at, yaw)],
+	], 6, 0.4)
+	# Room left on the floor: a table to sit round.
+	for spot in _room_spread(room_name, 2.2, 6.0, 1.7, 1):
+		var turn := 90.0 if _rng.randf() < 0.5 else 0.0
+		var top := Basis(Vector3.UP, deg_to_rad(turn))
+		table(Vector3(spot.x, 0, spot.y), turn, Vector3(1.8, 0.76, 0.9))
+		for seat: float in [-1.0, 1.0]:
+			place("SchoolChair_01", Vector3(spot.x, 0, spot.y) + top * Vector3(_rng.randf_range(-0.4, 0.4), 0, seat * 0.95), turn + (180.0 if seat > 0.0 else 0.0) + _rng.randf_range(-25.0, 25.0))
+
+
+## A desk with its back to a wall and what was left on it, and a chair
+## pushed back from it. `at` is its middle on the floor.
+func _desk(at: Vector3, yaw: float) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	var top: float = _model(DESK).box.size.y
+	place(DESK, at, yaw)
+	place("plastic_monobloc_chair_01" if _rng.randf() < 0.5 else "SchoolChair_01", at + turn * Vector3(0.2, 0, 0.95), yaw + 180.0 + _rng.randf_range(-25.0, 25.0))
+	drop("office_notepads", at + turn * Vector3(-0.3, top, 0.05), yaw + _clutter_rng.randf_range(-15.0, 15.0))
+	if _clutter_rng.randf() < 0.6:
+		drop("clipboard", at + turn * Vector3(0.6, top, 0.1), yaw + _clutter_rng.randf_range(-40.0, 40.0))
+	if _clutter_rng.randf() < 0.35:
+		drop("boombox", at + turn * Vector3(0.65, top, -0.25), yaw + _clutter_rng.randf_range(-15.0, 15.0))
+
+
+## A table against a wall with a few small things on it.
+func _table_with(at: Vector3, yaw: float, things: Array) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	table(at, yaw, Vector3(1.8, 0.8, 0.75))
+	for i in things.size():
+		var where := at + turn * Vector3(-0.65 + 1.3 * i / maxf(1.0, things.size() - 1.0) + _clutter_rng.randf_range(-0.08, 0.08), 0.8, _clutter_rng.randf_range(-0.2, 0.2))
+		drop(things[i], where, yaw + _clutter_rng.randf_range(0.0, 360.0))
+
+
+## A kitchen cupboard with something standing on it.
+func _cabinet_with(at: Vector3, yaw: float, model: String, scale: float) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	place("painted_wooden_cabinet", at, yaw)
+	prop(model, Transform3D(turn * Basis(Vector3.UP, deg_to_rad(_clutter_rng.randf_range(-12.0, 12.0))), at + Vector3(0, _model("painted_wooden_cabinet").box.size.y, 0)), scale)
+
+
+## Cans of cleaner put down against a wall, and a broom leaning by them.
+func _cans(at: Vector3, yaw: float) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	for i in _clutter_rng.randi_range(2, 3):
+		place("multi_cleaner_5_litre", at + turn * Vector3(-0.25 + i * 0.26, 0, _clutter_rng.randf_range(-0.12, 0.05)), yaw + _clutter_rng.randf_range(-30.0, 30.0))
+	if _clutter_rng.randf() < 0.6:
+		drop("plastic_broom", at + turn * Vector3(0.45, 0, -0.1), yaw)
+
+
+## Two cardboard boxes, one on the other.
+func _boxes(at: Vector3, yaw: float) -> void:
+	var size: Vector3 = _model("cardboard_box_01").box.size
+	place("cardboard_box_01", at, yaw + 8.0)
+	place("cardboard_box_01", at + Vector3(0.02, size.y, 0.02), yaw - 14.0)
+
+
+## Three barrels in a row against a wall, one of them a little forward.
+func _barrel_row(at: Vector3, yaw: float) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	for k in 3:
+		barrel(at + turn * Vector3((k - 1) * 0.75, 0, (k % 2) * 0.35 - 0.15))
+
+
+## A few piles of the same crate or tote, side by side.
+func _piles(model: String, at: Vector3, yaw: float, count: int) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	var wide: float = _model(model).box.size.x + 0.08
+	for i in count:
+		pile(model, at + turn * Vector3((i - (count - 1) * 0.5) * wide, 0, _prop_rng.randf_range(-0.04, 0.04)), yaw + _prop_rng.randf_range(-6.0, 6.0), _prop_rng.randi_range(2, 4))
+
+
+## Two runs of shelving back to back.
+func _shelving_pair(at: Vector3, yaw: float, length: float) -> void:
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw))
+	shelving(at + turn * Vector3(0, 0, 0.24), yaw, length)
+	shelving(at - turn * Vector3(0, 0, 0.24), yaw + 180.0, length)
+
+
+## Which lockers of a row stand ajar, and by how many degrees.
+func _ajar(count: int) -> Dictionary:
+	var open := {}
+	for i in _prop_rng.randi_range(1, 2):
+		open[_prop_rng.randi_range(0, count - 1)] = _prop_rng.randf_range(8.0, 70.0)
+	return open
+
+
+## Stands things against the walls of a room, where nothing opens in them.
+## Each of `things` is [how likely it is, how wide, how deep, what builds
+## it]; the last is called with its middle on the floor and the turn that
+## makes it face the room. No more than `most` in all, and the higher
+## `crowd` (0 to 1) the closer together. Returns how many were stood.
+func _line_walls(room_name: String, things: Array, most := 99, crowd := 0.5) -> int:
+	var total := 0.0
+	var narrowest: Array = things[0]
+	for thing: Array in things:
+		total += thing[0]
+		if thing[1] < narrowest[1]:
+			narrowest = thing
+	var stood := 0
+	# Begin with another wall every time, or the first would get the best.
+	var first := _rng.randi_range(0, 3)
+	for turn in 4:
+		var side := (first + turn) % 4
+		for span: Vector2 in _free_spans(room_name, side, 0.9, true):
+			var at := span.x + _rng.randf_range(0.1, 0.5 + (1.0 - crowd) * 1.5)
+			while stood < most:
+				var pick := _rng.randf() * total
+				var thing: Array = things[0]
+				for candidate: Array in things:
+					pick -= candidate[0]
+					if pick <= 0.0:
+						thing = candidate
+						break
+				if at + thing[1] > span.y - 0.1:
+					thing = narrowest
+				var wide: float = thing[1]
+				var deep: float = thing[2]
+				if at + wide > span.y - 0.1:
+					break
+				var middle := _wall_spot(room_name, side, at + wide * 0.5, deep * 0.5 + 0.03)
+				if _room_free(room_name, Vector2(middle.x, middle.z), maxf(deep * 0.5, 0.3) + 0.15 + WAY_BETWEEN):
+					(thing[3] as Callable).call(middle, _yaw_in(side))
+					_stand(room_name, Vector2(middle.x, middle.z), maxf(wide, deep) * 0.5)
+					_wall(room_name, side, at, at + wide)
+					stood += 1
+				at += wide + lerpf(2.6, 0.15, crowd) * _rng.randf_range(0.6, 1.4)
+	return stood
+
+
+## Stands rows of something down the length of a room, an aisle apart, as
+## the shelves of an archive: `build` is called for every piece of a row,
+## `length` long, with its middle on the floor and its turn.
+func _room_rows(room_name: String, length: float, build: Callable) -> void:
+	var floor_left := _room_inside(room_name).grow(-2.3)
+	if floor_left.size.x < length or floor_left.size.y < length:
+		return
+	var along_x := floor_left.size.x >= floor_left.size.y
+	var long := floor_left.size.x if along_x else floor_left.size.y
+	var wide := floor_left.size.y if along_x else floor_left.size.x
+	var rows := int(wide / 2.7) + 1
+	var pieces := maxi(1, int(long / (length + 0.05)))
+	for r in rows:
+		for k in pieces:
+			var down := (k + 0.5) * long / pieces
+			var over := wide * (r + 0.5) / rows
+			var spot := floor_left.position + (Vector2(down, over) if along_x else Vector2(over, down))
+			if not _room_free(room_name, spot, length * 0.5):
+				continue
+			build.call(Vector3(spot.x, 0, spot.y), 0.0 if along_x else 90.0)
+			_stand(room_name, spot, length * 0.5)
 
 
 ## Things to take cover behind, on the floor of a room away from its walls:
@@ -530,6 +1059,7 @@ func _room_islands(room_name: String, pitch: float, kinds: Array, fewest: int, m
 	for spot in _room_spread(room_name, 2.2, pitch, 1.3):
 		var on_floor := Vector3(spot.x, 0, spot.y)
 		var turn := _rng.randf_range(0.0, 360.0)
+		var facing := Basis(Vector3.UP, deg_to_rad(turn))
 		match kinds[_rng.randi_range(0, kinds.size() - 1)]:
 			"crates":
 				crates(on_floor, _rng.randi_range(fewest, most))
@@ -546,14 +1076,55 @@ func _room_islands(room_name: String, pitch: float, kinds: Array, fewest: int, m
 						fuel(beside)
 					else:
 						barrel(beside)
+			"case":
+				case(on_floor, turn, Vector3(_prop_rng.randf_range(1.2, 1.9), _prop_rng.randf_range(0.9, 1.5), _prop_rng.randf_range(0.9, 1.2)))
+				if _prop_rng.randf() < 0.5:
+					case(on_floor + facing * Vector3(0.2, 0, 1.25), turn + _prop_rng.randf_range(-20.0, 20.0), Vector3(1.1, 0.8, 0.9))
+			"drum":
+				cable_drum(on_floor, turn, _prop_rng.randf_range(1.5, 2.0), 1.0)
+			"totes":
+				_piles("industrial_pastic_container", on_floor, turn, 2)
+			"plastic":
+				_piles("plastic_crate_02", on_floor, turn, _prop_rng.randi_range(2, 3))
+			"cart":
+				place(["tool_cart", "industrial_storage_cart", "hand_truck"][_prop_rng.randi_range(0, 2)], on_floor, turn)
+			"generator":
+				place("portable_generator", on_floor, turn)
+				place("metal_toolbox", on_floor + facing * Vector3(0.75, 0, 0.2), turn + 40.0)
+			"stove":
+				place("barrel_stove", on_floor, turn)
+				floor_decal("scorch_1", on_floor, Vector2(2.2, 2.2), turn)
+				place("trashbag", on_floor + facing * Vector3(0.8, 0, 0.3), turn)
+			"bins":
+				place("metal_trash_can", on_floor, turn)
+				place("trashbag", on_floor + facing * Vector3(0.2, 0, 0.75), turn + 70.0)
+			"panels":
+				screens(on_floor, turn, 2, "container_grey")
+			"table":
+				place("painted_wooden_table", on_floor, turn)
+				if _rng.randf() < 0.7:
+					place("metal_stool_03", on_floor + facing * Vector3(0.4, 0, 0.95), turn + 180.0)
+
+
+## One or two of the large things a room has room for: a car under a sheet,
+## a rack of steel plate.
+func _room_big(room_name: String, kinds: Array, most: int) -> void:
+	for spot in _room_spread(room_name, 3.4, 9.0, 2.6, most):
+		var on_floor := Vector3(spot.x, 0, spot.y)
+		var turn := _rng.randf_range(0.0, 360.0)
+		match kinds[_rng.randi_range(0, kinds.size() - 1)]:
+			"car":
+				place("covered_car", on_floor, turn)
+			"plates":
+				plate_rack(on_floor, turn)
 
 
 ## Spots on the floor of a room for things that reach `reach` around them:
-## `inset` from its walls, `pitch` apart, where the floor is free. Every spot
-## a metre and a half from the next is tried, in an order the dice decide.
-## What is returned counts as stood on from then on.
-func _room_spread(room_name: String, inset: float, pitch: float, reach: float) -> Array[Vector2]:
-	var plan: Dictionary = _floor_plan[room_name]
+## `inset` from its walls, `pitch` apart, where the floor is free, and no
+## more than `most` of them. Every spot a metre and a half from the next is
+## tried, in an order the dice decide. What is returned counts as stood on
+## from then on.
+func _room_spread(room_name: String, inset: float, pitch: float, reach: float, most := 999) -> Array[Vector2]:
 	var floor_left := _room_inside(room_name).grow(-inset)
 	var taken: Array[Vector2] = []
 	if floor_left.size.x <= 0.0 or floor_left.size.y <= 0.0:
@@ -572,11 +1143,221 @@ func _room_spread(room_name: String, inset: float, pitch: float, reach: float) -
 		spots[i] = spots[other]
 		spots[other] = held
 	for spot in spots:
-		if taken.any(func(island: Vector2) -> bool: return island.distance_to(spot) < pitch) or not _room_free(room_name, spot, reach):
+		if taken.size() >= most:
+			break
+		# A good step more than it reaches itself: what stands on the floor
+		# leaves room to walk between it and the next thing.
+		if taken.any(func(island: Vector2) -> bool: return island.distance_to(spot) < pitch) or not _room_free(room_name, spot, reach + WAY_BETWEEN):
 			continue
 		taken.append(spot)
-		plan.stood.append(Vector3(spot.x, spot.y, reach))
+		_stand(room_name, spot, reach)
 	return taken
+
+
+# --- On the walls and under the ceiling -----------------------------------------
+
+
+## What hangs on the walls of a room once everything stands: a radiator
+## under a window, a switch by the door, and what a room of its stock has on
+## its walls: a clock, a board, a first-aid box, a warning.
+func _room_fittings(room_name: String) -> void:
+	var plan: Dictionary = _floor_plan[room_name]
+	var high: float = plan.height
+	var stock: String = _fit(room_name, "stock")
+	var brick: bool = ROOM_KINDS[plan.kind].wall == "brick"
+	var open_air: bool = plan.roof.is_empty()
+	if not brick:
+		for pane: Dictionary in plan.windows:
+			var front := _wall_spot(room_name, pane.side, pane.along, 0.3)
+			if pane.sill >= 0.85 and pane.width >= 1.4 and _room_free(room_name, Vector2(front.x, front.z), 0.25):
+				radiator(_wall_spot(room_name, pane.side, pane.along, 0.0), _normal_in(pane.side), clampi(int(pane.width * 8.0), 8, 20))
+				_stand(room_name, Vector2(front.x, front.z), 0.7)
+		# Conduit down to a switch beside the door one comes in by.
+		var way: Dictionary = plan.entry
+		if not way.is_empty():
+			for aside: float in [1.0, -1.0]:
+				var along: float = way.along + aside * (way.width * 0.5 + 0.32)
+				var span := _wall_span(room_name, way.side)
+				if along > span.x + 0.2 and along < span.y - 0.2 and _wall_free(room_name, way.side, along, 0.12):
+					switch_drop(_wall_spot(room_name, way.side, along, 0.0, high - 0.02), _normal_in(way.side))
+					_wall(room_name, way.side, along - 0.12, along + 0.12)
+					break
+	if brick:
+		# A lamp over every door of a yard or a plant room, where there is
+		# no daylight to find the way out by; in a plant room one every few
+		# metres along the walls as well, or what stands behind its
+		# machines stands in the dark; and a number on every pier.
+		if open_air or plan.kind == "plant":
+			for way: Dictionary in plan.doors:
+				if way.to != "" and way.height + 1.0 < high:
+					wall_lamp(_wall_spot(room_name, way.side, way.along, 0.0, way.height + 0.85), _normal_in(way.side), true, 6.0, 3.0)
+		if plan.kind == "plant":
+			for side in 4:
+				for span: Vector2 in _free_spans(room_name, side, 1.6, true):
+					var count := roundi((span.y - span.x) / 5.5)
+					for i in count:
+						var along := span.x + (span.y - span.x) * (i + 0.5) / count
+						if _wall_free(room_name, side, along, 0.3):
+							wall_lamp(_wall_spot(room_name, side, along, 0.0, 2.45), _normal_in(side), true, 6.5, 3.0)
+							_wall(room_name, side, along - 0.3, along + 0.3)
+		var numbers: Array[String] = ["1", "2", "3", "4", "5"]
+		var count := 0
+		for stood: Dictionary in plan.piers:
+			if open_air or count >= numbers.size() or stood.side == EAST or stood.side == WEST:
+				continue
+			if stood.side == NORTH:
+				label(numbers[count], _wall_spot(room_name, stood.side, stood.along, 0.3, 3.1), _normal_in(stood.side), 0.34, Color(0.07, 0.07, 0.07), 0.04)
+				count += 1
+	var pose_flat := Basis(Vector3.RIGHT, PI * 0.5)
+	match stock:
+		"office", "lodge", "archive":
+			_hang(room_name, 0.4, func(at: Vector3, inwards: Vector3) -> void: hang("wall_clock", at + Vector3.UP * 2.25, inwards))
+			_hang(room_name, 1.3, func(at: Vector3, inwards: Vector3) -> void: pin_board(at + Vector3.UP * 1.6, inwards))
+			_hang(room_name, 0.4, func(at: Vector3, inwards: Vector3) -> void: hang("clipboard", at + Vector3.UP * 1.5, inwards, pose_flat))
+			if stock == "lodge":
+				_hang(room_name, 0.7, func(at: Vector3, inwards: Vector3) -> void: hang("medical_box", at + Vector3.UP * 1.6, inwards, pose_flat))
+				_hang(room_name, 0.8, func(at: Vector3, inwards: Vector3) -> void: pin_board(at + Vector3.UP * 1.55, inwards, 0.7))
+		"canteen":
+			_hang(room_name, 0.4, func(at: Vector3, inwards: Vector3) -> void: hang("wall_clock", at + Vector3.UP * 2.3, inwards))
+			_hang(room_name, 0.7, func(at: Vector3, inwards: Vector3) -> void: hang("dartboard", at + Vector3.UP * 1.73, inwards))
+			_hang(room_name, 1.6, func(at: Vector3, inwards: Vector3) -> void: pin_board(at + Vector3.UP * 1.6, inwards, 1.5))
+			_hang(room_name, 1.2, func(at: Vector3, inwards: Vector3) -> void: sign_plate(at + Vector3.UP * 2.1, inwards, "NO SMOKING", 0.24, "enamel_red"))
+		"kitchen", "changing":
+			_hang(room_name, 0.4, func(at: Vector3, inwards: Vector3) -> void: hang("wall_clock", at + Vector3.UP * 2.25, inwards))
+			_hang(room_name, 1.3, func(at: Vector3, inwards: Vector3) -> void: pin_board(at + Vector3.UP * 1.6, inwards))
+		"corridor":
+			var long := maxf(_room_inside(room_name).size.x, _room_inside(room_name).size.y)
+			for i in maxi(1, int(long / 14.0)):
+				_hang(room_name, 1.3, func(at: Vector3, inwards: Vector3) -> void: pin_board(at + Vector3.UP * 1.6, inwards))
+			if long > 12.0:
+				_hang(room_name, 0.4, func(at: Vector3, inwards: Vector3) -> void: hang("wall_clock", at + Vector3.UP * 2.3, inwards))
+				_hang(room_name, 0.7, func(at: Vector3, inwards: Vector3) -> void: hang("medical_box", at + Vector3.UP * 1.6, inwards, pose_flat))
+				_hang(room_name, 0.5, func(at: Vector3, inwards: Vector3) -> void: hang("security_camera_01", at + Vector3.UP * 2.45, inwards))
+		"storage", "tools", "despatch":
+			_hang(room_name, 1.2, func(at: Vector3, inwards: Vector3) -> void: sign_plate(at + Vector3.UP * 2.2, inwards, "NO SMOKING", 0.24, "enamel_red"))
+			_hang(room_name, 0.4, func(at: Vector3, inwards: Vector3) -> void: hang("clipboard", at + Vector3.UP * 1.5, inwards, pose_flat))
+			if stock == "despatch":
+				_hang(room_name, 0.7, func(at: Vector3, inwards: Vector3) -> void: hang("medical_box", at + Vector3.UP * 1.6, inwards, pose_flat))
+		"works", "paint", "bay":
+			_hang(room_name, 0.5, func(at: Vector3, inwards: Vector3) -> void: hang("wall_clock", at + Vector3.UP * 2.6, inwards, Basis(), 1.6))
+			_hang(room_name, 0.7, func(at: Vector3, inwards: Vector3) -> void: hang("medical_box", at + Vector3.UP * 1.6, inwards, pose_flat))
+			_hang(room_name, 1.4, func(at: Vector3, inwards: Vector3) -> void: sign_plate(at + Vector3.UP * 2.4, inwards, "NO SMOKING" if stock == "paint" else "KEEP CLEAR", 0.3, "enamel_red"))
+			_hang(room_name, 1.3, func(at: Vector3, inwards: Vector3) -> void: pin_board(at + Vector3.UP * 1.6, inwards))
+		"plant":
+			for i in 2:
+				_hang(room_name, 1.2, func(at: Vector3, inwards: Vector3) -> void: _warning(at, inwards))
+		"yard":
+			_hang(room_name, 0.5, func(at: Vector3, inwards: Vector3) -> void: hang("security_camera_01", at + Vector3.UP * 3.4, inwards))
+			_hang(room_name, 1.4, func(at: Vector3, inwards: Vector3) -> void: sign_plate(at + Vector3.UP * 2.6, inwards, "KEEP CLEAR", 0.3, "enamel_red"))
+			for i in 3:
+				_hang(room_name, 0.5, func(at: Vector3, inwards: Vector3) -> void: downpipe(at, inwards, high))
+
+
+## A warning on a wall: the triangle, and under it what it warns of.
+func _warning(at: Vector3, inwards: Vector3) -> void:
+	wall_decal("warning_1", at + Vector3.UP * 2.3 + inwards * 0.02, inwards, 0.6, 0.6, Color.WHITE, 0.2)
+	sign_plate(at + Vector3.UP * 1.8, inwards, "DANGER", 0.22, "enamel_red")
+
+
+## Hangs something `wide` on a wall of a room where the wall is free: `build`
+## is called with the spot at the foot of the wall under its middle and the
+## way the wall faces. False if no wall has room for it.
+func _hang(room_name: String, wide: float, build: Callable) -> bool:
+	var first := _decal_rng.randi_range(0, 3)
+	for turn in 4:
+		var side := (first + turn) % 4
+		var spans := _free_spans(room_name, side, 0.5, true)
+		for k in spans.size():
+			var span: Vector2 = spans[(k + first) % spans.size()]
+			var room_for := span.y - span.x - wide
+			if room_for < 0.2:
+				continue
+			# A few tries along the span, from a spot the dice pick.
+			for attempt in 6:
+				var along := span.x + wide * 0.5 + room_for * fposmod(_decal_rng.randf() + attempt / 6.0, 1.0)
+				if _wall_free(room_name, side, along, wide * 0.5):
+					build.call(_wall_spot(room_name, side, along, 0.0), _normal_in(side))
+					_wall(room_name, side, along - wide * 0.5, along + wide * 0.5)
+					return true
+	return false
+
+
+## What runs under the ceiling of a room, by its kind and its roof: a duct
+## and a cable ladder down a corridor, a duct along the wall of an office,
+## sprinklers over a store, a round duct under the trusses of a hall and an
+## air main along its walls, and steam and water mains through a plant room.
+func _room_services(room_name: String) -> void:
+	var plan: Dictionary = _floor_plan[room_name]
+	if plan.roof.is_empty():
+		return
+	var high: float = plan.height
+	var inner := _room_inside(room_name)
+	var along_x := inner.size.x >= inner.size.y
+	var long := inner.size.x if along_x else inner.size.y
+	var wide := inner.size.y if along_x else inner.size.x
+	# A spot under the ceiling: `down` the length of the room from its
+	# north-west corner, `over` across it, at height `y`.
+	var under := func(down: float, over: float, y: float) -> Vector3:
+		return Vector3(inner.position.x + (down if along_x else over), y, inner.position.y + (over if along_x else down))
+	match plan.kind:
+		"corridor":
+			duct_run(under.call(0.01, 0.5, high - 0.2), under.call(long - 0.01, 0.5, high - 0.2), high, Vector2(0.4, 0.28), maxi(1, int(long / 5.0)))
+			cable_ladder(under.call(0.02, wide - 0.45, high - 0.3), under.call(long - 0.02, wide - 0.45, high - 0.3), high, 4, 0.3)
+			pipe_run([under.call(0.0, wide - 0.95, high - 0.35), under.call(long, wide - 0.95, high - 0.35)], 0.05, "pipe", high)
+		"office", "canteen", "control", "kitchen", "changing":
+			# Along the long wall that has the fewest windows in it.
+			var sides: Array[int] = [NORTH, SOUTH]
+			if not along_x:
+				sides = [WEST, EAST]
+			var near := 0 if (plan.windows as Array).filter(func(pane: Dictionary) -> bool: return pane.side == sides[0]).size() <= (plan.windows as Array).filter(func(pane: Dictionary) -> bool: return pane.side == sides[1]).size() else 1
+			var over := 0.42 if near == 0 else wide - 0.42
+			duct_run(under.call(0.01, over, high - 0.22), under.call(long - 0.01, over, high - 0.22), high, Vector2(0.45, 0.3), maxi(1, int(long / 4.0)))
+		"storage":
+			var lines := maxi(1, roundi(wide / 3.6))
+			for i in lines:
+				var over := wide * (i + 0.5) / lines + 0.35
+				sprinkler_line(under.call(0.6, over, high - 0.22), under.call(long - 0.05, over, high - 0.22), high)
+			# The main they branch from, and the riser that feeds it.
+			pipe_run([under.call(0.6, 0.12, 0.0), under.call(0.6, 0.12, high - 0.22), under.call(0.6, wide - 0.2, high - 0.22)], 0.04, RED)
+			pipe_valve(under.call(0.6, 0.12, 1.2), Vector3.UP, (under.call(1.6, 0.12, 1.2) as Vector3) - (under.call(0.6, 0.12, 1.2) as Vector3), 0.04)
+		"hall":
+			if plan.roof.form == "trusses":
+				# Under the ties, a quarter of the way across.
+				var from: Vector3 = under.call(0.6, wide * 0.27, high - 0.5)
+				var to: Vector3 = under.call(long - 0.6, wide * 0.27, high - 0.5)
+				round_duct(from, to, high - 0.2, 0.26, maxi(2, int(long / 5.0)))
+			# The air main along the two long walls, over the heads of the
+			# doors and under the sills of the windows, with a drop to a valve
+			# at every other pier.
+			var level := minf(2.95, high - 1.6)
+			for pane: Dictionary in plan.windows:
+				level = minf(level, pane.sill - 0.25)
+			var long_walls: Array[int] = [NORTH, SOUTH]
+			if not along_x:
+				long_walls = [WEST, EAST]
+			for side in long_walls:
+				var span := _wall_span(room_name, side)
+				wall_pipe(_wall_spot(room_name, side, span.x + 0.05, 0.3, level), _wall_spot(room_name, side, span.y - 0.05, 0.3, level), _normal_in(side), 0.04, "pipe")
+				var piers := piers_along(room_name, side)
+				for k in range(0, piers.size(), 2):
+					var top := _wall_spot(room_name, side, piers[k] + 0.42, 0.3, level) + _normal_in(side) * 0.11
+					pipe_run([top, Vector3(top.x, 1.25, top.z)], 0.022, "pipe")
+					pipe_valve(Vector3(top.x, 1.45, top.z), Vector3.UP, _normal_in(side), 0.022)
+		"plant":
+			# Two mains down the length of the room under the slab, one lagged,
+			# and a cable tray along the wall across from them.
+			# A plan says {"mains": false} for a room that has pipes enough of
+			# its own up there.
+			var over := wide * 0.24
+			if plan.fit.get("mains", true):
+				pipe_run([under.call(0.0, over, high - 0.95), under.call(long, over, high - 0.95)], 0.13, "tank", high)
+				pipe_run([under.call(0.0, over + 0.42, high - 0.9), under.call(long, over + 0.42, high - 0.9)], 0.07, "pipe", high)
+				pipe_valve(under.call(long * 0.5 + 0.9, over + 0.42, high - 0.9), (under.call(1.0, 0.0, 0.0) as Vector3) - (under.call(0.0, 0.0, 0.0) as Vector3), Vector3.DOWN, 0.07)
+			var side: int = SOUTH if along_x else EAST
+			var span := _wall_span(room_name, side)
+			var level := minf(3.0, high - 1.2)
+			if (plan.windows as Array).all(func(pane: Dictionary) -> bool: return pane.side != side or pane.sill > level + 0.4 or pane.head < level - 0.4):
+				cable_tray(_wall_spot(room_name, side, span.x + 0.1, 0.0, level), _wall_spot(room_name, side, span.y - 0.1, 0.0, level), _normal_in(side), 5, 0.3)
 
 
 # --- The robots -----------------------------------------------------------------
@@ -589,7 +1370,7 @@ func _room_spread(room_name: String, inset: float, pitch: float, reach: float) -
 ## needs nothing.
 func _plan_screens(room_name: String, count: int, entry: Vector2) -> void:
 	var plan: Dictionary = _floor_plan[room_name]
-	if ROOM_KINDS[plan.kind].stock == "corridor":
+	if _fit(room_name, "stock") == "corridor":
 		return
 	var floor_left := _room_inside(room_name).grow(-2.2)
 	var spots: Array[Vector2] = []
@@ -620,22 +1401,54 @@ func _plan_screens(room_name: String, count: int, entry: Vector2) -> void:
 		var stands := pair + towards * (2.4 if open_air else 1.5)
 		plan.screens.append({"at": stands, "turn": rad_to_deg(atan2(-across.y, across.x)), "along_x": absf(across.x) > absf(across.y)})
 		plan.stood.append(Vector3(stands.x, stands.y, 3.4 if open_air else 2.2))
+		# And the way round either end of it, or whatever is stood against
+		# a wall nearby shuts the robots in behind their screen.
+		for side: float in [-1.0, 1.0]:
+			var round_end := stands + across * side * (4.2 if open_air else 2.7)
+			plan.stood.append(Vector3(round_end.x, round_end.y, 0.9))
 
 
-## Stands something tall where a robot is to wait behind it: a container in
-## a yard, a cupboard in an office, a high stack of pallets anywhere else.
+## Stands something tall where a robot is to wait behind it, 3.7 m wide and
+## 2 m high or more: what a room of that stock would have standing there,
+## see SCREENS, and the next of them for the next screen of the room.
 func _room_screens(room_name: String) -> void:
 	var plan: Dictionary = _floor_plan[room_name]
-	for screen: Dictionary in plan.screens:
+	var forms: Array = SCREENS.get(_fit(room_name, "stock"), ["pallets"])
+	# The spray booth of a paint shop comes first: there is one.
+	var first := 0 if forms[0] == "booth" else _rng.randi_range(0, forms.size() - 1)
+	for i in plan.screens.size():
+		var screen: Dictionary = plan.screens[i]
 		var on_floor := Vector3(screen.at.x, 0, screen.at.y)
-		match ROOM_KINDS[plan.kind].stock:
-			"yard":
+		var sideways := Basis(Vector3.UP, deg_to_rad(screen.turn)) * Vector3.RIGHT
+		match forms[(first + i) % forms.size()]:
+			"container":
 				container(["container_red", "container_green", "container_blue", "container_grey"][_rng.randi_range(0, 3)], on_floor, screen.along_x)
-			"office", "canteen":
+			"cupboard":
 				cupboard("machine", on_floor, screen.turn, Vector3(2.4, 1.9, 0.5))
+			"lockers":
+				lockers("machine_blue", on_floor, screen.turn, 9, _ajar(9))
+			"shelving":
+				for side: float in [-1.0, 1.0]:
+					shelving(on_floor + sideways * side * 0.925, screen.turn, 1.85, 2.1, true)
+			"cases":
+				cases(on_floor, screen.turn, 3.7)
+			"booth":
+				# With its back to the door: whoever waits, waits inside it.
+				var inside := on_floor + Basis(Vector3.UP, deg_to_rad(screen.turn)) * Vector3(0, 0, 1.1)
+				spray_booth(inside, screen.turn, plan.height, false)
+				_stand(room_name, Vector2(inside.x, inside.z), 2.3)
+			"screens":
+				screens(on_floor, screen.turn, 3)
+			"plates":
+				plate_rack(on_floor, screen.turn)
+			"drums":
+				# Two of them, one a step behind the other, so that nothing
+				# shows between their rims.
+				var ahead := Basis(Vector3.UP, deg_to_rad(screen.turn)) * Vector3.BACK
+				for side: float in [-1.0, 1.0]:
+					cable_drum(on_floor + sideways * side * 0.86 + ahead * side * 0.6, screen.turn, 2.0, 1.1)
 			_:
-				# Three stacks side by side, of unequal height.
-				var sideways := Basis(Vector3.UP, deg_to_rad(screen.turn)) * Vector3.RIGHT
+				# Three stacks of pallets side by side, of unequal height.
 				for along: float in [-1.25, 0.0, 1.25]:
 					pallet(on_floor + sideways * along, screen.turn + _rng.randf_range(-4.0, 4.0), _rng.randi_range(12, 14))
 
@@ -746,6 +1559,38 @@ func _garrison(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3
 			print("Route: %d of the robots of '%s' stand in view of where the player comes in" % [exposed, battle.id])
 
 
+
+# --- Where to look from ---------------------------------------------------------
+
+
+## The first view of a room: what the player sees when he has come a step
+## in by its door, turned a little towards what there is to see in it, or
+## towards its middle; of the room he starts in, what he sees as the level
+## begins. The builder puts it before the views it picks itself.
+func _own_views(zone_name: String) -> PackedFloat32Array:
+	var views := PackedFloat32Array()
+	if not _floor_plan.has(zone_name):
+		return views
+	var way: Dictionary = _floor_plan[zone_name].entry
+	var eye := _room_middle(zone_name)
+	var towards := Vector2.RIGHT
+	if not way.is_empty():
+		eye = _door_spot(zone_name, way, 0.9)
+		var straight := _normal_in(way.side)
+		var goal := _eye_catcher(zone_name)
+		if goal == Vector2.INF:
+			goal = _room_middle(zone_name)
+		towards = Vector2(straight.x, straight.z)
+		towards = towards.rotated(clampf(towards.angle_to(goal - eye), deg_to_rad(-32.0), deg_to_rad(32.0)))
+	elif zone_name == _start_room and not (_floor_plan[zone_name].doors as Array).is_empty():
+		# Where the level begins: what the player sees first of all.
+		towards = _door_spot(zone_name, _floor_plan[zone_name].doors[0], 0.0) - eye
+	else:
+		return views
+	views.append_array([snappedf(eye.x, 0.01), 1.6, snappedf(eye.y, 0.01), snappedf(rad_to_deg(atan2(-towards.x, -towards.y)), 0.1), -3.0])
+	return views
+
+
 # --- Where things are in a room -------------------------------------------------
 
 
@@ -765,6 +1610,13 @@ func _room_inside(room_name: String) -> Rect2:
 ## The way from a wall of a room into the room.
 func _normal_in(side: int) -> Vector3:
 	return [Vector3.BACK, Vector3.FORWARD, Vector3.RIGHT, Vector3.LEFT][side]
+
+
+## The wall of a room that faces that way: the other way round.
+func _side_of(inwards: Vector3) -> int:
+	if absf(inwards.z) > absf(inwards.x):
+		return NORTH if inwards.z > 0.0 else SOUTH
+	return WEST if inwards.x > 0.0 else EAST
 
 
 ## The turn that makes something with its back to that wall face the room.
@@ -802,17 +1654,23 @@ func _door_spot(room_name: String, way: Dictionary, off: float) -> Vector2:
 
 
 ## The stretches of a wall that nothing opens in: [from, to] along the wall,
-## keeping `clear` of every doorway and, with `low`, of every window that
-## something standing against the wall would stand in front of.
-func _free_spans(room_name: String, side: int, clear: float, low: bool) -> Array[Vector2]:
+## keeping `clear` of every doorway. With `low` they also keep clear of what
+## something standing against the wall would stand in front of or against:
+## a window that begins under head height, and a pier. A window whose sill
+## lies under `under` counts as an opening whatever else.
+func _free_spans(room_name: String, side: int, clear: float, low: bool, under := 0.0) -> Array[Vector2]:
 	var plan: Dictionary = _floor_plan[room_name]
 	var taken: Array[Vector2] = []
 	for way: Dictionary in plan.doors:
 		if way.side == side:
 			taken.append(Vector2(way.along - way.width * 0.5 - clear, way.along + way.width * 0.5 + clear))
 	for pane: Dictionary in plan.windows:
-		if pane.side == side and low and pane.sill < 2.3:
+		if pane.side == side and ((low and pane.sill < 2.3) or pane.sill < under):
 			taken.append(Vector2(pane.along - pane.width * 0.5 - 0.2, pane.along + pane.width * 0.5 + 0.2))
+	if low:
+		for stood: Dictionary in plan.piers:
+			if stood.side == side:
+				taken.append(Vector2(stood.along - 0.45, stood.along + 0.45))
 	taken.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
 	var span := _wall_span(room_name, side)
 	var free: Array[Vector2] = []
@@ -832,6 +1690,49 @@ func _longest(spans: Array[Vector2]) -> Vector2:
 		if span.y - span.x > longest.y - longest.x:
 			longest = span
 	return longest
+
+
+## Whether a wall of a room is clear, `half` to either side of `along`, of
+## its doorways and windows and of what the plan keeps the floor clear for:
+## for a pier to stand there.
+func _wall_clear(room_name: String, side: int, along: float, half: float) -> bool:
+	var plan: Dictionary = _floor_plan[room_name]
+	for way: Dictionary in plan.doors:
+		if way.side == side and absf(way.along - along) < way.width * 0.5 + half + 0.25:
+			return false
+	for pane: Dictionary in plan.windows:
+		if pane.side == side and absf(pane.along - along) < pane.width * 0.5 + half + 0.15:
+			return false
+	var spot := _wall_spot(room_name, side, along, 0.3)
+	for area: Rect2 in plan.kept:
+		if area.grow(half).has_point(Vector2(spot.x, spot.z)):
+			return false
+	return true
+
+
+## Whether nothing stands or hangs against a wall of a room yet, `half` to
+## either side of `along`.
+func _wall_free(room_name: String, side: int, along: float, half: float) -> bool:
+	for used: Vector3 in _floor_plan[room_name].walled:
+		if int(used.x) == side and along + half > used.y - 0.12 and along - half < used.z + 0.12:
+			return false
+	var spot := _wall_spot(room_name, side, along, 0.3)
+	for area: Rect2 in _floor_plan[room_name].kept:
+		if area.grow(half).has_point(Vector2(spot.x, spot.z)):
+			return false
+	return true
+
+
+## Notes that something stands or hangs against a wall of a room, from
+## `from` to `to` along it.
+func _wall(room_name: String, side: int, from: float, to: float) -> void:
+	_floor_plan[room_name].walled.append(Vector3(side, from, to))
+
+
+## Notes that something stands on the floor of a room at `spot` (x and z)
+## and reaches `reach` around it.
+func _stand(room_name: String, spot: Vector2, reach: float) -> void:
+	_floor_plan[room_name].stood.append(Vector3(spot.x, spot.y, reach))
 
 
 ## Whether a spot on the floor of a room (x and z) is free for something to

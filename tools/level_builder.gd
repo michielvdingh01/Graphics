@@ -451,7 +451,8 @@ func _survey() -> bool:
 	if _zones.size() > 1:
 		_find_sightlines(space, ray, feet)
 	for zone_name: String in trodden:
-		var views := _find_views(space, ray, trodden[zone_name])
+		var views := _own_views(zone_name)
+		views.append_array(_find_views(space, ray, trodden[zone_name]))
 		(_zones[zone_name].node if zone_name else _root).set_meta(&"views", views)
 	stand_in.free()
 	print("Survey: %.1f s" % ((Time.get_ticks_msec() - began) / 1000.0))
@@ -462,6 +463,11 @@ func _survey() -> bool:
 ## where the player starts, numbered as _survey() numbers its spots: the
 ## corners first, then a middle for every polygon. All of them, in a level
 ## without a route.
+##
+## To walk from one polygon to the next they have to share an edge, as the
+## game's own pathfinding has it. Two that only touch at a corner are a
+## place where the way is pinched shut: between a stack and a wall that
+## stand a metre apart, say.
 func _walked(navmesh: NavigationMesh) -> Dictionary:
 	var corners := navmesh.get_vertices()
 	var count := navmesh.get_polygon_count()
@@ -471,20 +477,21 @@ func _walked(navmesh: NavigationMesh) -> Dictionary:
 		for i in corners.size() + count:
 			walked[i] = true
 		return walked
-	# Polygons that share a corner are joined; begin under the player.
-	var at_corner := {}
+	# The polygons on either side of every edge; begin under the player.
+	var at_edge := {}
 	var first := -1
 	var nearest := INF
 	for p in count:
 		var middle := Vector3.ZERO
 		var polygon := navmesh.get_polygon(p)
 		var outline := PackedVector2Array()
-		for corner in polygon:
-			if not at_corner.has(corner):
-				at_corner[corner] = PackedInt32Array()
-			at_corner[corner].append(p)
-			middle += corners[corner] / polygon.size()
-			outline.append(Vector2(corners[corner].x, corners[corner].z))
+		for i in polygon.size():
+			var edge := Vector2i(mini(polygon[i], polygon[(i + 1) % polygon.size()]), maxi(polygon[i], polygon[(i + 1) % polygon.size()]))
+			if not at_edge.has(edge):
+				at_edge[edge] = PackedInt32Array()
+			at_edge[edge].append(p)
+			middle += corners[polygon[i]] / polygon.size()
+			outline.append(Vector2(corners[polygon[i]].x, corners[polygon[i]].z))
 		var gap := middle.distance_to(start.position)
 		if absf(middle.y - start.position.y) < 1.5 and Geometry2D.is_point_in_polygon(Vector2(start.position.x, start.position.z), outline):
 			gap = 0.0
@@ -496,13 +503,21 @@ func _walked(navmesh: NavigationMesh) -> Dictionary:
 	while not todo.is_empty():
 		var p: int = todo.pop_back()
 		walked[corners.size() + p] = true
-		for corner in navmesh.get_polygon(p):
-			walked[corner] = true
-			for other: int in at_corner[corner]:
+		var polygon := navmesh.get_polygon(p)
+		for i in polygon.size():
+			walked[polygon[i]] = true
+			for other: int in at_edge[Vector2i(mini(polygon[i], polygon[(i + 1) % polygon.size()]), maxi(polygon[i], polygon[(i + 1) % polygon.size()]))]:
 				if not seen.has(other):
 					seen[other] = true
 					todo.append(other)
 	return walked
+
+
+## Views of a zone that a level knows of itself, before those the builder
+## picks: five numbers each, as _find_views() gives them. A level laid out as
+## rooms looks into each from its door, see tools/kit/rooms.gd.
+func _own_views(_zone_name: String) -> PackedFloat32Array:
+	return PackedFloat32Array()
 
 
 ## Posts the robots that a level leaves for the builder to post, now that
@@ -514,11 +529,31 @@ func _garrison(_space: PhysicsDirectSpaceState3D, _ray: PhysicsRayQueryParameter
 
 ## Catches a route that cannot be walked: a robot posted where it cannot get
 ## to the player from, or a checkpoint that cannot be reached. `walked` is
-## what _walked() found.
+## what _walked() found. And says of every zone how much of its floor no
+## robot can get to, when that is more than a corner behind a machine: what
+## stands about has shut a part of the room off.
 func _check_walkable(navmesh: NavigationMesh, walked: Dictionary) -> void:
 	if _route == null:
 		return
 	var corners := navmesh.get_vertices()
+	for zone_name: String in _zones:
+		var cut_off := 0.0
+		var floor_there := 0.0
+		for p in navmesh.get_polygon_count():
+			var polygon := navmesh.get_polygon(p)
+			var middle := Vector3.ZERO
+			for corner in polygon:
+				middle += corners[corner] / polygon.size()
+			if middle.y > 1.0 or not (_zones[zone_name].bounds as Array).any(func(box: AABB) -> bool: return box.has_point(middle + Vector3.UP * 0.5)):
+				continue
+			var area := 0.0
+			for i in range(1, polygon.size() - 1):
+				area += (corners[polygon[i]] - corners[polygon[0]]).cross(corners[polygon[i + 1]] - corners[polygon[0]]).length() * 0.5
+			floor_there += area
+			if not walked.has(corners.size() + p):
+				cut_off += area
+		if cut_off > maxf(6.0, floor_there * 0.2):
+			print("Route: %.0f of the %.0f m2 of floor of '%s' cannot be walked to from the start" % [cut_off, floor_there, zone_name])
 	for step: Node3D in _route.get_children():
 		for mark in step.get_children():
 			if not (mark.is_in_group("enemy_spawn") or mark.name == &"Respawn"):
