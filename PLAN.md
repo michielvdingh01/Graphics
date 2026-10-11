@@ -373,7 +373,7 @@ Gemeten op 11 oktober 2026 in de fabriek met het wapen in beeld (`--weapon=N --a
 | Pistoolmitrailleur, idem | 52,9 / 51,8 fps | 52,2 / 52,2 fps |
 | Scherpschuttersgeweer, idem | 52,8 / 49,5 fps | 51,2 / 51,9 fps |
 
-Bij de karabijn is dat 1 fps, 0,2 tot 0,3 ms. Bij de andere vier ligt het tussen niets en 1 fps; die metingen zijn onrustiger (in twee ervan zit een ronde waarin een andere sessie de 1% low van de stand ervoor naar 29 en 46 fps trok). Waar de tijd precies heen gaat (de driehoeken, het skelet, of dat een mesh met botten voor de upscaler twee keer wordt doorgerekend) is niet uitgezocht. De hele selftest, de test van de mensachtige vijanden en die van samen spelen slagen. Wat een ander draagt heeft dezelfde merktekens voor de handen als eerst en is met het wapen meegegroeid.
+Bij de karabijn is dat 1 fps, 0,2 tot 0,3 ms. Bij de andere vier ligt het tussen niets en 1 fps; die metingen zijn onrustiger (in twee ervan zit een ronde waarin een andere sessie de 1% low van de stand ervoor naar 29 en 46 fps trok). Aan de driehoeken ligt het niet: een handschoen met de helft ervan (9,2 duizend per hand), in een kloon ernaast gezet, haalde in de enige rustige ronde van drie 52,3 fps tegen 52,2. Of het het skelet is, of dat een mesh met botten voor de upscaler twee keer wordt doorgerekend, is niet uitgezocht. De hele selftest, de test van de mensachtige vijanden en die van samen spelen slagen. Wat een ander draagt heeft dezelfde merktekens voor de handen als eerst en is met het wapen meegegroeid.
 
 **Niet kunnen beoordelen, en nog open**
 
