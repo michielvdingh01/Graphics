@@ -3,7 +3,9 @@ render_mode blend_mul;
 
 // Final lens pass over the tonemapped frame: vignette and animated film
 // grain, multiplied onto the frame so that nothing has to be read back from
-// it. Keep it subtle. The Ultra preset swaps in post_aberration.gdshader.
+// it. Keep it subtle. The chromatic aberration of the Ultra preset is done
+// before the frame is enlarged, by scripts/lens_fringe.gd; where the
+// renderer has no place for that, post_aberration.gdshader takes over.
 uniform float vignette = 0.32;
 uniform float grain = 0.03;
 

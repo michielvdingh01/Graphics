@@ -1,8 +1,14 @@
 shader_type canvas_item;
 
-// The lens pass of the Ultra preset: as post.gdshader, plus chromatic
-// aberration towards the edges. That needs a copy of the frame to read from,
-// which costs about 0.35 ms at 1440p for something that is hard to see.
+// The lens pass of the Ultra preset as it was: as post.gdshader, plus
+// chromatic aberration towards the edges. That needs a copy of the frame to
+// read from, which on a full screen of 3456 x 2160 took 0.7 to 0.9 ms more
+// than post.gdshader. scripts/lens_fringe.gd now does the aberration on the
+// frame before it is enlarged; this is for a renderer that has no place for
+// that, and for a benchmark that asks for it (--undo=fringe).
+//
+// Its grain is added, where post.gdshader can only multiply: the same frame
+// comes out 3% lighter here, with as much grain in the dark as in the light.
 uniform sampler2D screen : hint_screen_texture, filter_linear, repeat_disable;
 uniform float aberration = 0.004;
 uniform float vignette = 0.32;

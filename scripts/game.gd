@@ -486,7 +486,7 @@ func _show_checkpoint(index: int) -> void:
 	# starts with, and so does the player.
 	player.weapons.resupply()
 	player.heal(maxf(CHECKPOINT_HEALTH - player.health, 0.0))
-	Sfx.play(&"reload_end", -4.0)
+	Sfx.play(&"checkpoint", -2.0)
 	checkpoint_reached.emit(checkpoint.title)
 
 

@@ -979,6 +979,7 @@ func _show_shot(end: Vector3, struck: bool) -> void:
 	Fx.tracer(muzzle, end, _rig.tracer_tint)
 	Fx.muzzle_flash(null, Transform3D(Fx.facing(along), muzzle), flash_size, _rig.flash_prongs, _rig.flash_tint)
 	Sfx.play_at(_rig.sounds[&"shot"], global_position)
+	Sfx.passing(muzzle, end)
 
 
 func _show_death(push: Vector3) -> void:

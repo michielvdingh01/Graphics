@@ -20,8 +20,26 @@ What an entry can say besides its source:
             less for a file in which one thing follows close on another
     pick    which of the takes found to keep, counted from 1 in the order
             they were found: for a file that holds different things
+    trim    [from, to]: only that part of a take, in seconds from its start:
+            a moment out of something that goes on. A list of those makes a
+            take of each: for a recording in which one thing follows on
+            another with no silence between
     pitch   play a take this many times as fast, and so higher and shorter;
             under 1 it is lower and longer, as of something bigger
+    glide   [from, to]: the same, changing from the one speed to the other
+            over the take. Falling, it is something that comes past; rising,
+            something that winds up
+    reverse play a take backwards: what died away now swells
+    ring    [Hz, depth 0..1]: multiply a take by a tone of that pitch, which
+            takes the throat out of a voice and leaves a machine
+    comb    [ms, feedback 0..1]: let a take ring in a pipe that long, for a
+            voice that comes out of a tin
+    scatter [seconds, least, most, lowest dB]: instead of the recordings
+            themselves, takes that are that long and made of them, one after
+            another with between `least` and `most` seconds from the start of
+            the one to the start of the next, each between `lowest` and 0 dB:
+            a rattle out of single knocks
+    attack  seconds over which a take comes in
     tight   begin a take at its bang, not where it rises out of the noise:
             for a shot, which otherwise comes late by however long the
             mechanism rattles before it
@@ -45,7 +63,12 @@ What an entry can say besides its source:
             pitch, the thump under a shot, or "rumble": [seconds, from Hz,
             to Hz] for noise that dies away over that long while its treble
             goes first, the way a bang rolls on over open ground. A rumble
-            is different left and right and in every take. Or it has
+            is different left and right and in every take. "air": [seconds,
+            Hz] is noise that does not die away, with nothing above that
+            pitch: the air in a room, and with a highpass steam. A third
+            number, up to 1, lets it come and go in gusts: wind; "hum":
+            [seconds, Hz, Hz ...] is those tones together, each drifting a
+            little, for what turns or runs on the mains. Or it has
             "burst": [seconds, from Hz, to Hz, fall]: noise that is there at
             once and white, and turns brown within `fall` seconds as it dies
             away, which is what a shot does that lands in something soft
@@ -61,11 +84,27 @@ What an entry can say besides its source:
             shelves, "bell" a peak an octave and a half wide
     glue    [drive, punch] of one more soft clip, over the mix: what makes
             the layers one sound
+    bed     seconds: the sound is not something that happens but what a space
+            sounds like, and comes out as one take of that length that goes
+            round without a seam. The recording and every layer is repeated
+            to fill it, each crossfaded into itself; recordings of different
+            lengths then never meet the same way twice. A layer with "once"
+            is not repeated. It is written in stereo, a recording running
+            ahead on the right of where it is on the left, which the ear
+            takes for width
+    rate    the sample rate the takes are written at, 22050 for half the
+            size: for a sound with nothing in it above 10 kHz
+    ogg     write the takes as Ogg Vorbis of this quality, 0 to 10, a tenth
+            of the size at 3: for a bed, which is long and has no edge that
+            the coding could blur. Needs oggenc (brew install vorbis-tools)
+    rms     how loud the take is to be, in dB below full scale averaged over
+            its length, instead of with its peak at full scale: a bed is as
+            loud in its file as it is in the game
 
 A pack is downloaded once into .cache/sounds/ and checked against the checksum
 in the manifest; only the files a sound names are unpacked. A pack may also be
 one sound file instead of an archive. Needs macOS
-(afconvert, bsdtar) and Godot for Ogg files.
+(afconvert, bsdtar) and Godot for reading Ogg files.
 """
 import array
 import hashlib
@@ -87,6 +126,7 @@ CACHE = ROOT / ".cache/sounds"
 OUT = ROOT / "assets/audio"
 RECORDINGS = ROOT / "assets/recordings"
 GODOT = os.environ.get("GODOT", "/Applications/Godot.app/Contents/MacOS/Godot")
+OGGENC = os.environ.get("OGGENC", "oggenc")
 HEADERS = {"User-Agent": "GraphicsFPS-asset-fetch/0.1"}
 
 RATE = 44100
@@ -97,40 +137,47 @@ LEAD = int(0.002 * RATE)  # kept before the start of a take
 FADE = 0.25  # seconds over which a take that was cut off dies away
 PUNCH = 0.04  # seconds over which the push of "punch" wears off
 BUTTERWORTH = (0.5412, 1.3066)  # the two stages of a 24 dB per octave filter
+SEAM = 0.5  # seconds over which a loop is crossfaded into itself, at most
+WIDE = 0.37  # how far round its loop the right channel of a bed runs ahead
 
 
 def unpack(name: str, pack: dict, wanted: str) -> pathlib.Path:
     """The folder a pack is unpacked in, with the files that match `wanted` in
-    it: the pack is downloaded if need be, and only those are unpacked."""
+    it: the pack is downloaded if need be, and only those are unpacked. A
+    pack that is offered as loose files names them all, "url" and "sha256"
+    each a list."""
     folder = CACHE / name
     files = folder / "files"
     if any(files.glob(wanted)):
         return files
-    archive = folder / urllib.parse.unquote(pack["url"].rsplit("/", 1)[1])
-    if not archive.exists():
-        folder.mkdir(parents=True, exist_ok=True)
-        print(f"downloading {archive.name}")
-        partial = archive.with_name(archive.name + ".part")
-        with urllib.request.urlopen(urllib.request.Request(pack["url"], headers=HEADERS)) as response:
-            with open(partial, "wb") as out:
-                shutil.copyfileobj(response, out)
-        partial.rename(archive)
-    digest = hashlib.sha256()
-    with open(archive, "rb") as data:
-        for chunk in iter(lambda: data.read(1 << 20), b""):
-            digest.update(chunk)
-    if digest.hexdigest() != pack["sha256"]:
-        raise SystemExit(f"checksum mismatch for {archive}")
-    if archive.suffix.lower() in (".wav", ".ogg", ".mp3", ".flac"):
-        files.mkdir(parents=True, exist_ok=True)
-        shutil.copy(archive, files / archive.name)
-        return files
-    # bsdtar reads both zip and 7z, and refuses to write outside the folder.
-    with tempfile.TemporaryDirectory(dir=folder) as partial:
-        subprocess.run(["bsdtar", "-xf", str(archive), "-C", partial, wanted], check=True)
-        # Some archives hold read-only folders, which could then never be removed.
-        subprocess.run(["chmod", "-R", "u+rwX", partial], check=True)
-        shutil.copytree(partial, files, dirs_exist_ok=True)
+    urls = pack["url"] if isinstance(pack["url"], list) else [pack["url"]]
+    sums = pack["sha256"] if isinstance(pack["sha256"], list) else [pack["sha256"]]
+    for url, checksum in zip(urls, sums):
+        archive = folder / urllib.parse.unquote(url.rsplit("/", 1)[1])
+        if not archive.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+            print(f"downloading {archive.name}")
+            partial = archive.with_name(archive.name + ".part")
+            with urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS)) as response:
+                with open(partial, "wb") as out:
+                    shutil.copyfileobj(response, out)
+            partial.rename(archive)
+        digest = hashlib.sha256()
+        with open(archive, "rb") as data:
+            for chunk in iter(lambda: data.read(1 << 20), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != checksum:
+            raise SystemExit(f"checksum mismatch for {archive}")
+        if archive.suffix.lower() in (".wav", ".ogg", ".mp3", ".flac"):
+            files.mkdir(parents=True, exist_ok=True)
+            shutil.copy(archive, files / archive.name)
+            continue
+        # bsdtar reads both zip and 7z, and refuses to write outside the folder.
+        with tempfile.TemporaryDirectory(dir=folder) as partial:
+            subprocess.run(["bsdtar", "-xf", str(archive), "-C", partial, wanted], check=True)
+            # Some archives hold read-only folders, which could then never be removed.
+            subprocess.run(["chmod", "-R", "u+rwX", partial], check=True)
+            shutil.copytree(partial, files, dirs_exist_ok=True)
     return files
 
 
@@ -219,6 +266,10 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
         return [[sweep(*spec["sweep"])]]
     if "rumble" in spec:
         return [rumble(*spec["rumble"], seed) for seed in range(4)]
+    if "air" in spec:
+        return [air(*spec["air"], seed=seed) for seed in range(4)]
+    if "hum" in spec:
+        return [hum(spec["hum"][0], spec["hum"][1:], seed) for seed in range(4)]
     if "burst" in spec:
         return [[burst(*spec["burst"], seed)] for seed in range(5)]
     source = spec["source"]
@@ -242,9 +293,151 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
         takes = [takes[number - 1] for number in spec["pick"]]
     if not takes:
         raise SystemExit(f"found no sound in {spec['files']}")
+    if "trim" in spec:
+        parts = spec["trim"] if isinstance(spec["trim"][0], list) else [spec["trim"]]
+        takes = [
+            [channel[int(first * RATE):int(last * RATE)] for channel in take]
+            for take in takes for first, last in parts
+        ]
     if "pitch" in spec:
         takes = [[pitched(channel, spec["pitch"]) for channel in take] for take in takes]
+    if "glide" in spec:
+        takes = [[glided(channel, *spec["glide"]) for channel in take] for take in takes]
+    if spec.get("reverse"):
+        takes = [[channel[::-1] for channel in take] for take in takes]
+    if "ring" in spec:
+        takes = [[rung(channel, *spec["ring"]) for channel in take] for take in takes]
+    if "comb" in spec:
+        takes = [[combed(channel, *spec["comb"]) for channel in take] for take in takes]
+    if "scatter" in spec:
+        takes = [scattered(takes, *spec["scatter"], seed) for seed in range(4)]
+    if "attack" in spec:
+        rise = int(spec["attack"] * RATE)
+        takes = [[[sample * min(1.0, i / rise) for i, sample in enumerate(channel)] for channel in take] for take in takes]
     return takes
+
+
+def glided(samples: list, start: float, end: float) -> list:
+    """A channel played `start` times as fast at first and `end` times at last."""
+    last = len(samples) - 1
+    count = int(last / ((start + end) / 2.0))
+    out = []
+    at = 0.0
+    for i in range(count):
+        whole = int(at)
+        if whole >= last:
+            break
+        out.append(samples[whole] + (samples[whole + 1] - samples[whole]) * (at - whole))
+        at += start + (end - start) * i / count
+    return out
+
+
+def rung(samples: list, hz: float, depth: float = 1.0) -> list:
+    """A channel multiplied by a tone."""
+    turn = math.tau * hz / RATE
+    return [sample * (1.0 - depth + depth * math.sin(turn * i)) for i, sample in enumerate(samples)]
+
+
+def combed(samples: list, ms: float, feedback: float) -> list:
+    """A channel ringing in a pipe: each sample comes back `ms` later."""
+    back = max(1, int(ms / 1000.0 * RATE))
+    out = samples + [0.0] * int(back * math.log(0.01) / math.log(max(feedback, 0.01)))
+    for i in range(back, len(out)):
+        out[i] += feedback * out[i - back]
+    return out
+
+
+def scattered(takes: list, seconds: float, least: float, most: float, lowest: float, seed: int) -> list:
+    """A take of `seconds` made of `takes`, one after another."""
+    chance = random.Random(seed)
+    out = [[0.0] * int(seconds * RATE) for _ in takes[0]]
+    at = 0.0
+    before = -1
+    while at < seconds:
+        pick = chance.randrange(len(takes))
+        if pick == before and len(takes) > 1:
+            pick = (pick + 1) % len(takes)
+        before = pick
+        gain = 10.0 ** (chance.uniform(lowest, 0.0) / 20.0) / top(takes[pick])
+        first = int(at * RATE)
+        for channel, source in zip(out, takes[pick]):
+            for i, sample in enumerate(source[:len(channel) - first]):
+                channel[first + i] += sample * gain
+        at += chance.uniform(least, most)
+    return out
+
+
+def air(seconds: float, pitch: float, sway: float = 0.0, seed: int = 0) -> list:
+    """Noise in two channels that goes on as it began, with nothing in it
+    above `pitch`. With `sway` it comes and goes: louder and brighter in a
+    gust, both sides together, and back where it began at the end."""
+    count = int(seconds * RATE)
+    chance = random.Random(1000 + seed)
+    # Whole turns over the length, so that the end runs on into the start.
+    gusts = [(turns, chance.uniform(0.0, math.tau)) for turns in (1, 2, 3, 5)]
+    out = []
+    for side in range(2):
+        noise = random.Random(1000 + seed * 2 + side)
+        one = two = 0.0
+        channel = []
+        for i in range(count):
+            blow = sum(math.sin(math.tau * turns * i / count + lean) / (n + 1) for n, (turns, lean) in enumerate(gusts)) / 2.08
+            pull = 1.0 - math.exp(-math.tau * pitch * (1.0 + 0.6 * sway * blow) / RATE)
+            one += pull * (noise.uniform(-1.0, 1.0) - one)
+            two += pull * (one - two)
+            channel.append(two * (1.0 + sway * blow))
+        out.append(channel)
+    return out
+
+
+def hum(seconds: float, pitches: list, seed: int) -> list:
+    """Tones together in two channels, the first loudest, each wandering a
+    little in pitch and in level so that it is a machine and not a tuning fork."""
+    count = int(seconds * RATE)
+    chance = random.Random(2000 + seed)
+    out = [[0.0] * count for _ in range(2)]
+    for n, pitch in enumerate(pitches):
+        for channel in out:
+            phase = chance.uniform(0.0, math.tau)
+            drift = chance.uniform(0.07, 0.19)
+            swell = chance.uniform(0.11, 0.31)
+            lean = chance.uniform(0.0, math.tau)
+            turn = math.tau * pitch / RATE
+            for i in range(count):
+                t = i / RATE
+                phase += turn * (1.0 + 0.003 * math.sin(math.tau * drift * t + lean))
+                channel[i] += math.sin(phase) * (0.75 + 0.25 * math.sin(math.tau * swell * t + lean)) / (n + 1)
+    return out
+
+
+def seamless(channel: list, seam: int) -> list:
+    """A channel that goes round: its last `seam` samples are taken off and
+    faded into its first, so that its end runs on into its start."""
+    kept = len(channel) - seam
+    out = channel[:kept]
+    for i in range(seam):
+        turn = 0.5 * math.pi * i / seam
+        out[i] = channel[i] * math.sin(turn) + channel[kept + i] * math.cos(turn)
+    return out
+
+
+def tiled(take: list, count: int, wide: bool) -> list:
+    """A take repeated to `count` samples in two channels, crossfaded into
+    itself at every round. If it is to be `wide`, the right runs ahead of the
+    left: two microphones on one machine hear nearly the same, and the same
+    on both sides is a sound in the middle of the head."""
+    seam = min(int(SEAM * RATE), len(take[0]) // 4)
+    out = []
+    for side in range(2):
+        loop = seamless(take[min(side, len(take) - 1)], seam)
+        ahead = int(WIDE * len(loop)) if side and wide else 0
+        out.append([loop[(ahead + i) % len(loop)] for i in range(count)])
+    return out
+
+
+def made(spec: dict) -> bool:
+    """True for what is generated here instead of recorded."""
+    return any(kind in spec for kind in ("sweep", "rumble", "air", "hum", "burst"))
 
 
 def pitched(samples: list, speed: float) -> list:
@@ -420,17 +613,24 @@ def mix(take: list, under: list, spec: dict) -> None:
 
 
 def build(sound: dict, packs: dict, scratch: pathlib.Path) -> None:
-    stereo = sound.get("stereo", False)
+    bed = int(sound.get("bed", 0.0) * RATE)
+    # A bed is mixed half a second longer than it is, for its own seam.
+    whole = bed + int(SEAM * RATE)
+    stereo = sound.get("stereo", False) or bed > 0
     recorded = []
     for take in excerpts(sound, packs, scratch, stereo):
-        recorded.append(clipped(prepared(take, sound, 0.1), sound.get("drive", 1.0), sound.get("punch", 1.0)))
+        take = clipped(prepared(take, sound, 0.1), sound.get("drive", 1.0), sound.get("punch", 1.0))
+        recorded.append(tiled(take, whole, not made(sound)) if bed else take)
+    if bed:
+        recorded = recorded[:1]
     layers = []
     for spec in sound.get("layers", []):
         under = []
-        for take in excerpts(spec, packs, scratch, False):
+        for take in excerpts(spec, packs, scratch, bed > 0):
             take = faded(prepared(take, spec, 0.25), spec.get("length", 0.0))
             peak = top(take)
-            under.append([[sample / peak for sample in channel] for channel in take])
+            take = [[sample / peak for sample in channel] for channel in take]
+            under.append(tiled(take, whole, not made(spec)) if bed and not spec.get("once") else take)
         layers.append((spec, under))
     takes = []
     for i in range(sound.get("takes", len(recorded))):
@@ -441,30 +641,54 @@ def build(sound: dict, packs: dict, scratch: pathlib.Path) -> None:
             mix(take, under[(i % len(recorded) + i // len(recorded)) % len(under)], spec)
         for kind, hz, db in sound.get("eq", []):
             take = [filtered(channel, biquad(kind, hz, db, 0.9 if kind == "bell" else 0.7071)) for channel in take]
+        if bed:
+            take = [seamless(channel[:whole], whole - bed) for channel in take]
         if "glue" in sound:
             take = clipped(take, *sound["glue"])
-        elif top(take) > 1.0:
+        elif top(take) > 1.0 or "rms" in sound:
             # Layers and filters add up to more than the recording was.
             peak = top(take)
             take = [[sample / peak for sample in channel] for channel in take]
-        takes.append(faded(take, sound.get("length", 0.0)))
+        if "rms" in sound:
+            mean = math.sqrt(sum(sample * sample for channel in take for sample in channel) / sum(len(channel) for channel in take))
+            gain = min(10.0 ** (sound["rms"] / 20.0) * 32768.0 / PEAK / mean, 1.0)
+            take = [[sample * gain for sample in channel] for channel in take]
+        takes.append(take if bed else faded(take, sound.get("length", 0.0)))
 
     out = OUT / sound["id"]
     out.mkdir(parents=True, exist_ok=True)
+    kind = ".ogg" if "ogg" in sound else ".wav"
     # A take that is rewritten keeps its .import file, and with it its uid.
-    keep = {f"{sound['id']}_{i + 1}.wav" for i in range(len(takes))}
-    for stale in out.glob(f"{sound['id']}_*.wav*"):
+    keep = {f"{sound['id']}_{i + 1}{kind}" for i in range(len(takes))}
+    for stale in out.glob(f"{sound['id']}_*"):
         if stale.name.removesuffix(".import") not in keep:
             stale.unlink()
+    rate = sound.get("rate", RATE)
+    if RATE % rate:
+        raise SystemExit(f"{sound['id']}: a rate has to go into {RATE} a whole number of times")
     for i, take in enumerate(takes):
+        if rate != RATE:
+            # Nothing may be left above half the new rate: it would come
+            # back as a tone that was never there.
+            # A bed is filtered as it will be heard, going round: its end
+            # is run through the filter before its start.
+            lead = min(4096, len(take[0])) if bed else 0
+            take = [channel[len(channel) - lead:] + channel for channel in take]
+            for q in BUTTERWORTH + BUTTERWORTH:
+                take = [filtered(channel, biquad("lowpass", 0.42 * rate, 0.0, q)) for channel in take]
+            take = [channel[lead::RATE // rate] for channel in take]
         frames = array.array("h", bytes(2 * len(take) * len(take[0])))
         for c, channel in enumerate(take):
             frames[c::len(take)] = array.array("h", [int(sample * PEAK) for sample in channel])
-        with wave.open(str(out / f"{sound['id']}_{i + 1}.wav"), "wb") as writer:
+        path = out / f"{sound['id']}_{i + 1}.wav"
+        with wave.open(str(path), "wb") as writer:
             writer.setnchannels(len(take))
             writer.setsampwidth(2)
-            writer.setframerate(RATE)
+            writer.setframerate(rate)
             writer.writeframes(frames.tobytes())
+        if kind == ".ogg":
+            subprocess.run([OGGENC, "--quiet", "-q", str(sound["ogg"]), "-o", str(path.with_suffix(".ogg")), str(path)], check=True)
+            path.unlink()
     lengths = " ".join(f"{len(take[0]) / RATE:.2f}" for take in takes)
     print(f"{sound['id']:16s} {len(takes):2d} takes  {lengths}")
 
@@ -481,7 +705,7 @@ def main() -> None:
         if wanted:
             if "--all" not in wanted and sound["id"] not in wanted:
                 continue
-        elif any((OUT / sound["id"]).glob("*.wav")):
+        elif any((OUT / sound["id"]).glob("*.wav")) or any((OUT / sound["id"]).glob("*.ogg")):
             continue
         with tempfile.TemporaryDirectory() as scratch:
             build(sound, manifest["packs"], pathlib.Path(scratch))
