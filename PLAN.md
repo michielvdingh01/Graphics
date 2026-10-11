@@ -157,7 +157,7 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 
 **Wapens en vijanden**
 
-- De vijf wapens zijn onderdeel voor onderdeel in code opgebouwd (`tools/models/weapons.gd`), omdat er geen gescande of gegenereerde modellen voor zijn: een karabijn met een open richtkijker en een lamp, een dienstpistool, een pompgeweer met reservepatronen op de kast, een pistoolmitrailleur met draadkolf en een scherpschuttersgeweer met kijker en tweepoot. Elk is 14 tot 20 duizend driehoeken, inclusief de handschoenen en mouwen van de schutter. De vingers lopen taps toe met een verdikking bij elk gewricht, de duimmuis loopt over in de hand (het was een bol erop), en over elke kneukel ligt een eigen plaatje (`_hand` en `_finger`; `hose` in de levelbouwer kan daarvoor een dikte per punt aan).
+- De vijf wapens zijn onderdeel voor onderdeel in code opgebouwd (`tools/models/weapons.gd`), omdat er geen gescande of gegenereerde modellen voor zijn: een karabijn met een open richtkijker en een lamp, een dienstpistool, een pompgeweer met reservepatronen op de kast, een pistoolmitrailleur met draadkolf en een scherpschuttersgeweer met kijker en tweepoot. Elk is 36 tot 46 duizend driehoeken, inclusief de handschoenen en mouwen van de schutter: sinds 11 oktober 2026 een hand met een skelet uit Blender in plaats van buizen en blokken, en de wapens zelf op echte maten met een rail naar het echte profiel. Zie "De wapens opnieuw".
 - Een modelbouwer (`tools/model_builder.gd`) gebruikt daarvoor dezelfde bouwstenen als de levelbouwer en verdeelt de driehoeken over onderdelen met een eigen draaipunt, zodat een slede, een grendel, een pomp of een magazijn kan bewegen. Een model wordt één bestand in `scenes/models/`. De levelbouwer heeft er `slab` bij gekregen: een plaat die naar een omtrek is gesneden, met afgeronde randen. Daar zijn de kasten, kolven, grepen en magazijnen van gemaakt.
 - Wapens en robots gebruiken één shader, `shaders/finish.gdshader`: een deklaag (bruinering, anodiseerlaag, lak of het kunststof zelf) die langs de randen tot op het metaal is weggesleten, met krassen en schuurplekken op de vlakken en vet waar het wordt vastgepakt. De randen komen uit dezelfde vertexkleur als bij de lakshader. Handschoenen en mouwen hebben een stofshader met een weefsel (`shaders/cloth.gdshader`). Vier naadloze normal maps voor wat je van een handbreedte afstand ziet (weefsel, korrel van kunststof, gestraald metaal, ruitjes van een greep) worden uit het manifest gegenereerd (soort `grain`).
 - De rode stip van de richtkijker is niet op het glas geschilderd: de shader tekent hem waar de kijklijn door het glas evenwijdig aan de loop loopt, zoals een echte gecollimeerde stip. Hij blijft dus op het doel als het wapen beweegt.
@@ -317,15 +317,15 @@ De modellen brengen het aantal driehoeken per frame van circa 80 duizend naar 1,
 **Nog open in deze fase**
 
 - De klap met een leeg wapen is één beweging van het hele wapen, voor alle vijf dezelfde; hij is op screenshots van losse momenten bekeken, niet in beweging.
-- De wapens, de handen en de vijanden zijn gebouwd en niet gescand of gegenereerd. De handen zijn handschoenen van buizen en afgeronde blokken, zonder skelet; de steunhand onder de karabijn en het pompgeweer is vanaf de schutter gezien nog steeds een glad vlak met een duim, en bij het pistool is de overgang van duim naar hand rafelig: bij het herladen beweegt de hele arm mee, de vingers niet. De robots lopen procedureel en hebben geen ingestudeerde animaties. Zodra er een generatiedienst is die bruikbare topologie en rigs levert, zijn dit de eerste om te vervangen; de gameplay hoeft daarvoor niet te veranderen, want die kent een wapen en een vijand alleen als een scène met een paar benoemde onderdelen.
+- De wapens, de handen en de vijanden zijn gebouwd en niet gescand of gegenereerd. De handen hebben sinds 11 oktober 2026 een skelet en vingers die bij het herladen bewegen (zie "De wapens opnieuw", ook voor wat daar nog aan open staat). De robots lopen procedureel en hebben geen ingestudeerde animaties. Zodra er een generatiedienst is die bruikbare topologie en rigs levert, zijn dit de eerste om te vervangen; de gameplay hoeft daarvoor niet te veranderen, want die kent een wapen en een vijand alleen als een scène met een paar benoemde onderdelen.
 - Poly Haven heeft geen kubusvormige krat; de kratstapels bestaan daarom uit langwerpige kisten.
 - De machines, containers, tanks en kraan zijn gebouwd en niet gescand. Zodra er een generatiedienst is, zijn na de wapens en de vijanden de machines aan de beurt.
 - Poly Haven heeft sinds juli 2026 een bovenloopkraan met een overspanning van 12,5 m. De kraan in de hal overspant 23 m en is daarom in code gebouwd.
 - De schakelkasten zijn straatkasten die 1,45 keer vergroot zijn; van dichtbij zijn de waarschuwingsstickers daardoor te groot.
 
-## De karabijn opnieuw: echte maten en handen met een skelet
+## De wapens opnieuw: echte maten en handen met een skelet
 
-De wapens en de handschoenen waren het zwakste wat er te zien is, en ze staan altijd in beeld: een rail van losse blokjes, een vizier van vier balkjes, een steunhand als glad vlak met een duim, vingers die bij het herladen niet bewegen. Op 11 oktober 2026 is eerst alleen de karabijn opnieuw gedaan, langs twee wegen om naast elkaar te leggen. De andere vier wapens wachten op de keuze tussen die twee en hebben nog hun oude handen.
+De wapens en de handschoenen waren het zwakste wat er te zien is, en ze staan altijd in beeld: een rail van losse blokjes, een vizier van vier balkjes, een steunhand als glad vlak met een duim, vingers die bij het herladen niet bewegen. Op 11 oktober 2026 is eerst alleen de karabijn opnieuw gedaan, langs twee wegen om naast elkaar te leggen. Michiel koos weg (a), verfijnen in code; daarna zijn de andere vier wapens op dezelfde manier gedaan.
 
 **Weg (a): verfijnen in code**
 
@@ -336,7 +336,12 @@ De wapens en de handschoenen waren het zwakste wat er te zien is, en ze staan al
 - **`tools/build_hands.sh`** laat Blender de hand bouwen en Godot er `scenes/models/glove.res` (het mesh met zijn drie materialen) en `scenes/models/glove.scn` (het skelet met dat mesh erop) van maken, in twaalf seconden. Alleen dit heeft Blender nodig; `tools/build_model.sh weapons` werkt met wat het achterlaat. Met `--sheet=<map>` rendert Blender de hand in vijf houdingen op de CPU, om hem te bekijken zonder het spel te starten.
 - **Een hand sluit zich zelf.** `_glove` in `tools/models/weapons.gd` legt de handpalm tegen wat hij vasthoudt, op een plek rondom en in de richting van de pols, en buigt dan elke vinger gewricht voor gewricht tot het kootje raakt (`Grasp`). De duim doet hetzelfde of volgt een pad, net als de wijsvinger van de schiethand, die langs de kast ligt. De hand heeft één maat: de oude handen rekten mee met wat ze vasthielden. Een linkerhand is de rechter in een spiegel. Dezelfde regels sluiten de hand om elk ander wapen; alleen de plek van de palm is per greep gekozen.
 - **Herladen met vingers.** De handschoen bewaart zijn grepen (`holds`): om de handguard, om het magazijn, en los. Bij een magazijnwissel laat de linkerhand de handguard los, gaat open, pakt het magazijn van links met de vingers om de voorkant en de duim erachter, neemt het mee naar beneden en komt met het volle terug (`Viewmodel.reach` in `scripts/weapons.gd`). Wanneer het magazijn eruit gaat en erin komt is niet veranderd.
-- **De stof vangt licht langs zijn rand** (`shaders/cloth.gdshader`): een zwarte handschoen in een donkere hal was anders alleen een silhouet. Het geldt voor gladde stof en niet voor de mouw, die er lichter en geler van werd dan hij is. Ook de oude handen van de andere vier wapens hebben het.
+- **De andere vier wapens** dragen dezelfde handschoen, die zich om elk van hun grepen sluit, en hebben de echte rail en afgeschuinde randen gekregen waar ze die hadden:
+  - het **pompgeweer**: een kast met ronde bovenkant en een ingelaten trekkerplaat, de ghost ring tussen twee oren op de rail, een hitteschild van geperforeerd plaatstaal over de loop, een kolf met afgeschuinde randen. De steunhand gaat met de pomp mee; bij het laden komt hij met een patroon onder de kast en duwt het met de duim naar binnen (greep `shell`);
+  - de **pistoolmitrailleur**: een achtkantige kast van geperst staal met de rail erop, een uitlopende magazijnschacht, een diopter tussen oren en een korrel in een ring, elk op de rail geklemd, een handstop, een kap achterop waar de draadkolf in zit;
+  - het **scherpschuttersgeweer**: de kasten van de karabijn een maat groter, twee rails, de handguard met sleuven op alle acht vlakken, een mondingsrem met afgeschuinde hoeken, ringen met schroeven om de kijker, een wangstuk op de kolf, ribben op het magazijn;
+  - het **pistool** is zelf niet veranderd. De rechterhand ligt om de greep met de duim naar links, de linker ertegenaan met de vingers over die van de rechter; bij het herladen gaat de linker onder de greep en pakt het magazijn.
+- **De stof vangt licht langs zijn rand** (`shaders/cloth.gdshader`): een zwarte handschoen in een donkere hal was anders alleen een silhouet. Het geldt voor gladde stof en niet voor de mouw, die er lichter en geler van werd dan hij is.
 
 **Weg (b): een bestaand CC0-model**
 
@@ -347,21 +352,37 @@ De wapens en de handschoenen waren het zwakste wat er te zien is, en ze staan al
 - **Wat het laat zien** (derde rij van `benchmark/results/bladen/karabijn.png`): het wapen heeft een fijner silhouet dan wat in code is gebouwd (een handguard met vier rails, de driehoek van het voorvizier, een opgeklapt achtervizier) en slijtage die erop geschilderd is, maar geen richtkijker, dus geen rode stip, en niet de shader die randen blank slijt: van dichtbij is het vlakker. De hand is een blote hand met een vingerloze handschoen; de vingertoppen steken in de donkere hal fel af. Hij is in rust gespreid en sluit daardoor minder net dan de eigen handschoen.
 - **Wat (b) verder zou vragen:** voor de andere vier wapens moet elk nog een CC0-model gevonden worden (daar is niet naar gezocht), en geen van de gevonden modellen brengt een animatie mee: het herladen blijft in beide wegen van ons.
 
-**Wat het kost.** De karabijn in beeld is van 20,0 naar 46,1 duizend driehoeken gegaan (het wapen zelf van 8,1 naar 12,5 duizend, de twee handen van 11,9 naar 33,6 duizend), in evenveel tekenopdrachten: 18. Gemeten op 11 oktober 2026 in de fabriek met de karabijn in beeld (`--weapon=0 --at="2,1.7,3,-120,0"`), om en om met de stand ervoor in een kloon ernaast, drie ronden per instelling, terwijl drie andere sessies bouwden en maten (load 4 tot 8):
+**Wat het kost.** De handen zijn van 11,9 naar 33,6 duizend driehoeken gegaan (16,8 duizend per hand, voor elk wapen dezelfde), in evenveel tekenopdrachten als eerst:
+
+| Wapen in beeld, in duizenden driehoeken | Ervoor | Erna | Waarvan het wapen zelf |
+|---|---|---|---|
+| Karabijn | 20,0 | 46,1 | 8,1 → 12,5 |
+| Pistool | 14,1 | 35,8 | 2,2 → 2,2 |
+| Pompgeweer | 16,1 | 40,0 | 4,2 → 6,4 |
+| Pistoolmitrailleur | 16,0 | 39,5 | 4,1 → 5,9 |
+| Scherpschuttersgeweer | 19,8 | 45,2 | 7,9 → 11,6 |
+
+Gemeten op 11 oktober 2026 in de fabriek met het wapen in beeld (`--weapon=N --at="2,1.7,3,-120,0"`), om en om met de stand ervoor in een kloon ernaast, terwijl drie andere sessies bouwden en maten (load 3 tot 8):
 
 | | Ervoor | Erna |
 |---|---|---|
-| Zoals Michiel speelt: 3456×2160, Ultra, MetalFX Spatial | 53,0 / 52,9 / 53,0 fps | 52,2 / 52,2 / 52,0 fps |
-| 1440p met FSR 2 op 67% | 75,2 / 75,1 / 75,3 fps | 74,2 / 74,0 / 74,0 fps |
+| Karabijn, zoals Michiel speelt (3456×2160, Ultra, MetalFX Spatial), drie ronden | 53,0 / 52,9 / 53,0 fps | 52,2 / 52,2 / 52,0 fps |
+| Karabijn, 1440p met FSR 2 op 67%, drie ronden | 75,2 / 75,1 / 75,3 fps | 74,2 / 74,0 / 74,0 fps |
+| Pistool, zoals Michiel speelt, twee ronden | 52,8 / 53,4 fps | 52,8 / 52,4 fps |
+| Pompgeweer, idem | 52,4 / 52,5 fps | 51,6 / 52,2 fps |
+| Pistoolmitrailleur, idem | 52,9 / 51,8 fps | 52,2 / 52,2 fps |
+| Scherpschuttersgeweer, idem | 52,8 / 49,5 fps | 51,2 / 51,9 fps |
 
-Dat is 1 fps, 0,2 tot 0,3 ms. Waar die precies heen gaat (de driehoeken, het skelet, of dat een mesh met botten voor de upscaler twee keer wordt doorgerekend) is niet uitgezocht. De hele selftest slaagt; `rifle_held`, het wapen zoals een ander het draagt, heeft dezelfde merktekens voor de handen als eerst en is van 8,1 naar 12,5 duizend driehoeken gegaan.
+Bij de karabijn is dat 1 fps, 0,2 tot 0,3 ms. Bij de andere vier ligt het tussen niets en 1 fps; die metingen zijn onrustiger (in twee ervan zit een ronde waarin een andere sessie de 1% low van de stand ervoor naar 29 en 46 fps trok). Waar de tijd precies heen gaat (de driehoeken, het skelet, of dat een mesh met botten voor de upscaler twee keer wordt doorgerekend) is niet uitgezocht. De hele selftest, de test van de mensachtige vijanden en die van samen spelen slagen. Wat een ander draagt heeft dezelfde merktekens voor de handen als eerst en is met het wapen meegegroeid.
 
 **Niet kunnen beoordelen, en nog open**
 
-- **Niemand heeft het in beweging gezien.** Alles is op losse beelden bekeken: het blad met zoals het was, weg (a) en weg (b) onder elkaar (`benchmark/results/bladen/karabijn.png`, niet in git) en renders op de CPU. Hoe de hand loslaat, het magazijn pakt en terugkomt is op vier momenten bekeken, niet als beweging; op 40% van het herladen is de hand met het magazijn onder beeld, net als voorheen.
+- **Niemand heeft het in beweging gezien.** Alles is op losse beelden bekeken: per wapen een blad met voor en na in rust, gericht en op drie momenten van het herladen (`benchmark/results/bladen/`, niet in git; op dat van de karabijn staat weg (b) eronder) en renders op de CPU. Hoe de hand loslaat, het magazijn of een patroon pakt en terugkomt is op drie momenten bekeken, niet als beweging; op 40% van een magazijnwissel is de hand met het magazijn onder beeld, net als voorheen.
 - **De schiethand** ligt om de greep met de wijsvinger langs de kast en beweegt niet: hij gaat niet naar de trekker bij een schot. Vanuit de schutter is hij nauwelijks te zien.
 - **De hand is stijf waar een echte meegeeft.** De palm is één stuk: om de handguard ligt hij er vlak tegenaan in plaats van eromheen. Waar een gewricht ver buigt, vouwt de binnenkant in zichzelf; dat zit tegen het wapen aan.
-- **De vier andere wapens** hebben nog de rail van blokjes en de oude handen, tot er gekozen is. `_gloved()` in `tools/models/weapons.gd` zegt welk model de handschoen draagt.
+- **Er zit geen patroon in de hand** die het pompgeweer laadt: de hand komt bij de laadopening en gaat weer, het patroon moet je erbij denken. Hetzelfde geldt voor de magazijnen: de hand pakt het magazijn dat erin zat en komt met hetzelfde terug.
+- **Het pistool** heeft als enige zijn oude model gehouden; alleen de handen zijn nieuw.
+- **Wat een ander draagt** (`*_held.scn`) is met de wapens meeveranderd, zonder handen; `_gloved()` in `tools/models/held.gd` houdt de handschoen daar weg. De test van de mensachtige vijanden en die van samen spelen slagen ermee, maar niemand heeft een vijand met het nieuwe pompgeweer bekeken.
 - **Het grove korreltje op de kast** komt uit `materials/gun_receiver.tres` (een gestraalde korrel van ruim een millimeter). Dat bestand hoorde niet bij deze opdracht; fijner zou meer op geanodiseerd aluminium lijken.
 
 ## Geluid (fase 3)

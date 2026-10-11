@@ -8,10 +8,10 @@ extends "res://tools/model_builder.gd"
 ## What scripts/weapons.gd animates is found by name: the parts Mag, Bolt,
 ## Slide, Pump, ArmL and ArmR, and the markers Muzzle, Eject and MagHold.
 ##
-## A hand is either built here out of tubes, or it is the glove that
-## tools/build_hands.sh makes, with bones in it: then the arm holds a node
-## Glove at the wrist with a Skeleton3D under it, and the glove says under
-## "holds" how its bones lie for everything the hand is given to hold.
+## The hands are the glove that tools/build_hands.sh makes, with bones in it:
+## an arm holds a node Glove at the wrist with a Skeleton3D under it, and the
+## glove says under "holds" how its bones lie for everything the hand is given
+## to hold. tools/models/held.gd builds the same weapons without them.
 
 const STEEL := "gun_steel"
 const ALU := "gun_receiver"
@@ -24,9 +24,6 @@ const RUBBER := "rubber"
 const LENS := "sight_lens"
 const OPTIC := "scope_glass"
 const GLOW := "tritium"
-const GLOVE := "glove"
-const PAD := "glove_pad"
-const SLEEVE := "sleeve"
 
 ## A profile drawn from the weapon's right-hand side is in (ahead, up).
 const SIDE := Basis(Vector3.FORWARD, Vector3.UP, Vector3.RIGHT)
@@ -43,16 +40,9 @@ const JOINT_OPEN: Array[float] = [-28.0, -26.0, -14.0]
 const JOINT_CLOSED: Array[float] = [70.0, 82.0, 62.0]
 
 
-## Cross-sections, in (right, up): a flat-topped receiver and an octagonal
-## handguard with a raised top for the rail.
-const UPPER: Array[Vector2] = [Vector2(-0.019, -0.022), Vector2(0.019, -0.022), Vector2(0.019, 0.016), Vector2(0.0125, 0.03), Vector2(-0.0125, 0.03), Vector2(-0.019, 0.016)]
-const HANDGUARD: Array[Vector2] = [
-	Vector2(-0.0084, -0.0203), Vector2(0.0084, -0.0203), Vector2(0.0203, -0.0084), Vector2(0.0203, 0.0084), Vector2(0.0105, 0.021),
-	Vector2(0.0105, 0.03), Vector2(-0.0105, 0.03), Vector2(-0.0105, 0.021), Vector2(-0.0203, 0.0084), Vector2(-0.0203, -0.0084),
-]
-
-## The carbine's own, to its real measurements: a tube around the bolt carrier
-## with a neck on top for the rail to stand on, and a plain octagon.
+## Cross-sections of an AR-15, in (right, up) and to its real measurements: a
+## tube around the bolt carrier with a neck on top for the rail to stand on,
+## and the octagon of a handguard.
 const UPPER_TUBE: Array[Vector2] = [
 	Vector2(-0.0165, -0.019), Vector2(0.0165, -0.019), Vector2(0.0165, 0.006), Vector2(0.0155, 0.011), Vector2(0.013, 0.0155),
 	Vector2(0.0095, 0.0185), Vector2(0.0078, 0.0195), Vector2(-0.0078, 0.0195), Vector2(-0.0095, 0.0185), Vector2(-0.013, 0.0155),
@@ -76,9 +66,10 @@ func model(model_name: String) -> void:
 	_worn = null
 
 
-## Whether the hands of the model being built are the glove with bones in it.
+## Whether the hands of the model being built are the glove with bones in it:
+## they are for the player, see tools/models/held.gd for anybody else.
 func _gloved() -> bool:
-	return _figure.name == "Rifle"
+	return true
 
 
 func _describe() -> void:
@@ -148,14 +139,7 @@ func _rifle() -> void:
 	_bar(STEEL, _at(0.088), _at(0.1), 0.0235, 20)
 	_section(ALU, OCTAGON, 0.098, 0.42, 0.0015)
 	_picatinny(ALU, 0.101, 0.418, RAIL_TOP, 0.019)
-	for i in 5:
-		var at := 0.145 + i * 0.056
-		_slot(_at(at, 0, -0.0204), Vector3.LEFT)
-		_slot(_at(at, 0, 0.0204), Vector3.RIGHT)
-		_slot(_at(at, -0.0204), Vector3.DOWN)
-		for side: float in [-1.0, 1.0]:
-			for up: float in [-1.0, 1.0]:
-				_slot(_at(at + 0.028, up * 0.01445, side * 0.01445), Vector3(side, up, 0).normalized(), 0.022, 0.006)
+	_guard_slots(0.145, 5)
 	for side: float in [-1.0, 1.0]:
 		_bar(STEEL, _at(0.108, -0.006, side * 0.0196), _at(0.108, -0.006, side * 0.0208), 0.0032, 6)
 		_bar(STEEL, _at(0.119, -0.006, side * 0.0196), _at(0.119, -0.006, side * 0.0208), 0.0032, 6)
@@ -361,15 +345,26 @@ func _pistol() -> void:
 
 	# Both thumbs forward: the right hand on the grip, the left wrapped round it.
 	var around := Basis(Vector3.RIGHT, grip, Vector3.RIGHT.cross(grip))
+	var index := [_at(-0.04, -0.045, 0.024), _at(-0.012, -0.028, 0.02), _at(0.016, -0.022, 0.0185), _at(0.042, -0.02, 0.0175)]
 	part("ArmR", Transform3D(Basis(), _at(-0.135, -0.1, 0.035)))
-	_hand(Transform3D(around, _at(-0.0464, -0.08)), Vector2(0.0145, 0.026), -25, -1,
-		_at(-0.135, -0.1, 0.035), _at(-0.42, -0.24, 0.14),
-		[_at(-0.082, -0.036, 0.008), _at(-0.066, -0.022, -0.014), _at(-0.04, -0.02, -0.022), _at(-0.016, -0.019, -0.022)],
-		[_at(-0.04, -0.045, 0.024), _at(-0.012, -0.028, 0.02), _at(0.016, -0.022, 0.0185), _at(0.042, -0.02, 0.0175)])
+	if _gloved():
+		_glove(Transform3D(around, _at(-0.0464, -0.08)), Vector2(0.0145, 0.026), false, 30.0, _at(-0.17, -0.13, 0.02), 0.03, 0.014, _at(-0.42, -0.24, 0.14),
+			[_at(-0.08, -0.036, 0.004), _at(-0.062, -0.024, -0.016), _at(-0.036, -0.021, -0.023), _at(-0.012, -0.02, -0.023)], index)
+	else:
+		_hand(Transform3D(around, _at(-0.0464, -0.08)), Vector2(0.0145, 0.026), -25, -1,
+			_at(-0.135, -0.1, 0.035), _at(-0.42, -0.24, 0.14),
+			[_at(-0.082, -0.036, 0.008), _at(-0.066, -0.022, -0.014), _at(-0.04, -0.02, -0.022), _at(-0.016, -0.019, -0.022)], index)
 	part("ArmL", Transform3D(Basis(), _at(-0.043, -0.085)))
-	_hand(Transform3D(around, _at(-0.043, -0.088)), Vector2(0.026, 0.036), 215, 1,
-		_at(-0.105, -0.13, -0.075), _at(-0.36, -0.3, -0.25),
-		[_at(-0.066, -0.052, -0.032), _at(-0.036, -0.032, -0.028), _at(-0.006, -0.024, -0.025), _at(0.02, -0.022, -0.023)])
+	if _gloved():
+		# The palm against the left of the grip, the fingers over those of the
+		# other hand; to change the magazine it goes under the grip and takes it.
+		_glove(Transform3D(around, _at(-0.043, -0.088)), Vector2(0.026, 0.036), true, 200.0, _at(-0.13, -0.15, -0.09), 0.036, 0.0, _at(-0.36, -0.3, -0.25),
+			[_at(-0.07, -0.05, -0.034), _at(-0.038, -0.032, -0.03), _at(-0.008, -0.025, -0.027), _at(0.02, -0.023, -0.025)], [])
+		_holds_also("mag", Transform3D(around, _at(-0.062, -0.155)), Vector2(0.0105, 0.02), 185.0, _at(-0.1, -0.22, -0.05), 0.03, 0.0, _at(-0.2, -0.45, -0.2))
+	else:
+		_hand(Transform3D(around, _at(-0.043, -0.088)), Vector2(0.026, 0.036), 215, 1,
+			_at(-0.105, -0.13, -0.075), _at(-0.36, -0.3, -0.25),
+			[_at(-0.066, -0.052, -0.032), _at(-0.036, -0.032, -0.028), _at(-0.006, -0.024, -0.025), _at(0.02, -0.022, -0.023)])
 
 	marker("Muzzle", Transform3D(Basis(), _at(0.14)))
 	marker("Eject", Transform3D(Basis(), _at(0.022, 0.012, 0.016)))
@@ -379,27 +374,37 @@ func _pistol() -> void:
 # --- Shotgun -------------------------------------------------------------------
 
 
-## Pump-action shotgun with a ghost-ring sight and spare shells on the receiver.
+## Pump-action shotgun with a ghost-ring sight, a heat shield over the barrel
+## and spare shells on the receiver.
 func _shotgun() -> void:
 	model("shotgun")
 
-	_section(STEEL, [Vector2(-0.02, -0.05), Vector2(0.02, -0.05), Vector2(0.02, 0.012), Vector2(0.013, 0.022), Vector2(-0.013, 0.022), Vector2(-0.02, 0.012)], -0.15, 0.07, 0.003)
-	_rail(ALU, Transform3D(Basis(), _at(-0.135, 0.022)), 0.14)
-	_plate(RUBBER, _at(-0.03, -0.0503), Vector3(0.024, 0.0006, 0.08))
-	_plate(BARE, _at(-0.03, -0.0507), Vector3(0.018, 0.0004, 0.062))
+	# Receiver: flat-sided under a rounded top, with the trigger plate let in below.
+	_section(STEEL, [
+		Vector2(-0.02, -0.05), Vector2(0.02, -0.05), Vector2(0.02, 0.008), Vector2(0.0185, 0.014), Vector2(0.0145, 0.019), Vector2(0.0085, 0.0218),
+		Vector2(-0.0085, 0.0218), Vector2(-0.0145, 0.019), Vector2(-0.0185, 0.014), Vector2(-0.02, 0.008),
+	], -0.15, 0.07, 0.0025)
+	_picatinny(ALU, -0.138, 0.012, 0.0312, 0.0205)
+	_side(ALU, _chamfer([Vector2(-0.046, -0.049), Vector2(0.034, -0.049), Vector2(0.034, -0.0555), Vector2(-0.046, -0.0555)], 0.002), 0.034, 0.0012)
+	_plate(RUBBER, _at(-0.03, -0.0558), Vector3(0.024, 0.0006, 0.08))
+	_plate(BARE, _at(-0.03, -0.0562), Vector3(0.018, 0.0004, 0.062))
 	_plate(RUBBER, _at(-0.01, -0.004, 0.0203), Vector3(0.0006, 0.022, 0.075))
-	_bar(STEEL, _at(-0.105, -0.03, -0.0195), _at(-0.105, -0.03, 0.0215), 0.004, 10)
+	# The safety, a button right through behind the trigger, and the pins of the trigger plate.
+	_bar(STEEL, _at(-0.105, -0.03, -0.0215), _at(-0.105, -0.03, 0.0215), 0.004, 10)
+	_bar("enamel_red", _at(-0.105, -0.03, -0.0217), _at(-0.105, -0.03, -0.0211), 0.0046, 10)
 	for pin: float in [-0.02, 0.03]:
 		_bar(STEEL, _at(pin, -0.034, -0.0206), _at(pin, -0.034, 0.0206), 0.0022, 10)
+	_block(STEEL, _at(0.032, -0.046, -0.0185), Vector3(0.005, 0.006, 0.014), 0.0015)
 	_grip()
 
-	# Ghost ring behind, a blade on a ramp in front.
-	_block(STEEL, _at(-0.115, 0.0325), Vector3(0.022, 0.007, 0.02), 0.001)
+	# Ghost ring behind, between two ears, and a blade on a ramp in front.
+	_section(STEEL, _chamfer([Vector2(-0.0128, 0.0268), Vector2(0.0128, 0.0268), Vector2(0.0128, 0.0358), Vector2(-0.0128, 0.0358)], 0.0016), -0.128, -0.102, 0.0008)
+	_bar(STEEL, _at(-0.115, 0.031, -0.0128), _at(-0.115, 0.031, -0.0166), 0.0038, 6)
 	_ring(STEEL, _at(-0.115, 0.043), Vector3.BACK, 0.007, 0.0018)
 	for side: float in [-1.0, 1.0]:
-		_block(STEEL, _at(-0.115, 0.043, side * 0.0125), Vector3(0.003, 0.02, 0.018), 0.001)
-	_block(STEEL, _at(0.535, 0.016), Vector3(0.008, 0.012, 0.034), 0.002)
-	_block(STEEL, _at(0.535, 0.032), Vector3(0.003, 0.022, 0.012), 0.0008)
+		_side(STEEL, _chamfer([Vector2(-0.127, 0.0358), Vector2(-0.103, 0.0358), Vector2(-0.106, 0.0555), Vector2(-0.122, 0.0555)], 0.002), 0.003, 0.0008, side * 0.0122)
+	_side(STEEL, _chamfer([Vector2(0.515, 0.0108), Vector2(0.552, 0.0108), Vector2(0.548, 0.021), Vector2(0.524, 0.023)], 0.0015), 0.009, 0.0015)
+	_side(STEEL, _chamfer([Vector2(0.528, 0.021), Vector2(0.541, 0.021), Vector2(0.539, 0.043), Vector2(0.533, 0.043)], 0.001), 0.003, 0.0006)
 	_dot(_at(0.5285, 0.0395), 0.0013)
 
 	# Spare shells in a carrier on the left of the receiver, heads up and down in turn.
@@ -419,15 +424,35 @@ func _shotgun() -> void:
 	_bar(RUBBER, _at(0.54), _at(0.541), 0.0093, 12)
 	_bar(STEEL, _at(0.07, -0.03), _at(0.5, -0.03), 0.0125, 16)
 	_turned(STEEL, _at(0.5, -0.03), Vector3.FORWARD, [Vector2(0.0135, 0), Vector2(0.0135, 0.02), Vector2(0.01, 0.028), Vector2(0, 0.028)], 16)
-	_block(STEEL, _at(0.46, -0.014), Vector3(0.03, 0.056, 0.016), 0.006)
+	_section(STEEL, _chamfer([Vector2(-0.015, -0.042), Vector2(0.015, -0.042), Vector2(0.015, 0.014), Vector2(-0.015, 0.014)], 0.006), 0.452, 0.468, 0.001)
 	_bar(STEEL, _at(0.46, -0.014, -0.0155), _at(0.46, -0.014, 0.0165), 0.0045, 6)
 
+	# Heat shield: half a tube of pierced sheet steel over the barrel, in two clamps.
+	var shield: Array[Vector2] = []
+	for i in 11:
+		var round := deg_to_rad(12.0 + 156.0 * i / 10.0)
+		shield.append(Vector2(cos(round), sin(round)) * 0.0152)
+	for i in 11:
+		var round := deg_to_rad(168.0 - 156.0 * i / 10.0)
+		shield.append(Vector2(cos(round), sin(round)) * 0.0136)
+	_section(STEEL, shield, 0.1, 0.43, 0.0005)
+	for i in 8:
+		for lean: float in [42.0, 90.0, 138.0]:
+			var out := Vector3(cos(deg_to_rad(lean)), sin(deg_to_rad(lean)), 0)
+			_slot(_at(0.122 + i * 0.041) + out * 0.01525, out, 0.026, 0.0062)
+	for ahead: float in [0.104, 0.424]:
+		_bar(STEEL, _at(ahead - 0.004), _at(ahead + 0.004), 0.0158, 16)
+
 	# Stock.
-	_side(POLY, [
-		Vector2(-0.15, 0.018), Vector2(-0.355, 0.012), Vector2(-0.362, -0.115), Vector2(-0.33, -0.118), Vector2(-0.235, -0.046), Vector2(-0.15, -0.04),
-	], 0.04, 0.008)
-	_side(RUBBER, [Vector2(-0.353, 0.014), Vector2(-0.36, -0.118), Vector2(-0.372, -0.118), Vector2(-0.365, 0.014)], 0.042, 0.004)
+	_side(POLY, _chamfer([
+		Vector2(-0.15, 0.016), Vector2(-0.21, 0.019), Vector2(-0.355, 0.013), Vector2(-0.362, -0.115), Vector2(-0.33, -0.118),
+		Vector2(-0.25, -0.052), Vector2(-0.19, -0.042), Vector2(-0.15, -0.04),
+	], 0.004), 0.04, 0.008)
+	_side(RUBBER, [Vector2(-0.353, 0.015), Vector2(-0.36, -0.118), Vector2(-0.372, -0.118), Vector2(-0.365, 0.015)], 0.042, 0.004)
+	for i in 5:
+		_plate(RUBBER, _at(-0.3695 + i * 0.0003, -0.094 + i * 0.022), Vector3(0.036, 0.0016, 0.0012))
 	_slot(_at(-0.31, -0.05, -0.0201), Vector3.LEFT, 0.03, 0.008)
+	_slot(_at(-0.31, -0.05, 0.0201), Vector3.RIGHT, 0.03, 0.008)
 
 	part("Bolt")
 	_plate(BARE, _at(-0.012, -0.004, 0.0206), Vector3(0.0006, 0.018, 0.06))
@@ -443,6 +468,10 @@ func _shotgun() -> void:
 
 	_trigger_hand()
 	_support_hand(0.28, 0.024, "Pump", 0.033)
+	# To load, the same hand brings a shell up under the receiver and thumbs it in.
+	_holds_also("shell", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), _at(-0.035, -0.064)), Vector2(0.0105, 0.0105), -96.0,
+		_at(-0.1, -0.075, -0.07), 0.034, 0.0, _at(-0.3, -0.36, -0.2),
+		[_at(-0.085, -0.074, -0.014), _at(-0.058, -0.064, -0.008), _at(-0.03, -0.059, -0.004), _at(-0.006, -0.057, -0.001)])
 
 	marker("Muzzle", Transform3D(Basis(), _at(0.585)))
 	marker("Eject", Transform3D(Basis(), _at(-0.01, 0.0, 0.026)))
@@ -457,45 +486,65 @@ func _shotgun() -> void:
 func _smg() -> void:
 	model("smg")
 
-	_section(ALU, [Vector2(-0.017, -0.02), Vector2(0.017, -0.02), Vector2(0.017, 0.014), Vector2(0.011, 0.026), Vector2(-0.011, 0.026), Vector2(-0.017, 0.014)], -0.12, 0.2)
-	_section(ALU, [Vector2(-0.0165, -0.038), Vector2(0.0165, -0.038), Vector2(0.0175, -0.019), Vector2(-0.0175, -0.019)], 0.085, 0.2, 0.003)
-	_rail(ALU, Transform3D(Basis(), _at(-0.112, 0.026)), 0.305)
-	_side(POLY, [
+	# Receiver: a tube of pressed steel, eight-sided above and square below,
+	# with the lower of moulded plastic under it.
+	_section(ALU, [
+		Vector2(-0.017, -0.02), Vector2(0.017, -0.02), Vector2(0.017, 0.012), Vector2(0.0135, 0.021), Vector2(0.0078, 0.0245),
+		Vector2(-0.0078, 0.0245), Vector2(-0.0135, 0.021), Vector2(-0.017, 0.012),
+	], -0.12, 0.2, 0.0012)
+	_section(ALU, _chamfer([Vector2(-0.0165, -0.038), Vector2(0.0165, -0.038), Vector2(0.0175, -0.019), Vector2(-0.0175, -0.019)], 0.002), 0.085, 0.2, 0.002)
+	_picatinny(ALU, -0.114, 0.194, 0.0339, 0.0238)
+	_side(POLY, _chamfer([
 		Vector2(-0.12, -0.018), Vector2(-0.12, -0.042), Vector2(-0.09, -0.053), Vector2(-0.04, -0.053), Vector2(-0.03, -0.047),
 		Vector2(0.03, -0.047), Vector2(0.028, -0.086), Vector2(0.074, -0.091), Vector2(0.078, -0.03), Vector2(0.078, -0.018),
-	], 0.03, 0.003)
+	], 0.002), 0.03, 0.003)
+	_side(POLY, [Vector2(0.0265, -0.079), Vector2(0.026, -0.0875), Vector2(0.0745, -0.0925), Vector2(0.076, -0.084)], 0.0335, 0.0018)
 	for pin: Vector2 in [Vector2(-0.1, -0.032), Vector2(0.07, -0.03), Vector2(-0.014, -0.035)]:
 		_bar(STEEL, _at(pin.x, pin.y, -0.0156), _at(pin.x, pin.y, 0.0156), 0.0026, 10)
 	_bar(STEEL, _at(-0.062, -0.034, -0.015), _at(-0.062, -0.034, -0.0178), 0.005, 12)
-	_block(STEEL, _at(-0.062, -0.027, -0.0185), Vector3(0.003, 0.022, 0.006), 0.0012)
+	_block(STEEL, _at(-0.05, -0.034, -0.0186), Vector3(0.003, 0.006, 0.024), 0.0012)
+	_bar("enamel_red", _at(-0.062, -0.0245, -0.0149), _at(-0.062, -0.0245, -0.0153), 0.0016, 8)
+	_bar(STEEL, _at(0.022, -0.036, 0.015), _at(0.022, -0.036, 0.0178), 0.0042, 10)
 	_grip()
 	_slot(_at(0.115, 0.004, -0.0171), Vector3.LEFT, 0.1, 0.0065)
 	_plate(RUBBER, _at(0.03, 0.002, 0.0172), Vector3(0.0006, 0.016, 0.05))
+	_side(ALU, [Vector2(-0.012, -0.002), Vector2(0.0, -0.006), Vector2(0.0, 0.009), Vector2(-0.008, 0.01)], 0.008, 0.0015, 0.0195)
 	for i in 3:
 		_slot(_at(0.115 + i * 0.03, -0.029, -0.0172), Vector3.LEFT, 0.02, 0.006)
 		_slot(_at(0.115 + i * 0.03, -0.029, 0.0172), Vector3.RIGHT, 0.02, 0.006)
+	# A stop for the hand, so that it stays behind the muzzle.
+	_side(POLY, _chamfer([Vector2(0.172, -0.038), Vector2(0.2, -0.038), Vector2(0.197, -0.06), Vector2(0.181, -0.06)], 0.003), 0.02, 0.004)
 
 	# Short barrel with lugs for a suppressor.
 	_bar(STEEL, _at(0.2), _at(0.236), 0.008, 16)
+	_bar(STEEL, _at(0.2), _at(0.206), 0.0135, 16)
 	_turned(STEEL, _at(0.236), Vector3.FORWARD, [
 		Vector2(0.008, 0), Vector2(0.011, 0), Vector2(0.011, 0.006), Vector2(0.009, 0.008), Vector2(0.009, 0.016), Vector2(0.012, 0.018),
 		Vector2(0.012, 0.04), Vector2(0.0055, 0.04), Vector2(0.005, 0.02),
 	], 16)
 	_bar(RUBBER, _at(0.258), _at(0.259), 0.0052, 12)
 
-	# Sights: an aperture behind, a hooded post in front.
-	_block(STEEL, _at(-0.09, 0.0375), Vector3(0.022, 0.016, 0.018), 0.002)
+	# Sights: an aperture behind and a hooded post in front, each clamped on the rail.
+	for ahead: float in [-0.09, 0.175]:
+		_section(STEEL, _chamfer([Vector2(-0.0128, 0.0298), Vector2(0.0128, 0.0298), Vector2(0.0128, 0.0398), Vector2(-0.0128, 0.0398)], 0.0016), ahead - 0.012, ahead + 0.012, 0.0008)
+		_bar(STEEL, _at(ahead, 0.0345, -0.0128), _at(ahead, 0.0345, -0.0166), 0.0038, 6)
+	_side(STEEL, _chamfer([Vector2(-0.094, 0.0398), Vector2(-0.086, 0.0398), Vector2(-0.087, 0.047), Vector2(-0.093, 0.047)], 0.001), 0.006, 0.0008)
 	_ring(STEEL, _at(-0.09, 0.052), Vector3.BACK, 0.0062, 0.002)
-	_block(STEEL, _at(0.175, 0.0355), Vector3(0.02, 0.012, 0.016), 0.002)
+	for side: float in [-1.0, 1.0]:
+		_side(STEEL, _chamfer([Vector2(-0.1, 0.0398), Vector2(-0.08, 0.0398), Vector2(-0.083, 0.061), Vector2(-0.096, 0.061)], 0.002), 0.0028, 0.0008, side * 0.0114)
 	_ring(STEEL, _at(0.175, 0.052), Vector3.BACK, 0.0105, 0.0018)
-	_block(STEEL, _at(0.175, 0.0465), Vector3(0.0022, 0.011, 0.003), 0.0005)
+	_side(STEEL, _chamfer([Vector2(0.169, 0.0398), Vector2(0.181, 0.0398), Vector2(0.178, 0.0425), Vector2(0.172, 0.0425)], 0.0008), 0.02, 0.0008)
+	_block(STEEL, _at(0.175, 0.0468), Vector3(0.0022, 0.011, 0.003), 0.0005)
 	_dot(_at(0.1734, 0.0505), 0.001)
 
-	# Wire stock, pulled out.
+	# Wire stock, pulled out, on the cap that closes the receiver.
+	_section(ALU, _chamfer([Vector2(-0.0178, -0.021), Vector2(0.0178, -0.021), Vector2(0.0178, 0.018), Vector2(0.012, 0.0245), Vector2(-0.012, 0.0245), Vector2(-0.0178, 0.018)], 0.002), -0.128, -0.119, 0.001)
 	for side: float in [-1.0, 1.0]:
 		_bar(STEEL, _at(-0.05, 0.006, side * 0.0195), _at(-0.33, 0.006, side * 0.0195), 0.0038, 10)
 		_block(ALU, _at(-0.1, 0.006, side * 0.0185), Vector3(0.008, 0.012, 0.03), 0.002)
-	_block(POLY, _at(-0.335, -0.03), Vector3(0.05, 0.115, 0.016), 0.007)
+		_bar(STEEL, _at(-0.33, 0.006, side * 0.0195), _at(-0.336, -0.012, side * 0.012), 0.0038, 10)
+	_side(POLY, _chamfer([Vector2(-0.329, 0.03), Vector2(-0.343, 0.03), Vector2(-0.343, -0.088), Vector2(-0.329, -0.088)], 0.004), 0.05, 0.006)
+	_side(RUBBER, [Vector2(-0.342, 0.03), Vector2(-0.342, -0.088), Vector2(-0.349, -0.086), Vector2(-0.349, 0.028)], 0.048, 0.003)
 
 	part("Bolt")
 	_bar(STEEL, _at(0.15, 0.004, -0.016), _at(0.15, 0.004, -0.032), 0.0045, 10)
@@ -510,6 +559,8 @@ func _smg() -> void:
 
 	_trigger_hand()
 	_support_hand(0.145, 0.0235, "", 0.011)
+	_holds_also("mag", Transform3D(Basis(), _at(0.056, -0.165)), Vector2(0.0102, 0.018), 180.0,
+		_at(-0.03, -0.2, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
 	marker("Muzzle", Transform3D(Basis(), _at(0.29)))
 	marker("Eject", Transform3D(Basis(), _at(0.03, 0.004, 0.022)))
@@ -525,55 +576,71 @@ func _smg() -> void:
 func _marksman() -> void:
 	model("marksman")
 
-	_section(ALU, UPPER, -0.11, 0.112)
-	_side(ALU, [
-		Vector2(-0.11, -0.02), Vector2(-0.11, -0.046), Vector2(-0.085, -0.053), Vector2(-0.04, -0.053), Vector2(-0.03, -0.047),
-		Vector2(0.02, -0.047), Vector2(0.016, -0.092), Vector2(0.104, -0.1), Vector2(0.112, -0.06), Vector2(0.112, -0.02),
-	], 0.034, 0.0025)
-	_rail(ALU, Transform3D(Basis(), _at(-0.104, 0.03)), 0.6)
+	# The receivers of the carbine, a size up for the longer cartridge.
+	var wide := UPPER_TUBE.map(func(corner: Vector2) -> Vector2: return Vector2(corner.x * 1.07 if absf(corner.x) > 0.008 else corner.x, corner.y))
+	_section(ALU, wide, -0.11, 0.112, 0.0012)
+	_picatinny(ALU, -0.108, 0.11, RAIL_TOP, 0.019)
+	_side(ALU, _chamfer([
+		Vector2(-0.11, -0.019), Vector2(-0.11, -0.044), Vector2(-0.09, -0.0515), Vector2(-0.04, -0.0515), Vector2(-0.03, -0.047),
+		Vector2(0.02, -0.047), Vector2(0.016, -0.092), Vector2(0.104, -0.1), Vector2(0.112, -0.06), Vector2(0.112, -0.019),
+	], 0.002), 0.032, 0.002)
+	_side(ALU, [Vector2(0.0155, -0.084), Vector2(0.015, -0.0925), Vector2(0.1045, -0.101), Vector2(0.106, -0.092)], 0.0355, 0.0018)
 	for pin: Vector2 in [Vector2(-0.095, -0.036), Vector2(0.1, -0.036), Vector2(-0.012, -0.036)]:
-		_bar(STEEL, _at(pin.x, pin.y, -0.0176), _at(pin.x, pin.y, 0.0176), 0.0028, 10)
-	_bar(STEEL, _at(-0.062, -0.034, -0.017), _at(-0.062, -0.034, -0.0198), 0.005, 12)
-	_block(STEEL, _at(-0.062, -0.027, -0.0205), Vector3(0.003, 0.022, 0.006), 0.0012)
-	_slot(_at(0.045, 0.006, -0.0191), Vector3.LEFT, 0.11, 0.0065)
-	_plate(RUBBER, _at(0.02, 0.003, 0.0192), Vector3(0.0006, 0.018, 0.075))
+		_bar(STEEL, _at(pin.x, pin.y, -0.0166), _at(pin.x, pin.y, 0.0166), 0.0028, 10)
+	_bar(STEEL, _at(-0.062, -0.034, -0.016), _at(-0.062, -0.034, -0.0188), 0.005, 12)
+	_block(STEEL, _at(-0.05, -0.034, -0.0196), Vector3(0.003, 0.006, 0.024), 0.0012)
+	_bar("enamel_red", _at(-0.062, -0.0245, -0.0159), _at(-0.062, -0.0245, -0.0163), 0.0016, 8)
+	_slot(_at(0.045, 0.006, -0.0177), Vector3.LEFT, 0.11, 0.0065)
+	_plate(RUBBER, _at(0.02, 0.003, 0.0178), Vector3(0.0006, 0.018, 0.075))
+	_side(ALU, [Vector2(-0.038, 0.0), Vector2(-0.022, -0.004), Vector2(-0.022, 0.011), Vector2(-0.031, 0.012)], 0.012, 0.002, 0.0205)
+	_bar(STEEL, _at(0.012, -0.031, 0.016), _at(0.012, -0.031, 0.0188), 0.0042, 10)
 	_grip()
 
+	# A long handguard on its own, clear of the barrel, with a rail all the way.
 	_bar(STEEL, _at(0.105), _at(0.118), 0.0235, 20)
-	_section(ALU, HANDGUARD, 0.115, 0.5, 0.0015)
-	_slots(0.16, 6)
+	_section(ALU, OCTAGON, 0.115, 0.5, 0.0015)
+	_picatinny(ALU, 0.118, 0.498, RAIL_TOP, 0.019)
+	_guard_slots(0.16, 6)
 	_turned(STEEL, _at(0.48), Vector3.FORWARD, [Vector2(0.0098, 0), Vector2(0.0098, 0.175), Vector2(0.0082, 0.178), Vector2(0.0082, 0.185)], 20)
-	_block(STEEL, _at(0.698), Vector3(0.023, 0.021, 0.066), 0.004)
+	# Muzzle brake: a block with three ports a side.
+	_section(STEEL, _chamfer([Vector2(-0.0115, -0.0105), Vector2(0.0115, -0.0105), Vector2(0.0115, 0.0105), Vector2(-0.0115, 0.0105)], 0.003), 0.665, 0.731, 0.0012)
 	for i in 3:
 		for side: float in [-1.0, 1.0]:
 			_slot(_at(0.68 + i * 0.018, 0, side * 0.0116), Vector3(side, 0, 0), 0.011, 0.012)
 	_bar(RUBBER, _at(0.7311), _at(0.7314), 0.0055, 12)
 
 	# Bipod folded back under the handguard.
-	_block(ALU, _at(0.455, -0.026), Vector3(0.03, 0.014, 0.03), 0.003)
+	_section(ALU, _chamfer([Vector2(-0.015, -0.033), Vector2(0.015, -0.033), Vector2(0.015, -0.0195), Vector2(-0.015, -0.0195)], 0.003), 0.44, 0.47, 0.001)
 	for side: float in [-1.0, 1.0]:
 		_bar(STEEL, _at(0.452, -0.03, side * 0.013), _at(0.24, -0.034, side * 0.016), 0.0048, 10)
 		_bar(ALU, _at(0.34, -0.0325, side * 0.0145), _at(0.24, -0.034, side * 0.016), 0.0062, 10)
 		_ball(RUBBER, _at(0.232, -0.034, side * 0.016), 0.0085)
 
-	# Stock with a raised cheek piece.
+	# The receiver extension with its lock nut, and a stock with a raised cheek piece.
 	_bar(ALU, _at(-0.11), _at(-0.3), 0.0148, 20)
-	_bar(STEEL, _at(-0.11), _at(-0.118), 0.02, 16)
-	_side(POLY, [
+	_section(STEEL, _chamfer([Vector2(-0.016, -0.044), Vector2(0.016, -0.044), Vector2(0.0195, -0.008), Vector2(0.0195, 0.008), Vector2(0.012, 0.0185), Vector2(-0.012, 0.0185), Vector2(-0.0195, 0.008), Vector2(-0.0195, -0.008)], 0.003), -0.1135, -0.1105, 0.0008)
+	_bar(STEEL, _at(-0.1135), _at(-0.1215), 0.0192, 12)
+	_side(POLY, _chamfer([
 		Vector2(-0.16, 0.026), Vector2(-0.335, 0.026), Vector2(-0.343, -0.112), Vector2(-0.305, -0.114), Vector2(-0.28, -0.06),
 		Vector2(-0.2, -0.036), Vector2(-0.16, -0.03),
-	], 0.042, 0.007)
-	_block(POLY, _at(-0.243, 0.036), Vector3(0.036, 0.022, 0.13), 0.009)
+	], 0.004), 0.042, 0.007)
+	_side(POLY, _chamfer([Vector2(-0.18, 0.026), Vector2(-0.305, 0.026), Vector2(-0.3, 0.047), Vector2(-0.19, 0.047)], 0.005), 0.036, 0.009)
 	_side(RUBBER, [Vector2(-0.333, 0.028), Vector2(-0.341, -0.115), Vector2(-0.353, -0.115), Vector2(-0.345, 0.028)], 0.044, 0.004)
+	for i in 5:
+		_plate(RUBBER, _at(-0.3505 + i * 0.0004, -0.09 + i * 0.024), Vector3(0.038, 0.0016, 0.0012))
 	for ahead: float in [-0.21, -0.275]:
 		_bar(STEEL, _at(ahead, 0.02, -0.0215), _at(ahead, 0.02, -0.025), 0.006, 10)
+		_bar(STEEL, _at(ahead, 0.02, -0.025), _at(ahead, 0.02, -0.0262), 0.0072, 12)
 
 	# Telescopic sight in two rings.
 	var eye := 0.067
 	for ahead: float in [-0.012, 0.118]:
-		_block(ALU, _at(ahead, 0.0445), Vector3(0.03, 0.016, 0.022), 0.003)
+		_section(ALU, _chamfer([Vector2(-0.0135, 0.0262), Vector2(0.0135, 0.0262), Vector2(0.0135, 0.05), Vector2(-0.0135, 0.05)], 0.002), ahead - 0.011, ahead + 0.011, 0.001)
 		_bar(ALU, _at(ahead - 0.011, eye), _at(ahead + 0.011, eye), 0.0192, 20)
-		_bar(STEEL, _at(ahead, 0.042, -0.0165), _at(ahead, 0.042, -0.021), 0.005, 6)
+		_bar(STEEL, _at(ahead, 0.0315, -0.0135), _at(ahead, 0.0315, -0.0178), 0.005, 6)
+		for side: float in [-1.0, 1.0]:
+			for along: float in [-0.006, 0.006]:
+				_bar(STEEL, _at(ahead + along, eye + 0.0125, side * 0.0135), _at(ahead + along, eye + 0.0165, side * 0.0135), 0.0022, 6)
 	_turned(ALU, _at(-0.115, eye), Vector3.FORWARD, [
 		Vector2(0.0172, 0), Vector2(0.021, 0.004), Vector2(0.021, 0.05), Vector2(0.0185, 0.062), Vector2(0.0152, 0.07), Vector2(0.0152, 0.215),
 		Vector2(0.019, 0.24), Vector2(0.027, 0.28), Vector2(0.027, 0.35), Vector2(0.0255, 0.352), Vector2(0.0255, 0.345),
@@ -581,18 +648,22 @@ func _marksman() -> void:
 	_bar(RUBBER, _at(-0.1155, eye), _at(-0.085, eye), 0.0222, 20)
 	_bar(OPTIC, _at(-0.1162, eye), _at(-0.1158, eye), 0.0175, 20)
 	_bar(OPTIC, _at(0.2295, eye), _at(0.23, eye), 0.0255, 20)
-	_block(ALU, _at(0.052, eye), Vector3(0.035, 0.035, 0.036), 0.007)
+	_section(ALU, _chamfer([Vector2(-0.0175, eye - 0.0175), Vector2(0.0175, eye - 0.0175), Vector2(0.0175, eye + 0.0175), Vector2(-0.0175, eye + 0.0175)], 0.006), 0.034, 0.07, 0.002)
 	var knob: Array[Vector2] = [Vector2(0.011, 0), Vector2(0.011, 0.01), Vector2(0.0128, 0.011), Vector2(0.0128, 0.022), Vector2(0.011, 0.024), Vector2(0, 0.024)]
 	_turned(ALU, _at(0.052, eye + 0.0165), Vector3.UP, knob, 16)
 	_turned(ALU, _at(0.052, eye, 0.0165), Vector3.RIGHT, knob, 16)
 	_turned(ALU, _at(0.052, eye, -0.0165), Vector3.LEFT, knob, 16)
+	_bar(STEEL, _at(-0.062, eye), _at(-0.05, eye), 0.0208, 24)
 
 	part("Bolt")
 	_bar(STEEL, _at(0.09, 0.006, -0.018), _at(0.09, 0.006, -0.034), 0.0045, 10)
 	_ball(STEEL, _at(0.09, 0.006, -0.036), 0.0072)
 
 	part("Mag", Transform3D(Basis(), _at(0.06, -0.06)))
-	_side(POLY, [Vector2(0.024, -0.03), Vector2(0.021, -0.152), Vector2(0.099, -0.158), Vector2(0.098, -0.03)], 0.026, 0.003)
+	_side(POLY, _chamfer([Vector2(0.024, -0.03), Vector2(0.021, -0.152), Vector2(0.099, -0.158), Vector2(0.098, -0.03)], 0.003), 0.026, 0.003)
+	for i in 5:
+		_block(POLY, _at(0.022, -0.108 - i * 0.0095), Vector3(0.0272, 0.0032, 0.0046), 0.0014)
+		_block(POLY, _at(0.0985, -0.108 - i * 0.0095), Vector3(0.0272, 0.0032, 0.0046), 0.0014)
 	_block(POLY, _at(0.06, -0.156), Vector3(0.03, 0.01, 0.084), 0.003, Vector3(-4, 0, 0))
 	for side: float in [-1.0, 1.0]:
 		_side(POLY, [Vector2(0.034, -0.105), Vector2(0.033, -0.146), Vector2(0.088, -0.15), Vector2(0.088, -0.105)], 0.0015, 0.0005, side * 0.0132)
@@ -600,6 +671,8 @@ func _marksman() -> void:
 
 	_trigger_hand()
 	_support_hand(0.285, 0.021)
+	_holds_also("mag", Transform3D(Basis(), _at(0.06, -0.125)), Vector2(0.013, 0.038), 180.0,
+		_at(-0.03, -0.165, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
 	marker("Muzzle", Transform3D(Basis(), _at(0.745)))
 	marker("Eject", Transform3D(Basis(), _at(0.02, 0.006, 0.024)))
@@ -667,16 +740,6 @@ func _picatinny(mat: String, from: float, to: float, top: float, base: float) ->
 		_section(mat, [Vector2(-0.01037, floor), Vector2(0.01037, floor), Vector2(0.0106, top - 0.00277), Vector2(0.007835, top), Vector2(-0.007835, top), Vector2(-0.0106, top - 0.00277)], at, at + 0.00477, 0.00035)
 
 
-## Accessory rail with a tooth every centimetre. It starts at the origin of
-## `frame`, runs `length` along its -Z and stands on its XZ plane.
-func _rail(mat: String, frame: Transform3D, length: float) -> void:
-	var xf := _m * frame
-	_local_box(mat, xf, Vector3(0, 0.002, -length * 0.5), Vector3(0.0156, 0.004, length), _part)
-	var teeth := int(length / 0.01)
-	for i in teeth:
-		_local_box(mat, xf, Vector3(0, 0.0052, -(i + 0.5) * length / teeth), Vector3(0.0212, 0.0028, 0.0053), _part)
-
-
 ## Slot through a handguard or a flash hider, as a dark inlay with rounded
 ## ends: `at` is its middle on the surface and `out` the normal there. It runs
 ## along the barrel.
@@ -701,16 +764,17 @@ func _grip(mat := GRIP) -> void:
 	_line(STEEL, [_at(-0.008, -0.045), _at(-0.006, -0.058), _at(-0.011, -0.07), _at(-0.017, -0.077)], 0.0028)
 
 
-## Rows of slots down an octagonal handguard, the first `ahead` of the origin.
-func _slots(ahead: float, count: int) -> void:
+## Rows of slots down an octagonal handguard, the first `ahead` of the origin:
+## on its sides and underneath, and shorter ones on the four slanted faces.
+func _guard_slots(ahead: float, count: int) -> void:
 	for i in count:
 		var at := ahead + i * 0.056
 		_slot(_at(at, 0, -0.0204), Vector3.LEFT)
 		_slot(_at(at, 0, 0.0204), Vector3.RIGHT)
 		_slot(_at(at, -0.0204), Vector3.DOWN)
 		for side: float in [-1.0, 1.0]:
-			_slot(_at(at + 0.028, -0.01445, side * 0.01445), Vector3(side, -1, 0).normalized(), 0.022, 0.006)
-			_slot(_at(at + 0.028, 0.0149, side * 0.0156), Vector3(side * 0.79, 0.613, 0), 0.022, 0.005)
+			for up: float in [-1.0, 1.0]:
+				_slot(_at(at + 0.028, up * 0.01445, side * 0.01445), Vector3(side, up, 0).normalized(), 0.022, 0.006)
 
 
 ## Glowing dot on the back of a sight, facing the shooter.
@@ -753,65 +817,15 @@ func _support_hand(ahead: float, radius: float, parent := "", drop := 0.0) -> vo
 			_at(ahead + 0.037, -0.001 - drop, -0.01 - radius), _at(ahead + 0.059, 0.005 - drop, -0.009 - radius)])
 
 
-## Gloved hand closed around something, with its forearm. `frame` sits in the
-## middle of what is held, between the middle and the ring finger: its Y runs
-## along it towards the index finger, and `radii` are how thick it is along X
-## and Z. The knuckles lie `palm_deg` round from X towards Z; from there the
-## fingers curl on towards Z if `curl` is 1 and away from it if -1. The back
-## of the hand runs from the knuckles to `wrist` and the forearm from there
-## towards `elbow`. `thumb` is the path the thumb takes, and `index` that of
-## the index finger if it does not curl with the others.
-func _hand(frame: Transform3D, radii: Vector2, palm_deg: float, curl: float, wrist: Vector3, elbow: Vector3, thumb: Array, index: Array = []) -> void:
-	var lengths: Array[float] = [0.078, 0.088, 0.082, 0.064]
-	var thick: Array[float] = [0.0093, 0.0097, 0.0092, 0.0083]
-	var start := deg_to_rad(palm_deg)
-	var reach := (radii.x + radii.y) * 0.5 + 0.01
-	var knuckles: Array[Vector3] = []
-	for k in 4:
-		var along := (1.5 - k) * 0.0205
-		knuckles.append(_around(frame, radii, start, 0.011, along))
-		_ball(GLOVE, knuckles[k], 0.0112)
-		if k == 0 and not index.is_empty():
-			_finger(index, thick[k], PackedFloat32Array([1.1, 1.02, 0.95, 0.86]))
-			continue
-		var points := []
-		for i in 7:
-			points.append(_around(frame, radii, start + curl * lengths[k] / reach * i / 6.0, thick[k], along))
-		_finger(points, thick[k])
-
-	# Back of the hand, with a hard guard over the knuckles.
-	var middle := (knuckles[0] + knuckles[3]) * 0.5
-	var back := (wrist - middle).normalized()
-	var out := back.cross(knuckles[0] - knuckles[3]).normalized()
-	if out.dot(middle - frame.origin) < 0.0:
-		out = -out
-	var basis := Basis(out.cross(back), out, back)
-	rounded_box(GLOVE, _m * Transform3D(basis, (middle + wrist) * 0.5 - out * 0.004), Vector3(0.09, 0.034, middle.distance_to(wrist) + 0.024), 0.014, _part)
-	# The guard is a moulded plate per knuckle on a strip of the same stuff,
-	# and a seam runs down the back of the hand from between each two.
-	rounded_box(PAD, _m * Transform3D(basis, middle + back * 0.02 + out * 0.0125), Vector3(0.08, 0.005, 0.03), 0.0025, _part)
-	for k in 4:
-		var across: Vector3 = basis.x * (knuckles[k] - middle).dot(basis.x)
-		rounded_box(PAD, _m * Transform3D(basis, middle + across + back * 0.012 + out * 0.0155), Vector3(0.0165, 0.008, 0.021), 0.0038, _part)
-		if k < 3:
-			var between: Vector3 = basis.x * ((knuckles[k] + knuckles[k + 1]) * 0.5 - middle).dot(basis.x)
-			_bar(PAD, middle + between + back * 0.038 + out * 0.0128, middle + between * 0.8 + back * (middle.distance_to(wrist) - 0.004) + out * 0.0128, 0.0011, 6)
-	# The ball of the thumb is part of the hand, not a ball on it.
-	var heel: Vector3 = thumb[0].lerp(wrist, 0.5)
-	_ball(GLOVE, heel, 0.0185)
-	_line(GLOVE, [heel, thumb[0], thumb[1]], 0.0108, 10, PackedFloat32Array([1.7, 1.45, 1.12]))
-	_finger(thumb, 0.0108, PackedFloat32Array([1.14, 1.04, 1.0, 0.9]))
-
-	# Cuff of the glove with its strap, and the sleeve.
-	var arm := (elbow - wrist).normalized()
-	_turned(GLOVE, wrist - arm * 0.014, arm, [Vector2(0, 0), Vector2(0.028, 0.002), Vector2(0.0335, 0.014), Vector2(0.0345, 0.056), Vector2(0.031, 0.058)], 16, true)
-	_turned(PAD, wrist + arm * 0.018, arm, [Vector2(0.034, 0), Vector2(0.0358, 0.002), Vector2(0.0358, 0.02), Vector2(0.034, 0.022)], 16)
-	var sleeve := PackedVector2Array([Vector2(0.031, 0), Vector2(0.0365, 0.003)])
-	for i in 15:
-		var along := 0.012 + i * 0.024
-		var folds := 0.0022 * sin(along * 95.0) + 0.0016 * sin(along * 41.0 + 1.0)
-		sleeve.append(Vector2(lerpf(0.0375, 0.052, pow(i / 14.0, 0.8)) + folds, along))
-	_turned(SLEEVE, wrist + arm * 0.046, arm, sleeve, 16, true)
+## Where a hand holds a weapon that is built without the glove: `frame` sits
+## in the middle of what is held, between the middle and the ring finger, its
+## Y along it towards the index finger, and `radii` are how thick it is along
+## X and Z. The knuckles lie `palm_deg` round from X towards Z, and the back
+## of the hand runs from there to `wrist`, the forearm on towards `elbow`.
+## Nothing is built of it here; tools/models/held.gd makes markers of it for
+## the hands of whoever carries the weapon.
+func _hand(_frame: Transform3D, _radii: Vector2, _palm_deg: float, _curl: float, _wrist: Vector3, _elbow: Vector3, _thumb: Array, _index: Array = []) -> void:
+	pass
 
 
 ## The glove with bones in it, closed around something: `frame` and `radii`
@@ -1020,14 +1034,6 @@ class Grasp:
 ## `clear` of its surface and `along` it from the middle of the hand.
 func _around(frame: Transform3D, radii: Vector2, angle: float, clear: float, along: float) -> Vector3:
 	return frame * Vector3((radii.x + clear) * cos(angle), along, (radii.y + clear) * sin(angle))
-
-
-## Finger or thumb of a glove along `points`, rounded off at the tip. It is
-## thickest at the hand and at its joints and thinner towards the tip; `taper`
-## says how thick at each point, for one that is not a finger of seven points.
-func _finger(points: Array, radius: float, taper := PackedFloat32Array([1.1, 1.0, 1.05, 0.95, 0.99, 0.88, 0.84])) -> void:
-	_line(GLOVE, points, radius, 10, taper)
-	_ball(GLOVE, points[-1], radius * taper[taper.size() - 1])
 
 
 ## Pane of glass that faces the shooter.

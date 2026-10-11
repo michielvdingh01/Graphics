@@ -1043,9 +1043,13 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		if model.arm_l:
 			var turn_at := fposmod((elapsed - SHELL_LEAD) / (data.reload_time / data.mag_size), 1.0)
 			var at_port := smoothstep(0.1, 0.5, turn_at) * (1.0 - smoothstep(0.7, 1.0, turn_at))
-			var port: Vector3 = (model.arm_l.get_parent() as Node3D).transform.affine_inverse() * model.mag_hold
-			var away := port + Vector3(-0.1, -0.2, 0.12)
-			model.arm_l.position = model.arm_l.position.lerp(away.lerp(port, at_port), rolled)
+			if model.glove_l:
+				# A hand with bones comes up with a shell between its fingers.
+				model.reach(&"shell", rolled, Vector3(-0.1, -0.2, 0.12) * (1.0 - at_port) * rolled)
+			else:
+				var port: Vector3 = (model.arm_l.get_parent() as Node3D).transform.affine_inverse() * model.mag_hold
+				var away := port + Vector3(-0.1, -0.2, 0.12)
+				model.arm_l.position = model.arm_l.position.lerp(away.lerp(port, at_port), rolled)
 		return [offset, turn]
 
 	# Canted with the magazine well towards the hand that changes it.
