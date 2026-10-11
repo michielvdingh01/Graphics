@@ -1092,10 +1092,10 @@ Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. V
 **Nog open**
 
 - De regels voor wat er rondstaat zijn een eerste gok. In de werkplaats, met drie machines, drie deuren en vijf robots op 200 m², blijft er plek voor drie eilanden dekking. De robots staan open en bloot, in het zicht van wie binnenkomt: in de ketelruimte staat er een op een meter van de deur.
-- Een ruimte is een rechthoek langs de assen met een vlak plafond. Geen schuin dak met spanten, geen tussenvloer, geen trap, geen terrein onder de open lucht.
+- Een ruimte is een rechthoek langs de assen met een vlak plafond. Geen schuin dak met spanten, geen tussenvloer, geen trap, geen terrein onder de open lucht. (Het terrein kwam er in stap 5 bij, daken met spanten onder "Kit-ruimtes".)
 - Tussen twee ruimtes staan twee muren rug aan rug. Dat houdt elke zone gesloten voor zijn bake, en kost muur die niemand ziet.
 - Wat er met de hand in komt, moet het plan zelf vrijhouden; de bouwer weet niet hoe groot een pers is.
-- De werkbank, het leidingwerk van de gang en de kraan uit de bouwdoos kunnen nog steeds maar in één richting staan.
+- De werkbank, het leidingwerk van de gang en de kraan uit de bouwdoos kunnen nog steeds maar in één richting staan. (Sinds "Kit-ruimtes" is er leidingwerk en een werkbank die in elke richting kunnen; de kraan niet.)
 
 ### Stap 5: het fabrieksterrein
 
@@ -1189,7 +1189,7 @@ Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het sa
 
 - **Op de speelresolutie is er geen marge**: twee standpunten halen daar 60 fps. Het licht van een lamp reikt door muren heen tot in de ruimtes ernaast en wordt daar per pixel uitgerekend, met zijn schaduw erbij; dat is de grootste post die overblijft. Een lamp aan zijn eigen ruimte binden vraagt renderlagen per zone.
 - **Rijen kamers aan een gang zien elkaar.** Uit een kamer kijk je door je eigen deur schuin de deuren aan de overkant in. De westgang ziet zo acht ruimtes. Occlusion culling zou tekenen wat echt in beeld is; nu is het alles of niets per zone.
-- De kantoren zijn kaal: een bureau, een stoel en een kast op ruim 90 m². De schermen zijn overal dezelfde drie stapels pallets.
+- De kantoren zijn kaal: een bureau, een stoel en een kast op ruim 90 m². De schermen zijn overal dezelfde drie stapels pallets. (Beide aangepakt onder "Kit-ruimtes".)
 - De schaduwsortering kijkt bij het laden. Een model dat in de schaduw stond van iets dat wordt opgeblazen, werpt daarna nog steeds geen zonneschaduw.
 - De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is op 11 oktober nagekeken: 10 GiB, zie "Meerdere agents tegelijk".
 - **`bouwdoos` is op 11 oktober 2026 samengevoegd met `fase-2-vertical-slice`**, op Michiels woord: de renderschaal, de stemmen, wat stuk kan en de beweging van het beeld zitten er nu in. Het botste op de twee regels die de proef al gaf. In `_ready()` van `scripts/game.gd` staan ze allebei: eerst krijgt wat stuk kan zijn lichamen, dan wordt uitgezocht wat in de schaduw staat. In de levellijst van `scripts/menu.gd` staat het fabrieksterrein tussen de fabriek en het depot met hetzelfde muziekstuk als die twee, zodat het doorspeelt in plaats van het langste level stil te laten; dat is niet op het gehoor gekozen. `scripts/shade.gd` laat wat stuk kan buiten wat de zon tegenhoudt: zes modellen, vier in de fabriek en twee op het fabrieksterrein, stonden alleen in de schaduw doordat er een stapel kisten tussen hen en de zon stond, en bleven buiten de schaduw van de zon als die stapel was weggeschoten. Er staan er nu 198 en 755 in de schaduw, tegen 202 en 757. Op het geheel slagen `tools/selftest.sh` (264 controles), `tools/test_humanoid.sh` en `tools/nettest.sh`; een herbouw geeft de bewaarde levels terug en `tools/bake_lightmaps.py --list` noemt elke zone bij. Er is niets herbouwd of opnieuw gebakken. De framerate van het fabrieksterrein is dezelfde als ervoor (72 tot 95 fps op 1440p met FSR 2 op 67%). Nog te doen: het contactblad opnieuw maken, want kratten en lampen kunnen nu stuk en de tekenopdrachten zijn op een paar standpunten een handvol hoger, zie "De repetitie verschuift de teller van tekenopdrachten" onder "Wat er kapot kan". Een worktree die de hoofdbranch binnenhaalt moet de nieuwe geluiden nog inlezen (`godot --headless --path . --import`).
@@ -1281,8 +1281,114 @@ Elke ruimte haalt het keurmerk. Op de instellingen waarmee gespeeld wordt (Ultra
 
 - De machines zijn dicht. Op het fundatieblok van een turbine kan niemand staan en de hal heeft geen bordes: een ruimte uit de plattegrond is een vlakke vloer onder een vlak plafond.
 - De lijnen van de mast buiten naar het portaal liggen grotendeels buiten het terrein en horen daarom bij geen ruimte: ze worden altijd getekend.
-- De ontvangst, de schakelruimte en het pompenhuis zijn donker, zoals de kleedkamer van de fabriek. Of dat sfeer is of te weinig om bij te vechten, moet het spelen uitwijzen.
-- De schermen op het terrein en in de werkplaats zijn nog die van de bouwer. In de werkplaats staan zo twee wanden van pallets op 180 m².
+- De ontvangst, de schakelruimte en het pompenhuis zijn donker, zoals de kleedkamer van de fabriek. Of dat sfeer is of te weinig om bij te vechten, moet het spelen uitwijzen. (Sinds "Kit-ruimtes" zijn ze dat niet meer: zie de lichtregel daar.)
+- De schermen op het terrein en in de werkplaats zijn nog die van de bouwer. In de werkplaats staan zo twee wanden van pallets op 180 m². (Sinds "Kit-ruimtes" kiest de bouwer uit tien vormen.)
+
+## Kit-ruimtes: daken, wanden, inrichting en licht uit de bouwdoos
+
+Op 11 oktober 2026 gevraagd: het fabrieksterrein en de centrale zijn uit de plattegrond gebouwd en zagen eruit als dozen, met vlakke plafonds, kale wanden, bijna zwarte kamers en overal dezelfde drie stapels pallets en dezelfde kisten. De met de hand gebouwde fabriekshal is de maat. Gebouwd op de branch `kitruimtes`, niet samengevoegd. De fabriek en het depot zijn niet aangeraakt.
+
+**Wat er staat**
+
+- **Drie laden erbij in de bouwdoos**, en de plattegrond (`rooms.gd`) is nu de laatste van de ketting, zodat ze uit alle andere kan putten:
+  - `tools/kit/structure.gd`: `roof()` in vijf vormen (een vlakke plaat, een plaat op betonbalken, een plat stalen dak op liggers met een daklicht per travee, een zadeldak op spanten met dakramen in beide dakvlakken, een sheddak met glas in de steile kant en de vakwerkligger in dat glas), en wat een wand geleedt: `pier`, `corbel`, `plinth` en `buttress`. Een dak sluit de rechthoek van zijn wanden af, topgevels inbegrepen, zodat de zone eronder dicht is voor haar bake op het glas na; `roof_height()` zegt hoe hoog zijn onderkant boven een plek hangt.
+  - `tools/kit/services.gd`: wat door een gebouw loopt en aan zijn wanden hangt. `pipe_run` (met bochten, flenzen en beugels), `pipe_valve`, `duct_run`, `round_duct`, `sprinkler_line`, `cable_tray`, `wall_pipe`, `downpipe`, `switch_drop`, `radiator`, `sign_plate`, `wall_lamp`, `pin_board`, en `hang` voor een model aan de wand. Alles neemt een plek op de wand en de kant waar de wand heen kijkt, en kan dus aan elke wand: het leidingwerk van de gang en het prikbord uit `fittings.gd` konden maar in één richting.
+  - `tools/kit/furniture.gd`: wat in code gemaakt is en ergens staat. `filing_cabinets`, `counter`, `table`, `bench` (een vrijstaande werkbank met bankschroef en gereedschap), `shelving` (met archiefdozen en ordners), `slat_bench`, `wash_trough`, `kitchen_range` met afzuigkap, `screens` (lasschermen), `plate_rack`, `cable_drum`, `case` en `cases`, `spray_booth`, `pile`.
+- **Een ruimte krijgt haar dak naar haar soort**, en een plan kan het per ruimte anders zeggen in het laatste argument van `room()`: `{"roof": "sawtooth", "glazed": SOUTH}`. Een hal heeft spanten met dakramen, een installatieruimte een plaat op balken, de rest een vlakke plaat. Op het fabrieksterrein: de montagehal een sheddak met het glas naar de avondzon, de werkplaats en het laadperron spanten, de spuiterij een plat stalen dak met daklichten. In de centrale: de turbinehal spanten met een dakraam in elke travee, de werkplaats spanten. Hallampen hangen onder een schuin dak tussen de spanten, zoals in de fabriek, waar een kraan eronderdoor kan.
+- **De wanden zijn geleed.** Onder elk spant, elke ligger en elke balk een pilaster, of een console waar een deur of raam in de weg zit; een betonnen plint langs baksteen en een stootrand langs pleisterwerk; steunberen, regenpijpen en een camera tegen de muren van een terrein. De spanten van de werkplaats, het laadperron en de turbinehal staan tussen de ramen (`"lines"` in het plan), en de consoles van de kranen liggen op de pilasters (`piers_along()`).
+- **Boven elke deur een bord** met de naam van de ruimte erachter, en `EXIT` boven de uitgang: 29 opschriften erbij in het manifest. De HUD zegt "Reach the switch room"; nu staat op de deur welke dat is.
+- **Leidingwerk onder elk plafond**: in een gang een kanaal met roosters, een kabelladder en een leiding; in een kantoor, kantine of keuken een kanaal langs de wand; boven een magazijn sprinklers met hun stijgleiding en afsluiter; in een hal een rond kanaal onder de trekstangen en een persluchtleiding langs de wanden met een aftakking per pilaster; in een installatieruimte twee hoofdleidingen onder de plaat en een kabelgoot langs de wand.
+- **Inrichting per soort ruimte.** Twee soorten erbij, `kitchen` en `changing`, en zes voorraden die een plan aan een ruimte kan geven: `lodge`, `archive`, `tools`, `despatch`, `paint` en `bay`. Een kantoor heeft een bureau met wat erop lag, archiefkasten, boekenkasten en een tafel; een archief rijen stellingen; een kleedkamer kluisjes, banken en een wastrog; een keuken een fornuis onder een kap, werkbladen en kratten; een kantine tafels van twee soorten, een buffet, een theewagen en een dartbord; een werkhal werkbanken, een platenrek, kabelhaspels en pakkisten naast wat er al stond. Wat tegen een wand staat komt uit één regel, `_line_walls()`: een lijst van dingen met hun breedte, en de bouwer vult de vrije stukken wand.
+- **Schermen in tien vormen**, waarvan de drie stapels pallets er nog één zijn: pakkisten in verband gestapeld, lasschermen, een platenrek, twee kabelhaspels, stellingen met een rug, een kast, kluisjes, een container, en in de spuiterij de spuitcabine zelf, die met haar rug naar de deur staat: de robots wachten erin. Een ruimte heeft ze om de beurt, naar wat er in zo'n ruimte zou staan (`SCREENS` in `tools/kit/rooms.gd`).
+- **De lichtregel** (`_room_lamps()` in `tools/kit/rooms.gd`). De dobbelstenen laten een deel van de lampen uit, en daarna geldt: geen stuk vloer ligt verder van een brandende lamp dan haar licht reikt (4,6 m voor een tl-buis, 6,2 m en meer voor een hallamp), en anders gaat er een lamp aan; brede lage ruimtes hebben een tweede rij buizen. Wat er in een ruimte te zien is, het eerste waarvoor het plan de vloer vrijhoudt of wat `eye_catcher()` noemt, heeft een lamp een stap vóór de kant waar de speler vandaan komt, zodat zijn voorkant verlicht is en niet alleen zijn bovenkant; die brandt altijd. Die lamp en de lamp bij de deur zijn de twee die schaduw werpen. De met de hand bijgehangen lampen van de centrale (boven de roldeur, de pompen en de eerste turbine) zijn daardoor weg.
+- **Wandlampen die niets kosten.** Boven elke deur van een terrein of een installatieruimte, en in een installatieruimte om de vijf meter langs de wand, hangt een lamp in een korf waarvan het licht helemaal in de lightmap gebakken is (`BAKE_STATIC`). Wat achter de schakelkasten en de ketels staat, staat zo niet meer in het donker, en er komt geen lamp bij die elk beeld berekend moet worden. De prijs: zo'n lamp is voor het spel geen lamp en kan niet kapotgeschoten worden.
+- **29 modellen van Poly Haven** (CC0, 1k, samen 58,5 MB in `assets/models/`), opgehaald met `tools/fetch_assets.py`: een auto onder een hoes, een aggregaat, een vuurton, vuilnisbakken, kratten en bakken van kunststof, een legerkist, een schoolstoel en een kruk, drie tafels en een bank, een keukenkast, twee boekenkasten en een stelling, een theewagen, een magnetron, een televisie, een radio, een klok, een dartbord, een verbandtrommel, een camera, een klembord, papier, spuitbussen, een blik en een jerrycan schoonmaakmiddel. Een dertigste, `vintage_wooden_drawer_01`, is niet opgehaald: het bestand dat Poly Haven levert klopt niet met de checksum die het er zelf bij geeft.
+- **Een eerste standpunt per ruimte**: wat de speler ziet als hij een stap binnen is door de deur waar de route hem brengt, en in de ruimte waar hij begint wat hij dan ziet. De bouwer zet het vóór de standpunten die hij zelf kiest (`_own_views()`).
+- **`tools/room_sheet.py <level> --before=<andere checkout>`** kijkt vanuit die deuren in deze checkout en in een andere en zet de twee naast elkaar op één blad, met onder elk beeld hoeveel ervan bijna zwart is.
+- **De bouwer controleert de route zoals het spel loopt.** Zie "Onderweg gevonden".
+- De showroom heeft er een plaat bij met alle nieuwe stukken, en vier open loodsen onder de vier daken.
+
+**Gemeten** op 11 oktober 2026. Er maten en testten de hele tijd andere sessies; tekenopdrachten en driehoeken hebben daar geen last van, de framerates wel.
+
+| | Fabrieksterrein, was | Fabrieksterrein, is | Centrale, was | Centrale, is |
+|---|---|---|---|---|
+| Modellen geplaatst, soorten | 818, 36 | 561, 67 | 511, 41 | 378, 51 |
+| Decals | 420 | 472 | 280 | 320 |
+| Lampen, waarvan gebakken wandlampen | 83, 0 | 135, 19 | 43, 0 | 93, 35 |
+| Lampen met schaduw | 47 | 31 | 23 | 17 |
+| Zichtlijnen tussen ruimtes | 42 paren | 44 | 14 | 16 |
+| Bouwen, waarvan de opmeting | 24 s, 19 s | 30 s, 22 s | 11 s, 6,6 s | 12 s, 6,2 s |
+| Alle ruimtes bakken | 7 min 43 s | 6 min 23 s aan bakes | 4 min 35 s met het starten van de editor | 4 min 13 s aan bakes |
+| Lightmaps op schijf | 229 MB | 196 MB | 138 MB | 130 MB |
+
+Het contactblad en het keurmerk (`tools/zone_sheet.py`, 1440p met FSR 2 op 67%, zonder robots):
+
+| | Standpunten | Tekenopdrachten | Driehoeken | Fps | Keurmerk |
+|---|---|---|---|---|---|
+| Fabrieksterrein, was (stap 5) | 56 | 146 tot 949 | 0,1 tot 2,0 miljoen | 65 tot 85 | gehaald |
+| Fabrieksterrein, is | 78 | 215 tot 1791 | 0,1 tot 1,8 miljoen | 64 tot 82 | gehaald: "Every zone has what it is held to" |
+| Centrale, was | 25 | 220 tot 1092 | 0,5 tot 2,2 miljoen | 68 tot 81 | gehaald |
+| Centrale, is | 36 | 204 tot 1395 | 0,2 tot 2,1 miljoen | 64 tot 78 | gehaald |
+
+- **De tekenopdrachten zijn op het zwaarste standpunt bijna verdubbeld** en blijven onder de grens van 2000: de montagehal 1791, de spuiterij 1741. Het sheddak laat de zon binnen, en wat in de zon kan staan werpt haar schaduw weer (`scripts/shade.gd` haalt het niet meer uit de schaduwkaarten). De framerate is er niet onder gezakt: het langzaamste standpunt is 64 fps op beide levels. Op het fabrieksterrein zijn dat de gangen die acht ruimtes zien, zoals voorheen; in de centrale de werkplaats.
+- **Hoe donker**, gemeten als het deel van een beeld dat donkerder is dan 6% grijs, vanuit de deur van elke ruimte:
+
+| | Donkerste beeld, was | Donkerste beeld, is | Meer dan half zwart, was | is |
+|---|---|---|---|---|
+| Fabrieksterrein, 23 deuren | 52% bijna zwart (het archief) | 4% (de kleedkamer) | 1 | 0 |
+| Centrale, 11 deuren | 33% (de brandstofopslag), 31% (de ontvangst), 30% (de schakelruimte) | 3% (de gang) | 0 | 0 |
+
+  Over alle standpunten, ook die de bouwer zelf kiest: op het fabrieksterrein is van 78 beelden het donkerste voor 31% bijna zwart (een hoek van de oostgang, met de neus tegen een kast) en geen enkel voor meer dan de helft; in de centrale is het donkerste van 36 beelden 10%.
+- `tools/selftest.sh` slaagt (315 controles), `tools/nettest.sh` ook (62). `tools/build_check.py`: de fabriek, het depot en de modellen komen er gelijk uit; veranderd zijn het fabrieksterrein, de centrale, de vleugel en de showroom. Een tweede keer bouwen geeft dezelfde bestanden en `tools/bake_lightmaps.sh --list` noemt elke ruimte van de drie levels bij.
+- De vleugel is met dezelfde bouwdoos herbouwd en opnieuw gebakken (vijf ruimtes, 62 s, 35 MB); die staat niet in het spel.
+
+**Onderweg gevonden**
+
+- **De bouwer keurde een route goed die het spel niet kon lopen.** Zijn controle telde twee stukken navmesh als verbonden zodra ze een hoekpunt delen; het padzoeken van het spel vraagt een gedeelde rand. In het laadperron stonden een pilaster, een haspel, twee stapels kisten, de auto en een stelling op een rij, elk een meter van de volgende: de vloer hing nog aan hoekpunten aan elkaar, en alle acht robots konden de speler niet bereiken. De selftest ving het ("every robot can reach the player from its post"), de bouwer niet. `_walked()` in `tools/level_builder.gd` volgt nu randen, de bouwer zegt hoeveel vloer van een ruimte niet te belopen is als dat meer is dan een hoek, en wat op de vloer komt te staan houdt 60 cm meer afstand dan het zelf reikt (`WAY_BETWEEN`). Wat hij nu meldt en wat er al was: 18 van de 68 m² van het pompenhuis ligt tussen de machines waar geen robot komt.
+- **Een scherm kon zijn robots insluiten.** Wat tegen de wand staat hield alleen afstand tot het scherm zelf, niet tot de doorgang om zijn uiteinden. In het magazijn van de vleugel stonden de robots daardoor in het zicht: de plek achter het scherm was niet meer te belopen. `_plan_screens()` houdt nu aan beide uiteinden een doorgang vrij.
+- **Een scherm met kieren is geen scherm.** De kisten stonden eerst los naast elkaar en de twee haspels rand aan rand: door de kier stond een robot in het zicht. De kisten zijn nu in verband gestapeld en de haspels staan een stap achter elkaar.
+- **De bake zag een wachtende meting aan voor een tekenende Godot.** `tools/bake_lightmaps.py` zocht in de opdrachtregel van elk proces naar het pad van Godot, en een run van een andere checkout die op het GPU-slot wacht is een shell met dat pad erin. Zolang een andere sessie metingen in de rij had staan, weigerde elke bake. Het kijkt nu naar de naam van het programma dat draait.
+- **Mijn eigen tijdslimiet hield het GPU-slot zes minuten bezet.** Het script dat een bake na een tijd afbreekt startte daarvoor een `sleep`, en die erfde het slot en bleef leven nadat de bake al geweigerd had. De sessie `zestig` en ikzelf wachtten daar van 17:38 tot 17:45 op. Wie een bewaker naast een run in het slot zet, moet die het slot laten loslaten (`exec 9>&-`) en hem met zijn `sleep` opruimen.
+- **De spanten vielen eerst op de ramen.** Gelijk verdeeld stonden drie van de vier spanten van de werkplaats boven een raam, en vier van de vijf in de turbinehal: geen pilaster eronder. Een plan kan daarom zeggen waar ze staan.
+- **De regelkamer van de centrale liep dicht** door een radiator onder haar raam: tussen de lessenaar, de stoel, een openstaande deurvleugel en die radiator bleef geen doorgang van een meter over. Het plan houdt de lessenaar en de weg eromheen nu vrij. Hetzelfde geldt voor alles wat met de hand tegen een wand hangt: de metersborden staan nu als vrij te houden in de plannen, anders zet de bouwer er een pilaster of een bord voor.
+- **`covered_car` komt binnen met vier `VehicleWheel3D`'s**: de importer van Godot leest de namen van de wielen als een aanwijzing. Zonder voertuig eromheen doen ze niets; de wielen worden gewoon getekend.
+- **De bake van de brandstofopslag waarschuwt** zestien tot dertig keer met `Inconsistency found in triangulation while building BSP` en is daarna in 18 s klaar. Dat is de waarschuwing die bij de werkplaats van stap 5 niet meer ophield; hier houdt ze op. De probes van die ruimte kunnen iets minder goed aansluiten.
+
+**Buiten mijn bestanden geraakt**
+
+- `tools/bake_lightmaps.py`: één functie, `drawing_godots()`, zie hierboven. Zonder kon ik niet bakken.
+- `scripts/net.gd`: `VERSION` van 5 naar 6. "Raise it with anything that changes ... how a level is built", staat erbij: twee machines met een verschillend fabrieksterrein mogen niet samen spelen.
+- `tools/room_sheet.py` is nieuw, en in `benchmark/sheets/` staan de bladen.
+- De opschriften in `assets/manifest.json` en `assets/decals/`, naast de modellen die bij de opdracht horen.
+
+**Niet kunnen beoordelen**
+
+- **Gespeeld is het niet.** De selftest loopt beide levels af en legt de robots om. Of de nieuwe schermen eerlijk aanvoelen, of een gevecht tussen haspels en pakkisten beter is dan tussen pallets, en of de robots in de spuitcabine een goede vondst zijn of een flauwe, weet ik niet. De pakkisten, lasschermen, haspels en het platenrek kunnen niet stuk, de stapels kisten van Poly Haven nog wel: er is dus meer vaste dekking dan voorheen.
+- **Op de instellingen waarop gespeeld wordt is niet gemeten** (Ultra, volledig scherm, renderschaal vanzelf). Het keurmerk is dat van 1440p met FSR 2 op 67%. De sessie `zestig` werkt aan die instellingen, en haar werk (een lamp aan haar eigen ruimte binden, muren die verbergen wat erachter staat) raakt wat hier zwaarder is geworden: meer lampen en meer tekenopdrachten.
+- Of het sheddak met het glas naar het zuiden het goede is. Een echt sheddak kijkt naar het noorden; dit vangt de avondzon en geeft strepen licht door de hal. `"glazed": NORTH` in het plan draait het om, en dan staat er niets meer in de zon.
+- Of de lichtere kamers de sfeer houden. Het archief, de kantine en de magazijnen waren schemerig en zijn nu gewoon verlicht.
+- De borden boven de deuren zijn Engels, zoals de HUD.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Een ruimte een ander dak, een andere voorraad of een ander bord geven | Het laatste argument van `room()` in het plan: `{"roof": "beams", "stock": "paint", "sign": "PAINT"}` |
+| Zeggen wat de speler in een ruimte het eerst moet zien | Het eerste `keep_clear()` van die ruimte, of `eye_catcher()` |
+| Iets dat met de hand geplaatst wordt, ook aan een wand | `keep_clear()` in het plan, vóór de gevechten: de bouwer weet niet wat een bestand van een ruimte er later in zet |
+| Een stuk uit de nieuwe laden van dichtbij bekijken | `tools/build_level.sh showroom`, dan `tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-13,1.7,21,15,-3"` |
+| Een level voor en na naast elkaar | `tools/room_sheet.py works --before=<checkout van ervoor>`; het blad staat in `benchmark/sheets/` |
+| Hoe donker elk standpunt is | `tools/room_sheet.py works --views=6` |
+| Een bake met een tijdslimiet, achter in de rij van het GPU-slot | `tools/gpu_slot.sh <script dat de bake start en bewaakt>`: de limiet gaat dan pas in als het slot er is |
+
+**Nog open**
+
+- **Zichtlijnen hangen aan wat er toevallig staat.** In de centrale zien het ketelhuis en het pompenhuis elkaar nu door de werkplaats, en het pompenhuis en de schakelruimte over het terrein; op het fabrieksterrein de zuidgang en de werkplaats over het binnenterrein. Eerder stond daar een stapel pallets tussen. Het keurmerk haalt het, maar een deur die drie ruimtes verderop iets laat tekenen is toeval dat bij de volgende wijziging anders valt.
+- **De halve wand tussen twee ruimtes blijft dubbel**, en een ruimte is nog steeds een rechthoek met een vlakke vloer: geen bordes, geen trap.
+- **De kap van een dak is van buiten niet af.** Vanaf een terrein zie je een hal die niet getekend wordt niet; `wall_above()` zet de topgevel van de turbinehal boven de muur van het schakelterrein, verder nergens.
+- De gebakken wandlampen kunnen niet stuk. Wie dat wil, maakt er gewone lampen van (`BAKE_DYNAMIC` en de naam `Bulb` in `wall_lamp()`), en betaalt dan 54 lampen die elk beeld berekend worden.
+- Zes van de 29 modellen staan in de twee levels maar op één plek (de theewagen, de magnetron, het dartbord, de schragentafel, de boekenkast en de smalle boekenplank), en de legerkist nergens: ze staat bij wat een magazijn tegen zijn wanden kan hebben, en de dobbelstenen kozen haar in geen van de vier. Ze staat in de showroom.
+- Het keurmerk kijkt niet naar hoe donker een beeld is. `tools/room_sheet.py` meet het; een grens in `tools/zone_sheet.py` zou het vasthouden.
 
 ## Gevechten: dekking, beurten en schaarste
 
