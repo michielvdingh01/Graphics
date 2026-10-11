@@ -27,6 +27,22 @@ const NEAR := 1.6
 const HUG := 0.6
 ## Half the width of somebody who has to fit behind something.
 const SHOULDER := 0.32
+## A point of the navmesh hovers over the floor it belongs to, by a quarter to
+## half a metre: how much depends on where the lowest collider of the level
+## lies. Up to this much higher or lower it is still the same floor, and how
+## far it is from a point on the floor is measured flat, see _flat().
+const HOVER := 0.6
+## The survey looks from a finger's breadth beside each spot and never from
+## the spot itself. Spots lie on whole metres, and a level is built on those
+## and on parts of them: a ray from a spot runs along the faces of walls and
+## crates, past their corners and on to exactly where the next wall begins,
+## and whether it hits is decided in its last digit. That digit is not the
+## same from one build of a level to the next. Jolt keeps the shapes of a
+## body relative to the centre of all of them, so every hit moves a hair when
+## a collider is added, taken away or moved up the list anywhere in the level.
+const ASIDE := Vector3(0.005625, 0.00375, 0.01125)
+## Two distances that differ by less than this are the same distance.
+const HAIR := 0.0015
 const AROUND := 8
 ## Spots that are looked at properly, out of the ones that seem best.
 const SHORTLIST := 8
@@ -58,6 +74,9 @@ var _flankers: Array[Node3D] = []
 var _clock := 0.0
 ## What the survey was made of: a level, and the navmesh it had then.
 var _surveyed := [0, 0]
+## True once a level has asked for its survey ahead of the first fight: it
+## is then made as soon as the navmesh is there, and again if that changes.
+var _ahead := false
 ## Where in the level there is fighting: the survey looks nowhere else. With
 ## nothing here it looks at all of the navmesh.
 var _grounds: Array[AABB] = []
@@ -84,6 +103,8 @@ func _physics_process(delta: float) -> void:
 		if not _fights(_held[index]):
 			_held.erase(index)
 	_flankers = _flankers.filter(_fights)
+	if _ahead:
+		_survey()
 	for i in range(_rests.size() - 1, -1, -1):
 		_rests[i] -= delta
 		if _rests[i] <= 0.0:
@@ -96,11 +117,13 @@ func _physics_process(delta: float) -> void:
 func fight_in(grounds: Array[AABB]) -> void:
 	_grounds = grounds
 	_surveyed = [0, 0]
+	_ahead = false
 
 
-## Surveys the level now instead of when cover is first asked for, which is
-## in the middle of a fight. Does nothing until the navmesh is there.
+## Surveys the level as soon as its navmesh is there, instead of when cover
+## is first asked for, which is in the middle of a fight.
 func prepare() -> void:
+	_ahead = true
 	_survey()
 
 
@@ -374,11 +397,19 @@ func _survey() -> bool:
 	var region := scene.get_node_or_null("NavigationRegion3D") as NavigationRegion3D if scene else null
 	if region == null:
 		return false
-	var made := NavigationServer3D.map_get_iteration_id(region.get_navigation_map())
+	var map := region.get_navigation_map()
+	var made := NavigationServer3D.map_get_iteration_id(map)
 	if made == 0:
 		return false
 	if _surveyed == [scene.get_instance_id(), made]:
 		return true
+	var navmesh := region.navigation_mesh
+	var to_world := region.global_transform
+	var corners := navmesh.get_vertices()
+	# A navmesh that has just been baked is only on the map a few frames
+	# later. Until then the map knows of no floor to put a spot on.
+	if corners.is_empty() or NavigationServer3D.map_get_closest_point_owner(map, to_world * corners[0]) != region.get_rid():
+		return false
 	_surveyed = [scene.get_instance_id(), made]
 	_spots.clear()
 	_low.clear()
@@ -386,10 +417,6 @@ func _survey() -> bool:
 	_open.clear()
 	_held.clear()
 	var space := region.get_world_3d().direct_space_state
-	var map := region.get_navigation_map()
-	var navmesh := region.navigation_mesh
-	var to_world := region.global_transform
-	var corners := navmesh.get_vertices()
 	var looked := {}
 	var kept := {}
 	for p in navmesh.get_polygon_count():
@@ -441,22 +468,24 @@ func _look_at(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, kept: Dic
 	var towards := Vector3.ZERO
 	for i in AROUND:
 		var way := _way(i)
-		var hit := _ray(space, at + Vector3.UP * LOW, at + Vector3.UP * LOW + way * NEAR)
-		# A fuel barrel is nothing to hide behind.
-		if hit and not (hit.collider as Node).is_in_group("explosive"):
-			var gap: float = (hit.position as Vector3).distance_to(at + Vector3.UP * LOW)
-			if gap < closest:
-				closest = gap
-				towards = way
+		var gap := _feel(space, at, LOW, way)
+		# In the middle between two walls the first way round wins, whatever
+		# the last digit of either says.
+		if gap < closest - HAIR:
+			closest = gap
+			towards = way
 	if closest == INF:
 		_open.append(at)
 		return
-	if closest > HUG:
-		var moved := NavigationServer3D.map_get_closest_point(map, at + towards * (closest - HUG))
-		if moved.distance_to(at) < NEAR and absf(moved.y - at.y) < 0.6:
+	if closest > HUG + HAIR:
+		# Asked from a hair beside it as well: a spot that walks up to a
+		# pillar on its own line would otherwise end up left or right of it
+		# by the last digit.
+		var moved := NavigationServer3D.map_get_closest_point(map, at + towards * (closest - HUG) + ASIDE)
+		if _flat(moved, at) < NEAR and absf(moved.y - at.y) < HOVER:
 			at = _on_floor(space, moved)
 	# Two spots that were moved up against the same thing may have met.
-	var cell := Vector3i((at * 2.0).round())
+	var cell := Vector3i(((at + ASIDE) * 2.0).round())
 	if kept.has(cell):
 		return
 	kept[cell] = true
@@ -464,23 +493,34 @@ func _look_at(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, kept: Dic
 	var high := 0
 	for i in AROUND:
 		var way := _way(i)
-		for height: float in [LOW, HIGH]:
-			var hit := _ray(space, at + Vector3.UP * height, at + Vector3.UP * height + way * NEAR)
-			if hit and not (hit.collider as Node).is_in_group("explosive"):
-				if height == LOW:
-					low |= 1 << i
-				else:
-					high |= 1 << i
+		if _feel(space, at, LOW, way) < INF:
+			low |= 1 << i
+		if _feel(space, at, HIGH, way) < INF:
+			high |= 1 << i
 	_spots.append(at)
 	_low.append(low)
 	_high.append(high)
 
 
+## How far from `at` something stands in the direction `way`, at `height`
+## above the floor: INF if nothing does within NEAR. Looked at from a hair
+## beside the spot, see ASIDE, and measured from the spot.
+func _feel(space: PhysicsDirectSpaceState3D, at: Vector3, height: float, way: Vector3) -> float:
+	var from := at + ASIDE + Vector3.UP * height
+	var hit := _ray(space, from, from + way * NEAR)
+	# A fuel barrel is nothing to hide behind.
+	if hit.is_empty() or (hit.collider as Node).is_in_group("explosive"):
+		return INF
+	return ((hit.position as Vector3) - at).dot(way)
+
+
 ## The navmesh hovers over the floor by up to half a metre, and what counts
-## as cover is measured from the floor.
+## as cover is measured from the floor. That is looked for from a hair beside
+## `at` as well, see ASIDE: a spot may lie on the seam between two floors.
 func _on_floor(space: PhysicsDirectSpaceState3D, at: Vector3) -> Vector3:
-	var ground := _ray(space, at + Vector3.UP * 0.3, at + Vector3.DOWN * 1.2)
-	return ground.position if ground else at
+	var from := Vector3(at.x + ASIDE.x, at.y + 0.3, at.z + ASIDE.z)
+	var ground := _ray(space, from, from + Vector3.DOWN * 1.5)
+	return Vector3(at.x, ground.position.y, at.z) if ground else at
 
 
 ## Whether somebody at `at` is hidden from `foe` and can still shoot at it:
@@ -495,7 +535,7 @@ func _suits(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, foe: Vector
 		# Hidden standing up: it shoots from a step to the side.
 		for step: Vector3 in [across * 1.2, -across * 1.2, across * 1.9, -across * 1.9, across * 1.2 + ahead * 0.8, -across * 1.2 + ahead * 0.8]:
 			var spot := NavigationServer3D.map_get_closest_point(map, at + step)
-			if spot.distance_to(at + step) > 0.45:
+			if _flat(spot, at + step) > 0.45 or absf(spot.y - at.y) > HOVER:
 				continue
 			spot = _on_floor(space, spot)
 			# The step itself has to be walkable in a straight line.
@@ -548,6 +588,11 @@ func _bit(from: Vector3, to: Vector3) -> int:
 
 func _way(i: int) -> Vector3:
 	return Vector3(cos(TAU * i / AROUND), 0.0, sin(TAU * i / AROUND))
+
+
+## How far apart two points are over the floor, whatever their heights.
+func _flat(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 func _ray(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> Dictionary:

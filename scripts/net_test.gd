@@ -18,7 +18,10 @@ const NEXT := "res://scenes/works.tscn"
 ## An open lane in the factory with 6 m of clear floor to the east of it.
 const RANGE_TARGET := Vector3(1, 0, -7.5)
 ## Not the port the game hosts on, so that a test never meets a real game.
+## Every checkout of the project counts on from here to a port of its own, so
+## that a test never meets the test of another checkout either.
 const PORT := 24599
+const PORTS := 400
 const STACK := preload("res://scripts/stack.gd")
 
 ## True for a run of this test. The menu stays on for it, unlike for the
@@ -31,6 +34,7 @@ var _failures := 0
 
 
 func _ready() -> void:
+	_port = PORT + absi(SelfTest.checkout().hash()) % PORTS
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--nettest="):
 			_role = arg.get_slice("=", 1)

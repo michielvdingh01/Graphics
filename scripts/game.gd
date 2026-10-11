@@ -14,6 +14,9 @@ extends Node3D
 ## last checkpoint a moment later, unless everybody is down: then the level
 ## starts again from there for all. It ends once everybody who is still
 ## standing is at the exit.
+##
+## In the sandbox (see sandbox.gd) one zone of the level is all there is: the
+## fight for it is fought over and over, and there is no way on or out.
 
 ## What the HUD shows as the thing to do, and how many robots still stand in
 ## the way of it.
@@ -141,8 +144,11 @@ func _ready() -> void:
 	var playing := not Benchmark.active and not Menu.at_title()
 	_playing = playing
 	if playing:
-		_resume()
-		post_robots()
+		if Sandbox.active:
+			Sandbox.arrive(self)
+		else:
+			_resume()
+			post_robots()
 		_watch_route()
 		player.died.connect(_on_player_died)
 		player.damaged.connect(func(amount: float) -> void: Net.player_did(&"hurt", [amount]))
@@ -274,25 +280,52 @@ func post_robots() -> void:
 			continue
 		var from := _approach(zone)
 		for spawn in zone.area.get_children():
-			if not spawn.is_in_group("enemy_spawn"):
-				continue
-			var robot: CharacterBody3D = ENEMIES[spawn.get_meta(&"kind")].instantiate()
-			robot.position = (spawn as Node3D).global_position
-			var towards := from - robot.position
-			robot.rotation.y = atan2(-towards.x, -towards.z)
-			robot.died.connect(_on_enemy_died.bind(zone))
-			# One that is shot at where it stands does not take it standing,
-			# whether the shot hurt it or its plate stopped it.
-			robot.disturbed.connect(_start.bind(zone))
-			# By the same name on every machine, see net.gd.
-			robot.name = "%s_%d" % [zone.id, zone.robots.size()]
-			add_child(robot)
-			_robots[zones.find(zone) * 100 + zone.robots.size()] = robot
-			# It stays there to be shot at and walked into.
-			robot.disable_mode = CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE
-			robot.process_mode = Node.PROCESS_MODE_DISABLED
-			zone.robots.append(robot)
-			zone.alive += 1
+			if spawn.is_in_group("enemy_spawn"):
+				post(zone, spawn.get_meta(&"kind"), (spawn as Node3D).global_position, from)
+
+
+## Stands one robot of `kind` in a zone at `at`, facing `towards`. Where the
+## fight has begun already it joins in.
+func post(zone: Zone, kind: String, at: Vector3, towards: Vector3) -> CharacterBody3D:
+	var robot: CharacterBody3D = ENEMIES[kind].instantiate()
+	robot.position = at
+	towards -= at
+	robot.rotation.y = atan2(-towards.x, -towards.z)
+	robot.died.connect(_on_enemy_died.bind(zone))
+	# One that is shot at where it stands does not take it standing,
+	# whether the shot hurt it or its plate stopped it.
+	robot.disturbed.connect(_start.bind(zone))
+	# By the same name on every machine, see net.gd.
+	robot.name = "%s_%d" % [zone.id, zone.robots.size()]
+	add_child(robot)
+	_robots[zones.find(zone) * 100 + zone.robots.size()] = robot
+	if zone.started:
+		robot.alert.call_deferred()
+	else:
+		# It stays there to be shot at and walked into.
+		robot.disable_mode = CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE
+		robot.process_mode = Node.PROCESS_MODE_DISABLED
+	zone.robots.append(robot)
+	zone.alive += 1
+	return robot
+
+
+## Takes a zone back to before its fight, for one that is fought again: who
+## stood in it is gone, the fallen too, with what they left to pick up.
+func reset(zone: Zone) -> void:
+	for robot: Variant in zone.robots:
+		if is_instance_valid(robot):
+			robot.free()
+	zone.robots.clear()
+	zone.alive = 0
+	zone.started = false
+	zone.cleared = false
+	for pickup in get_tree().get_nodes_in_group("pickup"):
+		pickup.queue_free()
+	_due = [0.0, 0.5, 0.0]
+	kills = 0
+	kills_changed.emit(kills)
+	_update_objective()
 
 
 ## Where the player is last sure to have stood on the way to a zone: the
@@ -544,6 +577,9 @@ func _update_objective() -> void:
 
 
 func _on_player_died() -> void:
+	if Sandbox.active:
+		# That is the end of a round, which the sandbox starts again.
+		return
 	Save.tally("deaths")
 	Save.flush()
 	if Net.active:
