@@ -24,6 +24,8 @@ var stats := {}
 
 var _path := PATH
 var _persistent := true
+## What was saved and whether it was written, while it is set aside.
+var _aside := {}
 
 
 func _ready() -> void:
@@ -73,6 +75,24 @@ func tally(what: String, by := 1.0) -> void:
 ## Writes what there is to the file now, instead of at the next checkpoint.
 func flush() -> void:
 	_write()
+
+
+## Sets what is saved aside while something is played that is not the game,
+## and puts it back afterwards as it was. In between nothing is written,
+## whatever is stored or tallied.
+func set_aside(on: bool) -> void:
+	if on == not _aside.is_empty():
+		return
+	if on:
+		_aside = {"checkpoint": checkpoint, "stats": stats, "persistent": _persistent}
+		checkpoint = {}
+		_persistent = false
+		_reset_stats()
+	else:
+		checkpoint = _aside.checkpoint
+		stats = _aside.stats
+		_persistent = _aside.persistent
+		_aside = {}
 
 
 func _reset_stats() -> void:

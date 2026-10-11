@@ -107,6 +107,8 @@ const REGEN_RATE := 20.0
 
 var health := MAX_HEALTH
 var dead := false
+## Nothing hurts it: for watching a fight from the inside, see sandbox.gd.
+var invulnerable := false
 ## Lets the self-test drive the player without a captured mouse.
 var force_control := false
 
@@ -222,7 +224,7 @@ func heal(amount: float) -> bool:
 ## `direction` is the way whatever hit was travelling: from whoever fired it
 ## towards the player.
 func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.ZERO) -> bool:
-	if dead:
+	if dead or invulnerable:
 		return false
 	health = maxf(health - amount, 0.0)
 	_since_damage = 0.0
