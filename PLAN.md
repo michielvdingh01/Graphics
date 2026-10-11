@@ -1406,8 +1406,7 @@ De hele selftest slaagt (315 controles), net als `--fights` (5 van 5 vanuit dekk
 
 **Nog open**
 
-- **Er is nog niets op de GPU door het slot gegaan.** De echte Godot is er alleen met `--version` doorheen gestart; alles wat wacht en doorgeeft is getest met een nagemaakte. Voor één beeld door het slot heb ik negen minuten naar een vrij moment gezocht en er was er geen: de drie andere sessies maten aan één stuk, twee keer met twee tegelijk. Eén commando als de GPU vrij is: `tools/benchmark.sh --quick --at="-23,2.2,9,0,-5"` moet een beeld geven in `benchmark/results/`.
-- **Een bake is niet door het slot gegaan**, om dezelfde reden en omdat bakken aan de agent van "Kit-ruimtes" is.
+- **Eén echte run is door het slot gegaan, een bake niet.** Tijdens het bouwen was de GPU negen minuten lang geen moment vrij: de drie andere sessies maten aan één stuk, twee keer met twee tegelijk. Michiel draaide daarna zelf `tools/benchmark.sh --quick --at="-23,2.2,9,0,-5"` vanuit de worktree: het beeld staat er, het slot noemde de run en was daarna weer vrij. Dat die run op een ander wachtte is op de GPU niet gezien, alleen met de nagemaakte Godot. Bakken is aan de agent van "Kit-ruimtes".
 - **Het slot ziet alleen wie het neemt.** De editor, het spel dat Michiel daaruit speelt en een branch van vóór dit werk tekenen erbuiten. `ps` blijft dus nodig, en `houding`, `wapens` en `zestig` wachten pas op elkaar als ze de trunk binnenhalen.
 - Een Godot die bij het afsluiten blijft hangen, zoals op 10 oktober, houdt het slot vermoedelijk vast zolang hij in de proceslijst staat. Dan wacht alles, wat toen ook het beste was; wie wacht leest wie het heeft. Dat is niet uitgeprobeerd.
 - De sandbox en de dekkingsfix zijn niet gespeeld.
