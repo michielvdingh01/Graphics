@@ -243,7 +243,7 @@ Gemeten op vaste 60 beelden per seconde, zonder scherm; "eerst" is de stand van 
 | Zoals Michiel speelt: 3456×2160, Ultra, MetalFX Spatial | 46,6–51,4 fps | 46,5–51,4 fps |
 | Elke seconde een explosie, die nu ook kisten breekt | 63,2–66,6 fps, traagste frame 17,0–17,6 ms | 62,8–66,9 fps, 17,0–17,7 ms |
 
-- **De dekking van de vijanden** is op deze branch gevoelig voor elke verandering aan de botsvormen van het level (zie "Dekking die aan het laatste cijfer hing" in de worktree `brave-bose-91ce03`, niet gecommit). Stapels uit dat lichaam halen is zo'n verandering. In alle runs van de selftest bleven vijf van de vijf grunts vanuit dekking vechten; dat is een uitkomst, geen garantie, tot die fix erin zit.
+- **De dekking van de vijanden** was op deze branch gevoelig voor elke verandering aan de botsvormen van het level, en stapels uit dat lichaam halen is zo'n verandering. In alle runs van de selftest bleven vijf van de vijf grunts vanuit dekking vechten; dat was een uitkomst, geen garantie. Sinds 11 oktober zit de fix erin, zie "Dekking die aan het laatste cijfer hing".
 
 **Afwijking van het plan: SDFGI staat uit.** Naast de lightmaps gaf SDFGI geen zichtbaar verschil, maar het kostte circa 25 fps. Dynamische objecten krijgen hun indirecte licht van de lightmap-probes.
 
@@ -1194,6 +1194,7 @@ De branch `gevecht` voegt eerst `looproute` (de route) en `speelbaar` (de person
 
 **Wat de selftest ervan controleert** (138 controles, was 103; de test van de personages 26):
 
+- dat er vanaf waar de speler staat dekking is om achter te staan en om achter te bukken, en dat een collider erbij ver van het gevecht of dezelfde colliders in een andere volgorde daar niets aan veranderen (sinds 10 oktober, zie "Dekking die aan het laatste cijfer hing");
 - dat een grunt naar dekking rent en daar van hoofd tot borst niet te zien is, eruit komt om te schieten als het zijn beurt is en teruggaat;
 - dat van vijf grunts er nooit meer dan het toegestane aantal tegelijk aanvalt, dat ze wel aanvallen, en dat er één omtrekt en niet meer;
 - dat een grunt wegrent van een granaat aan zijn voeten en dat overleeft, en uit een brand loopt;
@@ -1206,7 +1207,7 @@ Een deel van de test dat op een scriptfout halverwege ophoudt, telde tot nu toe 
 
 **Wat het kost**
 
-- Het opzoeken van de dekking: 44 ms voor de fabriek, één keer, terwijl het beeld uit zwart opkomt. Het navmesh van een level is vooral het terrein eromheen (24 duizend plekken); er wordt alleen in de zones gekeken (1569 plekken).
+- Het opzoeken van de dekking: 44 ms voor de fabriek, één keer, terwijl het beeld uit zwart opkomt (dat het één keer is en dan gebeurt, klopt pas sinds 10 oktober, zie verderop). Het navmesh van een level is vooral het terrein eromheen (24 duizend plekken); er wordt alleen in de zones gekeken (1569 plekken).
 - Een keer dekking zoeken: 0,3 tot 0,4 ms, hooguit 1 ms. Vijf grunts in gevecht doen dat samen 10 keer in 12 seconden.
 - Een heel gevecht: gemeten op 10 oktober 2026 op 1440p met FSR 2 op 67%, vanaf de oostkant van de hal, met alle zestien robots van de fabriek tegelijk aan en op de speler af (`--awake`) tegen dezelfde zestien roerloos op hun post (`--posted`), twee keer om en om terwijl de laptop zwaar in gebruik was (load 5 tot 6): 71,6 en 74,2 fps roerloos, 70,1 en 67,3 fps in gevecht. Dat is 2 tot 7 fps voor zestien robots; een zone heeft er hooguit zes. De 1% low liep in die runs uiteen van 46 tot 67 fps, in beide soorten; daar is niets uit af te lezen.
 - De grunt is met zijn plaat 9,4 duizend driehoeken in 17 onderdelen, de heavy met zijn pack 8,7 duizend in 19. De cel en het blik zijn 1,1 en 1,5 duizend, met elk een licht zonder schaduw.
@@ -1216,6 +1217,64 @@ Een deel van de test dat op een scriptfout halverwege ophoudt, telde tot nu toe 
 - Het navmesh zweeft tot een halve meter boven de vloer. De dekkingsplekken lagen daardoor te hoog en een "lage" dekking werd op heuphoogte gemeten. Elke plek wordt nu met een straal op de vloer gezet.
 - Een schot dat de plaat tegenhoudt kost de robot geen health, en het spel zag aan zijn health dat er op hem geschoten was. Een zone begon dus niet als je op een plaat schoot. Een vijand meldt nu zelf dat hij geraakt is (signaal `disturbed`), wat ook het open punt uit de route oplost dat het spel te veel van een robot las.
 - De test van de personages ging nog uit van waves en faalde op de samengevoegde branch op drie punten. Hij speelt nu het eerste gevecht van de route.
+
+**Dekking die aan het laatste cijfer hing (10 oktober 2026)**
+
+Of de grunts dekking vonden, hing af van iets dat met elke wijziging aan de colliders van een level verschoof. Met één vuilniszak erbij in het ketelhuis, ruim dertig meter en twee zones van het gevecht in de hal, vochten van de vijf grunts in de test er nog twee vanuit dekking in plaats van vijf, en zochten ze 56 tot 59 keer dekking in 12 seconden in plaats van 8 tot 12 keer. Dezelfde colliders in een andere volgorde deden hetzelfde, en de bestaande vuilniszak weghalen ook. Aan het navmesh lag het niet: dat was met de zak erbij dezelfde 612 polygonen.
+
+De oorzaak heeft twee schakels:
+
+- **Waar het verschil vandaan komt.** Alle colliders van een level zijn vormen van één body (294 in de fabriek), en Jolt bewaart elke vorm ten opzichte van het zwaartepunt van allemaal samen, in getallen van 32 bit. Een vorm erbij verschuift dat punt en een andere volgorde rondt de som anders af; daarna komt elke straal een haar anders terug. Dat is af te lezen aan `center_of_mass_local` van de body: een volgorde die dat punt tot op het laatste cijfer gelijk liet, liet ook elke straal gelijk. Met de zak verschoof het zwaartepunt 0,27 mm en de treffers tot 0,000005 m; met een doos van 60 m op een kilometer afstand werd dat 0,0001 tot 0,0003 m. De vloer van de hal lag zo op +0,0000001 m of op −0,0000001 m.
+- **Wat eraan hing.** Wie staand dekking neemt schiet van een stap opzij, en `_suits()` keurde die stap goed als het navmesh niet verder dan 0,45 m van die plek lag. Die afstand werd schuin gemeten, van de plek op de vloer naar het navmesh erboven, en het navmesh zweeft in de hal precies 0,45 m boven de vloer. Bij een vloer op +0,0000001 was het 0,4499999 en goed, bij −0,0000001 was het 0,4500001 en afgekeurd: voor alle plekken in de hal tegelijk. Tegen zes standpunten in de hal voldeed 127 keer een plek om achter te staan; met de zak 0 keer. De plekken zelf waren toen op 0,000005 m dezelfde 361, met dezelfde richtingen. Het vermoeden dat de survey andere plekken opleverde klopte voor de zak dus niet; de survey had wel dezelfde kwaal, zie verderop.
+
+Dat die twee getallen samenvielen is geen toeval van dit ene level. Het navmesh ligt op lagen van 0,25 m, geteld vanaf het laagste punt van alle colliders, en komt een kwart tot een halve meter boven een vloer uit. In de fabriek en in het depot ligt dat punt op −1,05 m, wat boven de begane grond 0,45 m geeft. Nagemeten met een collider buiten het level waarvan de onderkant 10 cm dieper ligt dan de rest: het navmesh zweeft dan 0,35 m boven de hal en de oude regel had 28 cm speling. Op de tussenvloer zweeft het 0,50 m, net als op 202 plekken in het depot; daar kon de oude regel nooit slagen. De 0,45 m was kennelijk als speling over de vloer bedoeld, uit de tijd dat de plekken nog op het navmesh lagen (zie "Onderweg gevonden").
+
+De survey had dezelfde kwaal in het klein. De plekken liggen op hele meters en een level is op hele en halve meters gebouwd: de 164 dozen die recht staan hebben 44 vlakken in x en 91 in z precies op een hele meter. Een straal vanaf zo'n plek loopt dan precies langs een vlak en raakt een hoek, eindigt precies op de muur die 1,6 m verderop begint, en midden in een gang is het naar links even ver als naar rechts. Wat zo'n straal oplevert beslist het laatste cijfer. Met alleen de regel hierboven gerepareerd verdwenen over twaalf verstoringen (dozen ver weg, de vormen gehusseld) samen 80 plekken, kwamen er 23 bij en stond er bij 52 iets anders omheen.
+
+Wat er veranderd is, alles in `scripts/squad.gd`:
+
+- Hoe ver een punt van het navmesh van een punt op de vloer ligt, wordt over de vloer gemeten. Tot 0,6 m hoger of lager is het dezelfde vloer (`HOVER`).
+- De survey kijkt van een haar naast elke plek en nooit vanaf de plek zelf (`ASIDE`: 5,6 en 11,3 mm opzij, 3,8 mm hoger). Dat geldt voor de stralen om de plek heen, de straal naar de vloer, de vraag aan het navmesh waar de plek naartoe schuift en het vakje waarin twee plekken als dezelfde tellen. Geen straal loopt zo nog langs een vlak of door een hoek van iets dat op het raster staat.
+- Twee afstanden die minder dan 1,5 mm verschillen zijn dezelfde afstand (`HAIR`). Midden tussen twee muren wint de eerste richting, wat het laatste cijfer ook zegt.
+
+Wat het oplevert, gemeten door in het draaiende spel colliders toe te voegen en te husselen en de survey over te doen:
+
+| | Was | Nu |
+|---|---|---|
+| Plekken in de fabriek | 361 | 353 |
+| Keer dat een plek voldoet om achter te staan, tegen zes standpunten in de hal | 127, of 0 | 141 |
+| Om achter te bukken | 33 | 32 |
+| Verschil na een verstoring in de fabriek: zes dozen, van een vuilniszak dichtbij tot 60 m op een kilometer, en veertig keer 50 vormen achteraan gezet | tot 9 plekken weg en 8 met iets anders eromheen | geen plek, geen richting, geen oordeel over een plek |
+| Hetzelfde in het depot (576 plekken, zes dozen en dertig keer husselen) | niet gemeten | geen |
+
+Er voldoen nu meer plekken om achter te staan dan in het gunstige geval van vroeger, omdat de stap opzij echt tot 0,45 m naast het navmesh mag uitkomen. De acht plekken minder bestonden bij de gratie van een straal die een hoek schampte. De survey zelf is iets duurder geworden: 31 tot 33 ms tegen 29 tot 32 ms in de fabriek en 47 tot 52 ms tegen 43 tot 44 ms in het depot (mediaan van negen, vier keer om en om gemeten).
+
+`tools/selftest.sh --fights` per variant van het level, voor de oude code één keer gedraaid en voor de nieuwe twee of drie keer:
+
+| Level | Was | Nu |
+|---|---|---|
+| Zoals het is | 5 van de 5 vanuit dekking, 8 tot 12 keer zoeken | 5 van 5, 12 tot 15 keer |
+| Vuilniszak erbij in het ketelhuis | 2 van 5, 56 tot 59 keer | 5 van 5, 10 tot 13 keer |
+| Dezelfde colliders in omgekeerde volgorde | 2 van 5, 53 keer | 5 van 5 en één keer 4 van 5, 11 tot 14 keer |
+| De bestaande vuilniszak weg | 2 van 5, 58 keer | 5 van 5, 11 keer |
+| Een doos van 10 m op 140 m van de hal erbij | 5 van 5, 10 keer | 5 van 5, 10 tot 11 keer |
+| Een collider 10 cm dieper dan de rest (het navmesh zweeft dan 0,35 m) | 5 van 5, 11 keer | 5 van 5, 9 tot 11 keer |
+
+Die ene keer had één grunt op het moment van tellen geen dekking; waardoor heb ik niet nagegaan. De test vraagt er drie.
+
+De selftest kijkt er nu zelf naar, vóór het eerste gevecht: of er vanaf waar de speler staat dekking is om achter te staan en om achter te bukken (18 en 3 plekken), en of een doos van 30 m op 300 m afstand of dezelfde vormen in een andere volgorde daar iets aan veranderen. Met de oude `squad.gd` falen daarvan twee controles in het level zoals het is en alle drie met de vuilniszak erbij. De hele selftest telt nu 141 controles en slaagt, net als de test van de personages (26) en die van samen spelen (58).
+
+Onderweg gevonden:
+
+- De survey bij het laden kwam te vroeg. Een navmesh dat net gebakken is, staat pas een paar frames later op de kaart waar de vragen aan gesteld worden; `prepare()` keek op frame 3, de kaart had het op frame 6. Dat kostte 28 ms voor 369 plekken waarvan er geen tegen zijn dekking was aangeschoven, en de echte survey (44 ms) kwam bij de eerste vraag om dekking, midden in het eerste gevecht. De survey wacht nu tot het navmesh op de kaart staat en gebeurt één keer, terwijl het beeld opkomt.
+- In het depot stond één plek nu eens links en dan weer rechts van een pilaar die precies op zijn rasterlijn staat, 11 cm uit elkaar. Daarom gaat ook de vraag aan het navmesh een haar opzij.
+
+Nog open hiervan:
+
+- De haar opzij maakt toeval onwaarschijnlijk, niet onmogelijk: iets dat zelf 5,6 mm naast een rasterlijn begint, ligt weer op de rand. De controle in de selftest is er om dat te merken.
+- `_suits()` kijkt vanaf de ogen van de speler. Die staan in het spel nooit precies op het raster, in de test wel. In geen van de verstoringen hierboven gaf dat een ander oordeel.
+- Op twee plekken wordt nog schuin gemeten tussen de vloer en het navmesh: of een pad bij een plek uitkomt, met 1,0 m als grens. Met een navmesh dat hooguit een halve meter zweeft is daar een halve meter speling; dat is zo gelaten.
+- Het is niet gespeeld. Staand dekking nemen kan nu op meer plekken dan in het gunstige geval van vroeger. Op de tussenvloer scheelt het weinig, want daar staat weinig hoogs: tegen drie standpunten daarboven voldoet nu één plek om achter te staan, eerst geen.
 
 **Nog open**
 
