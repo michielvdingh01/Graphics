@@ -21,7 +21,9 @@ What an entry can say besides its source:
     pick    which of the takes found to keep, counted from 1 in the order
             they were found: for a file that holds different things
     trim    [from, to]: only that part of a take, in seconds from its start:
-            a moment out of something that goes on
+            a moment out of something that goes on. A list of those makes a
+            take of each: for a recording in which one thing follows on
+            another with no silence between
     pitch   play a take this many times as fast, and so higher and shorter;
             under 1 it is lower and longer, as of something bigger
     glide   [from, to]: the same, changing from the one speed to the other
@@ -292,8 +294,11 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
     if not takes:
         raise SystemExit(f"found no sound in {spec['files']}")
     if "trim" in spec:
-        first, last = (int(seconds * RATE) for seconds in spec["trim"])
-        takes = [[channel[first:last] for channel in take] for take in takes]
+        parts = spec["trim"] if isinstance(spec["trim"][0], list) else [spec["trim"]]
+        takes = [
+            [channel[int(first * RATE):int(last * RATE)] for channel in take]
+            for take in takes for first, last in parts
+        ]
     if "pitch" in spec:
         takes = [[pitched(channel, spec["pitch"]) for channel in take] for take in takes]
     if "glide" in spec:
