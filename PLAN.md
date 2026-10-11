@@ -145,12 +145,12 @@ Het level is een verlaten fabriek bij zonsondergang: een hal met kraanbaan en tu
 - Vuil glas in alle ramen en dakramen, met hier en daar een ontbrekende ruit.
 - Decals: lekstrepen onder de ramen, vuil langs de plinten en olievlekken op de vloer.
 - Gescande CC0-modellen van Poly Haven (1K), 45 in totaal: vaten, houten kisten, betonnen wegbarrières, stellingen, hallampen, schakelkasten, een bureau, banden, gasflessen, cementzakken op pallets, een compressor, een lasset, gereedschapswagens, een ladder, een steekwagen, werkbanken met twee kolomboren, een bankschroef en een gereedschapskist, een kruk en groepenkasten. Daarbij het kleine spul dat een ruimte bewoond maakt: brandblussers en brandmelders bij de deuren, jerrycans en olieblikken bij de machines, gereedschap op de werkbank, een voorhamer en een koevoet tegen de muur, bezems, vuilniszakken, kartonnen dozen, plastic stoelen, putdeksels in de vloer en een waarschuwingsbord bij de plas in de gang. Ze staan in het manifest, krijgen bij import lightmap-UV's (importstandaard in `project.godot`) en worden door de levelbouwer geplaatst, die er zelf een eenvoudige botsvorm bij zet; los gereedschap (`drop`) krijgt geen botsvorm en geen lightmap.
-- Een excenterpers en een draaibank van zes meter, in code opgebouwd (`_press` en `_lathe` in `tools/levels/factory.gd`), omdat er van grote machines geen gescande modellen zijn. De levelbouwer heeft daarvoor afgeronde blokken, omwentelingslichamen en slangen gekregen (`rounded_box`, `revolve`, `hose`). Samen zijn ze circa 26 duizend driehoeken; ze horen bij de gewone levelgeometrie en krijgen dus een lightmap. Blank staal, donker staal, rubber, messing en rode lak zijn materialen zonder eigen kleurtextuur. De werklamp van de draaibank brandt en boven de werkbank hangt een tl-buis, anders stond die hoek in het donker.
-- Ook in code opgebouwd, omdat Poly Haven er geen modellen van heeft: zeecontainers van geperste panelen met deuren en sluitstangen (`container`, met `corrugated` voor het geperste staal), twee opslagtanks met mangat, peilglas, afsluiters, kooiladder en leidingwerk naar de wand (`_tank`), een bovenloopkraan met loopkat, haakblok, kabelslingers en hangende bediening (`_crane`), roldeuren van lamellen (`roller_door`), pallets van losse planken, ronde buisleuningen met schopplaat, werkplaatskasten en een rij kluisjes waarvan er twee openstaan (`cupboard`, `lockers`). De gedeelde bouwstenen staan in `tools/level_builder.gd` en gelden dus ook voor het depot.
+- Een excenterpers en een draaibank van zes meter, in code opgebouwd (`press` en `lathe` in `tools/kit/machines.gd`), omdat er van grote machines geen gescande modellen zijn. De levelbouwer heeft daarvoor afgeronde blokken, omwentelingslichamen en slangen gekregen (`rounded_box`, `revolve`, `hose`). Samen zijn ze circa 26 duizend driehoeken; ze horen bij de gewone levelgeometrie en krijgen dus een lightmap. Blank staal, donker staal, rubber, messing en rode lak zijn materialen zonder eigen kleurtextuur. De werklamp van de draaibank brandt en boven de werkbank hangt een tl-buis, anders stond die hoek in het donker.
+- Ook in code opgebouwd, omdat Poly Haven er geen modellen van heeft: zeecontainers van geperste panelen met deuren en sluitstangen (`container`, met `corrugated` voor het geperste staal), twee opslagtanks met mangat, peilglas, afsluiters, kooiladder en leidingwerk naar de wand (`tank`), een bovenloopkraan met loopkat, haakblok, kabelslingers en hangende bediening (`crane`), roldeuren van lamellen (`roller_door`), pallets van losse planken, ronde buisleuningen met schopplaat, werkplaatskasten en een rij kluisjes waarvan er twee openstaan (`cupboard`, `lockers`). De gedeelde bouwstenen staan in `tools/level_builder.gd` en in de bouwdoos (`tools/kit/`) en gelden dus voor elk level.
 - Al het gelakte staal (machines, containers, tanks, kraan, leuningen, leidingen) gebruikt één shader, `shaders/worn_paint.gdshader`: een laklaag in een kleur naar keuze over een gescande laktextuur, met roestplekken die strepen naar beneden trekken, afgebladderde randen die op de rand zelf blank zijn gesleten, en stof op wat naar boven wijst. De levelbouwer geeft daarvoor elk vlak mee hoe ver een punt van de rand ligt, verpakt in de vertexkleur (`_edge`). De ruis komt uit een procedureel masker in het manifest (`wear`), de roest uit een scan van Poly Haven.
 - Vloerbelijning in de hal: een rijpad van de laaddeur naar de aanbouw met een aftakking naar de trap, zwart-gele randen om de pers en de draaibank, arcering voor de laaddeur en de schakelkasten, en opslagvakken langs de zuidwand. Een level beschrijft de belijning met `floor_line`, `floor_frame` en `floor_hatch`; de levelbouwer tekent daar één textuur van en de vloershader legt die over het beton en laat de verf slijten.
 - Opschriften, gesjabloneerd met de bruggetjes die een sjabloon nodig heeft: nummers op de containers, de hijslast op de kraan, tanknummers, deurnummers op het perron van het depot en vaknummers op de vloer. De pers en de draaibank hebben een machinenummer, tekst op hun typeplaatje, de perskracht op de kop en waarschuwingsdriehoeken waar iets beweegt (soort `warning` in het manifest). Elk opschrift staat als decal in het manifest (soort `text`) en wordt gezet in het ingebouwde lettertype van de engine, dus zonder extra bestand; `label` plaatst het en `floor_text` schildert het mee in de vloerverf. Ze kosten geen meetbare rekentijd.
-- De aanbouw is ingericht als het kantoor- en magazijngedeelte van een fabriek. De muren hebben een lambrisering: glansverf tot heuphoogte met een bies erboven en een donkere plint, afgebladderd waar karren en schoenen ertegen stoten en vuil vanaf de vloer (`shaders/dado_wall.gdshader`, materiaal `plaster_dado`; het kost geen geometrie). Beide kamers hebben een stalen kozijn met dubbele deuren die openstaan, met een ruitje, een schopplaat, klinken en scharnieren (`_door` en `_leaf` in `tools/levels/factory.gd`), en een nummerplaatje ernaast. Onder het plafond van de gang lopen een luchtkanaal van verzinkt plaatstaal met roosters en een kabelladder met kabels; vanaf de ladder komt een buis naar een schakelaar bij elke deur. Op de gangmuur hangt een prikbord. De scharnieren zitten aan de buitenkant van het kozijn, zodat een open deur de doorgang niet smaller maakt: die is precies zo breed als de robots nodig hebben.
+- De aanbouw is ingericht als het kantoor- en magazijngedeelte van een fabriek. De muren hebben een lambrisering: glansverf tot heuphoogte met een bies erboven en een donkere plint, afgebladderd waar karren en schoenen ertegen stoten en vuil vanaf de vloer (`shaders/dado_wall.gdshader`, materiaal `plaster_dado`; het kost geen geometrie). Beide kamers hebben een stalen kozijn met dubbele deuren die openstaan, met een ruitje, een schopplaat, klinken en scharnieren (`doorway` en `_leaf` in `tools/kit/fittings.gd`), en een nummerplaatje ernaast. Onder het plafond van de gang lopen een luchtkanaal van verzinkt plaatstaal met roosters en een kabelladder met kabels; vanaf de ladder komt een buis naar een schakelaar bij elke deur. Op de gangmuur hangt een prikbord. De scharnieren zitten aan de buitenkant van het kozijn, zodat een open deur de doorgang niet smaller maakt: die is precies zo breed als de robots nodig hebben.
 - Stof in de lucht van de hal: 4000 deeltjes die alleen oplichten waar licht op valt, dus in de zonnebundels en onder de lampen (`shaders/dust.gdshader`). Kost 0,1 tot 0,2 ms. Het ketelhuis heeft er 1400 van zichzelf; de levelbouwer zet het stof per ruimte neer (`dust`), zodat het verdwijnt met de ruimte waar het hangt.
 - Massieve props krijgen een eigen stukje lightmap. Props van dunne staven (stellingen, lampen, ladder, steekwagen) lost een lightmap niet op; die krijgen hun licht van de lightmap-probes. Het probe-raster staat daarvoor op de fijnste stand: met het grove standaardraster lichtten zulke props in een donkere hoek spookachtig op.
 - Wat de levelbouwer zelf zonder lightmap bouwt (spanten, kraan, leuningen, raamroeden) is in blokken van 14 × 6 × 12 m geknipt. Een mesh zonder lightmap leest de probes op één punt uit, zijn midden; als één mesh lag dat punt voor de hele hal boven het dak, zodat de kraan en de spanten door de buitenlucht werden verlicht en feller geel waren dan hun omgeving. Nu krijgen ze het licht van de plek waar ze hangen: donkerder en warmer, zoals de rest van de hal.
@@ -258,9 +258,10 @@ Gemeten op vaste 60 beelden per seconde, zonder scherm; "eerst" is de stand van 
 | Geluiden uitsnijden en mengen volgens het manifest; haalt de pakketten op als ze ontbreken. Met een naam erachter alleen dat geluid opnieuw, met `--all` alles | `tools/build_sounds.py` |
 | Een geluid horen zoals de game het afspeelt, door de bussen heen: één keer, of anderhalve seconde vuur met het aantal schoten per minuut erachter | `tools/hear.py rifle_shot 620` |
 | Levelgeometrie opnieuw genereren uit `tools/levels/<naam>.gd` | `tools/build_level.sh factory` of `depot` |
+| Alle levels en modellen opnieuw bouwen en horen wat er anders uitkomt dan wat er in git staat; wat gelijk is gebleven wordt teruggezet | `tools/build_check.py`, of `tools/build_check.py factory` voor één level |
 | Een bouwsteen van dichtbij bekijken zonder een level te bakken: alles wat in code is opgebouwd staat naast elkaar in de showroom (`tools/levels/showroom.gd`) | `tools/build_level.sh showroom`, dan `tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-23,2.2,9,0,-5"` |
-| Lightmaps bakken (nodig na elke geometrie- of lichtwijziging, 2 minuten). De bake drukt op de knop van de editor zelf en zet daarvoor eerst de 3D-weergave voor | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
-| Alleen de lightmap van de zones bakken die veranderd zijn (de fabriek heeft er een per zone; het ketelhuis duurt een halve minuut) | `tools/bake_lightmaps.sh res://scenes/factory.tscn boiler,passage` |
+| Lightmaps bakken: alleen wat sinds de vorige bake veranderd is (de hal duurt twee minuten, het ketelhuis een halve). De bake drukt op de knop van de editor zelf en zet daarvoor eerst de 3D-weergave voor | `tools/bake_lightmaps.sh [res://scenes/depot.tscn]` |
+| Horen welke zones een bake nodig hebben, bepaalde zones bakken wat hun staat ook is, of alles | `tools/bake_lightmaps.sh --list`, `tools/bake_lightmaps.sh res://scenes/factory.tscn boiler,passage`, `tools/bake_lightmaps.sh --all` |
 | Wapens, vijanden of de granaat opnieuw genereren uit `tools/models/<naam>.gd` | `tools/build_model.sh weapons`, `enemies` of `props` |
 | Een wapen bekijken zoals de speler het vasthoudt (nummer in de loadout vanaf 0; `,1` erachter is gericht, `,0,0.4` is 40% van het herladen, `,0,0,0.36` is 36% van een klap met het wapen) | `tools/benchmark.sh --quick --weapon=2 --at="2,1.7,3,-120,0"` |
 | Een model of een vijand in een level neerzetten om te bekijken (x,y,z,draaiing,schaal,houding: 1 richt, 2 loopt, 3 ligt in stukken, 4 vuurt, 10 met de plaat voor zich, 11 weggedoken, 12 met een brandend pack) | `tools/benchmark.sh --quick --spawn="res://scenes/enemy_heavy.tscn@-2,0,-1,-100,1,1" --at="2.5,1.7,3,90,-4"` |
@@ -575,7 +576,7 @@ Een level had geen begin en geen eind: waves verschenen op willekeurige punten e
 
 **Wat er staat**
 
-- **De route staat in het levelbestand**, naast de geometrie (`_route_through` in `tools/levels/<naam>.gd`): `route_start`, `route_zone`, `route_checkpoint` en `route_exit`, in de volgorde waarin de speler ze tegenkomt. De levelbouwer zet ze in de levelscène onder `Route` en `scripts/game.gd` speelt wat daar staat. Route en gebouw veranderen zo samen: wie een muur verzet, verzet in hetzelfde bestand het spawnpunt erachter. De bouwer weigert een route zonder start of uitgang, een start die in een zone ligt en een checkpoint dat in een latere zone ligt. De met de hand geplaatste spawnpunten in `scenes/factory.tscn` en `scenes/depot.tscn` zijn weg.
+- **De route staat in het levelbestand**, naast de geometrie (`_route_through` in `tools/levels/<naam>.gd`, of bij een level in meerdere bestanden in het bestand van elke zone): `route_start`, `route_zone`, `route_checkpoint` en `route_exit`, in de volgorde waarin de speler ze tegenkomt. De levelbouwer zet ze in de levelscène onder `Route` en `scripts/game.gd` speelt wat daar staat. Route en gebouw veranderen zo samen: wie een muur verzet, verzet in hetzelfde bestand het spawnpunt erachter. De bouwer weigert een route zonder start of uitgang, een start die in een zone ligt en een checkpoint dat in een latere zone ligt. De met de hand geplaatste spawnpunten in `scenes/factory.tscn` en `scenes/depot.tscn` zijn weg.
 - **Zones.** De robots die een zone opsomt staan er vanaf het laden, elk op zijn eigen post, met het gezicht naar waar de speler vandaan komt. Ze staan uit: ze zien niets en bewegen niet. Het gevecht om een zone begint wanneer de speler de zone binnenloopt of op een van zijn robots schiet; dan gaan ze allemaal aan. De zone is opgeruimd als de laatste ligt. Er verschijnt dus niets meer uit het niets: wat je straks tegenkomt, zie je al staan. Ze staan uit omdat een robot die aan staat op de speler afgaat zodra hij hem ziet, tot op 45 m; in de hal zou dan elk gevecht tegelijk beginnen. Waar de speler het level begint of bij een checkpoint verdergaat, staat er geen dichterbij dan 14 m in het zicht: dezelfde afstand die de waves aanhielden.
 - **Checkpoints.** Een checkpoint is een plek met een gebied eromheen. Het telt zodra de speler in dat gebied staat, er geen gevecht loopt en alle zones die ervoor liggen zijn opgeruimd. Na een dood of een herstart van het spel sta je er weer, met wat ervoor ligt opgeruimd, met 75 health en met de reserve en de granaten waarmee een level begint (zie Gevechten). De save bevat daarom alleen het level en de naam van het checkpoint: wat is opgeruimd, volgt uit waar het op de route ligt. Het begin van een level is het eerste checkpoint.
 - **De uitgang** gaat open wanneer elke zone is opgeruimd. Boven de deur springt een groene lamp aan, die ook de mist kleurt, en een halve seconde later rolt de deur in ruim drie seconden omhoog. De laaddeur van de fabriek geeft uit op het voorterrein, met recht ertegenover de poort in de muur. Deur 3 van het depot geeft toegang tot een kale gang het magazijn in, verlicht van achteren. Het level eindigt een stap voorbij de deur: daar gaat het beeld op zwart en komt het volgende level op. De zones mogen in elke volgorde: wie in het depot de oostelijke oprit neemt, staat eerder op het perron, maar de deur blijft dicht tot ook het terrein is opgeruimd.
@@ -635,12 +636,12 @@ De marge is 10 fps op 1440p met FSR 2, en het spel gebruikt er 3 van. Een level 
 
 **Wat er staat**
 
-- **Zones in het levelbestand.** Een level somt bovenaan zijn zones op (`zone` in `tools/level_builder.gd`): een naam, de dozen die de zone vult en welke andere zones je er vandaan kunt zien. Alles wat daarna gebouwd wordt, komt bij de zone waarin het staat: muren, props, lampen, decals, reflectieprobes, stof. Het levelbestand zelf hoefde daar nauwelijks voor te veranderen; alleen de vloer, die onder alles door liep, is per zone gelegd. Wat buiten elke zone valt (het terrein en de skyline) hoort bij geen en is er altijd. Een level zonder zones komt eruit zoals voorheen: de meshes van het depot zijn byte voor byte gelijk gebleven.
+- **Zones in het levelbestand.** Een level somt bovenaan zijn zones op (`zone` in `tools/level_builder.gd`): een naam en de dozen die de zone vult. Welke andere zones je er vandaan kunt zien, stond er eerst met de hand bij; sinds 10 oktober 2026 rekent de bouwer dat zelf uit, zie "Grotere levels bouwen". Alles wat daarna gebouwd wordt, komt bij de zone waarin het staat: muren, props, lampen, decals, reflectieprobes, stof. Het levelbestand zelf hoefde daar nauwelijks voor te veranderen; alleen de vloer, die onder alles door liep, is per zone gelegd. Wat buiten elke zone valt (het terrein en de skyline) hoort bij geen en is er altijd. Een level zonder zones komt eruit zoals voorheen: de meshes van het depot zijn byte voor byte gelijk gebleven.
 - **Alleen wat in het zicht is, wordt getekend** (`scripts/zones.gd`, dat de bouwer aan de levelscène hangt). Elk frame kijkt het in welke zone de camera staat en zet de inhoud van alle zones uit, behalve die zone en de zones die hij als zichtbaar opgeeft. Het werkt op de camera en niet op de speler, dus ook in de benchmark en achter het titelscherm. De schil van een zone die uit staat (zijn gebakken muren, vloer en dak) blijft schaduw werpen: anders scheen de zon door de deuropeningen de buurzone in. Een robot hoort bij geen zone, maar wie in een zone staat die uit is, staat achter dezelfde muren en wordt ook niet getekend.
 - **Een lightmap per zone.** Elke zone heeft zijn eigen `LightmapGI` en zijn eigen bestand (`scenes/factory_<zone>.exr`). Een zone wordt gebakken met alleen zichzelf om zich heen, dus moet hij gesloten zijn met eigen muren, vloer en dak. De bake zet daarvoor zolang hij duurt een zwart paneel in elke deuropening (`bake_blocker`) en een kopie van de zon in de zone, want een bake kijkt alleen naar wat onder de ouder van zijn `LightmapGI` hangt. Wie een ruimte verandert, bakt alleen die ruimte.
 - **De selftest zoekt zichtlijnen.** Vanaf elke plek waar de speler kan staan trekt hij lijnen naar punten door elke zone die daar uit staat (ruim een miljoen in de fabriek) en faalt bij de eerste die nergens op stuit. Zo kan een zone niet ongemerkt wegvallen terwijl je hem kunt zien. Ter controle heb ik de aanbouw de gang laten vergeten: 840 zichtlijnen en een falende test.
 - **De fabriek in vier zones**: hal, aanbouw, gang en ketelhuis, op een rij. Hal en aanbouw zien elkaar door twee deuropeningen. De gang heeft een knik, zodat aanbouw en ketelhuis elkaar nooit zien, en de gang de hal niet. Wie in de hal staat, tekent dus hal en aanbouw, zoals voorheen; wie in het ketelhuis staat, alleen het ketelhuis en de gang.
-- **Het ketelhuis** is de nieuwe ruimte: 12 bij 12 m en 7 m hoog, baksteen onder een betonnen dak, met de ramen op het noorden en oosten zodat de avondzon er niet in komt. Erin staan een vlampijpketel op zadels met brander, ventilator, manometers, peilglas, veiligheidskleppen, stoomleiding en rookkanaal door het dak (`_boiler` in `tools/levels/factory.gd`), een voedingstank, twee pompen met hun leidingwerk (`_pump`), een bord met meters (`_gauge_board`) en de schakelkasten. Het licht komt van één hallamp, een tl-buis, een peertje in de hoek en het vuur. De gang ernaartoe is 2,4 m breed. Samen 35 duizend driehoeken gebakken levelwerk, tegen 60 duizend voor de hal.
+- **Het ketelhuis** is de nieuwe ruimte: 12 bij 12 m en 7 m hoog, baksteen onder een betonnen dak, met de ramen op het noorden en oosten zodat de avondzon er niet in komt. Erin staan een vlampijpketel op zadels met brander, ventilator, manometers, peilglas, veiligheidskleppen, stoomleiding en rookkanaal door het dak (`boiler` in `tools/kit/plant.gd`), een voedingstank, twee pompen met hun leidingwerk (`pump`), een bord met meters (`gauge_board`) en de schakelkasten. Het licht komt van één hallamp, een tl-buis, een peertje in de hoek en het vuur. De gang ernaartoe is 2,4 m breed. Samen 35 duizend driehoeken gebakken levelwerk, tegen 60 duizend voor de hal.
 - **De route begint nu in het ketelhuis**, bij een buitendeur die dicht is, en loopt door de gang het magazijn van de aanbouw in. Daarmee is hij een ruimte en een gevecht langer.
 
 **Wat het kost**, gemeten op 9 oktober 2026 op 1440p met FSR 2 op 67%, terwijl de GPU gedeeld werd met twee andere sessies. De cijfers liggen daardoor een paar fps onder die van 8 oktober en losse runs lopen uiteen; ze zijn een indicatie. Wat wel te vertrouwen is, is het verschil tussen twee builds die om en om zijn gemeten.
@@ -692,6 +693,361 @@ In het ketelhuis is dat 7 fps: zonder zones werd daar de hele hal achter de muur
 - De selftest kijkt of je *in* een zone kunt kijken, niet of je zijn buitenkant ziet. Vanaf de tussenvloer zou de dakrand van het ketelhuis door de bovenramen van de hal te zien kunnen zijn; die wordt daar niet getekend.
 - Het depot is niet in zones geknipt: het is één terrein onder de open lucht.
 - De ketel, de pompen en het leidingwerk zijn gebouwd in code, zoals de machines in de hal.
+
+## Grotere levels bouwen
+
+De fabriek is vier zones en zestien robots, en elke ruimte is met de hand in code geschreven. Een level van tien keer die omvang is zo niet te maken. Op 10 oktober 2026 is daarom afgesproken hoe levels veel groter kunnen worden zonder dat de graphics inleveren, in vijf stappen. De eerste is gezet.
+
+**Waar het op vastliep**
+
+- **Elke ruimte was handwerk.** De fabriek was één bestand van 1720 regels; het ketelhuis alleen kostte er ruim 250.
+- **De mooiste bouwstenen zaten opgesloten in de fabriek.** Pers, draaibank, tank, ketel, pomp, deuren, kraan en het leidingwerk van de gang stonden in het levelbestand en niet in de gedeelde bouwer. De showroom moest de hele fabriek uitbreiden om ze te kunnen laten zien.
+- **Alles laadt in één keer.** Een level is één scène met alle lightmaps, en het navmesh wordt bij het laden berekend. Laadtijd en geheugen groeien mee met het level.
+- **Lightmaps zijn groot.** De fabriek is 64 MB over vier zones. Vijf keer zoveel level is naar schatting 300 MB en een kwartier bakken, en `.git` is nu al 1,0 GB.
+- **Welke zones elkaar zien, staat er met de hand in.** Bij vier zones gaat dat, bij twintig niet.
+- **De framerate is niet het probleem**, zolang een level groeit achter hoeken en deuren: zie de zones hierboven.
+
+**De stappen**
+
+| Stap | Wat | Waaraan je ziet dat het klaar is | Status |
+|---|---|---|---|
+| 1. Bouwdoos | De bouwstenen uit de fabriek naar een gedeelde bibliotheek, en een level in één bestand per zone met vaste deurposities | De fabriek komt er byte voor byte gelijk uit | Klaar, zie hieronder |
+| 2. Automatisch wat nu handwerk is | Zichtlijnen tussen zones uitrekenen bij het bouwen, alleen gewijzigde zones opnieuw bakken, en zones die elkaars toeval niet verschuiven | Na een wijziging in één ruimte zijn bouwen en bakken in minder dan een minuut klaar | Klaar, op de hal na. Zie hieronder |
+| 3. Streamen | Zones op de achtergrond laden en loslaten langs de route; grote kale vlakken krijgen een grovere lightmap | Vijf fabrieken achter elkaar als proeflevel: 60 fps, en het geheugen blijft vlak | Klaar zonder streamen: het proeflevel haalt het zo. Zie hieronder |
+| 4. Ruimtes uit een plattegrond | Een level begint als lijst van ruimtes met een type (hal, gang, kantoor, opslag, terrein) en deuren. De bouwer maakt daar schil, zones, lampen, probes, vuil en rommel van volgens regels; de blikvangers komen er met de hand in | Een nieuwe vleugel van vijf ruimtes staat in één sessie speelbaar in greybox | Klaar: de vleugel is gebouwd, gebakken en bekeken. Gespeeld is hij nog niet. Zie hieronder |
+| 5. Het eerste grote level | Ongeveer 20 zones en 80 vijanden, 15 tot 20 minuten spelen | De route is te lopen en elke zone haalt het budget | Gebouwd, gebakken en gemeten: het fabrieksterrein, 23 ruimtes en 59 robots. Twee keer kort gespeeld, in een build die de renderschaal van de hoofdbranch nog mist. Zie hieronder |
+
+**Wat is afgesproken**
+
+- **Groter betekent een langere route door veel ruimtes**, met af en toe een ommuurd buitenterrein. Een open wereld past niet binnen de marge van 10 fps op deze laptop.
+- **De fabriek is het proefterrein** voor stap 1 tot 3; het grote level wordt nieuw gebouwd.
+- **Lightmaps gaan uit git**, naar Git LFS. Dat is op 10 oktober 2026 gedaan: `git-lfs` 3.8.0 via Homebrew, alleen voor deze repository aangezet (`git lfs install --local`). De `.exr` en `.lmbake` in `scenes/` staan vanaf die commit als verwijzing in de geschiedenis; wat ervoor ligt is niet herschreven. Een verse checkout krijgt de echte bestanden. Er is nog niets naar GitHub gepusht; hoeveel LFS-opslag daar beschikbaar is, is niet nagekeken.
+
+**Hoe de graphics op niveau blijven**, vanaf stap 2:
+
+- Een keurmerk per zone, automatisch gecontroleerd: de framerate vanaf de ingang van de zone, het aantal tekenopdrachten en driehoeken, of er een reflectieprobe en een lichtbron hangt, en geen groot kaal vlak zonder decal of rand.
+- Een contactblad per zone, zoals bij de personages: twintig zones beoordelen op één pagina in plaats van ze af te lopen.
+- Eerst greybox en spelen, dan aankleden, dan bakken, zodat er geen baktijd naar een ruimte gaat die nog verschuift.
+- Meer variatie in assets: met 45 modellen gaat een groot level zich herhalen.
+
+### Stap 1: de bouwdoos
+
+**Wat er staat**
+
+- **De bouwdoos** (`tools/kit.gd` en `tools/kit/`): alles wat in code is opgebouwd en in elk level kan staan. `tank`, `press`, `lathe`, `workbench` en `crane` in `machines.gd`, `boiler`, `pump` en `gauge_board` in `plant.gd`, `doorway`, `corridor_services` en `notice_board` in `fittings.gd`, en de onderdelen waar machines van gemaakt zijn (balken, flenzen, bouten, handwielen, motoren, meters) in `parts.gd`. Een level breidt `tools/kit.gd` uit in plaats van de levelbouwer. GDScript kan één script niet uit meerdere bestanden samenstellen, dus de laden zijn een ketting: elk breidt het vorige uit.
+- **Een bouwsteen weet niets meer van de fabriek.** Wat hij van zijn omgeving moet weten, krijgt hij mee: de ketel de muur waar de stoomleiding heen gaat en de hoogte van het dak, de werkbank de muur waar hij tegenaan staat, de tank de leiding waarop hij aansluit, de kraan de maten van de hal (het aantal verstijvingen volgt de overspanning), het leidingwerk van de gang waar kanaal, kabelladder, roosters en schakelaars zitten.
+- **Een level in meerdere bestanden.** `tools/levels/factory/plan.gd` heeft de maten, de zones en de deuropeningen ertussen (`HALL_DOORWAYS`, `PASSAGE_DOORWAY`, `BOILER_DOORWAY`): de muur aan de ene kant en de muur aan de andere kant halen de opening daar vandaan. Elke zone heeft een eigen bestand dat het plan uitbreidt (`hall.gd`, `annex.gd`, `passage.gd`, `boiler.gd`, en `outside.gd` voor wat eromheen ligt), met wat erin staat: schil, inrichting, probes, vuil, vloerverf en zijn stuk van de route. De rommel van hal en aanbouw staat in één bestand, `clutter.gd`; waarom staat onder "Onderweg gevonden". `tools/levels/factory.gd` is nog 21 regels: het plan, de volgorde waarin de zones gebouwd worden en de volgorde van de route. Twee sessies kunnen zo elk aan een eigen zone werken zonder hetzelfde bestand aan te raken.
+- **Hoe dat werkt.** De levelbouwer is geen `SceneTree` meer: `tools/build.gd` start hem, voor levels en modellen. Daardoor kan een level andere bestanden hun deel laten bouwen (`build` in `tools/level_builder.gd`): elk is een eigen bouwer, die van het level overneemt wat er al staat en het daarna teruggeeft.
+- **De showroom** breidt de bouwdoos uit en niet meer de fabriek, en laat nu ook de pompen, het metersbord, de ketel, de werkbank, een deur en het prikbord zien. Dat ze er staan is het bewijs dat ze buiten de fabriek te gebruiken zijn.
+- **`tools/build_check.py`** bouwt alle levels en modellen opnieuw en zegt wat er anders uitkomt dan wat er in git staat. Meshes vergelijkt het byte voor byte, scènes op wat erin staat: de nummers die Godot bij elke keer opslaan opnieuw uitdeelt tellen niet mee. Dezelfde botsvormen in een andere volgorde tellen wel als wijziging, en dat staat er dan bij. Wat gelijk is gebleven zet het terug, zodat `git status` alleen laat zien wat echt veranderd is. Het duurt twaalf seconden.
+
+**Gecontroleerd**
+
+- De fabriek, het depot en de modellen komen er gelijk uit. De 45 bestanden met de meshes en de vloerverf van de twee levels zijn byte voor byte gelijk gebleven, en de scène van de fabriek is op de nummers van Godot na regel voor regel dezelfde tekst. De lightmaps zijn dus niet opnieuw gebakken, en het spel draait op precies de bestanden van vóór deze stap.
+- De showroom is het enige wat veranderd is, door wat erbij is gezet. Dat is bekeken in vier screenshots.
+- `tools/selftest.sh` slaagt.
+
+**Onderweg gevonden**
+
+- **Eén vuilniszak in het ketelhuis verandert het gevecht in de hal.** In de eerste opzet bouwde elke zone zijn eigen rommel. De botsvormen van het level kwamen daardoor in een andere volgorde in de scène, en de selftest faalde op "de meeste vechten vanuit dekking": van vijf grunts vochten er na twaalf seconden twee vanuit dekking in plaats van vijf, en ze zochten 55 tot 58 keer naar dekking in plaats van 9 tot 11 keer. Drie keer om en om gemeten, elke keer hetzelfde. Het navmesh was in beide gevallen hetzelfde, veelhoek voor veelhoek; de plekken met dekking die de verkenning van `scripts/squad.gd` vindt niet. Daarna heb ik het zonder de nieuwe opzet geprobeerd: één vuilniszak erbij in het ketelhuis, ruim dertig meter van het gevecht en twee zones verder, gaf dezelfde twee van de vijf. Het ligt dus niet aan de knip in bestanden: elke botsvorm die er in een level bij komt, kan dit doen. Mijn vermoeden is dat de physics-engine met een andere lijst vormen elke straal een fractie anders laat uitkomen, en dat de verkenning daar een andere plek van maakt waar twee richtingen even dichtbij zijn; dat heb ik niet nagegaan.
+- Daarom staat de rommel van hal en aanbouw in één bestand, in de volgorde van voorheen: zo blijft de scène dezelfde en het gevecht ook. Wat er vanaf nu in een zone bij komt, kan gewoon in het bestand van die zone.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Een zone aan een level toevoegen | De zone en zijn deuropening in `tools/levels/<level>/plan.gd`, een bestand `tools/levels/<level>/<zone>.gd` dat het plan uitbreidt en `_describe` en `_route_through` heeft, en de naam in de twee lijsten in `tools/levels/<level>.gd` |
+| Een bouwsteen voor elk level maken | In de la van `tools/kit/` waar hij hoort, zonder iets van een level erin, en erbij in `tools/levels/showroom.gd` |
+| Nagaan dat een wijziging aan de bouwer of de bouwdoos verder niets heeft veranderd | `tools/build_check.py` |
+| Een level zone voor zone bekijken en horen wat elke zone kost en mist | `tools/zone_sheet.py factory`, of met `--check` zonder beelden; `--posted` zet de robots op hun post |
+| Bakken wat er na een wijziging gebakken moet worden | `tools/bake_lightmaps.sh`, zie stap 2 |
+| Meten wat een level kost om te laden en vast te houden | `tools/level_cost.sh factory` |
+| Een proeflevel maken van vijf kopieën van een level, om aan te meten | `tools/proof_level.sh`, dan `tools/zone_sheet.py proof` of `tools/level_cost.sh proof` |
+
+**Nog open**
+
+- Of de robots dekking vinden hangt af van iets wat bij elke wijziging aan een level verschuift, zie hierboven. Dat moet robuust zijn vóór stap 2: daar verandert het navmesh, en in stap 5 komt er elke dag iets bij. Tot dan zegt een falende gevechtstest na een levelwijziging niets over die wijziging.
+- De volgorde in `tools/levels/factory.gd` ligt vast: de zones van de fabriek delen de reeksen willekeurige getallen waarmee kratten gedraaid en ruiten weggelaten worden. Een zone ertussen zetten verschuift die in de zones erna, en dan moeten die opnieuw gebakken worden. Sinds stap 2 heeft elk bestand van een level zijn eigen reeksen; de fabriek doet het nog op de oude manier, zie daar.
+- De werkbank, het leidingwerk van de gang, het prikbord en de kraan kunnen maar in één richting staan. Een ruimte met een eigen assenstelsel, waarin alles gebouwd wordt, hoort bij stap 4.
+- De kraan staat niet in de showroom: hij heeft een hal nodig om te overspannen.
+- Het depot is één bestand gebleven: het is één ruimte.
+- De deuropeningen staan in het plan als getallen; de lateien en de panelen die een opening tijdens het bakken afsluiten zijn daar nog met de hand van afgeleid.
+
+### Stap 2: automatisch wat handwerk was
+
+**Wat er staat**
+
+- **De bouwer rekent uit welke zones elkaar zien** (`_find_sightlines` in `tools/level_builder.gd`). Hij zet de botsvormen van het level in een wereld, bakt er een navmesh van zoals het spel dat doet, en kijkt vanaf waar iemand kan staan, staand en gebukt, naar punten door elke andere zone. Eén lijn die nergens op stuit en de twee zones worden samen getekend. Ramen tellen als gaten. Voor de fabriek vindt hij precies wat er met de hand stond: hal en aanbouw, aanbouw en gang, gang en ketelhuis. De lijsten zijn uit het plan van de fabriek gehaald en de scène is dezelfde gebleven. `zone` neemt nog wel namen aan van zones die er hoe dan ook bij getekend moeten worden. De selftest zoekt in het draaiende spel nog steeds naar dezelfde lijnen en faalt op de eerste; dat is nu de controle op de bouwer.
+- **Lukt het uitrekenen niet, dan wordt er niets weggeschreven.** Een level waarvan de zones niet weten wat ze zien, laat ruimtes wegvallen terwijl je ernaar kijkt. Dat gebeurde twee keer tijdens het bouwen hiervan, zonder foutmelding die de bouw stopte.
+- **`tools/bake_lightmaps.sh` bakt alleen wat veranderd is.** Van alles waar de bake van een zone naar kijkt wordt een handtekening gemaakt: de gebakken meshes van de zone (de bestanden zelf), de lampen, de geplaatste modellen, de panelen die de deuropeningen afsluiten, de instellingen van de bake, en uit de gespeelde scène de zon en de lucht. De handtekening waarmee een zone het laatst gebakken is staat in `scenes/<level>_bakes.json`, naast de lightmaps. Zonder argument bakt het script de zones waarvan de handtekening niet meer klopt; `--list` zegt alleen welke dat zijn, `--all` bakt alles, een naam bakt die zone, `--mark` neemt de lightmaps die er liggen voor geldig aan. Het depot, dat één lightmap heeft, telt als één geheel.
+- **Elk bestand van een level heeft zijn eigen toeval** (`_shared_dice` en `_seed_dice` in de levelbouwer). De kratten, de vaten en de ontbrekende ruiten van een zone hangen dan niet meer af van wat er in de zones ervoor is gebouwd, en hun lightmap dus ook niet. De fabriek deelt zijn reeksen nog, zoals hij gebouwd en gebakken is.
+
+- **Een contactblad en een keurmerk per zone** (`tools/zone_sheet.py`). De bouwer kiest per zone zelf een paar standpunten waar de speler kan komen, ver uit elkaar, meer in een grote zone, en kijkt vanaf elk de kant op waar de meeste vloer te zien is (`_find_views`); ze staan in de levelscène op de zone. Het script laat de benchmark vanaf elk een beeld maken op de instelling van het budget, 1440p met FSR 2 op 67%, en plakt ze op één blad met eronder wat dat standpunt kost. Een level zonder zones, zoals het depot, wordt bekeken waar er gevochten wordt. Per zone zegt het script of er een reflectieprobe hangt, een lamp brandt, een decal ligt en de lightmap nog klopt, en per standpunt of het binnen 2000 tekenopdrachten en 4 miljoen driehoeken blijft en 60 fps haalt. Met `--check` doet het alleen wat zonder GPU kan.
+
+**Gemeten** op 10 oktober 2026
+
+| | |
+|---|---|
+| Het contactblad van de fabriek: tien beelden, het blad en de tabel | 37 s |
+| De fabriek bouwen | 5,0 s, waarvan 2,1 s voor 1,2 miljoen zichtlijnen; het was 2,8 s |
+| Alle levels en modellen bouwen en vergelijken (`tools/build_check.py`) | 14 s; het was 12 s |
+| De gang bakken, van commando tot klaar | 16 s, waarvan 2,4 s de bake zelf en de rest het starten van de editor |
+| Aanbouw, ketelhuis en hal bakken | de bake zelf is 15 s, 32 s en 1:50 (gemeten op 9 oktober); met de 13 s van de editor erbij naar schatting 30 s, 45 s en 2 minuten |
+
+- **Wat een zone als veranderd telt.** Een tl-buis in de gang tien centimeter verplaatst: alleen de gang. Een vlek op de vloer van de aanbouw groter gemaakt (een decal): niets. Dikkere mist in `scenes/factory.tscn`: niets. Een fellere zon: alle vier.
+- **Twee bakes achter elkaar zijn byte voor byte gelijk.** De gang opnieuw gebakken geeft een bestand dat 33 bytes korter is dan het gecommitte, maar gedecodeerd is het beeld hetzelfde: geen texel verschilt. De lightmap die er lag was dus nog geldig, en hij is teruggezet. Voor de andere zones en het depot is dat aangenomen en niet nagebakken.
+- **Zones met eigen toeval staan los van elkaar.** Met de fabriek als proef op eigen reeksen gezet en een stapel kratten bijgezet in de hal: alleen de gebakken mesh van de hal verandert, die van aanbouw, gang en ketelhuis blijven byte voor byte gelijk.
+
+**Wat het eerste blad liet zien**
+
+| Standpunt | Tekenopdrachten | Driehoeken | Fps in drie runs |
+|---|---|---|---|
+| Hal, vier standpunten | 454 tot 909 | 1,2 tot 2,4 miljoen | 66 tot 75 |
+| Aanbouw 1: uit de kleedkamer, door de gang, de hal in | 1647 | 3,2 miljoen | 73, 75, 76 |
+| Aanbouw 2: de gang | 474 | 0,8 miljoen | 69, 58, 75 |
+| Gang 1: naar de deur van het magazijn | 1311 | 3,2 miljoen | 73, 72, 73 |
+| Gang 2 | 515 | 0,9 miljoen | 78, 76, 79 |
+| Ketelhuis 1: achter de ketel | 661 | 0,9 miljoen | 79, 81, 81 |
+| Ketelhuis 2: vanaf de deur van de gang | 820 | 1,5 miljoen | 71, 65, 75 |
+
+- Tekenopdrachten en driehoeken komen in alle drie de runs tot op de driehoek gelijk uit. De framerate niet: de gang van de aanbouw gaf 69, 58 en 75 fps, met een 1% low van 20 in de middelste run, terwijl de laptop in gebruik was. Een standpunt dat onder de 60 uitkomt wordt daarom één keer opnieuw gemeten en de beste van de twee telt.
+- De zwaarste beelden zijn niet de grootste ruimte maar de doorkijkjes: uit de kleedkamer en uit de gang kijk je door een deur een volgende zone in, en die wordt dan helemaal getekend. Ze halen ruim 70 fps. De grenzen van het keurmerk liggen een marge boven dat zwaarste beeld; de fabriek is de maat.
+- Wat er op het oog opvalt, en waar het blad voor is: de kleedkamer is bijna zwart (de tl-buis daar is uit), de gang naar het ketelhuis is kaal, en achter de ketel is het donker.
+- Het depot: vier standpunten, 359 tot 447 tekenopdrachten, 0,8 tot 1,0 miljoen driehoeken, 67 tot 81 fps.
+
+**Afwijking van het plan: het navmesh wordt niet vooraf gebakken.** Het bakken bij het laden duurt 65 tot 69 ms voor de fabriek en 116 tot 126 ms voor het depot. Een level van vijf keer die omvang is dan een halve seconde, achter een zwart beeld. Daar staat geen bestand per zone en geen wijziging aan het spel tegenover. De bouwer bakt er wel een, om te weten waar iemand kan staan, en gooit hem weer weg.
+
+**Onderweg gevonden**
+
+- **Een verse worktree hoeft niet zes minuten te importeren.** De editor importeerde in een nieuwe worktree alles opnieuw, ook met een gekopieerde `.godot`, omdat de uitgecheckte bestanden een nieuwe wijzigingstijd hebben. Wie elk bestand dat gelijk is aan dat in de hoofdmap de tijd van dat bestand geeft (`touch -r`), is in 9 seconden klaar.
+- `Engine.get_main_loop()` is leeg zolang de bouwer in de constructor van de `SceneTree` draait, en de root staat pas vanaf het eerste frame in de boom. `tools/build.gd` wacht daarom één frame.
+
+**Nog open**
+
+- **De hal haalt de minuut niet**: zijn bake duurt 1:50. Dat is één ruimte met een lightmap van 44,7 MB; korter kan alleen met een grovere lightmap op de grote kale vlakken, en dat is stap 3.
+- **De zichtlijnen groeien met het kwadraat van het aantal zones.** De fabriek kost 2,1 s voor zes paren die elkaar niet zien. Twintig zones zijn er ruim driehonderd, naar schatting twee minuten per bouw. Paren die elkaar wel zien zijn snel klaar: de eerste lijn is genoeg. Wat helpt: een uitkomst "ziet elkaar niet" blijft geldig zolang er alleen botsvormen bij komen, dus alleen na het weghalen of verplaatsen van iets hoeft alles opnieuw. Dat is nog niet gebouwd.
+- **De fabriek staat nog op gedeeld toeval.** Hem omzetten verlegt elke krat en vraagt een bake van alle vier de zones. Dat wacht tot het dekkingzoeken tegen zulke wijzigingen kan (zie stap 1).
+- Een handtekening ziet geen gewijzigd materiaal, geen gewijzigde textuur en geen opnieuw geïmporteerd model. Daarna: `tools/bake_lightmaps.sh --all`.
+- Het keurmerk kijkt niet naar grote kale vlakken: het telt alleen of er in een zone een decal ligt. De gang van de fabriek heeft er twee en is toch kaal, zoals op het blad te zien is.
+- De standpunten staan in de hoeken van een zone, en dat is niet altijd waar de speler binnenkomt. Het uitzicht vanaf de deur waar de route een zone binnenkomt ontbreekt nog.
+
+### Stap 3: gemeten in plaats van gestreamd
+
+Het plan was zones te gaan streamen: op de achtergrond laden en weer loslaten. Voordat daar iets voor gebouwd is, is gemeten wat een level van vijf fabrieken kost. Het haalt de framerate en het geheugen zonder streamen. Wat er wel te halen viel, lag ergens anders.
+
+**Wat er staat**
+
+- **`tools/level_cost.sh [level]`** laadt een level in een lege scène en zegt hoe lang dat duurt en wat het aan geheugen bijzet, met de lightmaps één voor één.
+- **`tools/proof_level.sh [level] [kopieën]`** maakt van een gebouwd en gebakken level een proeflevel: de fabriek vijf keer, als één level van twintig zones en tachtig robots. De kopieën staan 300 m uit elkaar, te ver om elkaar te zien of te beschaduwen, en delen hun meshes en lightmaps met de eerste. De twee scènes die het schrijft staan niet in git.
+- **Het levelbestand is dertig keer kleiner.** De bouwer plaatste modellen zonder Godot te vertellen hoe ze oorspronkelijk waren. Van elk model waarvan hij daarna iets binnenin veranderde, om het door de probes te laten belichten, werd de hele mesh in het level opgeslagen: 46 meshes, 7,4 van de 7,7 MB van de fabriek. Geplaatst zoals de editor het doet (`GEN_EDIT_STATE_INSTANCE` in `prop`) wordt alleen opgeslagen wat het level veranderde.
+- **Wat in een uitgeschakelde zone beweegt, wordt niet meer getekend.** Het rolluik van een uitgang hangt bij de schil van zijn zone, en die schil blijft staan om schaduw te werpen. Het rolluik zelf bleef daarbij gewoon zichtbaar. `scripts/zones.gd` laat het nu, net als de schil, alleen nog schaduw werpen.
+
+**Gemeten** op 10 oktober 2026, terwijl de laptop in gebruik was
+
+| | De fabriek | Het proeflevel: vijf fabrieken |
+|---|---|---|
+| Zones, nodes | 4, 1317 | 20, 6510 |
+| Het levelbestand | 0,25 MB, gelezen in 46 ms | 1,12 MB, gelezen in 196 ms |
+| Het level laden zonder beeld, alles | 0,25 tot 0,47 s | 0,40 tot 0,67 s |
+| Navmesh bakken bij het laden | 66 tot 73 ms, 612 veelhoeken | 375 ms, 3068 veelhoeken |
+| Texturen op de videokaart | 870 MB | 870 MB |
+| Meshes en andere buffers | 66 MB | 71 MB |
+| Geheugen van de engine zelf | 57 MB | 76 MB |
+| Lightmaps op de videokaart | 25 MB (hal 16, aanbouw 4, ketelhuis 4, gang 1) | dezelfde 25 MB, gedeeld; eigen lightmaps zouden 125 MB zijn |
+| De tien standpunten van de fabriek | 454 tot 1647 tekenopdrachten | in kopie 1 tot op de driehoek hetzelfde, alle tien |
+| Framerate in die standpunten, 1440p met FSR 2 op 67% | 68 tot 81 fps | 68 tot 80 fps |
+| Met de robots op hun post (16 en 80), mediaan | 73,5 fps | 74,3 fps |
+
+- **Het geheugen zit in wat elk level deelt.** De 870 MB aan texturen zijn die van de materialen en de modellen, en die groeien niet mee met het level. Per fabriek aan nieuwe ruimtes komt er 25 MB aan lightmaps bij, plus de eigen meshes. Het proeflevel deelt zijn meshes en lightmaps, dus een echt level van die omvang ligt hoger dan wat hier gemeten is: 100 MB aan lightmaps erbij en hooguit 260 MB aan meshes (vier keer alle buffers die de fabriek nu heeft), op een totaal van ruim 1 GB.
+- **Het laden van een level groeit met zijn omvang, maar het is weinig.** Het bestand en het navmesh van het proeflevel kosten samen 0,6 s. Dat de fabriek eerst 1,4 s nodig had, kwam door de meshkopieën: 1,2 s daarvan was het lezen van die tekst. De fabriek laadt nu in een kwart tot een halve seconde, en het depot in 0,05 tot 0,07 s in plaats van 0,6 tot 0,7.
+- **Wat een beeld kost, hangt niet af van hoeveel zones er zijn.** In elk van de tien standpunten tekent het level van twintig zones precies evenveel als de fabriek alleen.
+- **De lightmaps zijn op schijf groot en op de videokaart klein.** De hal is 44,7 MB als `.exr` en 16 MB gecomprimeerd in het geheugen.
+
+**Afwijkingen van het plan**
+
+- **Er wordt niet gestreamd.** Het zou geheugen en laadtijd besparen die er niet zijn, en het raakt alles wat nu van het hele level uitgaat: het navmesh, de verkenning van dekking, de robots op hun post.
+- **De grote vlakken hebben geen grovere lightmap gekregen.** Dat scheelt naar schatting een vijfde van de baktijd en de bestandsgrootte van de hal, en vraagt een bake van alles en een oordeel op het oog. Met LFS is de bestandsgrootte geen probleem meer; de 1:50 van de hal blijft staan.
+
+**Onderweg gevonden**
+
+- **De zon tekent mee wat binnen bereik van zijn schaduw staat.** Met de kopieën eerst 130 m uit elkaar kostten twee standpunten 25 en 38 tekenopdrachten en 60 duizend driehoeken meer dan in de fabriek alleen: de schil van de hal van de buurkopie, één keer getekend voor de schaduw. Dat is in een echt level ook zo: elke schil binnen het bereik van de zonneschaduw (70 m) telt mee, of zijn zone nu aan staat of niet.
+- **De getallen op een zone worden gedeeld door elke kopie van de scène.** De standpunten van de kopieën stonden eerst allemaal 1300 m verderop, de som van alle verschuivingen: het aanpassen van de ene kopie paste ze allemaal aan.
+- **Meten terwijl er gespeeld wordt, halveert de cijfers.** Eén run van het contactblad gaf 32 tot 37 fps in elk standpunt, ook in een lege gang. Het script zegt het nu als zelfs het lichtste standpunt tekortschiet. Tekenopdrachten en driehoeken hebben daar geen last van.
+- Door het rolluik staan er in het blad van de fabriek sindsdien vijf tekenopdrachten minder bij de twee standpunten waar het in beeld viel terwijl de hal uit stond: gang 2 (510) en ketelhuis 1 (656).
+
+**Nog open**
+
+- Het proeflevel is gekopieerd en niet gebouwd: wat de bouwer zelf aan twintig zones kost (de zichtlijnen, zie stap 2) is er niet mee gemeten, en evenmin een level waarin de zones aan elkaar grenzen.
+- De 870 MB aan texturen is het grootste wat een level in het geheugen heeft. Dat is geen vraag van levelgrootte, maar wel de eerste plek om te kijken als het geheugen ooit krap wordt.
+
+### Stap 4: ruimtes uit een plattegrond
+
+**Wat er staat**
+
+- **Een level als plattegrond** (`tools/kit/rooms.gd`, de vijfde la van de bouwdoos). Het plan van een level noemt zijn ruimtes: een rechthoek op de grond, een soort en een hoogte. Daarna de deuren ertussen, de ramen, wat vrij moet blijven voor wat er met de hand in komt, en de route: `room`, `door`, `window`, `keep_clear`, `start_in`, `fight`, `checkpoint_in` en `exit_through`. De rechthoek is de ruimte met zijn muren, dus twee ruimtes die een muur delen hebben rechthoeken die elkaar raken.
+- **Wat de bouwer daarvan maakt** (`build_rooms`). Per ruimte een eigen zone, gesloten door eigen vloer, muren en plafond; de deuropeningen en ramen uitgespaard, met in elke deuropening het paneel dat hem tijdens het bakken afsluit; lampen naar de soort ruimte (tl-buizen onder een laag plafond, hallampen onder een hoog), waarvan de meeste nog branden; een reflectieprobe. En tenzij het level kaal is (`_bare`): deuren in de deuropeningen, vuil langs de plinten, lekstrepen onder de ramen, vlekken op de vloer, en wat er in zo'n ruimte rondstaat. Een magazijn krijgt stellingen langs de muren en kisten, pallets en zakken ertussen; een kantoor een bureau, een stoel, een kast en dozen; een gang brandblussers en leidingen; een werkhal iets tegen de muur om de paar meter en dekking op de vloer. Dat blijft uit de buurt van de deuren, van waar de robots staan en van wat het plan vrijhoudt.
+- **Vijf soorten ruimte**: `hall`, `plant`, `corridor`, `office` en `storage` (`ROOM_KINDS`). Een soort legt het materiaal van muren en plafond vast, de dikte van de muren, welke lampen er hangen en hoe ver uit elkaar, en wat er rondstaat.
+- **De robots krijgen hun post van de bouwer.** `fight` zet er een per soort neer, zo ver van de deur waar de speler binnenkomt als de vloer toelaat, een paar passen uit elkaar.
+- **Wat een ruimte tot díé ruimte maakt, komt er met de hand in**, in een bestand per ruimte, met `spot_in` voor een plek gerekend vanaf de noordwesthoek van de ruimte. De ruimte verhuizen in het plan verhuist dan ook wat erin staat.
+- **Elke ruimte heeft zijn eigen toeval**, zodat een wijziging in de ene de lampen en kisten van de andere laat staan, en hun lightmap ook.
+- **De bouwer controleert of de route te lopen is** (`_check_walkable`). Een robot of een checkpoint op een plek die vanaf de start niet te bereiken is, geeft een fout bij het bouwen. Dat geldt voor elk level; de fabriek en het depot komen erdoor.
+- **`tools/level_map.py [level]`** tekent een level van bovenaf zoals het gebouwd is: wat er op de vloer staat (zwart wat hoger is dan een mens, grijs waar een robot overheen schiet), de zones, de robots op hun post, de start en de uitgang. Zonder GPU.
+- **De vleugel** (`tools/levels/wing.gd`, `scenes/wing.tscn`): een lobby en een magazijn aan de westkant van een gang, een werkplaats en een ketelruimte aan de oostkant, en een laaddeur in de oostwand van de werkplaats als uitgang. In de werkplaats staan een draaibank, een pers en een tank met de hand; in de ketelruimte de ketel, twee pompen en het metersbord. Elf robots in vier gevechten, met een checkpoint in het magazijn.
+
+**Gemeten** op 10 oktober 2026
+
+| | |
+|---|---|
+| De vleugel, vijf ruimtes met machines en route | 137 regels in vijf bestanden; de fabriek was 1720 regels voor vier zones |
+| Kaal gebouwd | 254 nodes, 9 modellen, 20 decals |
+| Ingericht | 440 nodes, 88 modellen, 72 decals |
+| Bouwen, met zichtlijnen | 1,8 s |
+| Zichtlijnen die de bouwer vond | lobby en gang, lobby en werkplaats, magazijn en gang, magazijn en ketelruimte, gang en werkplaats, gang en ketelruimte, werkplaats en ketelruimte |
+
+**Gecontroleerd, en wat niet**
+
+- De route is te lopen: de bouwer vindt elke robot en het checkpoint bereikbaar vanaf de start.
+- Het spel laadt de vleugel en draait hem 600 frames zonder beeld en zonder fout.
+- De fabriek, het depot, de showroom en de modellen komen er gelijk uit, en `tools/selftest.sh --routes` slaagt.
+- **De vleugel is gebakken en bekeken, na een herstart van de laptop.** Het contactblad laat vijf ruimtes zien die bij de fabriek passen: een lobby met een bureau onder het raam, een magazijn met stellingen en kisten, een gang met leidingen en open deuren, een werkplaats met pers, draaibank en tank onder hallampen, en een ketelruimte met de ketel, het metersbord en de pompen. Wat opvalt: de lobby is kaal en schemerig met één brandende buis, en de voorste hoek van de werkplaats is donker.
+- **Gespeeld is hij niet.** Of de gevechten kloppen, weet ik niet. De selftest loopt hem niet af: hij staat niet in de levelkeuze van het spel.
+- **Een proeflevel laat het savebestand met rust.** De vleugel spelen schreef eerst over wat er van het echte spel bewaard was: de start van de vleugel bij het begin, niets meer aan het eind. `scripts/save.gd` schrijft nu alleen nog voor de levels uit de levelkeuze; een ander level houdt zijn checkpoints zolang het draait. Getest in een kopie van het project met een eigen savemap: de vleugel schrijft niets, de fabriek wel, en de vleugel daarna laat staan wat de fabriek schreef.
+
+**De vleugel gemeten**, tien standpunten, op 10 oktober 2026 vlak na de herstart
+
+| | Tekenopdrachten | Driehoeken | Fps |
+|---|---|---|---|
+| 1440p met FSR 2 op 67%, zonder robots | 125 tot 1000 | 0,1 tot 1,7 miljoen | 63 tot 79 |
+| 3456×2160 met MetalFX op 50%, zoals er gespeeld wordt | 125 tot 1006 | 0,1 tot 1,9 miljoen | 66 tot 80 |
+| 1440p met FSR 2 op 67%, de elf robots op hun post | 125 tot 2108 | 0,1 tot 2,1 miljoen | 67 tot 77 |
+
+- Alle vijf de ruimtes bakken samen in 43 seconden: lobby 4, magazijn 10, gang 4, werkplaats 19 en ketelruimte 7. Met het starten van de editor erbij is de hele vleugel in een minuut gebakken. De lightmaps zijn samen 22,8 MB.
+- Met de robots op hun post verdubbelt het aantal tekenopdrachten in de gang, zonder dat de framerate eronder lijdt. De grenzen van het keurmerk gelden voor een ruimte zonder robots; met `--posted` telt alleen de framerate.
+
+**Wat er misging: de bake liep vast, en de GPU met hem**
+
+- Om 17:39 begon de bake van de vijf ruimtes. Lobby, magazijn, gang en werkplaats waren in twee minuten klaar. Om 17:41:06 startte er een andere Godot op de laptop, niet van deze sessie; de bake bleef daarna hangen op de ketelruimte.
+- Die andere Godot stond twintig minuten later nog in de proceslijst als bezig met afsluiten. Elke nieuwe run op de GPU liep sindsdien vast met `timeout waiting for fence`, ook een screenshot van één standpunt, en bleef na afbreken zelf minutenlang hangen.
+- Daarna is de inrichting van de vleugel nog veranderd, dus ook de vier lightmaps die er lagen klopten niet meer. Ze zijn weggehaald: de vleugel heeft geen lightmaps.
+- **`tools/bake_lightmaps.sh` weigert sindsdien te bakken zolang er een andere Godot op de GPU zit**, tenzij met `--anyway`. Een bake wil de GPU voor zichzelf.
+- `tools/build.gd` laat Godot niet meer eindeloos draaien als een bouwer op een fout stukloopt: na vier minuten stopt het met een melding. Dat gebeurde hier drie keer.
+- **Het lag niet aan de ketelruimte.** Het vastlopen begon precies toen de bake aan die ruimte toekwam, dus dat kon de oorzaak zijn. Een half uur later hingen beide processen er nog, en een poging om het spel te starten liep op dezelfde manier vast; pas een herstart van de laptop hielp. Daarna is de ketelruimte eerst alleen gebakken, met niets anders op de GPU: klaar in 7 seconden. Wat overblijft is de botsing met de andere Godot.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Een level uit ruimtes opzetten | Een plan met `room`, `door`, `window` en de route, en `_bare = true`; `tools/build_level.sh <level>`, dan `tools/level_map.py <level>` om het van bovenaf te zien |
+| Het level inrichten | `_bare = false`, `keep_clear` voor wat er met de hand in komt, en een bestand per ruimte dat het level zijn deel laat bouwen |
+| De vleugel bakken en bekijken, als er geen andere Godot draait | `tools/bake_lightmaps.sh res://scenes/wing.tscn`, dan `tools/zone_sheet.py wing` |
+| Meten op de resolutie waarop gespeeld wordt | `tools/zone_sheet.py wing --res=3456x2160 --upscaler=metalfx --scale=0.5` |
+| De vleugel spelen in een venster | `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/wing.tscn -- --play` |
+
+**Nog open**
+
+- De regels voor wat er rondstaat zijn een eerste gok. In de werkplaats, met drie machines, drie deuren en vijf robots op 200 m², blijft er plek voor drie eilanden dekking. De robots staan open en bloot, in het zicht van wie binnenkomt: in de ketelruimte staat er een op een meter van de deur.
+- Een ruimte is een rechthoek langs de assen met een vlak plafond. Geen schuin dak met spanten, geen tussenvloer, geen trap, geen terrein onder de open lucht.
+- Tussen twee ruimtes staan twee muren rug aan rug. Dat houdt elke zone gesloten voor zijn bake, en kost muur die niemand ziet.
+- Wat er met de hand in komt, moet het plan zelf vrijhouden; de bouwer weet niet hoe groot een pers is.
+- De werkbank, het leidingwerk van de gang en de kraan uit de bouwdoos kunnen nog steeds maar in één richting staan.
+
+### Stap 5: het fabrieksterrein
+
+**Wat er staat**
+
+- **Het fabrieksterrein** (`tools/levels/works.gd`, `scenes/works.tscn`), het level tussen de fabriek en het depot: 23 ruimtes op 84 bij 57 meter. Kantoren aan een gang aan de westkant; magazijn, gereedschapskamer, compressorruimte en werkplaats ten noorden van een ommuurd binnenterrein; kantine, keuken, ketelhuis en schakelruimte ten zuiden ervan; aan de oostkant de montagehal, de spuiterij, de expeditie en het laadperron, met de laaddeur als uitgang. 59 robots in elf gevechten, vijf checkpoints; het waren er eerst 73, zie "Na de eerste keer spelen".
+- **Het zit in het spel.** De levelkeuze is Factory, Works, Depot; de uitgang van de fabriek leidt naar het fabrieksterrein en die van het fabrieksterrein naar het depot. Een ruimte galmt naar haar soort: `scripts/sfx.gd` leest dat van de zone af voor een level dat het niet zelf opgeeft.
+- **Twee soorten ruimte erbij**: `canteen`, met tafels en stoelen, en `yard`, een ommuurd terrein onder de open lucht met schijnwerpers op masten en containers.
+- **De robots staan niet meer open en bloot.** `fight` noemt per ruimte welke soorten er staan; hun post krijgen ze pas als alles staat, bij de opmeting (`_garrison` in `tools/kit/rooms.gd`). Een plek telt als verborgen als hij binnen 16 m niet te zien is vanaf waar de speler binnenkomt (de eerste 2,4 m achter de deur, over de hele breedte van de deuropening), vanaf de start of vanaf een checkpoint dat voor het gevecht ligt. Verborgen plekken gaan voor, zo ver mogelijk van de deur en uit elkaar. In de ruimte waar de speler binnenkomt zet de bouwer er iets hoogs voor neer, waar ze twee aan twee achter wachten: drie stapels pallets, een kast in een kantoor of een container op het terrein.
+- **Zichtlijnen: sneller, en door elke opening.** De opmeting kijkt alleen nog naar de zijden van een zone die naar het oog toe staan: 57 s werd 19 s. Daarnaast kijkt de bouwer door elke opening in de zijden van een zone (`_look_through`): om de 30 cm, op drie hoogtes, in 480 richtingen. Een blik die naar beide kanten vrij is, verbindt de zones waar hij doorheen gaat. Dat vangt de kier tussen twee deurposten aan het eind van een gang, die de punten missen en de speler een stap later ziet.
+- **Wat in de schaduw staat, werpt geen zonneschaduw** (`scripts/shade.gd`). De zon tekent haar schaduw tot 70 m ver in vier kaarten, en in elke kaart gaat alles wat binnen bereik staat in een zone die getekend wordt. Binnen staat bijna alles onder een dak. Bij het laden van een level kijkt het spel van elk geplaatst model naar de zon: staat er vanaf elke hoek een muur of dak tussen, dan gaat het naar een eigen laag die de zon overslaat. Lampen werpen zijn schaduw als voorheen. Dat geldt voor elk level.
+- **De schaduwatlas heeft zestien vakken in zijn grootste maat** (`project.godot`), in plaats van vier. Zie hieronder wat er zonder gebeurde.
+- **De route gaat met een knik naar de werkplaats**: van het magazijn door de gereedschapskamer en de compressorruimte, om twee hoeken. Eerst was er een deur recht van het magazijn naar de werkplaats.
+- **Het keurmerk telt de schaduwlampen in zicht** (`tools/zone_sheet.py`, kolom `shadows`): die van de zone zelf en van de zones die ze ziet, twee vakken voor een lamp die rondom schijnt en een voor een spot, hooguit 48.
+- `tools/benchmark.sh` neemt `--eval=` nu ook bij een gemeten run, om in een level iets uit te proberen zonder het in te bouwen. De nettest neemt niet meer aan dat het level na de fabriek één zone voor zijn eerste checkpoint heeft.
+
+**Gemeten** op 10 oktober 2026
+
+| | |
+|---|---|
+| Het fabrieksterrein beschreven | 289 regels in zes bestanden |
+| Gebouwd | 2809 nodes in de scène, 818 modellen, 420 decals, 83 lampen |
+| Bouwen | 24 s, waarvan 19 s de opmeting: 9,5 miljoen blikken |
+| Zichtlijnen | 42 paren uit de punten en 2 door een opening; een ruimte ziet gemiddeld 3,7 andere, de westgang 8 |
+| Alle 23 ruimtes bakken | 7 min 43 s; de werkplaats 78 s, de montagehal 68 s, het laadperron 54 s |
+| Lightmaps | 222 MB op schijf, 141 MB op de videokaart |
+| Laden | 0,8 s; 527 MB op de videokaart, waarvan 441 MB texturen |
+
+**Het contactblad**, 56 standpunten op 1440p met FSR 2 op 67%, tenzij anders vermeld
+
+| | Tekenopdrachten | Driehoeken | Fps | Het zwaarste standpunt |
+|---|---|---|---|---|
+| Zoals het eerst gebouwd was | 161 tot 2874 | 0,1 tot 6,0 miljoen | 55 tot 84 | de westdeur van het magazijn: 55 fps |
+| Met de atlas en de schaduwsortering | 146 tot 1082 | 0,1 tot 2,0 miljoen | 59 tot 83 | dezelfde deur: 59 fps |
+| En met de knik in de route | 146 tot 949 | 0,1 tot 2,0 miljoen | 65 tot 85 | de westgang: 65 fps; die deur ook 65 |
+| Op 3456×2160 met MetalFX op 50%, zoals er gespeeld wordt | 147 tot 951 | 0,1 tot 2,1 miljoen | 60 tot 85 | de westdeur van het magazijn en de keuken: 60 fps |
+| Met de 73 robots op hun post | 159 tot 3007 | 0,1 tot 2,7 miljoen | 59 tot 80 | de spuiterij, met 26 robots in zicht: 59 fps |
+
+- De fabriek zelf, tien standpunten: 454 tot 1311 tekenopdrachten en 0,8 tot 3,2 miljoen driehoeken werd 343 tot 835 en 0,5 tot 1,5 miljoen. De framerate bleef 69 tot 80; een standpunt daar wordt begrensd door wat de pixels kosten, niet door de meetkunde.
+- De laptop was bij geen van deze metingen in rust: er draaiden tests en een export van andere sessies. De getallen zijn onderling te vergelijken, niet de beste die de laptop haalt.
+
+**Wat de metingen aan het licht brachten**
+
+- **De lampen verdrongen elkaar in de schaduwatlas.** Godot deelt de atlas op in vier kwarten met 4, 4, 16 en 64 vakken. Een lamp die veel van het beeld beslaat wil een groot vak, en zijn er daar te weinig van, dan pakt de ene lamp elk frame het vak van de andere en wordt elke schaduw opnieuw getekend. Vanaf de westdeur van het magazijn was dat 2800 tekenopdrachten en 4,7 miljoen driehoeken per frame extra. Met drie kwarten van zestien vakken blijven de schaduwen staan tot er iets beweegt. De grootste schaduwkaart van een lamp is daarmee 512 in plaats van 1024 pixels. In het beeld scheelt dat weinig: per standpunt verschillen hooguit 705 van de 2 miljoen pixels meer dan 3%, langs de randen van schaduwen.
+- **De zon tekende wat nooit zon krijgt.** Van de 4,4 miljoen driehoeken die bij die deur overbleven, waren er 3,7 miljoen van de zonneschaduw. Met de schaduwsortering 1,5 miljoen in totaal. Over alle 57 standpunten samen ging het van 83,5 naar 45,9 miljoen driehoeken. Het beeld bleef gelijk: per standpunt verschilden hooguit 234 van de 2 miljoen pixels meer dan 3%, evenveel als tussen twee runs zonder enig verschil.
+- **In een deuropening staat de camera in twee zones tegelijk.** `scripts/zones.gd` rekent 60 cm buiten een zone nog als erin, zodat de ruimte achter de deur er al is. In de westdeur van het magazijn stonden daardoor het magazijn, de gang en alles wat die twee zien aan: 12 van de 23 ruimtes. De knik haalt de werkplaats en het binnenterrein uit dat zicht.
+- **De fabriek had een kier.** Uit de zuidoosthoek van de hal is door een deuropening van de annex en de deur van de gang een reep van de gang te zien. De lijst die er met de hand stond, de punten van de bouwer en de selftest hadden hem alle drie gemist. De hal en de gang tekenen elkaar nu mee; de gang haalt daarmee 74 en 76 fps.
+
+**Wat er misging**
+
+- **De bake van de werkplaats liep twee keer vast**, na de knik, in het sorteren van de lichtprobes: Godot schreef in zes minuten ruim honderdduizend keer `Inconsistency found in triangulation while building BSP` en kwam niet tot een einde. De GPU had er geen deel aan. De bouwer zette de probes in een hal van 21 m om de 66 cm; nu staan ze een goede meter uit elkaar (`cells > 20` in `tools/level_builder.gd`). De werkplaats bakt zo in 70 s, zonder waarschuwing, en zijn probebestand is 0,6 MB in plaats van 2,9. Het raakt in dit level ook de zuidgang oost.
+- Een bake of een bouw die niet eindigt wordt door de tijdslimiet gestopt; meer dan tijd heeft het niet gekost.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh` slaagt met het fabrieksterrein erin, 197 controles, waaronder: de route is te lopen, elke robot kan de speler bereiken, geen robot staat in zicht waar zijn zone betreden wordt of bij een checkpoint, en geen zone die uit staat is te zien. `tools/selftest.sh --fights` en `tools/nettest.sh` slagen ook; de nettest loopt nu van de fabriek naar het fabrieksterrein.
+- Het fabrieksterrein komt bij twee keer bouwen gelijk uit. In de fabriek veranderde alleen wie wie ziet en waar de uitgang heen leidt; het depot en de modellen zijn gelijk gebleven. Alle lightmaps zijn bij.
+- De vleugel is opnieuw gebouwd met de schermen en de posten van nu, en zijn magazijn en werkplaats zijn opnieuw gebakken.
+- **Gespeeld is het niet.** Of elf gevechten met 73 robots een kwartier boeiend blijven, of de schermen eerlijk aanvoelen en of de checkpoints goed liggen, weet ik niet.
+- Met de robots op hun post haalt één standpunt 59 fps. Dat is met alle 73 nog overeind; wie in de spuiterij staat heeft de montagehal al leeg. Een gevecht zelf is op het fabrieksterrein niet gemeten.
+
+**Na de eerste keer spelen**, 11 oktober 2026
+
+Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het savebestand eindigde de tweede beurt na 41 seconden, met een dood en zonder het eerste checkpoint. Twee dingen zaten hem in de weg, en geen van beide is het level zelf.
+
+- **Deze branch mist de renderschaal die zichzelf instelt.** Die kwam op 10 oktober op `fase-2-vertical-slice`, nadat `bouwdoos` was afgetakt. Zijn instellingen (Ultra, MetalFX, `auto_scale`) leest deze build als een renderschaal van 100%. Gemeten aan het begin van het fabrieksterrein, van de portiersloge tot de deur van het magazijn:
+
+| Op zijn instellingen | Fps |
+|---|---|
+| Volledig scherm, 3456×2160 op 100%: wat deze build doet | 13 tot 17 |
+| In het venster van 1920×1080 op 100% | 42 tot 54 |
+| Volledig scherm op 50%: wat de hoofdbranch ervan maakt | 38 tot 47 |
+
+- De fabriek haalt op de hoofdbranch met die instellingen 44 tot 50 fps (gemeten door de sessie die de renderschaal bouwde). Het budget van 60 fps hierboven is dat van High; op Ultra zit het fabrieksterrein er net als de fabriek onder, en aan de deur van het magazijn het verst.
+- **De gevechten waren te groot.** De fabriek stuurt er 3, 3, 4 en 6 op de speler af en het depot 4, 6 en 5. Het fabrieksterrein begon met 8, uit vier kamers tegelijk een gang in waar niets staat om achter te schuilen, en had zes gevechten van 8. De vleugels die als één gevecht tellen zijn teruggebracht naar die maat: de kantoren 3 (twee grunts en een rusher, zoals de fabriek begint), het magazijn met gereedschapskamer en compressorruimte 5, de kantine met keuken 5, het ketelhuis met schakelruimte 5. Samen 59 robots in plaats van 73. Er verschoof niets dat gebakken is: alle lightmaps zijn nog bij, en de selftest en de nettest slagen.
+- De vier grote ruimtes staan nog op 7 en 8 (werkplaats, binnenterrein, montagehal, laadperron). Daar staat dekking, en ze naar 6 brengen verplaatst de schermen, wat een bake vraagt.
+- De meting met de robots op hun post, hierboven, is die met 73.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Het fabrieksterrein bouwen | `tools/build_level.sh works`, dan `tools/level_map.py works` om het van bovenaf te zien |
+| De routes nalopen, met waar elke robot staat | `tools/selftest.sh --routes` |
+| Bakken wat veranderd is, als er geen andere Godot draait | `tools/bake_lightmaps.sh res://scenes/works.tscn` |
+| Het keurmerk en het contactblad | `tools/zone_sheet.py works`, met `--posted` voor de robots erbij |
+| Uitzoeken wat een standpunt zwaar maakt | `tools/benchmark.sh --quick --scene=res://scenes/works.tscn --at=x,y,z,draai,kantel --profile` |
+| Iets uitproberen in een gemeten level | dezelfde opdracht met `--eval='game.get_node("Level/ZoneYard").hide()'` |
+
+**Nog open**
+
+- **Op de speelresolutie is er geen marge**: twee standpunten halen daar 60 fps. Het licht van een lamp reikt door muren heen tot in de ruimtes ernaast en wordt daar per pixel uitgerekend, met zijn schaduw erbij; dat is de grootste post die overblijft. Een lamp aan zijn eigen ruimte binden vraagt renderlagen per zone.
+- **Rijen kamers aan een gang zien elkaar.** Uit een kamer kijk je door je eigen deur schuin de deuren aan de overkant in. De westgang ziet zo acht ruimtes. Occlusion culling zou tekenen wat echt in beeld is; nu is het alles of niets per zone.
+- De kantoren zijn kaal: een bureau, een stoel en een kast op ruim 90 m². De schermen zijn overal dezelfde drie stapels pallets.
+- De schaduwsortering kijkt bij het laden. Een model dat in de schaduw stond van iets dat wordt opgeblazen, werpt daarna nog steeds geen zonneschaduw.
+- De lightmaps van het fabrieksterrein zijn 222 MB in Git LFS, naast ongeveer 130 MB van de fabriek, het depot en de vleugel. Hoeveel LFS-opslag er bij GitHub is, is nog steeds niet nagekeken.
+- **`bouwdoos` loopt 34 commits achter op `fase-2-vertical-slice`**: de renderschaal, de stemmen, wat stuk kan, de beweging van het beeld. Proef samengevoegd botst het op twee regels (`scripts/game.gd` en de levellijst in `scripts/menu.gd`). De sessie mocht het niet zelf samenvoegen; dat wacht op Michiel. Daarna moeten de nieuwe geluiden worden ingelezen, de tests opnieuw draaien en het contactblad opnieuw gemaakt, want kratten en lampen kunnen dan stuk.
+- Elke kamer een eigen gevecht, in plaats van een vleugel als één gevecht, geeft 21 kleine gevechten en houdt alle robots. Dan moet de speler elke kamer in, en de regel dat de route door elk gevecht loopt vervalt. Dat is niet besloten.
 
 ## Gevechten: dekking, beurten en schaarste
 

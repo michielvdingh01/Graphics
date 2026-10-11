@@ -1,8 +1,15 @@
-extends "res://tools/levels/factory.gd"
+extends "res://tools/kit.gd"
 ## Everything that is built in code side by side on a slab under an open sky,
 ## to judge a prefab from close by without rebuilding and rebaking a level.
 ## Build with tools/build_level.sh showroom, then look around with
 ## tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="0,1.7,9,0,-5"
+##
+## Along the wall at the back, from west to east: containers, a roller door,
+## pallets and bags, railings, lockers and cupboards, the tanks, the press,
+## the lathe, two pumps under a board of gauges, and the boiler. In front of
+## them, on the south side of the slab: the workbenches against a wall of
+## their own, and a partition with a doorway and a notice board. The crane
+## needs a hall to span and is only to be seen in the factory.
 
 
 func _level_name() -> String:
@@ -26,7 +33,20 @@ func _describe() -> void:
 	cupboard("machine", Vector3(-2.5, 0, -5.65), 0, Vector3(0.98, 1.9, 0.6))
 	cupboard("machine", Vector3(-1.2, 0, -5.8), 0, Vector3(1.2, 1.8, 0.35))
 
-	_tank(Vector3(3, 0, -3), 20, -55, -100)
-	_tank(Vector3(7, 0, -3), -10, 55)
-	_press(Vector3(13, 0, -2))
-	_lathe(Vector3(20, 0, -2))
+	tank(Vector3(3, 0, -3), 20, -55, -11.75, -100)
+	tank(Vector3(7, 0, -3), -10, 55, -11.75)
+	press(Vector3(13, 0, -2))
+	lathe(Vector3(20, 0, -2))
+
+	pump(Vector3(24.3, 0, -3.2), 0)
+	pump(Vector3(25.5, 0, -3.2), 0)
+	gauge_board(Vector3(24.9, 1.75, -6.0), Vector3.BACK)
+	# The boiler's steam main runs south to a wall that is not there, and its
+	# flue ends where a roof would be.
+	boiler(Vector3(31.0, 0, -1.5), 6.0, 7.0)
+
+	wall("brick", true, 12.25, 0.5, -4.0, 5.0, 0.0, 3.0, [])
+	workbench(Vector3(0.6, 0, 11.63), 12.0)
+	wall("plaster_dado", false, 9.0, 0.2, 7.0, 13.0, 0.0, 3.0, [[8.2, 9.8, 0.0, 2.2]])
+	doorway(Transform3D(Basis(), Vector3(9.0, 0, 9.0)), 0.2, 95.0, 30.0, "1")
+	notice_board(Vector3(9.1, 1.62, 11.8))

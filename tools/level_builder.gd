@@ -1,6 +1,7 @@
-extends SceneTree
+extends RefCounted
 ## Shared level generator; the levels themselves live in tools/levels/ and are
-## built with tools/build_level.sh <name>.
+## built with tools/build_level.sh <name>, which runs them through
+## tools/build.gd.
 ##
 ## A level is described in code by overriding _describe() and written to
 ## scenes/levels/ as merged meshes (lightmapped "static", probe-lit "detail"
@@ -19,6 +20,12 @@ extends SceneTree
 ## only the zones that can be seen from where the camera is. That is what
 ## lets a level grow: what a frame costs depends on what is in sight, not on
 ## how much there is.
+##
+## Such a level is written in more than one file: a plan that every other file
+## extends, with the measurements, the zones and the doorways between them,
+## and a file for each zone, which the level has build its share with
+## build(). See tools/levels/factory.gd. What several levels can use, a
+## machine or a door, belongs in tools/kit/ and not in a level.
 
 const OUT_DIR := "res://scenes/levels/"
 ## Lightmap texel size in metres. Imported models get the same value through
@@ -55,6 +62,19 @@ const PAINT_SCALE := 40.0
 const PAINT_YELLOW := Color(0.8, 0.57, 0.06)
 const PAINT_WHITE := Color(0.76, 0.76, 0.72)
 const PAINT_BLACK := Color(0.035, 0.035, 0.035)
+## Lines of sight between zones, see _survey(): from how many spots
+## in a zone they are looked for at most, and how far apart the points of a
+## zone lie that they are looked for to. scripts/selftest.gd checks with the
+## same two numbers.
+const LOOKOUTS := 150
+const SIGHT_GRID := 1.5
+## Looking through the openings in the sides of a zone: how far apart the
+## spots are that are looked from, how high over the floor they lie, in how
+## many directions is looked from each and how far.
+const OPENING_GRID := 0.3
+const OPENING_HEIGHTS: Array[float] = [0.95, 1.6, 2.05]
+const OPENING_LOOKS := 480
+const OPENING_REACH := 90.0
 
 var _tools := {}
 ## Size of the blocks that probe-lit detail is cut into, see _tool(). A level
@@ -107,6 +127,15 @@ var _m: Transform3D
 ## Flags those helpers build with: lightmapped, or DETAIL for whatever is too
 ## thin or hangs too high for a patch of lightmap.
 var _part := NO_COLLIDE
+## The other files of the level that have built a share of it, by name; see
+## build().
+var _files := {}
+## Whether those files throw the dice of the level, one after the other,
+## instead of their own. With its own, what is added to one zone leaves the
+## crates and the broken panes of every other zone as they were, and their
+## lightmaps with them. A level sets this only to come out as it did before
+## files had dice of their own.
+var _shared_dice := false
 
 
 func _init() -> void:
@@ -116,8 +145,12 @@ func _init() -> void:
 	_prop_rng.seed = 31
 	_clutter_rng.seed = 43
 	_fuel_rng.seed = 59
-	_build()
-	quit()
+
+
+## Builds what this file describes and writes it out; tools/build.gd calls
+## it, and waits for it: a level takes a few frames, see _survey().
+func make() -> void:
+	await _build()
 
 
 ## Builds what _describe() describes and writes it out. This one makes a
@@ -142,6 +175,10 @@ func _build() -> void:
 	_add(_explosives, _root)
 
 	_describe()
+	# Better no level than one whose zones do not know what they can see.
+	if not await _survey():
+		push_error("The lines of sight between the zones were not worked out: nothing is written")
+		return
 	_check_route()
 
 	# The meshes come in as many files as there are zones and blocks of detail;
@@ -178,16 +215,52 @@ func _describe() -> void:
 	pass
 
 
+## Has another file of the level build its share: calls `method` on
+## tools/levels/<level>/<file>.gd, which extends the same builder as the level
+## does and builds into the same level. The level decides the order, since
+## that is the order things are filed in, and a file can be asked more than
+## once: to build its zone, and later for its stretch of the route.
+func build(file: String, method := &"_describe") -> void:
+	if not _files.has(file):
+		_files[file] = (load("res://tools/levels/%s/%s.gd" % [_level_name(), file]) as GDScript).new()
+		_files[file]._seed_dice("%s/%s" % [_level_name(), file])
+	var other: RefCounted = _files[file]
+	_hand_over(self, other)
+	other.call(method)
+	_hand_over(other, self)
+
+
+## Gives `to` everything `from` has built so far and the state it builds
+## with: every variable the two have in common, but for the dice, which each
+## keeps to itself unless the level shares them.
+func _hand_over(from: RefCounted, to: RefCounted) -> void:
+	for property: Dictionary in from.get_property_list():
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name in to:
+			var value: Variant = from.get(property.name)
+			if value is RandomNumberGenerator and not _shared_dice:
+				continue
+			to.set(property.name, value)
+
+
+## Gives this file dice of its own, that fall the same way on every build.
+func _seed_dice(of: String) -> void:
+	var dice: Array[RandomNumberGenerator] = [_rng, _glass_rng, _decal_rng, _prop_rng, _clutter_rng, _fuel_rng]
+	for i in dice.size():
+		dice[i].seed = hash("%s/%d" % [of, i])
+
+
 # --- Zones --------------------------------------------------------------------
 # A level of more than one space is cut into zones before anything is built.
 
 
 ## Declares a zone: a part of the level that is drawn as a whole or not at
 ## all. Whatever is built inside one of the boxes of `bounds` from here on
-## belongs to it. `sees` names the zones that can be seen from inside it,
-## through a doorway or over a wall; it works both ways, so one side naming
-## the other is enough. A zone has to be closed by its own walls, floor and
-## roof, because its lightmap is baked with nothing else around it.
+## belongs to it. Which zones can be seen from inside it, through a doorway
+## or over a wall, the builder works out for itself once everything stands,
+## see _survey(). `sees` names zones to draw along with it besides:
+## for what has no collider to be found by, say. It works both ways, so one
+## side naming the other is enough. A zone has to be closed by its own walls,
+## floor and roof, because its lightmap is baked with nothing else around it.
 func zone(zone_name: String, bounds: Array[AABB], sees: Array[String] = []) -> void:
 	var node := Node3D.new()
 	node.name = "Zone" + zone_name.to_pascal_case()
@@ -279,6 +352,418 @@ func dust(volume: AABB, amount: int) -> void:
 	_add(node, _zones[zone_name].contents if zone_name else _root)
 
 
+## Finds out what can only be found out with the level standing in a world:
+## which zones are in sight of each other, and where to stand to look at
+## each. The colliders of the level are stood in a world and a navmesh is
+## baked from them as the game does it, to know where somebody can stand.
+## A level without zones and without a route, such as the showroom, is left
+## alone.
+##
+## True when it got to the end.
+func _survey() -> bool:
+	if _zones.is_empty() and _route == null:
+		return true
+	var began := Time.get_ticks_msec()
+	var tree := Engine.get_main_loop() as SceneTree
+	# A stand-in for every body of the level, in the order the game finds
+	# them in: the level itself is not in a tree, and has scripts on it that
+	# are the game's to run.
+	var stand_in := Node3D.new()
+	for body: StaticBody3D in _root.find_children("*", "StaticBody3D", true, false):
+		var copy := StaticBody3D.new()
+		var at: Node3D = body
+		while at != _root:
+			copy.transform = at.transform * copy.transform
+			at = at.get_parent()
+		copy.collision_layer = body.collision_layer
+		for child in body.get_children():
+			var collider := child as CollisionShape3D
+			if collider:
+				var shape := CollisionShape3D.new()
+				shape.shape = collider.shape
+				shape.transform = collider.transform
+				copy.add_child(shape)
+		stand_in.add_child(copy)
+	tree.root.add_child(stand_in)
+	var navmesh := NavigationMesh.new()
+	navmesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	navmesh.geometry_collision_mask = 1
+	var source := NavigationMeshSourceGeometryData3D.new()
+	NavigationServer3D.parse_source_geometry_data(navmesh, source, stand_in)
+	NavigationServer3D.bake_from_source_geometry_data(navmesh, source)
+	if navmesh.get_polygon_count() == 0:
+		push_error("Survey: there is nowhere to stand in this level")
+		stand_in.free()
+		return false
+	# The bodies are in the world a frame after they are in the tree.
+	await tree.physics_frame
+	await tree.physics_frame
+	var space := stand_in.get_world_3d().direct_space_state
+	var ray := PhysicsRayQueryParameters3D.create(Vector3.ZERO, Vector3.ZERO, 1)
+
+	# Where feet can be: under every corner and every middle of the navmesh.
+	var corners := navmesh.get_vertices()
+	var spots := PackedVector3Array(corners)
+	for i in navmesh.get_polygon_count():
+		var middle := Vector3.ZERO
+		var polygon := navmesh.get_polygon(i)
+		for corner in polygon:
+			middle += corners[corner]
+		spots.append(middle / polygon.size())
+	# Zone by zone, a share of them if there are many. A level without zones
+	# is looked at where it is fought over: most of its navmesh is the land
+	# around it.
+	var grounds := {}
+	if _zones.is_empty():
+		var fought: Array[AABB] = []
+		for step in _route.get_children():
+			if step.is_in_group("route_zone"):
+				fought.append(_area_of(step))
+		grounds[""] = fought
+	for zone_name: String in _zones:
+		grounds[zone_name] = _zones[zone_name].bounds
+	var walked := _walked(navmesh)
+	_garrison(space, ray, navmesh, walked)
+	_check_walkable(navmesh, walked)
+	var feet := {}
+	# Of those, the ones the player can get to: not the roof, not the top of
+	# a tank.
+	var trodden := {}
+	for zone_name: String in grounds:
+		var boxes: Array[AABB] = grounds[zone_name]
+		var mine := PackedInt32Array()
+		for i in spots.size():
+			if boxes.any(func(box: AABB) -> bool: return box.has_point(spots[i] + Vector3.UP * 0.5)):
+				mine.append(i)
+		var stands := PackedVector3Array()
+		var reached := PackedVector3Array()
+		for i in range(0, mine.size(), maxi(1, ceili(float(mine.size()) / LOOKOUTS))):
+			var spot := spots[mine[i]]
+			ray.from = spot + Vector3.UP
+			ray.to = spot + Vector3.DOWN * 2.0
+			var ground := space.intersect_ray(ray)
+			stands.append(ground.position if ground else spot)
+			if walked.has(mine[i]):
+				reached.append(stands[-1])
+		feet[zone_name] = stands
+		trodden[zone_name] = reached
+
+	if _zones.size() > 1:
+		_find_sightlines(space, ray, feet)
+	for zone_name: String in trodden:
+		var views := _find_views(space, ray, trodden[zone_name])
+		(_zones[zone_name].node if zone_name else _root).set_meta(&"views", views)
+	stand_in.free()
+	print("Survey: %.1f s" % ((Time.get_ticks_msec() - began) / 1000.0))
+	return true
+
+
+## The corners and the middles of the navmesh that can be walked to from
+## where the player starts, numbered as _survey() numbers its spots: the
+## corners first, then a middle for every polygon. All of them, in a level
+## without a route.
+func _walked(navmesh: NavigationMesh) -> Dictionary:
+	var corners := navmesh.get_vertices()
+	var count := navmesh.get_polygon_count()
+	var start := _route.get_node_or_null("Start") as Marker3D if _route else null
+	var walked := {}
+	if start == null:
+		for i in corners.size() + count:
+			walked[i] = true
+		return walked
+	# Polygons that share a corner are joined; begin under the player.
+	var at_corner := {}
+	var first := -1
+	var nearest := INF
+	for p in count:
+		var middle := Vector3.ZERO
+		var polygon := navmesh.get_polygon(p)
+		var outline := PackedVector2Array()
+		for corner in polygon:
+			if not at_corner.has(corner):
+				at_corner[corner] = PackedInt32Array()
+			at_corner[corner].append(p)
+			middle += corners[corner] / polygon.size()
+			outline.append(Vector2(corners[corner].x, corners[corner].z))
+		var gap := middle.distance_to(start.position)
+		if absf(middle.y - start.position.y) < 1.5 and Geometry2D.is_point_in_polygon(Vector2(start.position.x, start.position.z), outline):
+			gap = 0.0
+		if gap < nearest:
+			nearest = gap
+			first = p
+	var todo: Array[int] = [first]
+	var seen := {first: true}
+	while not todo.is_empty():
+		var p: int = todo.pop_back()
+		walked[corners.size() + p] = true
+		for corner in navmesh.get_polygon(p):
+			walked[corner] = true
+			for other: int in at_corner[corner]:
+				if not seen.has(other):
+					seen[other] = true
+					todo.append(other)
+	return walked
+
+
+## Posts the robots that a level leaves for the builder to post, now that
+## everything stands and it is known where one can walk: see
+## tools/kit/rooms.gd. Nothing, for a level that says where its robots stand.
+func _garrison(_space: PhysicsDirectSpaceState3D, _ray: PhysicsRayQueryParameters3D, _navmesh: NavigationMesh, _walked: Dictionary) -> void:
+	pass
+
+
+## Catches a route that cannot be walked: a robot posted where it cannot get
+## to the player from, or a checkpoint that cannot be reached. `walked` is
+## what _walked() found.
+func _check_walkable(navmesh: NavigationMesh, walked: Dictionary) -> void:
+	if _route == null:
+		return
+	var corners := navmesh.get_vertices()
+	for step: Node3D in _route.get_children():
+		for mark in step.get_children():
+			if not (mark.is_in_group("enemy_spawn") or mark.name == &"Respawn"):
+				continue
+			var spot: Vector3 = step.transform * (mark as Node3D).position
+			var stands := false
+			for p in navmesh.get_polygon_count():
+				if not walked.has(corners.size() + p):
+					continue
+				var outline := PackedVector2Array()
+				var height := 0.0
+				var polygon := navmesh.get_polygon(p)
+				for corner in polygon:
+					outline.append(Vector2(corners[corner].x, corners[corner].z))
+					height += corners[corner].y / polygon.size()
+				if absf(height - spot.y) > 1.5:
+					continue
+				# On the navmesh, or a step from it: the navmesh keeps half a
+				# metre from whatever stands on the floor.
+				var flat := Vector2(spot.x, spot.z)
+				stands = Geometry2D.is_point_in_polygon(flat, outline)
+				for i in outline.size():
+					if stands:
+						break
+					stands = Geometry2D.get_closest_point_to_segment(flat, outline[i], outline[(i + 1) % outline.size()]).distance_to(flat) < 1.0
+				if stands:
+					break
+			if not stands:
+				push_error("Route: %s of %s at %s cannot be walked to from the start" % [mark.name, step.name, spot])
+
+
+## Works out which zones are in sight of each other: from where somebody can
+## stand in one zone, standing and crouching, it looks into each of the
+## others. One line that nothing stops, and the two are drawn together.
+## Windows count as holes: nothing that has no collider stops a look. What is
+## found is added to what zone() was told.
+##
+## To look into a zone is to look at the sides of the box that lies a step
+## inside its walls: whatever is seen of its inside is seen through one of
+## those sides, and only through one that faces the eye. That is a few dozen
+## points a pair of zones instead of every point in the zone.
+##
+## scripts/selftest.gd looks for the same lines in the running game, where a
+## zone is switched off, and fails on the first it finds.
+func _find_sightlines(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3D, feet: Dictionary) -> void:
+	var sides := {}
+	for zone_name: String in _zones:
+		var mine: Array[Dictionary] = []
+		for box: AABB in _zones[zone_name].bounds:
+			var inner := box.grow(-0.6)
+			for axis in 3:
+				var u := (axis + 1) % 3
+				var v := (axis + 2) % 3
+				var across := maxi(1, ceili(inner.size[u] / SIGHT_GRID * 1.5))
+				var up := maxi(1, ceili(inner.size[v] / SIGHT_GRID * 1.5))
+				for outward: float in [-1.0, 1.0]:
+					var normal := Vector3.ZERO
+					normal[axis] = outward
+					var points := PackedVector3Array()
+					for i in across + 1:
+						for j in up + 1:
+							var point := inner.position
+							point[axis] += inner.size[axis] if outward > 0.0 else 0.0
+							point[u] += inner.size[u] * i / across
+							point[v] += inner.size[v] * j / up
+							points.append(point)
+					mine.append({"normal": normal, "at": points[0], "points": points})
+		sides[zone_name] = mine
+	var looked := 0
+	var found := PackedStringArray()
+	for from: String in _zones:
+		for to: String in _zones:
+			if to == from or to in _zones[from].sees or from in _zones[to].sees:
+				continue
+			var seen := false
+			for stand: Vector3 in feet[from]:
+				for height: float in [1.6, 0.95]:
+					var eye := stand + Vector3.UP * height
+					ray.from = eye
+					for side: Dictionary in sides[to]:
+						if seen or (eye - (side.at as Vector3)).dot(side.normal) <= 0.0:
+							continue
+						for point: Vector3 in side.points:
+							ray.to = point
+							looked += 1
+							if space.intersect_ray(ray).is_empty():
+								seen = true
+								break
+				if seen:
+					break
+			if seen:
+				_zones[from].sees.append(to)
+				found.append("%s and %s" % [from, to])
+	var through := _look_through(space, ray)
+	looked += through.looks
+	print("Sight: %s; through an opening besides: %s; %d looks" % [", ".join(found) if found else "no zone sees another",
+		", ".join(through.found) if through.found else "none", looked])
+
+
+## Looks through every opening in the sides of the zones, level with the eyes
+## of a player who stands or crouches and just under the head of a door, in
+## every direction of the compass. The look from one zone into another can
+## be a sliver between two doorposts, at the far end of a corridor say, which
+## the points of _find_sightlines() miss and the next step of the player
+## finds. A look that is open both ways from a spot in an opening joins the
+## zones it passes through: those see each other. Returns {found, looks}.
+func _look_through(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3D) -> Dictionary:
+	var names: Array[String] = []
+	var insides: Array[Array] = []
+	for zone_name: String in _zones:
+		names.append(zone_name)
+		insides.append((_zones[zone_name].bounds as Array).map(func(box: AABB) -> AABB: return box.grow(-0.6)))
+	var within := func(zone_name: String, at: Vector3) -> bool:
+		return (_zones[zone_name].bounds as Array).any(func(box: AABB) -> bool: return box.has_point(at))
+	# The openings: where a look across the side of a zone meets nothing. Not
+	# a spot inside a wall, at a corner say: a ray does not see what it
+	# starts in, and would look out of that wall on every side.
+	var solid := PhysicsPointQueryParameters3D.new()
+	solid.collision_mask = 1
+	var openings := {}
+	var looks := 0
+	for zone_name: String in _zones:
+		for box: AABB in _zones[zone_name].bounds:
+			for axis: int in [0, 2]:
+				var along := 2 - axis
+				var count := maxi(1, ceili(box.size[along] / OPENING_GRID))
+				var across := Vector3.ZERO
+				across[axis] = 1.0
+				for far: float in [0.0, 1.0]:
+					for i in count + 1:
+						var foot := box.position
+						foot[axis] += box.size[axis] * far
+						foot[along] += box.size[along] * i / count
+						# Inside the zone, where two of its boxes meet: no side.
+						if within.call(zone_name, foot + across + Vector3.UP * 2.0) and within.call(zone_name, foot - across + Vector3.UP * 2.0):
+							continue
+						ray.from = foot + Vector3.UP * 3.0
+						ray.to = foot + Vector3.DOWN * 0.5
+						var ground := space.intersect_ray(ray)
+						var floor_y: float = ground.position.y if ground else foot.y + 1.0
+						for height: float in OPENING_HEIGHTS:
+							var at := Vector3(foot.x, floor_y + height, foot.z)
+							ray.from = at - across * 0.6
+							ray.to = at + across * 0.6
+							solid.position = at
+							looks += 1
+							if space.intersect_ray(ray).is_empty() and space.intersect_point(solid, 1).is_empty():
+								openings[Vector3i((at * 20.0).round())] = at
+	var found := PackedStringArray()
+	var free := PackedFloat32Array()
+	free.resize(OPENING_LOOKS)
+	var touched := PackedInt32Array()
+	for at: Vector3 in openings.values():
+		ray.from = at
+		for k in OPENING_LOOKS:
+			var turn := TAU * k / OPENING_LOOKS
+			ray.to = at + Vector3(cos(turn), 0, sin(turn)) * OPENING_REACH
+			var hit := space.intersect_ray(ray)
+			free[k] = at.distance_to(hit.position) if hit else OPENING_REACH
+		looks += OPENING_LOOKS
+		@warning_ignore("integer_division")
+		for k in OPENING_LOOKS / 2:
+			@warning_ignore("integer_division")
+			var back := free[k + OPENING_LOOKS / 2]
+			# A look that ends in the doorpost on either side goes nowhere.
+			if free[k] < 0.7 or back < 0.7:
+				continue
+			var turn := TAU * k / OPENING_LOOKS
+			var way := Vector3(cos(turn), 0, sin(turn))
+			var from := at - way * (back - 0.05)
+			var to := at + way * (free[k] - 0.05)
+			touched.clear()
+			for i in names.size():
+				for inside: AABB in insides[i]:
+					if inside.intersects_segment(from, to):
+						touched.append(i)
+						break
+			for i in touched:
+				for j in touched:
+					if i < j and not (names[j] in _zones[names[i]].sees or names[i] in _zones[names[j]].sees):
+						_zones[names[i]].sees.append(names[j])
+						found.append("%s and %s (from %.1f, %.1f to %.1f, %.1f at %.1f)" % [names[i], names[j], from.x, from.z, to.x, to.z, at.y])
+	return {"found": found, "looks": looks}
+
+
+## Where to stand to look a zone over, for tools/zone_sheet.py to take its
+## pictures from: a few of the spots in `feet` that lie far apart, more of
+## them in a large zone, each looking the way in which most of the floor of
+## the zone is in sight from there. Five numbers a view: x, y and z of the
+## eyes, then the turn and the tilt of the look in degrees, as --at of the
+## benchmark takes them.
+func _find_views(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3D, feet: PackedVector3Array) -> PackedFloat32Array:
+	var views := PackedFloat32Array()
+	if feet.is_empty():
+		return views
+	var centre := Vector3.ZERO
+	for stand in feet:
+		centre += stand / feet.size()
+	# The first stands farthest from the middle, each next one farthest from
+	# those there are.
+	var chosen: Array[Vector3] = []
+	var count := 2
+	while chosen.size() < mini(count, feet.size()):
+		var best := feet[0]
+		var reach := -1.0
+		for stand in feet:
+			var gap := stand.distance_to(centre)
+			if not chosen.is_empty():
+				gap = INF
+				for other in chosen:
+					gap = minf(gap, stand.distance_to(other))
+			if gap > reach:
+				reach = gap
+				best = stand
+		chosen.append(best)
+		if chosen.size() == 2:
+			# The two ends of the zone: the longer it is, the more to look at.
+			count += int(reach > 20.0) + int(reach > 40.0)
+	for stand in chosen:
+		var eye := stand + Vector3.UP * 1.6
+		# The ways to every spot that is in sight from here, a step or more off.
+		var ways: Array[Vector2] = []
+		ray.from = eye
+		for other in feet:
+			var way := Vector2(other.x - stand.x, other.z - stand.z)
+			ray.to = other + Vector3.UP
+			if way.length() > 1.0 and space.intersect_ray(ray).is_empty():
+				ways.append(way)
+		# Look where most of them lie within what a picture takes in, and of
+		# two such ways the one that looks furthest.
+		var towards := Vector2(centre.x - stand.x, centre.z - stand.z)
+		var most := 0.0
+		for way in ways:
+			var within := 0.0
+			for other in ways:
+				if absf(way.angle_to(other)) < deg_to_rad(38.0):
+					within += 1.0 + other.length() * 0.001
+			if within > most:
+				most = within
+				towards = way
+		var turn := rad_to_deg(atan2(-towards.x, -towards.y))
+		views.append_array([snappedf(eye.x, 0.01), snappedf(eye.y, 0.01), snappedf(eye.z, 0.01), snappedf(turn, 0.1), -3.0])
+	return views
+
+
 ## Name of the zone a point lies in, or empty for none.
 func _zone_at(at: Vector3) -> String:
 	if _zone_forced != null:
@@ -334,10 +819,12 @@ func _finish_zones() -> void:
 		lightmap.bounces = 4
 		lightmap.directional = true
 		# Probes for what moves through the zone, about as far apart in a small
-		# zone as in a large one.
+		# zone as in a large one: a good metre at the closest. Closer than
+		# that, a hall of 21 m took Godot longer to sort its probes than
+		# anyone waited for: see "Stap 5" in PLAN.md.
 		var cells := whole.get_longest_axis_size() / 1.3
 		lightmap.generate_probes_subdiv = (
-			LightmapGI.GENERATE_PROBES_SUBDIV_32 if cells > 16.0
+			LightmapGI.GENERATE_PROBES_SUBDIV_32 if cells > 20.0
 			else LightmapGI.GENERATE_PROBES_SUBDIV_16 if cells > 8.0
 			else LightmapGI.GENERATE_PROBES_SUBDIV_8 if cells > 4.0
 			else LightmapGI.GENERATE_PROBES_SUBDIV_4
@@ -938,7 +1425,10 @@ func prop(model: String, xf: Transform3D, scale := 1.0, dynamic := false, pose :
 	var info := _model(model)
 	var box: AABB = Transform3D(pose, Vector3.ZERO) * (info.box as AABB)
 	var base := Vector3(box.get_center().x, box.position.y, box.get_center().z)
-	var node: Node3D = info.scene.instantiate()
+	# Instantiated as the editor does it, so that the level knows what the
+	# model was like to begin with. Without that, a model whose insides the
+	# level changes is saved with a copy of its whole mesh.
+	var node: Node3D = info.scene.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
 	node.name = model.to_pascal_case()
 	node.transform = xf * Transform3D(Basis.from_scale(Vector3.ONE * scale) * pose, -base * scale)
 	_add(node, _group("Props", xf.origin))

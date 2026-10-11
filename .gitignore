@@ -4,3 +4,6 @@
 benchmark/results/
 .cache/
 build/
+# Made by tools/proof_level.sh, to measure with.
+scenes/proof.tscn
+scenes/levels/proof_level.tscn

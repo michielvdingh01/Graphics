@@ -160,6 +160,20 @@ func _ready() -> void:
 		_run.call_deferred()
 
 
+## Runs what was given with --eval, one expression after the other, with the
+## level as `game` and the player as `player`: for trying something out in a
+## level as it is measured or pictured, without building it in first.
+func _evaluate(player: Node) -> void:
+	for line in _eval:
+		var expression := Expression.new()
+		if expression.parse(line, ["Menu", "Save", "game", "player"]) != OK:
+			push_error("--eval: %s" % expression.get_error_text())
+			continue
+		expression.execute([Menu, Save, get_tree().current_scene, player], self)
+		if expression.has_execute_failed():
+			push_error("--eval: %s" % expression.get_error_text())
+
+
 func _run() -> void:
 	var tree := get_tree()
 	await tree.process_frame
@@ -237,6 +251,7 @@ func _run() -> void:
 	for node_name in _show:
 		for node in tree.current_scene.find_children(node_name, "Node3D", true, false):
 			node.visible = true
+	_evaluate(player)
 	# What is seen through a telescopic sight is drawn by the HUD.
 	var aimed := _weapon.size() > 1 and _weapon[1] >= 1.0
 	for hud in tree.get_nodes_in_group("hud"):
@@ -368,12 +383,7 @@ func _snapshot() -> void:
 		player.rotation_degrees = Vector3(0.0, numbers[3], 0.0)
 		player.head.rotation_degrees.x = numbers[4]
 	await tree.create_timer(minf(1.0, _snap), true, false, true).timeout
-	for line in _eval:
-		var expression := Expression.new()
-		if expression.parse(line, ["Menu", "Save", "game", "player"]) != OK:
-			push_error("--eval: %s" % expression.get_error_text())
-			continue
-		expression.execute([Menu, Save, tree.current_scene, player], self)
+	_evaluate(player)
 	await tree.create_timer(maxf(_snap - 1.0, 0.05), true, false, true).timeout
 	await RenderingServer.frame_post_draw
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")

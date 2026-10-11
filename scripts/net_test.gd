@@ -13,7 +13,8 @@ extends Node
 ## ask the other how far it is, so each waits for what it should get to see.
 
 const FACTORY := "res://scenes/factory.tscn"
-const DEPOT := "res://scenes/depot.tscn"
+## The level the factory leads on to.
+const NEXT := "res://scenes/works.tscn"
 ## An open lane in the factory with 6 m of clear floor to the east of it.
 const RANGE_TARGET := Vector3(1, 0, -7.5)
 ## Not the port the game hosts on, so that a test never meets a real game.
@@ -143,7 +144,7 @@ func _host() -> void:
 	player.velocity = Vector3.ZERO
 	await _wait(1.5)
 	_check("the level does not end with the host alone at the exit", not game._finished and tree.current_scene == game)
-	_check("it ends with both there, and both go on", await _until(_in_level.bind(DEPOT), 30.0))
+	_check("it ends with both there, and both go on", await _until(_in_level.bind(NEXT), 30.0))
 	game = tree.current_scene
 	_check("the kills come along", game.kills == robots)
 	_check("the guest is there too", await _until(func() -> bool: return game.puppets.size() == 1, 60.0))
@@ -153,23 +154,25 @@ func _host() -> void:
 	_check("the guest is seen to die there", await _until(func() -> bool: return puppet.dead, 30.0))
 	game.player.take_damage(1e9)
 	var before := game.get_instance_id()
-	_check("with both down the level starts again", await _until(func() -> bool: return _in_level(DEPOT) and tree.current_scene.get_instance_id() != before, 15.0))
+	_check("with both down the level starts again", await _until(func() -> bool: return _in_level(NEXT) and tree.current_scene.get_instance_id() != before, 15.0))
 	game = tree.current_scene
 	_check("for both of them", not game.player.dead and await _until(func() -> bool: return game.puppets.size() == 1 and not game.puppets.values()[0].dead, 60.0))
 
-	# The guest leaves. While it is away the first zone is cleared, its
-	# checkpoint is taken and a robot of the next zone ends up at the start
-	# of the level, which is where the guest is to find it. Then the host
-	# leaves.
+	# The guest leaves. While it is away the zones before the first
+	# checkpoint are cleared, that checkpoint is taken and a robot of the
+	# zone after it ends up at the start of the level, which is where the
+	# guest is to find it. Then the host leaves.
 	_check("the guest's soldier goes when the guest does", await _until(func() -> bool: return game.puppets.is_empty() and Net.players.size() == 1, 30.0))
 	for robot: Node in game._robots.values():
 		robot.set_physics_process(false)
-	_clear(game.zones[0].robots)
+	var behind := _before_checkpoint(game)
+	for zone: RefCounted in behind:
+		_clear(zone.robots)
 	game.player.global_position = game.checkpoints[0].pose.origin
 	_check("the host takes a checkpoint meanwhile", await _until(func() -> bool: return game._checkpoint == 0, 5.0)
 		and Net.session.at == game.checkpoints[0].id)
-	game._start(game.zones[1])
-	var stray: CharacterBody3D = game.zones[1].robots[0]
+	game._start(game.zones[behind.size()])
+	var stray: CharacterBody3D = game.zones[behind.size()].robots[0]
 	stray.global_position = game.start.origin
 	stray.velocity = Vector3.ZERO
 	_check("and the guest is back", await _until(func() -> bool: return game.puppets.size() == 1, 60.0))
@@ -260,7 +263,7 @@ func _join() -> void:
 	_check("and waits for the guest", not game._finished)
 	player.global_position = _exit_floor(game)
 	player.velocity = Vector3.ZERO
-	_check("with both there it is on to the next level", await _until(_in_level.bind(DEPOT), 60.0))
+	_check("with both there it is on to the next level", await _until(_in_level.bind(NEXT), 60.0))
 	game = tree.current_scene
 	_check("where the kills come along", game.kills == robots)
 
@@ -268,7 +271,7 @@ func _join() -> void:
 	await _wait(1.0)
 	game.player.take_damage(1e9)
 	var before := game.get_instance_id()
-	_check("with both down the level starts again here too", await _until(func() -> bool: return _in_level(DEPOT) and tree.current_scene.get_instance_id() != before, 60.0))
+	_check("with both down the level starts again here too", await _until(func() -> bool: return _in_level(NEXT) and tree.current_scene.get_instance_id() != before, 60.0))
 	_check("with the guest on its feet", not tree.current_scene.player.dead)
 
 	# Leaving by the menu, and coming back to a game that is going on.
@@ -281,16 +284,26 @@ func _join() -> void:
 	await _press("Play together")
 	_check("the address is remembered", _typed(1) == "127.0.0.1:%d" % _port)
 	await _press("Join the game")
-	_check("and joins again, into the level the host is in", await _until(_in_level.bind(DEPOT), 60.0))
+	_check("and joins again, into the level the host is in", await _until(_in_level.bind(NEXT), 60.0))
 	game = tree.current_scene
-	var cleared: int = game.zones[0].area.get_children().filter(func(spot: Node) -> bool: return spot.is_in_group("enemy_spawn")).size()
-	_check("which is past its first checkpoint by now", game._checkpoint == 0 and game.zones[0].cleared and game.kills == robots + cleared)
+	var behind := _before_checkpoint(game)
+	var cleared := 0
+	for zone: RefCounted in behind:
+		cleared += zone.area.get_children().filter(func(spot: Node) -> bool: return spot.is_in_group("enemy_spawn")).size()
+	_check("which is past its first checkpoint by now", game._checkpoint == 0 and game.kills == robots + cleared
+		and behind.all(func(zone: RefCounted) -> bool: return zone.cleared))
 	_check("so that is where the guest stands", game.player.global_position.distance_to(game.checkpoints[0].pose.origin) < 2.5)
-	var stray := game.get_node_or_null("%s_0" % game.zones[1].id) as Node3D
+	var stray := game.get_node_or_null("%s_0" % game.zones[behind.size()].id) as Node3D
 	_check("and each robot is the one the host means", stray != null
 		and await _until(func() -> bool: return stray.global_position.distance_to(game.start.origin) < 0.5, 10.0))
 	_check("when the host leaves, the guest is back at the title screen and told why", await _until(func() -> bool: return not Net.active and Menu.at_title(), 30.0)
 		and Menu._together_note == "The host has left")
+
+
+## The zones of a level that have to be cleared before its first checkpoint
+## can be taken.
+func _before_checkpoint(game: Node) -> Array:
+	return game.zones.filter(func(zone: RefCounted) -> bool: return zone.order < game.checkpoints[0].order)
 
 
 ## True once this machine is in `level` and the host has let it in there.

@@ -12,6 +12,7 @@ enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER }
 
 const LEVELS: Array[Dictionary] = [
 	{"name": "Factory", "scene": "res://scenes/factory.tscn", "music": &"level1and2"},
+	{"name": "Works", "scene": "res://scenes/works.tscn", "music": &"level1and2"},
 	{"name": "Depot", "scene": "res://scenes/depot.tscn", "music": &"level1and2"},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it

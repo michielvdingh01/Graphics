@@ -122,6 +122,12 @@ func _physics_process(_delta: float) -> void:
 	for i in range(1, level.size()):
 		if (level[i][0] as AABB).has_point(camera.global_position):
 			space = level[i][1]
+	# A level that is laid out as rooms says of each room what space it is
+	# (see room() in tools/kit/rooms.gd): the one the camera is in counts.
+	if not LEVELS.has(scene.scene_file_path) and scene.has_node("Level"):
+		for zone in scene.get_node("Level").get_children():
+			if zone.has_meta(&"space") and (zone.get_meta(&"bounds") as Array).any(func(box: AABB) -> bool: return box.has_point(camera.global_position)):
+				space = zone.get_meta(&"space")
 	# A level that has just loaded starts in its own space at once: its first
 	# shot should not ring in the one before.
 	var loaded := scene.scene_file_path != _level

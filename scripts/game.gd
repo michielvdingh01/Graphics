@@ -44,6 +44,8 @@ const RESPAWN_DELAY := 5.0
 const ROBOT_TICK := 0.05
 const ELBOW_ROOM := 0.9
 const PUPPET := preload("res://scenes/puppet.tscn")
+## Keeps what stands in the shade out of the sun's shadow.
+const SHADE := preload("res://scripts/shade.gd")
 ## How long the screen takes to go dark at the exit before the next level loads.
 const EXIT_FADE := 0.9
 ## How long the door at the exit takes to roll up, and how long after the
@@ -133,6 +135,7 @@ func _ready() -> void:
 	Settings.apply()
 	Blast.clear()
 	_make_breakable()
+	SHADE.sort(self, get_node_or_null("Level"))
 	_read_route()
 	# Behind the title screen the level is only a backdrop.
 	var playing := not Benchmark.active and not Menu.at_title()
