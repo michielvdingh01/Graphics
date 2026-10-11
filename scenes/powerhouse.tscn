@@ -1,0 +1,105 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://codrrw63bxvgr" path="res://scripts/game.gd" id="game"]
+[ext_resource type="Texture2D" uid="uid://7sv2u7nfecvk" path="res://assets/hdri/industrial_sunset_puresky.hdr" id="hdri"]
+[ext_resource type="Script" uid="uid://v3mx0n2xm2fi" path="res://scripts/hud.gd" id="hud"]
+[ext_resource type="PackedScene" path="res://scenes/levels/powerhouse_level.tscn" id="level"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
+[ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
+
+[sub_resource type="NavigationMesh" id="navmesh"]
+geometry_parsed_geometry_type = 1
+geometry_collision_mask = 1
+geometry_source_geometry_mode = 1
+geometry_source_group_name = &"navigation_source"
+
+[sub_resource type="PanoramaSkyMaterial" id="sky_mat"]
+panorama = ExtResource("hdri")
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+sky_rotation = Vector3(0, 3.245, 0)
+tonemap_mode = 4
+tonemap_exposure = 0.62
+ssr_enabled = true
+ssr_max_steps = 48
+ssao_enabled = true
+ssao_radius = 1.2
+ssao_intensity = 2.5
+ssil_enabled = true
+glow_enabled = true
+glow_intensity = 0.6
+glow_bloom = 0.05
+glow_hdr_threshold = 1.2
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.012
+volumetric_fog_albedo = Color(0.9, 0.86, 0.8, 1)
+volumetric_fog_anisotropy = 0.6
+volumetric_fog_length = 48.0
+volumetric_fog_ambient_inject = 0.3
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.05
+
+[sub_resource type="ShaderMaterial" id="post_mat"]
+shader = ExtResource("post")
+shader_parameter/vignette = 0.32
+shader_parameter/grain = 0.03
+
+[node name="Powerhouse" type="Node3D" groups=["game"]]
+script = ExtResource("game")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8616291, 0.12278465, -0.4924623, 0, 0.9702957, 0.2419219, 0.5075384, -0.20844696, 0.8360351, 0, 0, 0)
+light_color = Color(1, 0.7, 0.46, 1)
+light_energy = 7.5
+light_volumetric_fog_energy = 1.4
+light_bake_mode = 1
+shadow_enabled = true
+shadow_blur = 1.5
+directional_shadow_max_distance = 70.0
+
+[node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
+
+[node name="Post" type="CanvasLayer" parent="."]
+layer = 0
+
+[node name="Lens" type="ColorRect" parent="Post" groups=["lens"]]
+material = SubResource("post_mat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="HUD" type="CanvasLayer" parent="." groups=["hud"]]
+script = ExtResource("hud")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+transform = Transform3D(-0.7477981, 0, 0.6639262, 0, 1, 0, -0.6639262, 0, -0.7477981, 8, 0, 4.5)
+
+[node name="BenchmarkViews" type="Node3D" parent="."]
+
+[node name="Yard" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(0.5299193, -0.08864516, -0.8434024, 0, 0.9945219, -0.1045285, 0.8480481, 0.05539165, 0.5270163, 18.5, 1.7, 19.5)
+
+[node name="PumpHouse" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(-0.8660254, 0.01744975, 0.4996954, 0, 0.9993908, -0.0348995, -0.5, -0.03022385, -0.8654978, 37, 1.7, 25.2)
+
+[node name="BoilerHouse" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(-0.4694716, -0.1228826, -0.8743548, 0, 0.9902681, -0.1391731, 0.8829476, -0.06533781, -0.4649027, 18.6, 1.7, 39.6)
+
+[node name="ControlRoom" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(0.9063078, 0, 0.4226183, 0, 1, 0, -0.4226183, 0, 0.9063078, 53, 1.7, 33.2)
+
+[node name="TurbineHall" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(0.309017, -0.1159046, -0.9439675, 0, 0.9925462, -0.1218693, 0.9510565, 0.0376597, 0.3067136, 45.5, 1.7, 22.6)

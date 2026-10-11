@@ -58,7 +58,7 @@ func _route_through() -> void:
 		["heavy", Vector3(16.5, DOCK_Y, -17.0)], ["heavy", Vector3(-1.0, DOCK_Y, -17.5)],
 	])
 	# Through the door: the game ends a step inside the warehouse.
-	route_exit("Leave through dock door 3", AABB(Vector3(-2.3, DOCK_Y - 0.1, -YZ - 4.0), Vector3(4.6, 3.6, 3.0)), "", Vector3(0.0, 5.35, -YZ), Vector3.BACK)
+	route_exit("Leave through dock door 3", AABB(Vector3(-2.3, DOCK_Y - 0.1, -YZ - 4.0), Vector3(4.6, 3.6, 3.0)), "powerhouse", Vector3(0.0, 5.35, -YZ), Vector3.BACK)
 
 
 func _yard() -> void:

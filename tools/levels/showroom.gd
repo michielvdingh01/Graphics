@@ -8,8 +8,11 @@ extends "res://tools/kit.gd"
 ## pallets and bags, railings, lockers and cupboards, the tanks, the press,
 ## the lathe, two pumps under a board of gauges, and the boiler. In front of
 ## them, on the south side of the slab: the workbenches against a wall of
-## their own, and a partition with a doorway and a notice board. The crane
-## needs a hall to span and is only to be seen in the factory.
+## their own, and a partition with a doorway and a notice board. Further
+## east on that side the turbo-alternator, and to the west of the benches
+## what a substation is made of: a transformer under the lines from a mast,
+## a row of switchgear, and the desk and the panel of a control room. The
+## crane needs a hall to span and is only to be seen in the factory.
 
 
 func _level_name() -> String:
@@ -18,6 +21,7 @@ func _level_name() -> String:
 
 func _describe() -> void:
 	box("floor", Vector3(0, -0.25, 0), Vector3(70, 0.5, 30))
+	_power()
 	wall("brick", true, -6.25, 0.5, -35.0, 35.0, 0.0, 6.0, [])
 
 	container("container_red", Vector3(-26, 0, 0), true)
@@ -50,3 +54,19 @@ func _describe() -> void:
 	wall("plaster_dado", false, 9.0, 0.2, 7.0, 13.0, 0.0, 3.0, [[8.2, 9.8, 0.0, 2.2]])
 	doorway(Transform3D(Basis(), Vector3(9.0, 0, 9.0)), 0.2, 95.0, 30.0, "1")
 	notice_board(Vector3(9.1, 1.62, 11.8))
+
+
+## What makes electricity and sends it off, see tools/kit/power.gd.
+func _power() -> void:
+	turbine(Vector3(24.0, 0, 9.0), 0, "1")
+	var tips := transformer(Vector3(-22.0, 0, 9.0), 0, "T1")
+	lattice_mast(Vector3(-27.0, 0, 12.5), 8.5)
+	lattice_mast(Vector3(-17.0, 0, 12.5), 8.5)
+	lattice_girder(Vector3(-27.0, 8.2, 12.5), Vector3(-17.0, 8.2, 12.5))
+	for i in 3:
+		var hung := insulator_string(Vector3(-22.0 + (i - 1) * 0.9, 7.9, 12.5))
+		wire(hung, tips[i], 0.35)
+	switchboard(Vector3(-13.0, 0, 8.0), 0, 5)
+	switchboard(Vector3(-7.0, 0, 11.5), 180, 4, true)
+	control_desk(Vector3(-7.0, 0, 9.0), 0)
+	cable_ladder(Vector3(-15.0, 2.6, 6.6), Vector3(-5.0, 2.6, 6.6), 3.2)

@@ -1050,6 +1050,96 @@ Michiel startte het fabrieksterrein twee keer vanuit de worktree. Volgens het sa
 - **`bouwdoos` is op 11 oktober 2026 samengevoegd met `fase-2-vertical-slice`**, op Michiels woord: de renderschaal, de stemmen, wat stuk kan en de beweging van het beeld zitten er nu in. Het botste op de twee regels die de proef al gaf. In `_ready()` van `scripts/game.gd` staan ze allebei: eerst krijgt wat stuk kan zijn lichamen, dan wordt uitgezocht wat in de schaduw staat. In de levellijst van `scripts/menu.gd` staat het fabrieksterrein tussen de fabriek en het depot met hetzelfde muziekstuk als die twee, zodat het doorspeelt in plaats van het langste level stil te laten; dat is niet op het gehoor gekozen. `scripts/shade.gd` laat wat stuk kan buiten wat de zon tegenhoudt: zes modellen, vier in de fabriek en twee op het fabrieksterrein, stonden alleen in de schaduw doordat er een stapel kisten tussen hen en de zon stond, en bleven buiten de schaduw van de zon als die stapel was weggeschoten. Er staan er nu 198 en 755 in de schaduw, tegen 202 en 757. Op het geheel slagen `tools/selftest.sh` (264 controles), `tools/test_humanoid.sh` en `tools/nettest.sh`; een herbouw geeft de bewaarde levels terug en `tools/bake_lightmaps.py --list` noemt elke zone bij. Er is niets herbouwd of opnieuw gebakken. De framerate van het fabrieksterrein is dezelfde als ervoor (72 tot 95 fps op 1440p met FSR 2 op 67%). Nog te doen: het contactblad opnieuw maken, want kratten en lampen kunnen nu stuk en de tekenopdrachten zijn op een paar standpunten een handvol hoger, zie "De repetitie verschuift de teller van tekenopdrachten" onder "Wat er kapot kan". Een worktree die de hoofdbranch binnenhaalt moet de nieuwe geluiden nog inlezen (`godot --headless --path . --import`).
 - Elke kamer een eigen gevecht, in plaats van een vleugel als één gevecht, geeft 21 kleine gevechten en houdt alle robots. Dan moet de speler elke kamer in, en de regel dat de route door elk gevecht loopt vervalt. Dat is niet besloten.
 
+## De centrale: het vierde level
+
+Op 11 oktober 2026 gevraagd: een heel nieuw level op de standaard van nu. Dat is de centrale geworden (`tools/levels/powerhouse.gd`, `scenes/powerhouse.tscn`), de elektriciteitscentrale van het fabrieksterrein, gebouwd met de bouwdoos en de plattegrond van "Grotere levels bouwen". Het thema is door de sessie gekozen, niet door Michiel. Het is gebouwd op branch `centrale` en dezelfde dag, op zijn woord, in `fase-2-vertical-slice` gezet.
+
+**Wat er staat**
+
+- **Elf ruimtes op 76 bij 56 meter.** De speler komt binnen waar de stroom naar buiten gaat en werkt terug naar waar hij gemaakt wordt: de ontvangst, een kabelgang, de schakelruimte, het schakelterrein onder de open lucht, het pompenhuis, de werkplaats, het ketelhuis met de brandstofopslag eraan, een gang, de regelkamer en de turbinehal. De grote deur aan het eind van de hal is de uitgang.
+- **Dertig robots in zeven gevechten**, drie checkpoints. Geen gevecht is groter dan die van de fabriek en het depot: 3, 4, 4, 4, 6, 3 en 6. De eerste heavy staat in de werkplaats, de laatste twee in de turbinehal.
+- **Het zit in het spel.** De levelkeuze is Factory, Works, Depot, Powerhouse; roldeur 3 van het depot leidt naar de centrale, en de uitgang van de centrale sluit het spel af. `VERSION` in `scripts/net.gd` is daarom 5.
+- **Een nieuwe la in de bouwdoos**, `tools/kit/power.gd`, met wat stroom maakt, schakelt en wegstuurt: `turbine` (een turbogenerator op zijn fundatieblok: regelaar, hogedruk- en lagedrukcilinder, generator en opwekker op één as, met de stoomleidingen en hun afsluiters), `transformer` (tank met radiatoren, conservator en doorvoeringen op een plint met oliekering), `switchboard` (een rij schakelkasten, of met `instruments` het paneel van een regelkamer), `control_desk`, `lattice_mast` en `lattice_girder`, `wire`, `insulator_string`, `wall_insulator` en `cable_ladder`. In `tools/kit/plant.gd` is `vessel` erbij gekomen, een liggend drukvat, en de ketel neemt zijn nummer aan. Alles staat in de showroom.
+- **Vijf materialen**: grijze machinelak, porselein, koper, en een rood en een groen signaallampje. **Vijf opschriften** in het manifest: K2, G1, G2, 10 kV en DANGER.
+- **Een soort ruimte erbij**, `control`: gepleisterd, tl-buizen, en niets wat de bouwer er zelf neerzet.
+- **Een gevecht zonder schermen** (`fight(..., false)`). Waar een ruimte eigen machines heeft om achter te wachten, zet de bouwer geen drie stapels pallets meer neer. De robots van de schakelruimte wachten tussen de schakelkasten, die van het pompenhuis achter de rij starters, die van het ketelhuis achter de ketels, die van de regelkamer achter het instrumentenpaneel dat de kamer in tweeën deelt, en die van de turbinehal achter de machines of ver weg. Het terrein en de werkplaats houden de schermen van de bouwer: containers en pallets.
+
+**Wat elke ruimte tot die ruimte maakt**
+
+| Ruimte | Met de hand erin |
+|---|---|
+| Ontvangst | De dichte roldeur waar het depot achter ligt, en een buis erboven die nog brandt |
+| Kabelgang | Een kabelladder langs het plafond |
+| Schakelruimte | Twee rijen van negen schakelkasten tegenover elkaar, rubber matten, kabelladders naar de muur van het terrein |
+| Schakelterrein | Drie transformatoren in hun vak tussen scherfmuren, een portaal van vier masten ervoor, en negen lijnen die over de muur binnenkomen van een mast daarbuiten |
+| Pompenhuis | Negen starters dwars door de ruimte, vier pompen tussen een zuig- en een persleiding, twee voedingstanks en een voorwarmer |
+| Werkplaats | Draaibank, pers, werkbanken, boormachines onder de ramen |
+| Ketelhuis | Twee ketels naast elkaar met hun front naar de stookvloer, K1 en K2, een voedingstank, pompen, meters en vaten brandstof |
+| Brandstofopslag | Een olietank, vaten, jerrycans en gasflessen: een ruimte om buiten te blijven of in te schieten |
+| Regelkamer | Het instrumentenpaneel met de relais in zijn rug, en de lessenaar ervoor |
+| Turbinehal | Twee turbogeneratoren in lijn, G1 en G2, de kraan erboven, de stoomleiding langs de zuidwand, een lamp boven de eerste machine en verf op de vloer |
+
+**Het licht.** De avondzon staat laag in het zuidzuidwesten. Ze valt door de zuidramen van het ketelhuis en de turbinehal, door de westramen van de werkplaats, de schakelruimte en de opslag, en door ramen boven het dak van de lagere buren: in het ketelhuis boven de brandstofopslag, in de hal boven de regelkamer. Op het terrein staan de transformatoren en het portaal in de zon en ligt de zuidelijke helft in de schaduw van de muur. Het pompenhuis heeft geen ramen.
+
+**Gemeten** op 11 oktober 2026, met niets anders op de GPU
+
+| | |
+|---|---|
+| De centrale beschreven | 503 regels in acht bestanden; de la `power.gd` is er 575 |
+| Gebouwd | 2476 nodes, 511 modellen, 280 decals, 43 lampen |
+| Bouwen | 11 s, waarvan 6,6 s de opmeting |
+| Zichtlijnen | 14 paren; het ketelhuis en de turbinehal zien elkaar niet |
+| Alle elf ruimtes bakken | 4 min 35 s met het starten van de editor; de turbinehal 60 s, de werkplaats 46 s, het terrein 38 s |
+| Lightmaps | 137 MB op schijf, 82 MB op de videokaart |
+| Laden | 0,4 tot 0,6 s; 495 MB op de videokaart, waarvan 404 MB texturen |
+
+**Het contactblad**, 25 standpunten
+
+| | Tekenopdrachten | Driehoeken | Fps | Het zwaarste standpunt |
+|---|---|---|---|---|
+| 1440p met FSR 2 op 67%, zonder robots | 220 tot 1092 | 0,5 tot 2,2 miljoen | 68 tot 81 | de kabelgang en de werkplaats: 68 fps |
+| Met de dertig robots op hun post | 327 tot 2529 | 0,5 tot 2,7 miljoen | 66 tot 81 | de werkplaats: 66 fps |
+| 3456×2160 met MetalFX op 50% | 216 tot 1098 | 0,5 tot 2,3 miljoen | 68 tot 82 | de werkplaats: 68 fps |
+
+Elke ruimte haalt het keurmerk. Op de instellingen waarmee gespeeld wordt (Ultra, volledig scherm, renderschaal vanzelf) halen de vijf vaste standpunten van de centrale 45 tot 52 fps, en de fabriek in dezelfde meting 47 tot 52.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh` slaagt met de centrale erin, 312 controles: de route is te lopen en komt door elk gevecht, elke robot kan de speler bereiken, geen staat dichtbij in zicht waar zijn gevecht begint of bij een checkpoint, geen ruimte die uit staat is te zien, de checkpoints overleven een herstart en een dood, de grote deur gaat open en het spel eindigt erachter. Van de vijf grunts in de hal van de fabriek vechten er nog steeds vijf vanuit dekking. `tools/nettest.sh` slaagt ook.
+- `tools/build_check.py`: de fabriek, het fabrieksterrein, de vleugel en de modellen komen er gelijk uit. Veranderd zijn de showroom, door wat erbij staat, en van het depot alleen waar de uitgang heen leidt. Er is niets anders opnieuw gebakken.
+- Het spel start de centrale en laat de HUD zien wat er te doen is (`Reach the switch room`).
+- De nieuwe stukken zijn bekeken in de showroom, en elke ruimte op het contactblad en vanaf twintig eigen standpunten.
+- **Gespeeld is het niet.** De selftest loopt de route af en legt de robots om; of de gevechten goed voelen, of de rij starters en het instrumentenpaneel eerlijk zijn als schuilplaats, en of dertig robots de juiste maat is, weet ik niet.
+- De muziek is het stuk van de andere drie levels. Niemand heeft dat op het gehoor gekozen.
+
+**Onderweg gevonden**
+
+- **Een checkpoint in een ruimte waar ook gevochten wordt, moet zijn plek vrijhouden vóór het gevecht gepland wordt.** `fight` zet zijn schermen neer op het moment dat het genoemd wordt, `checkpoint_in` houdt het midden pas daarna vrij. In de werkplaats kwam er zo een stapel pallets op het checkpoint, en de bouwer meldde dat het niet te bereiken was. Het plan houdt die twee plekken nu zelf vrij, vóór de gevechten.
+- **Ramen koppelen ruimtes die niets met elkaar te maken hebben.** Een zuidraam in de schakelruimte keek door een westraam de werkplaats in, en een oostraam van het ketelhuis door de zuidramen de turbinehal in: de bouwer tekende ze dan samen. Die ramen zijn weg.
+- **Drie deuren op één lijn.** Van het terrein door het pompenhuis en de werkplaats was het ketelhuis te zien. De deur tussen pompenhuis en werkplaats ligt daarom in de zuidhoek en die naar het ketelhuis ver naar het westen.
+- **Een rij kasten dwars door een ruimte snijdt haar in tweeën** als er aan de ene kant een tank en aan de andere een vat tegenaan staat: het navmesh vraagt meer dan een meter. De bouwer meldde het als "ruimte voor 0 robots" in elke ruimte erna.
+- **Welke lampen de bouwer uit laat, valt niet altijd goed.** Boven de eerste turbine en boven de ingang van de hal waren ze alle drie uit, en boven de pompen ook: de machine die de speler het eerst ziet stond in het donker. Daar hangt nu een lamp bij, met de hand; in de ontvangst een buis boven de roldeur.
+- De turbinehal is hoger dan de muur van het terrein, en een ruimte die uit staat wordt niet getekend. Vanaf het terrein stond er lucht waar de hal hoort. `outside.gd` zet daar nu een strook baksteen en een dakrand neer, die altijd getekend worden.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| De centrale bouwen | `tools/build_level.sh powerhouse`, dan `tools/level_map.py powerhouse` om haar van bovenaf te zien |
+| Een stuk uit `power.gd` van dichtbij bekijken | `tools/build_level.sh showroom`, dan `tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="24,2.4,17.5,0,-8"` |
+| Bakken wat veranderd is, als er geen andere Godot draait | `tools/bake_lightmaps.sh res://scenes/powerhouse.tscn` |
+| Het keurmerk en het contactblad | `tools/zone_sheet.py powerhouse`, met `--posted` voor de robots erbij |
+| De vijf vaste standpunten | `tools/benchmark.sh --quick --scene=res://scenes/powerhouse.tscn`, met `--exit` voor de open deur |
+| De centrale spelen in een venster | `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/powerhouse.tscn -- --play`, of in het spel: Play, Powerhouse |
+
+**Nog open**
+
+- De machines zijn dicht. Op het fundatieblok van een turbine kan niemand staan en de hal heeft geen bordes: een ruimte uit de plattegrond is een vlakke vloer onder een vlak plafond.
+- De lijnen van de mast buiten naar het portaal liggen grotendeels buiten het terrein en horen daarom bij geen ruimte: ze worden altijd getekend.
+- De ontvangst, de schakelruimte en het pompenhuis zijn donker, zoals de kleedkamer van de fabriek. Of dat sfeer is of te weinig om bij te vechten, moet het spelen uitwijzen.
+- De schermen op het terrein en in de werkplaats zijn nog die van de bouwer. In de werkplaats staan zo twee wanden van pallets op 180 m².
+- De lightmaps van de centrale zijn 137 MB in Git LFS, naast ruim 350 MB van de andere levels. Ze zijn nog niet gepusht.
+
 ## Gevechten: dekking, beurten en schaarste
 
 De branch `gevecht` voegt eerst `looproute` (de route) en `speelbaar` (de personages) samen en bouwt daarop. Tot hier liep elke vijand op de speler af, stapte ervoor heen en weer en schoot zodra zijn eigen klok afliep; health kwam vanzelf volledig terug en elk checkpoint vulde alle munitie aan. Een gevecht vroeg dus niets van de speler behalve raak schieten. Nu vechten de vijanden vanuit dekking en om beurten, en moet de speler wat hij nodig heeft bij de wrakken halen.

@@ -6,8 +6,9 @@ extends "res://tools/kit/machines.gd"
 ## smokebox and the flue up through the roof at the other. `at` is the middle
 ## of its footprint. The steam main leaves at a height of 5.85 m for the wall
 ## to the south of it, whose face is at `wall_z`, and hangs from the roof,
-## which is at `roof_y`.
-func boiler(at: Vector3, wall_z: float, roof_y: float) -> void:
+## which is at `roof_y`. `number` is what it is called, on its side; the
+## manifest has to have it as a text.
+func boiler(at: Vector3, wall_z: float, roof_y: float, number := "K1") -> void:
 	_m = Transform3D(Basis(), at)
 	var r := 1.3
 	var half := 2.8
@@ -126,7 +127,7 @@ func boiler(at: Vector3, wall_z: float, roof_y: float) -> void:
 	_block(IRON, Vector3(-1.1, 0.5, r + 0.37), Vector3(0.16, 0.16, 0.16), 0.03)
 	_handwheel(Vector3(-1.1, 0.5, r + 0.5), Vector3.BACK, 0.08)
 	# What it is called, on the side the room sees it from.
-	label("K1", _m * Vector3(0.75, axis + 0.25, r), Vector3.BACK, 0.5, Color(0.06, 0.06, 0.06), 0.25)
+	label(number, _m * Vector3(0.75, axis + 0.25, r), Vector3.BACK, 0.5, Color(0.06, 0.06, 0.06), 0.25)
 	var plate := Vector3(-1.5, axis + 0.1, r + 0.02)
 	_block(BRASS, plate, Vector3(0.3, 0.2, 0.006), 0.003)
 
@@ -181,3 +182,42 @@ func gauge_board(at: Vector3, out: Vector3) -> void:
 		var knob := at + out * 0.04 + across * (i - 1.0) * 0.4 + Vector3(0, -0.28, 0)
 		_block(IRON, knob + out * 0.012, Vector3(0.09, 0.12, 0.024) if absf(out.z) > 0.5 else Vector3(0.024, 0.12, 0.09), 0.006)
 		_bar(RED if i == 1 else BARE, knob + out * 0.024, knob + out * 0.05, 0.022, 10)
+
+
+## Pressure vessel lying on two saddles: a receiver, a heater or a tank of
+## oil. `at` is the middle of its footprint and `yaw_deg` the way the end
+## with the gauge faces (0 looks along +Z); it is `length` long and `radius`
+## round, of `shell`.
+func vessel(at: Vector3, yaw_deg: float, length: float, radius: float, shell := "tank") -> void:
+	_m = Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	_part = NO_COLLIDE
+	var axis := radius + 0.55
+	var half := length * 0.5
+	var seat := axis - radius * 0.6
+	_collide_box(_m * Transform3D(Basis(), Vector3(0, (axis + radius) * 0.5, 0)), Vector3(radius * 2.0, axis + radius, length), "metal")
+	for z: float in [-half * 0.55, half * 0.55]:
+		_plate("concrete", Vector3(0, 0.08, z), Vector3(radius * 2.0 + 0.3, 0.16, 0.6))
+		_block(IRON, Vector3(0, (seat + 0.16) * 0.5, z), Vector3(radius * 1.7, seat - 0.16, 0.3), 0.03)
+		_turned(BARE, Vector3(0, axis, z - 0.03), Vector3.BACK, PackedVector2Array([
+			Vector2(radius, 0), Vector2(radius + 0.01, 0), Vector2(radius + 0.01, 0.06), Vector2(radius, 0.06),
+		]), 32)
+	var dish := radius * 0.5
+	_turned(shell, Vector3(0, axis, -half), Vector3.BACK, PackedVector2Array([
+		Vector2(0, 0), Vector2(radius * 0.5, dish * 0.12), Vector2(radius * 0.86, dish * 0.5), Vector2(radius, dish),
+		Vector2(radius, length - dish), Vector2(radius * 0.86, length - dish * 0.5), Vector2(radius * 0.5, length - dish * 0.12), Vector2(0, length),
+	]), 32, true)
+	# On top a manhole and a relief valve, in the end a gauge, and underneath
+	# the drain through its valve into the floor.
+	var top := axis + radius - 0.02
+	_turned(shell, Vector3(0, top, -half * 0.25), Vector3.UP, PackedVector2Array([
+		Vector2(0.24, 0), Vector2(0.24, 0.14), Vector2(0.3, 0.14), Vector2(0.3, 0.18), Vector2(0, 0.18),
+	]), 24)
+	_bolt_circle(Vector3(0, top + 0.18, -half * 0.25), Vector3.UP, 0.27, 10)
+	_turned(BRASS, Vector3(0, top, half * 0.5), Vector3.UP, PackedVector2Array([
+		Vector2(0.06, 0), Vector2(0.06, 0.16), Vector2(0.085, 0.16), Vector2(0.085, 0.28), Vector2(0.04, 0.33), Vector2(0, 0.33),
+	]), 14)
+	_gauge(Vector3(0, axis, half), Vector3.BACK, 0.09)
+	var drain := Vector3(0, axis - radius + 0.02, half * 0.2)
+	_line(RUST, [drain, drain + Vector3(0, -0.12, 0), Vector3(0.12, 0.34, drain.z), Vector3(radius + 0.1, 0.3, drain.z), Vector3(radius + 0.24, 0.16, drain.z), Vector3(radius + 0.26, -0.05, drain.z)], 0.04, 10)
+	_block(IRON, Vector3(radius * 0.6, 0.31, drain.z), Vector3(0.14, 0.14, 0.14), 0.03)
+	_handwheel(Vector3(radius * 0.6, 0.31, drain.z + 0.12), Vector3.BACK, 0.07)
