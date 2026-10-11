@@ -27,6 +27,11 @@ func marker(marker_name: String, at: Transform3D, _parent := "") -> void:
 	super(marker_name, at)
 
 
+## Nobody's hands come with a weapon that somebody else carries.
+func _gloved() -> bool:
+	return false
+
+
 func _hand(frame: Transform3D, radii: Vector2, palm_deg: float, _curl: float, wrist: Vector3, elbow: Vector3, _thumb: Array, _index: Array = []) -> void:
 	# The knuckles of the index and the little finger, as the glove has them.
 	var start := deg_to_rad(palm_deg)
