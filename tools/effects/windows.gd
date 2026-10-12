@@ -233,6 +233,22 @@ func _shoot(game: Node, windows: Array[Node], space: PhysicsDirectSpaceState3D) 
 	_test.check(target.is_shape_owner_disabled(pane) and before - _standing(windows) <= 2, "a rifle shot from the floor breaks the pane it is aimed at")
 	player.force_control = false
 
+	# The streak of the player's shot starts at the muzzle, to the right of
+	# the line the shot goes along. Aimed at the right-hand edge of a pane,
+	# the streak passes through the pane beside it.
+	eye = player.camera.global_position
+	for one: int in target.size():
+		for beside: int in target.size():
+			var step: Vector3 = target.middle(beside) - target.middle(one)
+			if target.is_shape_owner_disabled(one) or target.is_shape_owner_disabled(beside) or step.length() > 1.5 or step.normalized().dot(player.camera.global_basis.x) < 0.95:
+				continue
+			var aim: Vector3 = target.middle(one) + step.normalized() * (step.length() * 0.5 - 0.04)
+			var muzzle: Vector3 = eye + (aim - eye).normalized() * 0.8 + step.normalized() * 0.15 + Vector3.DOWN * 0.12
+			_fx.tracer(muzzle, eye + (aim - eye) * 2.0)
+			_test.check(target.is_shape_owner_disabled(one) and not target.is_shape_owner_disabled(beside), "the pane under the crosshair breaks, not the one the streak of the shot passes through")
+			return
+	_test.check(false, "there are two panes side by side to aim between")
+
 
 ## The windows of a level, in the order the level keeps them in.
 func _windows(game: Node) -> Array[Node]:

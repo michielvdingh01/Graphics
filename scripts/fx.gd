@@ -422,6 +422,9 @@ const MOST_PANES := 6
 ## How far a shot is followed on from where it went into a pane before the
 ## next pane is looked for, in metres: further than a pane is thick.
 const PANE_STEP := 0.1
+## How near the camera a streak starts that is the shot of whoever looks
+## through it, in metres: no further than a weapon is long.
+const OWN_SHOT := 1.0
 ## The pieces a pane of a square metre breaks into, the longest side of the
 ## largest of them in metres and the seconds they are there, which is the
 ## LINGER of shaders/glass.gdshader. A smaller pane leaves fewer and smaller
@@ -449,13 +452,19 @@ func _ready_glass() -> void:
 	_bursts.append(_pane_shards)
 
 
-## Breaks the panes of glass that a shot went through on its way from `from`
-## to `to`. Glass stops no shot, so whoever fired it never knew: the windows
-## are found here, on the layer that only they are on, see scripts/window.gd.
-## The host decides what breaks.
+## Breaks the panes of glass that a shot went through on its way from `from`,
+## where its streak starts, to `to`. Glass stops no shot, so whoever fired it
+## never knew: the windows are found here, on the layer that only they are
+## on, see scripts/window.gd. The host decides what breaks.
 func _through_glass(from: Vector3, to: Vector3) -> void:
 	if Net.is_guest() or from.is_equal_approx(to):
 		return
+	# The streak of the player's own shot leaves the muzzle, a hand's breadth
+	# beside the line the shot itself went along, which starts at the eye:
+	# the pane under the crosshair is the one that has to break.
+	var camera := get_viewport().get_camera_3d()
+	if camera and from.distance_to(camera.global_position) < OWN_SHOT:
+		from = camera.global_position
 	var space := get_viewport().find_world_3d().direct_space_state
 	var along := from.direction_to(to)
 	var query := PhysicsRayQueryParameters3D.create(from, to, GLASS)
