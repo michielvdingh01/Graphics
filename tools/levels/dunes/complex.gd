@@ -128,6 +128,11 @@ func _inner_yard() -> void:
 	vehicle("truck", Vector2(99.5, 15.2), 0.0)
 	vehicle("truck", Vector2(107.0, 15.0), -2.0)
 	vehicle("tank", Vector2(120.0, 15.4), 0.0)
+	# The tank in the shed is laid up under a tarpaulin: over its hull and
+	# its turret, with the gun out in front.
+	tarpaulin(resting(120.0, 15.4, 180.0, 2.4), [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)]])
+	_shed_fittings(roof_y)
+	_fuel_point()
 	vehicle("tank_b", Vector2(104.0, 41.0), -90.0)
 	crates(Vector3(62.0, YARD_Y, 46.0), 5)
 	crates(Vector3(65.4, YARD_Y, 47.6), 3)
@@ -195,9 +200,9 @@ func _yard_ground() -> void:
 	road_line(Vector2(66.3, 53.6), Vector2(71.7, 53.6), 0.3)
 	stencil("STOP", on_ground_frame(Vector2(69.0, 51.4), Vector2(0, 1)), 1.5, WHITEWASH)
 	# Where the lorries stand, beyond the shed.
-	for i in 9:
+	for i in 5:
 		road_line(Vector2(130.4 + i * 3.4, 7.4), Vector2(130.4 + i * 3.4, 13.6))
-		if i < 8:
+		if i < 4:
 			stencil_number(str(i + 1), on_ground_frame(Vector2(132.1 + i * 3.4, 14.6), Vector2(0, -1)), 0.8, WHITEWASH)
 	road_line(Vector2(77.2, 20.3), Vector2(128.8, 20.3), 0.14, SIGNAL_YELLOW)
 	road_hatch(Rect2(172.2, 34.6, 3.5, 13.9))
@@ -213,6 +218,65 @@ func _yard_ground() -> void:
 		kerb(side[0], side[1], true)
 	box(CONCRETE, Vector3(58.0, YARD_Y + 0.1, 28.0), Vector3(0.9, 0.3, 0.9), Vector3.ZERO, SLIGHT)
 	box(CONCRETE, Vector3(58.0, YARD_Y + 0.3, 28.0), Vector3(0.5, 0.2, 0.5), Vector3.ZERO, SLIGHT)
+
+
+## What the shed along the north wall has besides its roof: purlins under
+## the sheet, a beam along its front with the numbers of its bays, a gutter
+## and the pipes it runs into. `roof_y` is how high its roof is in the middle.
+func _shed_fittings(roof_y: float) -> void:
+	var front := 21.6
+	fine(FAR)
+	for z: float in [9.2, 12.4, 15.0, 17.8, 20.6]:
+		box("steel", Vector3(103.0, roof_y - 0.12 - (z - 15.0) * 0.052, z), Vector3(51.6, 0.14, 0.08), Vector3.ZERO, SLIGHT)
+	box("steel", Vector3(103.0, roof_y - 0.62, front), Vector3(50.2, 0.26, 0.12), Vector3.ZERO, SLIGHT)
+	box("galvanised", Vector3(103.0, roof_y - 0.44, front + 0.45), Vector3(52.0, 0.12, 0.16), Vector3.ZERO, SLIGHT)
+	for x: float in [77.2, 128.8]:
+		rod("galvanised", Vector3(x, roof_y - 0.44, front + 0.45), Vector3(x, YARD_Y + 0.2, front + 0.45), 0.05, SLIGHT, 8)
+	refine(MID)
+	for bay in 4:
+		var plate := Transform3D(Basis(), Vector3(84.25 + bay * 12.5, roof_y - 0.62, front + 0.062))
+		painted(plate, Vector2(0.9, 0.5), Color(WHITEWASH, 0.4))
+		stencil_number(str(bay + 1), plate * Transform3D(Basis(), Vector3(0, 0, 0.003)), 0.38, STENCIL_BLACK)
+	coarse()
+
+
+## The fuel point against the north wall, beyond the shed: two pumps on a
+## kerbed island, the vents of the tank under it up the wall, its filler
+## caps in the slabs before it, a fire point, and what the wall says there.
+## It stands against the wall and is in nobody's way.
+func _fuel_point() -> void:
+	var wall := WALL_NORTH + WALL_THICK * 0.5 + 0.05
+	var island := Rect2(146.6, wall, 8.8, 1.3)
+	box(CONCRETE, Vector3(island.get_center().x, YARD_Y + 0.05, island.get_center().y), Vector3(island.size.x, 0.18, island.size.y), Vector3.ZERO, SLIGHT)
+	kerb(Vector2(island.position.x, island.end.y + 0.08), Vector2(island.end.x, island.end.y + 0.08), true)
+	fine(FAR)
+	for x: float in [149.2, 152.6]:
+		# A pump: a cabinet with a dial in its face, a crank at its side and
+		# its hose on a hook.
+		var pump := Transform3D(Basis(), Vector3(x, YARD_Y + 0.14, wall + 0.42))
+		rounded_box("army_green", pump * Transform3D(Basis(), Vector3(0, 0.7, 0)), Vector3(0.52, 1.4, 0.34), 0.03, SLIGHT)
+		rounded_box("army_green", pump * Transform3D(Basis(), Vector3(0, 1.52, 0)), Vector3(0.4, 0.26, 0.28), 0.06, SLIGHT)
+		refine(NEAR)
+		_cylinder("dark_steel", pump * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 1.1, 0.171)), 0.15, 0.012, SLIGHT, -1.0, 16)
+		painted(pump * Transform3D(Basis(), Vector3(0, 1.1, 0.19)), Vector2(0.2, 0.2), Color(0.7, 0.68, 0.6, 0.2))
+		rod("dark_steel", pump * Vector3(0.27, 0.95, 0), pump * Vector3(0.36, 0.95, 0), 0.015, SLIGHT, 6)
+		rod("dark_steel", pump * Vector3(0.36, 0.95, 0), pump * Vector3(0.36, 1.2, 0.05), 0.012, SLIGHT, 6)
+		hose("dark_steel", PackedVector3Array([pump * Vector3(-0.2, 0.35, 0.18), pump * Vector3(-0.42, 0.12, 0.3), pump * Vector3(-0.62, 0.5, 0.24), pump * Vector3(-0.5, 1.15, 0.2), pump * Vector3(-0.3, 1.22, 0.18)]), 0.022, SLIGHT, 6)
+		refine(FAR)
+	# The vents of the tank under the slabs, and its name on the wall.
+	for x: float in [155.6, 155.95]:
+		rod("galvanised", Vector3(x, YARD_Y + 0.1, wall + 0.1), Vector3(x, YARD_Y + 3.7, wall + 0.1), 0.03, SLIGHT, 6)
+		rod("galvanised", Vector3(x, YARD_Y + 3.7, wall + 0.1), Vector3(x, YARD_Y + 3.62, wall + 0.24), 0.03, SLIGHT, 6)
+	var name := Transform3D(Basis(), Vector3(151.0, YARD_Y + 3.0, wall - 0.045))
+	painted(name, Vector2(3.4, 1.0), Color(WHITEWASH, 0.5))
+	stencil("FUEL", name * Transform3D(Basis(), Vector3(0, 0, 0.004)), 0.66, SIGNAL_RED)
+	refine(MID)
+	stencil("NO SMOKING", Transform3D(Basis(), Vector3(151.0, YARD_Y + 2.1, wall - 0.04)), 0.22, SIGNAL_RED)
+	road_hatch(Rect2(147.0, 7.9, 8.0, 2.9))
+	coarse()
+	fire_point(Transform3D(Basis(), Vector3(147.4, YARD_Y, wall - 0.05)))
+	manhole(Vector2(150.9, 9.4))
+	manhole(Vector2(153.4, 9.9))
 
 
 ## The main building: a frame of concrete filled in with brick, three
@@ -352,7 +416,7 @@ func _north_face(face: Transform3D, length: float) -> void:
 	for side: float in [-1.0, 1.0]:
 		for band in 8:
 			painted(door * Transform3D(Basis(), Vector3(side * 2.22, 0.18 + band * 0.32, 0.202)), Vector2(0.44, 0.32), SIGNAL_YELLOW if band % 2 == 0 else STENCIL_BLACK)
-		_local_box("rubber", door, Vector3(side * 2.22, 0.75, 0.26), Vector3(0.3, 0.5, 0.12), SLIGHT)
+		_local_box("dark_steel", door, Vector3(side * 2.22, 0.75, 0.26), Vector3(0.3, 0.5, 0.12), SLIGHT)
 	coarse()
 	# The canopy: a roof of sheet on two brackets, hung from the wall by a
 	# rod each, with a gutter along its edge and a bar for the headroom.
@@ -374,8 +438,8 @@ func _north_face(face: Transform3D, length: float) -> void:
 	for side: float in [-1.0, 1.0]:
 		rod("dark_steel", door * Vector3(side * 2.1, 3.68, reach - 0.3), door * Vector3(side * 2.1, eave + 0.02, reach - 0.3), 0.008, SLIGHT, 4)
 	stencil("MAX 3.4 M", door * Transform3D(Basis(), Vector3(0, 3.62, reach - 0.27)), 0.085, STENCIL_BLACK)
-	wall_lamp(door * Vector3(-1.4, 4.42, 0.2), Vector3.FORWARD, false)
-	wall_lamp(door * Vector3(1.4, 4.42, 0.2), Vector3.FORWARD, false)
+	bulkhead(door * Vector3(-1.4, 4.42, 0.2), Vector3.FORWARD)
+	bulkhead(door * Vector3(1.4, 4.42, 0.2), Vector3.FORWARD)
 	coarse()
 	# What it is, in letters a driver reads from the corner of the building.
 	var board := door * Transform3D(Basis(), Vector3(0, 6.75, 0.0))
@@ -390,13 +454,35 @@ func _north_face(face: Transform3D, length: float) -> void:
 	square_box(CONCRETE, side_door, Vector3(0, 0.0, 0.35), Vector3(1.6, 0.14, 0.7))
 	square_box(CONCRETE, side_door, Vector3(0, 2.42, 0.4), Vector3(1.9, 0.12, 0.9))
 	fine(MID)
-	wall_lamp(side_door * Vector3(0, 2.75, 0), Vector3.FORWARD, false)
+	bulkhead(side_door * Vector3(0, 2.75, 0), Vector3.FORWARD)
 	sign_plate(side_door * Vector3(0, 2.28, 0.012), Vector3.FORWARD, "STORES", 0.16)
 	coarse()
 	# The rain off the roof comes down beside every third column.
 	fine(FAR)
 	for i: int in [1, 4, 7, 10, 13]:
 		downpipe(face * Vector3(i * length / BLOCK_BAYS + COLUMN.x * 0.5 + 0.2, 0.05, 0), Vector3.FORWARD, ROOF_EDGE.x - 0.1)
+	coarse()
+	# A lamp on every other column, a ladder to the roof and the duct of
+	# what is aired out of the ground floor.
+	fine(MID)
+	for i: int in [2, 4, 6, 9, 11, 13]:
+		bulkhead(face * Vector3(i * length / BLOCK_BAYS, 3.95, COLUMN.y), Vector3.FORWARD)
+	coarse()
+	cage_ladder(face * Vector3(2.0 * length / BLOCK_BAYS + COLUMN.x * 0.5 + 0.75, 2.4, 0), Vector3.FORWARD, ROOF_EDGE.y - 2.2)
+	duct_riser(face * Vector3(5.0 * length / BLOCK_BAYS - COLUMN.x * 0.5 - 0.7, 2.0, 0), Vector3.FORWARD, ROOF_EDGE.y - 1.7)
+	# Where the fuel comes in: two pipes over the road from the tanks, on a
+	# trestle, into the wall over the ground floor.
+	var pipes_x := 205.2
+	fine(FAR)
+	for pipe in 2:
+		var x := pipes_x + pipe * 0.42
+		var tank_z := 11.0 + pipe * 4.6
+		pipe_run([Vector3(x, YARD_Y + 3.0, tank_z), Vector3(x, YARD_Y + 4.9, tank_z), Vector3(x, YARD_Y + 4.9, BLOCK_NORTH + 0.1)], 0.07 - pipe * 0.015, "army_green")
+	for leg: float in [-0.5, 0.92]:
+		box("steel", Vector3(pipes_x + leg, YARD_Y + 2.4, 19.6), Vector3(0.12, 4.8, 0.12), Vector3.ZERO, SLIGHT)
+		beam("steel", Vector3(pipes_x + leg, YARD_Y + 0.3, 19.6), Vector3(pipes_x + 0.21, YARD_Y + 3.4, 19.6), 0.06, SLIGHT)
+	box("steel", Vector3(pipes_x + 0.21, YARD_Y + 4.76, 19.6), Vector3(1.7, 0.12, 0.14), Vector3.ZERO, SLIGHT)
+	box("steel", Vector3(pipes_x + 0.21, YARD_Y + 4.72, BLOCK_NORTH - 0.2), Vector3(1.0, 0.1, 0.4), Vector3.ZERO, SLIGHT)
 	coarse()
 	# Where the current comes in: two cabinets, and the cables up from them
 	# on a tray to the floor above.
@@ -421,7 +507,7 @@ func _west_end(face: Transform3D, depth: float) -> void:
 	coarse()
 	fine(MID)
 	for bay: int in [1, 2]:
-		wall_lamp(bay_frame(face, depth, END_BAYS, bay) * Vector3(0, 5.3, 0.06), Vector3.LEFT, false)
+		bulkhead(bay_frame(face, depth, END_BAYS, bay) * Vector3(0, 5.3, 0.06), Vector3.LEFT)
 	coarse()
 
 
@@ -443,6 +529,12 @@ func _behind() -> void:
 	for at: Vector3 in [Vector3(209.6, YARD_Y, 20.4), Vector3(210.4, YARD_Y, 20.9), Vector3(209.9, YARD_Y, 21.6)]:
 		fuel(at)
 	sign_post(Vector2(199.5, 19.4), -90.0, "NO SMOKING", 0.2, "paper")
+	# A low wall round the tanks to hold what they spill, and a kerb round
+	# the bed the transformers stand on: both low enough to step over.
+	for side: Array in [[Vector3(204.5, 0.2, 8.5), Vector3(8.6, 0.56, 0.16)], [Vector3(204.5, 0.2, 18.3), Vector3(8.6, 0.56, 0.16)], [Vector3(200.28, 0.2, 13.4), Vector3(0.16, 0.56, 9.96)], [Vector3(208.72, 0.2, 13.4), Vector3(0.16, 0.56, 9.96)]]:
+		box(CONCRETE, Vector3(0, YARD_Y, 0) + side[0], side[1], Vector3.ZERO, SLIGHT)
+	for side: Array in [[Vector2(182.4, 17.8), Vector2(197.6, 17.8)], [Vector2(197.6, 17.8), Vector2(197.6, 7.4)], [Vector2(182.4, 7.4), Vector2(182.4, 17.8)]]:
+		kerb(side[0], side[1])
 	# What came in by the back door and is still to go in.
 	container("container_green", Vector3(258.0, YARD_Y, 11.6), true)
 	container("container_grey", Vector3(268.5, YARD_Y, 21.0), true)
