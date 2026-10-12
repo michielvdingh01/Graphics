@@ -168,11 +168,42 @@ func _adopt_stacks(level: Node3D) -> void:
 			body.cover(part.node, part.kind, part.models, part.on.node if part.on else null)
 
 
-## Finds what can catch fire besides the stacks. Whatever becomes a child of
-## this node is kept by scripts/game.gd in a list for those who come into the
-## level later, and has a net_state() and a net_restore() as a stack has.
-func _adopt_tinder(_level: Node3D) -> void:
-	pass
+## Finds what can catch fire besides the stacks: the piles of pallets, each
+## of which gets a scripts/tinder.gd where it stands. Whatever becomes a
+## child of this node is kept by scripts/game.gd in a list for those who come
+## into the level later, and has a net_state() and a net_restore() as a
+## stack has.
+##
+## The builder made the boards of a pile part of the mesh of the level, and
+## one box collider for it in the body of the level, of wood, as long and as
+## wide as a pallet and a whole number of pallets high. That collider stays
+## where it is: a pile that has burnt still stands.
+func _adopt_tinder(level: Node3D) -> void:
+	const TINDER := preload("res://scripts/tinder.gd")
+	const PALLET := Vector3(1.2, 0.15, 0.8)
+	var count := 0
+	for ground: StaticBody3D in level.find_children("Collision", "StaticBody3D", true, false):
+		for collider in ground.get_children():
+			if not (collider is CollisionShape3D and collider.shape is BoxShape3D and _upright(collider)) or collider.get_meta(&"surface", "") != "wood":
+				continue
+			var size: Vector3 = collider.shape.size
+			var high := size.y / PALLET.y
+			if not is_equal_approx(size.x, PALLET.x) or not is_equal_approx(size.z, PALLET.z) or high < 0.5 or absf(high - roundf(high)) > 0.01:
+				continue
+			var pile: Node3D = TINDER.new()
+			pile.name = "Pallets%d" % count
+			count += 1
+			add_child(pile)
+			pile.global_transform = Transform3D(collider.global_basis.orthonormalized(), collider.global_transform * Vector3(0.0, -size.y * 0.5, 0.0))
+			pile.pile(size)
+	# A crate and a box that burn are looks of their own, and so are their
+	# boards once they have burnt.
+	var kinds := {}
+	for stack in get_children():
+		if stack.has_method("burning_looks") and not kinds.has(stack.kind()):
+			kinds[stack.kind()] = true
+			_looks.append_array(stack.burning_looks())
+	_looks.append_array(STACK.charred_pieces())
 
 
 ## Gives every lamp a body of its own: the hall lamps, which are models,
