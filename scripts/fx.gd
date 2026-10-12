@@ -230,9 +230,12 @@ func impact(hit: Dictionary, incoming: Vector3, light := false) -> void:
 	thud(hit.position, surface)
 
 
-## What a shot sounds like where it lands.
+## What a shot sounds like where it lands. In a puddle that is duller than
+## on the concrete under it.
 func thud(position: Vector3, surface: String) -> void:
 	var sound := "concrete" if surface == "brick" else surface
+	if sound == "concrete" and in_puddle(position):
+		sound = "water" if Sfx.has(&"impact_water") else "soft"
 	Sfx.play_at(StringName("impact_" + sound), position, -8.0)
 
 
@@ -260,6 +263,16 @@ func strike(position: Vector3, normal: Vector3, incoming: Vector3, surface := "c
 			# Somebody: what a hit does to them is theirs to show, see blood().
 			pass
 		_:
+			if normal.y > FACES_UP and in_puddle(position):
+				# Water throws up no dust. The shot goes through it into the
+				# floor all the same: the pit it leaves is seen through the
+				# water, which lies smooth over it.
+				splash(position, normal, incoming, light)
+				var pit := _hole("concrete", frame, randf_range(0.11, 0.15))
+				pit.texture_normal = null
+				pit.texture_orm = null
+				pit.modulate = Color(0.5, 0.5, 0.55)
+				return
 			# Concrete and brick: a puff of dust, chips, and now and then a
 			# spark off the jacket of the bullet.
 			var brick := surface == "brick"
@@ -340,6 +353,7 @@ func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 ## picture comes up out of black and not at the first shot. It is all drawn
 ## a metre in front of the camera, a thousandth of its size.
 func rehearse(extras: Array[MeshInstance3D] = []) -> void:
+	_chart_water()
 	var stage := Node3D.new()
 	for mesh: Mesh in _bursts:
 		var burst := MeshInstance3D.new()
@@ -745,7 +759,271 @@ func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
 
 ## Makes ready what a shot into a puddle throws up.
 func _ready_splash() -> void:
-	pass
+	_drops = _burst_mesh(48, preload("res://shaders/drops.gdshader"))
+	_rings = _burst_mesh(1, preload("res://shaders/rings.gdshader"))
+	# Nothing that can be seen through lies under a puddle, so the rings go
+	# before everything else that can.
+	_rings.surface_get_material(0).render_priority = -1
+	_bursts.append(_drops)
+	_bursts.append(_rings)
+
+
+## The shader of a floor that puddles stand on, which decides where they are
+## from a mask. What follows from here to RAGGED says what it does with that
+## mask and has to follow it: see shaders/wet_floor.gdshader.
+const WET_FLOOR := preload("res://shaders/wet_floor.gdshader")
+## How wide the shore of a puddle is, in what the mask is measured in.
+const SHORE := 0.035
+## The scale at which the mask is read a second time, and how much of that
+## is added to it, for a shore that is ragged.
+const PATCHY := 0.37
+const RAGGED := 0.09
+## The least the normal of a surface points up for water to stand on it.
+const FACES_UP := 0.7
+## How far above or below the top of a floor a point is still on it, in
+## metres. The ground outdoors lies 5 cm under the floors indoors.
+const ON_FLOOR := 0.03
+## Seconds the rings of a splash run out for, and how far they get in metres.
+const RING_TIME := 1.4
+const RING_REACH := 0.9
+
+
+## Where the water stands on the floors of one material, as the shader of
+## that material has it.
+class Water:
+	## The mask, one byte for each of its texels, row after row, and how many
+	## texels it is wide and high. Empty until the image of the mask is there.
+	var mask := PackedByteArray()
+	var size := Vector2i.ZERO
+	## `mask_scale` of the material, and the least the mask has to be for
+	## water to stand: one less its `puddle_amount`.
+	var scale := 0.045
+	var level := 1.0
+	## What the rings of a splash on such a floor are drawn with: it reads
+	## the same mask.
+	var rings: ShaderMaterial
+
+	## How much water stands where the floor has `uv`: 1 in a puddle, 0 on
+	## dry floor and in between on the shore, as `puddle` is in the shader.
+	func puddle(uv: Vector2) -> float:
+		if mask.is_empty():
+			return 0.0
+		var value := _read(uv * scale) + (_read(uv * PATCHY) - 0.5) * RAGGED
+		return smoothstep(level, level + SHORE, value)
+
+	## The mask at `uv` as a shader reads it: between the four texels
+	## around, and round to the other side at an edge.
+	func _read(uv: Vector2) -> float:
+		var x := uv.x * size.x - 0.5
+		var y := uv.y * size.y - 0.5
+		var column := floori(x)
+		var row := floori(y)
+		var left := posmod(column, size.x)
+		var right := posmod(column + 1, size.x)
+		var top := posmod(row, size.y) * size.x
+		var bottom := posmod(row + 1, size.y) * size.x
+		var above := lerpf(mask[top + left], mask[top + right], x - column)
+		var below := lerpf(mask[bottom + left], mask[bottom + right], x - column)
+		return lerpf(above, below, y - row) / 255.0
+
+
+## A triangle of floor that faces up and that water can stand on.
+class Patch:
+	var water: Water
+	## One of its corners, in the world.
+	var corner: Vector3
+	## What a metre along the X and along the Z of the world adds to how far
+	## a point is on the way from that corner to each of the other two.
+	var towards_second: Vector2
+	var towards_third: Vector2
+	## What that adds to the height of the floor.
+	var slope: Vector2
+	## The UV of the floor at the corner, and what a metre along X and a
+	## metre along Z add to it. For the top of a floor that the level
+	## builder made, the UV is simply x and z.
+	var uv: Vector2
+	var uv_along_x: Vector2
+	var uv_along_z: Vector2
+
+	## Whether `position` lies on this triangle: over it, and no further
+	## above or below it than ON_FLOOR.
+	func holds(position: Vector3) -> bool:
+		var from := Vector2(position.x - corner.x, position.z - corner.z)
+		var second := towards_second.dot(from)
+		var third := towards_third.dot(from)
+		if second < -0.0001 or third < -0.0001 or second + third > 1.0001:
+			return false
+		return absf(position.y - corner.y - slope.dot(from)) <= ON_FLOOR
+
+	## The UV the floor has at `position`.
+	func uv_at(position: Vector3) -> Vector2:
+		return uv + uv_along_x * (position.x - corner.x) + uv_along_z * (position.z - corner.z)
+
+
+var _drops: ArrayMesh
+var _rings: ArrayMesh
+## Every triangle of floor in the level that water can stand on, and the
+## level they were looked up in: the id of its scene, 0 for none.
+var _floors: Array[Patch] = []
+var _charted := 0
+
+
+## How much water stands at `position`: 1 in a puddle, 0 on dry floor and
+## anywhere that is not the top of a floor, in between on the shore of a
+## puddle. It is worked out from the mask the floor is drawn with, so it is
+## where the puddle is seen.
+func water_at(position: Vector3) -> float:
+	var patch := _patch_at(position)
+	return patch.water.puddle(patch.uv_at(position)) if patch else 0.0
+
+
+## Whether `position` lies in a puddle.
+func in_puddle(position: Vector3) -> bool:
+	return water_at(position) > 0.5
+
+
+## A shot lands in a puddle at `position`, on a floor that faces `normal`:
+## a crown of drops that fly up and out and fall back, leaning the way the
+## shot was going, a spout of spray that hangs for a moment, and rings that
+## run out over the water as far as its shore. One pellet of a load of shot
+## makes a `light` one.
+func splash(position: Vector3, normal := Vector3.UP, incoming := Vector3.DOWN, light := false) -> void:
+	var share := 0.45 if light else 1.0
+	var kick := 0.7 if light else 1.0
+	var onward := incoming - normal * incoming.dot(normal)
+	var up := Transform3D(_up_along(normal + onward * 0.25), position)
+	# The crown, the jet that stands up out of the middle of it, and the
+	# spray around that: low and wide, and for a bullet high and thin as well.
+	_burst(_drops, up, 1.6, {&"floor_y": position.y, &"speed": randf_range(3.0, 3.8) * kick, &"spread": 0.75, &"amount": share})
+	_burst(_drops, up, 1.6, {&"floor_y": position.y, &"speed": randf_range(4.5, 5.5) * kick, &"spread": 0.1, &"size": 0.018, &"trail": 0.026, &"amount": 0.5 * share})
+	_burst(_puffs, up, 0.55, {&"tint": Color(0.92, 0.95, 0.98, 0.55), &"speed": 3.0 * kick, &"spread": 0.22, &"size": Vector2(0.05, 0.2) * kick, &"life": 0.4, &"rise": -0.6, &"amount": 0.75 * share})
+	if not light:
+		_burst(_puffs, up, 0.65, {&"tint": Color(0.92, 0.95, 0.98, 0.6), &"speed": 7.0, &"spread": 0.1, &"size": Vector2(0.05, 0.26), &"life": 0.5, &"rise": -1.4, &"amount": 0.6})
+	var patch := _patch_at(position)
+	if patch == null:
+		return
+	var at := patch.uv_at(position)
+	var rings := _burst(_rings, Transform3D(_up_along(normal), position), RING_TIME, {
+		&"floor_uv": at, &"floor_uv_step": Vector4(patch.uv_along_x.x, patch.uv_along_x.y, patch.uv_along_z.x, patch.uv_along_z.y),
+		&"reach": RING_REACH * (0.6 if light else 1.0), &"life": RING_TIME, &"steep": 0.6 if light else 1.0})
+	rings.material_override = patch.water.rings
+
+
+## The triangle of floor that `position` lies on, of the floors that are
+## drawn with the shader of the wet floor. Null for anywhere else.
+func _patch_at(position: Vector3) -> Patch:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return null
+	if scene.get_instance_id() != _charted:
+		_chart_water()
+	for patch in _floors:
+		if patch.holds(position):
+			return patch
+	return null
+
+
+## Looks up where water can stand in the level that is there now: every
+## surface that is drawn with the shader of the wet floor, the triangles of
+## it that face up, and the mask and the numbers of its material. A level
+## does this as it loads, see rehearse(), and _patch_at() does it for one
+## that did not; whatever was known of the level before is forgotten.
+func _chart_water() -> void:
+	var scene := get_tree().current_scene
+	_floors.clear()
+	_charted = scene.get_instance_id() if scene else 0
+	if scene == null:
+		return
+	var waters := {}
+	for node: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
+		if node.mesh == null:
+			continue
+		for surface in node.mesh.get_surface_count():
+			var material := node.get_active_material(surface) as ShaderMaterial
+			if material == null or material.shader != WET_FLOOR:
+				continue
+			if not waters.has(material):
+				waters[material] = _water_of(material)
+			_chart_surface(node, surface, waters[material])
+
+
+## What there is to know of the water on floors of `material`. The image of
+## its mask follows as soon as there is one.
+func _water_of(material: ShaderMaterial) -> Water:
+	var water := Water.new()
+	water.scale = _number(material, &"mask_scale")
+	water.level = 1.0 - _number(material, &"puddle_amount")
+	var mask := material.get_shader_parameter(&"wet_mask") as Texture2D
+	water.rings = _rings.surface_get_material(0).duplicate() as ShaderMaterial
+	water.rings.set_shader_parameter(&"wet_mask", mask)
+	water.rings.set_shader_parameter(&"mask_scale", water.scale)
+	water.rings.set_shader_parameter(&"level", water.level)
+	if mask:
+		_read_mask(mask, water)
+	return water
+
+
+## A number of a material, or what its shader takes when the material does
+## not say.
+func _number(material: ShaderMaterial, parameter: StringName) -> float:
+	var value: Variant = material.get_shader_parameter(parameter)
+	if value == null:
+		value = RenderingServer.shader_get_parameter_default(material.shader.get_rid(), parameter)
+	return value if value != null else 0.0
+
+
+## Gives `water` the image of its mask. A mask of noise has none until it
+## has been worked out, which takes a moment after it is loaded; until then
+## the floor counts as dry.
+func _read_mask(mask: Texture2D, water: Water) -> void:
+	if mask.get_image() == null:
+		await mask.changed
+	var image := mask.get_image()
+	if image == null or image.is_empty():
+		return
+	# The red of every texel, at full size, is what the shader reads close by.
+	image = image.duplicate()
+	if image.is_compressed():
+		image.decompress()
+	image.clear_mipmaps()
+	image.convert(Image.FORMAT_R8)
+	water.size = image.get_size()
+	water.mask = image.get_data()
+
+
+## Adds the triangles of a surface of wet floor that face up to `_floors`.
+func _chart_surface(node: MeshInstance3D, surface: int, water: Water) -> void:
+	var arrays := node.mesh.surface_get_arrays(surface)
+	if arrays[Mesh.ARRAY_NORMAL] == null or arrays[Mesh.ARRAY_TEX_UV] == null:
+		return
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	# Without a list of corners, every three vertices are a triangle.
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(vertices.size()))
+	var to_world := node.global_transform
+	for i in range(0, indices.size() - 2, 3):
+		if (to_world.basis * normals[indices[i]]).normalized().y < FACES_UP:
+			continue
+		var first := to_world * vertices[indices[i]]
+		var second := to_world * vertices[indices[i + 1]] - first
+		var third := to_world * vertices[indices[i + 2]] - first
+		# Twice what the triangle covers of the ground, seen from above.
+		var area := second.x * third.z - second.z * third.x
+		if is_zero_approx(area):
+			continue
+		var patch := Patch.new()
+		patch.water = water
+		patch.corner = first
+		patch.towards_second = Vector2(third.z, -third.x) / area
+		patch.towards_third = Vector2(-second.z, second.x) / area
+		patch.slope = patch.towards_second * second.y + patch.towards_third * third.y
+		patch.uv = uvs[indices[i]]
+		var uv_second := uvs[indices[i + 1]] - patch.uv
+		var uv_third := uvs[indices[i + 2]] - patch.uv
+		patch.uv_along_x = uv_second * patch.towards_second.x + uv_third * patch.towards_third.x
+		patch.uv_along_z = uv_second * patch.towards_second.y + uv_third * patch.towards_third.y
+		_floors.append(patch)
 
 
 ## Looking along `direction`, whichever way that is.
