@@ -2034,7 +2034,7 @@ Eerste gebruik, geteld op de GPU in de fabriek: plons, explosie, kist die vlam v
 
 ## Wedstrijden: teams, bots en een buit (plan)
 
-Op 12 oktober 2026 gevraagd: een plan voor de klassieke spelsoorten, team deathmatch, ieder voor zich en capture the flag, zes tegen zes, met bots in het eigen team en in dat van de tegenstander zoals bij Call of Duty; een vlag die ook een voetbal of een grote banaan kan zijn; en spawnplekken die kloppen, ook op levels die er nog niet zijn. **Dit is een plan: er is niets van gebouwd.** Wel is de code gelezen waar het op moet aansluiten, en is het idee voor de spawnplekken zonder GPU uitgeprobeerd op de vier levels die er staan: zie "Gemeten voor dit plan" en het blad `assets/arenas/sheets/spawnplekken.jpg`. Geschreven op de branch `wedstrijd`.
+Op 12 oktober 2026 gevraagd: een plan voor de klassieke spelsoorten, team deathmatch, ieder voor zich en capture the flag, zes tegen zes, met bots in het eigen team en in dat van de tegenstander zoals bij Call of Duty; een vlag die ook een voetbal of een grote banaan kan zijn; en spawnplekken die kloppen, ook op levels die er nog niet zijn. **Dit is een plan: er is niets van gebouwd.** Michiel heeft het dezelfde dag akkoord bevonden en in de trunk laten zetten. Wel is de code gelezen waar het op moet aansluiten, en is het idee voor de spawnplekken zonder GPU uitgeprobeerd op de vier levels die er staan: zie "Gemeten voor dit plan" en het blad `assets/arenas/sheets/spawnplekken.jpg`. Geschreven op de branch `wedstrijd`.
 
 **Waar het op verder bouwt, en wat ontbreekt**
 
@@ -2211,6 +2211,8 @@ Wat stap 1 aan de gedeelde bestanden verandert, zodat de stappen erna ze met rus
 Wat daarna kan, in geen volgorde: klassen in plaats van alle vijf de wapens; één bal in het midden; een plek om te houden; hurken en zichtbaar herladen voor de pop, wat ook een open punt van "Samen spelen" is; roepen met een stem; bots als teamgenoten op de route.
 
 **Aannames die van Michiel zijn om om te gooien**
+
+Bij zijn akkoord van 12 oktober 2026 heeft hij er niets apart over gezegd: ze gelden tot hij iets anders zegt, en de vijfde staat open.
 
 1. **Wapens.** Iedereen draagt alle vijf, zoals op de route; een bot één hoofdwapen en het pistool. Het andere is klassen zoals bij Call of Duty: één hoofdwapen kiezen voor je begint.
 2. **Uiterlijk.** Dezelfde soldaten in twee uniformen, met het blauwe teken boven teamgenoten; een andere bezetting per team als keuze erbij.
