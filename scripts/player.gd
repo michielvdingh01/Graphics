@@ -52,6 +52,11 @@ const RECOIL_SNAP := 30.0
 const RECOIL_RETURN := 7.0
 ## Metres of floor from one footfall to the next.
 const STEP_DISTANCE := 2.4
+## Metres of sand from one print of a boot to the next, which is a real
+## pace and not the footfall that is heard, and how far to either side of
+## the way walked the left and the right boot come down.
+const PRINT_DISTANCE := 0.74
+const PRINT_STANCE := 0.1
 ## Head bob at walking speed: how far the eye rises and falls with every step
 ## and sways towards the foot that carries the weight, in metres, and how far
 ## the head rolls with that sway and nods with the step, in radians. Small on
@@ -124,6 +129,10 @@ var _was_on_floor := true
 ## See stride() and bob_weight().
 var _stride := 0.0
 var _bob_weight := 0.0
+## How far has been walked since the last print in the sand, and whether the
+## next one is of the left boot.
+var _since_print := 0.0
+var _left_next := false
 var _since_damage := 0.0
 var _recoil_target := Vector3.ZERO
 var _recoil := Vector3.ZERO
@@ -437,6 +446,18 @@ func _step_sound() -> StringName:
 	return &"footstep_sand" if floor_hit and Fx.surface_of(floor_hit) == "sand" else &"footstep"
 
 
+## Leaves the print of a boot where the player walks on sand: the left and
+## the right in turn, to either side of the way he goes.
+func _leave_print() -> void:
+	var heading := Vector3(velocity.x, 0.0, velocity.z).normalized()
+	var at := global_position + heading.cross(Vector3.UP) * (-PRINT_STANCE if _left_next else PRINT_STANCE)
+	_left_next = not _left_next
+	var down := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.3, at + Vector3.DOWN * 0.5, 1)
+	var floor_hit := get_world_3d().direct_space_state.intersect_ray(down)
+	if floor_hit and Fx.surface_of(floor_hit) == "sand":
+		Fx.footprint(floor_hit.position, floor_hit.normal, heading)
+
+
 ## Moves the stride on by what was walked in `delta` seconds, sounds a step at
 ## every footfall and returns how much of a walk there is to show, see
 ## bob_weight(). A stride is only ever paused, never started afresh: a bob
@@ -450,6 +471,10 @@ func _walk(delta: float) -> float:
 		if floorf(_stride) > foot:
 			Sfx.play(_step_sound(), -16.0 if _crouched else -10.0)
 		_stride = fposmod(_stride, 2.0)
+		_since_print += speed * delta
+		if _since_print >= PRINT_DISTANCE:
+			_since_print = 0.0
+			_leave_print()
 	var weight := minf(speed / WALK_SPEED, BOB_SPRINT) if walking else 0.0
 	_bob_weight = lerpf(_bob_weight, weight, 1.0 - exp(-BOB_FADE * delta))
 	return _bob_weight
