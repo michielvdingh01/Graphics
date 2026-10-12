@@ -226,7 +226,7 @@ func _light() -> void:
 	var fade := EVEN
 	var falloff := 0.0
 	var carry := 0.0
-	for sun: DirectionalLight3D in scene.find_children("*", "DirectionalLight3D", true, false):
+	for sun: DirectionalLight3D in scene.find_children("*", "DirectionalLight3D", false, false):
 		var travel := -sun.global_basis.z
 		if source != Source.NONE or not sun.visible or travel.dot(_front) < SLANT or not _open_to(space, ray, -travel):
 			continue
