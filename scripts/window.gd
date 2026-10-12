@@ -5,15 +5,15 @@ extends StaticBody3D
 ## panes the level builder put there.
 ##
 ## A pane stops nothing. A shot goes through it and it breaks, and a blast
-## breaks every pane within its reach. The glass comes down in shards, the
-## pane is gone from the picture, and jagged teeth of it stay along the
-## glazing bars: the same teeth for the same pane every time, so that
-## everybody who plays sees the same window.
+## breaks every pane within its reach that no wall hides from it. The glass
+## comes down in shards, the pane is gone from the picture, and jagged teeth
+## of it stay along the glazing bars: the same teeth for the same pane every
+## time, so that everybody who plays sees the same window.
 ##
 ## It is in nobody's way: its panes are on a layer of their own, which no
 ## shot, no look and no walker finds. Every shot that is fired asks
 ## afterwards which panes it went through, see Fx.tracer(), and a blast asks
-## every window what is within its reach, see Blast.explode().
+## the windows near it what is within its reach, see Blast.explode().
 ##
 ## All the glass of a zone is one mesh, which the windows of that zone share:
 ## see Glazing.
@@ -34,6 +34,9 @@ const EXACT := 0.001
 ## metres. The leaf of a door is a collider too and thicker than its pane: a
 ## shot that stops on it has to have got to the glass.
 const PAD := 0.03
+## How far in front of a pane a blast looks for it, in metres: clear of the
+## wall or the leaf of the door that the pane sits in.
+const IN_FRONT := 0.3
 ## The most panes one window has. Which of them are gone is told to whoever
 ## comes into the level later as the bits of a whole number, and
 ## net_snapshot() in game.gd keeps 32 of those: an opening with more panes
@@ -383,14 +386,33 @@ func shot(shape: int, along: Vector3) -> void:
 		Net.show(self, &"_shatter", [1 << pane, along])
 
 
+## How far a point is from the box around the middles of its panes, in
+## metres: 0 inside it.
+func distance_to(at: Vector3) -> float:
+	var local := global_transform.affine_inverse() * at
+	return (local.clamp(_around.position, _around.end) - local).length()
+
+
 ## A blast of `radius` metres goes off at `at`: it breaks every pane within
-## its reach. A wall in between does not save the glass.
-func blast(at: Vector3, radius: float) -> void:
-	if not (global_transform * _around).grow(radius).has_point(at):
+## its reach that it can see. A wall in between saves the glass, as it saves
+## whoever stands behind it; a stack of crates does not, and `through` is
+## what the look of the blast goes through, see Blast._through(). It looks
+## at a point just in front of the pane, on its own side of it, so that the
+## wall the pane sits in is not in the way of a look from the side.
+func blast(at: Vector3, radius: float, through: Array[RID] = []) -> void:
+	if distance_to(at) >= radius:
 		return
+	var space := get_world_3d().direct_space_state
 	var broken := 0
 	for pane in _panes.size():
-		if not is_shape_owner_disabled(pane) and middle(pane).distance_to(at) < radius:
+		if is_shape_owner_disabled(pane):
+			continue
+		var centre := middle(pane)
+		if centre.distance_to(at) >= radius:
+			continue
+		var out := facing(pane).normalized()
+		var before := centre + out * (IN_FRONT if out.dot(at - centre) >= 0.0 else -IN_FRONT)
+		if Blast.in_sight(space, at, before, through):
 			broken |= 1 << pane
 	if broken:
 		Net.show(self, &"_blow_out", [broken, at, radius])

@@ -1,11 +1,16 @@
 extends Node3D
-## What can be shot to pieces in a level: the stacks of wooden crates, the
-## cardboard boxes and the lamps. The level builder knows nothing of it. A
-## level is generated and lightmapped and comes as it is; scripts/game.gd
-## adds this node to it as Level/Breakables when it loads, on every machine,
-## and this goes through what the builder saved and gives everything that
-## can break a body of its own: scripts/stack.gd around what is stacked and
-## scripts/lamp.gd around a lamp.
+## What can be shot to pieces or set alight in a level: the stacks of wooden
+## crates, the cardboard boxes, the lamps, the glass in the windows and the
+## piles of pallets. The level builder knows nothing of it. A level is
+## generated and lightmapped and comes as it is; scripts/game.gd adds this
+## node to it as Level/Breakables when it loads, on every machine, and this
+## goes through what the builder saved and gives everything that can break
+## or burn a node of its own: scripts/stack.gd around what is stacked,
+## scripts/lamp.gd around a lamp, scripts/window.gd around the panes of an
+## opening and scripts/tinder.gd where a pile of pallets stands.
+##
+## One thing it sets up cannot break and is no child of this node: the
+## daylight behind every exit door, scripts/daylight.gd, see _adopt_exits().
 ##
 ## The level is the same on every machine and is gone through in the order
 ## of its tree, so the bodies get the same names everywhere, which is what
@@ -19,9 +24,6 @@ const LAMP := preload("res://scripts/lamp.gd")
 ## one alone, so nothing else finds it: it is in nobody's way, as before.
 const WORLD := 1
 const BREAKABLE := 32
-## The layer of the glass in the windows, which no shot stops at and no look.
-## Whatever asks where a shot went finds it there, see Fx.tracer().
-const WINDOW := 64
 ## The models that are stacked, by the folder they come from: what their
 ## collider is made of, and what kind of thing they are to a stack.
 const STACKED := {
@@ -78,6 +80,7 @@ func _ready() -> void:
 	_adopt_lamps(level)
 	_adopt_windows(level)
 	_adopt_tinder(level)
+	_adopt_burning()
 	_adopt_exits(level)
 	_rehearse()
 
@@ -168,44 +171,6 @@ func _adopt_stacks(level: Node3D) -> void:
 			body.cover(part.node, part.kind, part.models, part.on.node if part.on else null)
 
 
-## Finds what can catch fire besides the stacks: the piles of pallets, each
-## of which gets a scripts/tinder.gd where it stands. Whatever becomes a
-## child of this node is kept by scripts/game.gd in a list for those who come
-## into the level later, and has a net_state() and a net_restore() as a
-## stack has.
-##
-## The builder made the boards of a pile part of the mesh of the level, and
-## one box collider for it in the body of the level, of wood, as long and as
-## wide as a pallet and a whole number of pallets high. That collider stays
-## where it is: a pile that has burnt still stands.
-func _adopt_tinder(level: Node3D) -> void:
-	const TINDER := preload("res://scripts/tinder.gd")
-	const PALLET := Vector3(1.2, 0.15, 0.8)
-	var count := 0
-	for ground: StaticBody3D in level.find_children("Collision", "StaticBody3D", true, false):
-		for collider in ground.get_children():
-			if not (collider is CollisionShape3D and collider.shape is BoxShape3D and _upright(collider)) or collider.get_meta(&"surface", "") != "wood":
-				continue
-			var size: Vector3 = collider.shape.size
-			var high := size.y / PALLET.y
-			if not is_equal_approx(size.x, PALLET.x) or not is_equal_approx(size.z, PALLET.z) or high < 0.5 or absf(high - roundf(high)) > 0.01:
-				continue
-			var pile: Node3D = TINDER.new()
-			pile.name = "Pallets%d" % count
-			count += 1
-			add_child(pile)
-			pile.global_transform = Transform3D(collider.global_basis.orthonormalized(), collider.global_transform * Vector3(0.0, -size.y * 0.5, 0.0))
-			pile.pile(size)
-	# A crate and a box that burn are looks of their own, and so are their
-	# boards once they have burnt.
-	var kinds := {}
-	for stack in get_children():
-		if stack.has_method("burning_looks") and not kinds.has(stack.kind()):
-			kinds[stack.kind()] = true
-			_looks.append_array(stack.burning_looks())
-	_looks.append_array(STACK.charred_pieces())
-
-
 ## Gives every lamp a body of its own: the hall lamps, which are models,
 ## lit or not, and every light of one of the LAMPS, with what glows by it.
 func _adopt_lamps(level: Node3D) -> void:
@@ -271,16 +236,17 @@ func _adopt_lamps(level: Node3D) -> void:
 			lamps[light].bare()
 
 
-## Gives the glass in the windows bodies of its own, on the layer WINDOW:
-## one for the panes of every opening, see scripts/window.gd. The builder
-## puts all the glass of a zone into one mesh called Glass, and that of a
-## level without zones into one for the level. The teeth a broken pane
-## leaves are a look of their own.
+## Gives the glass in the windows bodies of its own, on the layer Fx.GLASS,
+## which no shot stops at and no look: whatever asks where a shot went finds
+## it there, see Fx.tracer(). One body for the panes of every opening, see
+## scripts/window.gd. The builder puts all the glass of a zone into one mesh
+## called Glass, and that of a level without zones into one for the level.
+## The teeth a broken pane leaves are a look of their own.
 func _adopt_windows(level: Node3D) -> void:
 	const PANES := preload("res://scripts/window.gd")
 	var count := 0
 	for glass: MeshInstance3D in level.find_children("Glass", "MeshInstance3D", true, false):
-		var windows: Array[StaticBody3D] = PANES.glaze(glass, WINDOW)
+		var windows: Array[StaticBody3D] = PANES.glaze(glass, Fx.GLASS)
 		if windows.is_empty():
 			push_warning("Breakables: %s is not one box to a pane and stays as it is" % level.get_path_to(glass))
 		for window in windows:
@@ -291,26 +257,48 @@ func _adopt_windows(level: Node3D) -> void:
 	_looks.append_array(PANES.first_teeth())
 
 
-## Has everything that breaking brings into view drawn once now, while the
-## level comes up out of black: a board of every model that is stacked, a
-## hall lamp without its glass, the dark glass of the other lamps, and the
-## splinters, the shards and the sparks. See Fx.rehearse() for why.
-func _rehearse() -> void:
-	var looks: Array[MeshInstance3D] = STACK.first_pieces()
-	looks.append_array(_looks)
-	var hall := false
-	var other := false
-	for body in get_children():
-		if not body.has_method("broken_look") or (hall if body.kind == LAMP.Kind.HALL else other):
-			continue
-		var look: MeshInstance3D = body.broken_look()
-		if look:
-			looks.append(look)
-			if body.kind == LAMP.Kind.HALL:
-				hall = true
-			else:
-				other = true
-	Fx.rehearse(looks)
+## Finds what can catch fire besides the stacks: the piles of pallets, each
+## of which gets a scripts/tinder.gd where it stands. Whatever becomes a
+## child of this node is kept by scripts/game.gd in a list for those who come
+## into the level later, and has a net_state() and a net_restore() as a
+## stack has.
+##
+## The builder made the boards of a pile part of the mesh of the level, and
+## one box collider for it in the body of the level, of wood, as long and as
+## wide as a pallet and a whole number of pallets high. That collider stays
+## where it is: a pile that has burnt still stands.
+func _adopt_tinder(level: Node3D) -> void:
+	const TINDER := preload("res://scripts/tinder.gd")
+	const PALLET := Vector3(1.2, 0.15, 0.8)
+	var count := 0
+	for ground: StaticBody3D in level.find_children("Collision", "StaticBody3D", true, false):
+		for collider in ground.get_children():
+			if not (collider is CollisionShape3D and collider.shape is BoxShape3D and _upright(collider)) or collider.get_meta(&"surface", "") != "wood":
+				continue
+			var size: Vector3 = collider.shape.size
+			var high := size.y / PALLET.y
+			if not is_equal_approx(size.x, PALLET.x) or not is_equal_approx(size.z, PALLET.z) or high < 0.5 or absf(high - roundf(high)) > 0.01:
+				continue
+			var pile: Node3D = TINDER.new()
+			pile.name = "Pallets%d" % count
+			count += 1
+			add_child(pile)
+			pile.global_transform = Transform3D(collider.global_basis.orthonormalized(), collider.global_transform * Vector3(0.0, -size.y * 0.5, 0.0))
+			pile.pile(size)
+
+
+## Adds the looks that fire brings to the stacks: a crate and a box that
+## burn are looks of their own, and so are their boards once they have
+## burnt. One stack of each kind wears its burning look for the length of
+## the rehearsal as well, see rehearse_burning() in scripts/stack.gd.
+func _adopt_burning() -> void:
+	var kinds := {}
+	for stack in get_children():
+		if stack.has_method("burning_looks") and not kinds.has(stack.kind()):
+			kinds[stack.kind()] = true
+			_looks.append_array(stack.burning_looks())
+			stack.rehearse_burning()
+	_looks.append_array(STACK.charred_pieces())
 
 
 ## Sees to what the way out of the level lets in once its door goes up: a
@@ -331,6 +319,30 @@ func _adopt_exits(level: Node3D) -> void:
 		var home := door.get_parent()
 		var contents := home.get_node_or_null("Contents") if home.is_in_group("level_zone") else null
 		(contents if contents else home).add_child(daylight)
+
+
+## Has everything that breaking and burning bring into view drawn once now,
+## while the level comes up out of black: a board of every model that is
+## stacked, a hall lamp without its glass, the dark glass of the other lamps,
+## the splinters, the shards and the sparks, and what the _adopt functions
+## left in _looks: the teeth of a broken window, a crate and a box that burn
+## and their charred boards. See Fx.rehearse() for why.
+func _rehearse() -> void:
+	var looks: Array[MeshInstance3D] = STACK.first_pieces()
+	looks.append_array(_looks)
+	var hall := false
+	var other := false
+	for body in get_children():
+		if not body.has_method("broken_look") or (hall if body.kind == LAMP.Kind.HALL else other):
+			continue
+		var look: MeshInstance3D = body.broken_look()
+		if look:
+			looks.append(look)
+			if body.kind == LAMP.Kind.HALL:
+				hall = true
+			else:
+				other = true
+	Fx.rehearse(looks)
 
 
 ## The kind of lamp a light is, or -1 if it is not one of the LAMPS.

@@ -1,8 +1,16 @@
 extends Node
 ## Short-lived visual effects: muzzle flashes, tracers, what a shot does to the
-## surface it hits, spent cases, the end of a robot, of a crate and of a lamp,
-## explosions and the fires they leave. Everything is parented to the current
-## scene so a scene reload cleans it up.
+## surface it hits, spent cases, the end of a robot, of a crate, of a lamp and
+## of a pane of glass, explosions with the smoke they light, the fires they
+## leave, the flames on what has caught fire and the soot it leaves, and the
+## splash of a shot into a puddle. Everything is parented to the current scene
+## so a scene reload cleans it up.
+##
+## Two things here are more than a look. Every shot's streak comes through
+## tracer(), so that is where the host breaks the glass the shot went
+## through: see _through_glass(). And water_at() and in_puddle() answer from a
+## copy of the mask the wet floor is drawn with, so a puddle is where it is
+## seen.
 ##
 ## Sparks, chips and smoke come in bursts. A burst is one mesh instance whose
 ## shader works out where every particle is from the time since the burst
@@ -73,14 +81,221 @@ var _expiring: Array[Array] = []
 var _lights: Array[Array] = []
 ## Holes in steel that are still glowing: [decal, start].
 var _cooling: Array[Array] = []
-## Fires that are burning: {light, at, start, seconds, energy, smoke, shade,
-## seed}. `smoke` is when the next of it rises and `shade` the light on it.
+## Fires that are burning: {flames, light, at, start, seconds, energy, smoke,
+## spit, floor, puffs, seed}. `smoke` is when the next of it rises, `spit`
+## when it next throws sparks, `floor` the height they land on and `puffs`
+## the smoke that it still lights from below.
 var _fires: Array[Dictionary] = []
 var _casing_mesh := CylinderMesh.new()
 var _shell_mesh := CylinderMesh.new()
 var _shell_head := CylinderMesh.new()
 ## Spent cases in flight: {node, velocity, spin, floor, age, bounces}.
 var _casings: Array[Dictionary] = []
+
+# The glass of a window that breaks.
+
+## The layer the glass of the windows is on, which no shot stops at and no
+## look: scripts/breakables.gd puts it there and _through_glass() finds it
+## there. And the most panes one shot breaks on its way.
+const GLASS := 64
+const MOST_PANES := 6
+## How far a shot is followed on from where it went into a pane before the
+## next pane is looked for, in metres: further than a pane is thick.
+const PANE_STEP := 0.1
+## How near the camera a streak starts that is the shot of whoever looks
+## through it, in metres: no further than a weapon is long.
+const OWN_SHOT := 1.0
+## The pieces a pane of a square metre breaks into, the longest side of the
+## largest of them in metres and the seconds they are there, which is the
+## LINGER of shaders/glass.gdshader. A smaller pane leaves fewer and smaller
+## pieces, and one of more than PANE_PART m² breaks as several.
+const PANE_SHARDS := 64
+const PANE_SHARD := 0.3
+const PANE_TIME := 4.0
+const PANE_PART := 2.0
+## How far from a pane its glass is taken to land, in metres, and the speed
+## in m/s at which it leaves: let go by a shot, and thrown by a blast at its
+## hardest.
+const PANE_THROW := 0.5
+const PANE_SPEED := 2.2
+const PANE_BLOWN := 11.0
+## The most bursts of shards the blasts of one frame set off. A blast breaks
+## the panes nearest to it first, and what it breaks beyond these is gone
+## without shards.
+const MAX_BLOWN := 16
+
+## The shards of a pane of a window: those of a lamp, and more of them.
+var _pane_shards: ArrayMesh
+## The frame in which a blast last broke a pane, and how many bursts of
+## shards the blasts of that frame have set off.
+var _blown_frame := -1
+var _blown := 0
+
+# The light on the smoke of an explosion and of a fire.
+
+## How far over an explosion its cloud of smoke hangs, in metres: where the
+## light on it is looked for.
+const SMOKE_HEIGHT := 1.2
+## How bright the light of the sky makes smoke, against a lamp of energy 1
+## that shines straight on it: a roof keeps half of it out.
+const SMOKE_SKY := 0.5
+## The share of the key light that comes back off the floor and the walls
+## around a cloud, as light from all around.
+const SMOKE_BOUNCE := 0.12
+## How much brighter than the light from all around the light from straight
+## above is taken to be, where no sun and no lamp gets to a cloud.
+const SMOKE_OVERHEAD := 4.0
+## How many of the brightest lights around a cloud are tried for a clear line
+## to it before it counts as standing in the dark.
+const SMOKE_TRIES := 3
+## A lamp counts as no nearer to a cloud than this, in metres: the cloud is a
+## good deal larger than the point its light is looked for at.
+const SMOKE_NEAR := 1.5
+## How far short of a lamp the line to it stops, in metres, so that what the
+## lamp hangs from is not in the way.
+const SMOKE_CLEAR := 0.5
+## How much of its colour a light loses on smoke, which scatters the blue of
+## it best: the low sun turns soot tan, not orange.
+const SMOKE_GREY := 0.35
+## The share of the key light that gets to the column of smoke inside the
+## cloud of an explosion.
+const SMOKE_SHROUDED := 0.6
+## How strongly a fire lights the smoke that rises off it.
+const SMOKE_EMBER := 8.0
+
+## How bright red, green and blue are to the eye.
+const LUMINANCE := Vector3(0.2126, 0.7152, 0.0722)
+
+## The lamps of the level that is being played, and which level that is.
+var _lamps: Array[Light3D] = []
+var _lamps_of := 0
+
+# The fire on what burns, as against fuel on the floor: a crate, a
+# cardboard box, a pile of pallets.
+
+## How many balls of flame the largest of them has, a pile of pallets two
+## metres high, and how many there are to a square metre of what burns. Half
+## of them are on the far side of it at any time.
+const BLAZE_FLAMES := 64
+const BLAZE_DENSITY := 14.0
+## The longest anything burns, in seconds. Whoever sets something alight puts
+## it out as well; flames that were forgotten go by themselves after this.
+const BLAZE_TIME := 60.0
+## How far the flames of a burning thing are from the foot of it at most, in
+## metres: for when to leave them out of the picture.
+const BLAZE_REACH := 4.0
+## How far a burn mark on the floor reaches beyond what burnt there, as a
+## multiple of how wide that was. The mark is thin towards its rim.
+const SOOT_SPREAD := 2.6
+## Burn marks that soot() leaves on the floor; the oldest makes way. The
+## stacks of one pile stand close together, and each leaves one of its own.
+const MAX_SOOT := 12
+
+var _blaze: ArrayMesh
+## What lies on something that has burnt and still stands.
+var _soot: ImageTexture
+var _soot_marks: Array[Decal] = []
+
+# A shot into a puddle, and where the puddles are.
+
+## The shader of a floor that puddles stand on, which decides where they are
+## from a mask. What follows from here to RAGGED says what it does with that
+## mask and has to follow it: see shaders/wet_floor.gdshader.
+const WET_FLOOR := preload("res://shaders/wet_floor.gdshader")
+## How wide the shore of a puddle is, in what the mask is measured in.
+const SHORE := 0.035
+## The scale at which the mask is read a second time, and how much of that
+## is added to it, for a shore that is ragged.
+const PATCHY := 0.37
+const RAGGED := 0.09
+## The least the normal of a surface points up for water to stand on it.
+const FACES_UP := 0.7
+## How far above or below the top of a floor a point is still on it, in
+## metres. The ground outdoors lies 5 cm under the floors indoors.
+const ON_FLOOR := 0.03
+## Seconds the rings of a splash run out for, and how far they get in metres.
+const RING_TIME := 1.4
+const RING_REACH := 0.9
+
+
+## Where the water stands on the floors of one material, as the shader of
+## that material has it.
+class Water:
+	## The mask, one byte for each of its texels, row after row, and how many
+	## texels it is wide and high. Empty until the image of the mask is there.
+	var mask := PackedByteArray()
+	var size := Vector2i.ZERO
+	## `mask_scale` of the material, and the least the mask has to be for
+	## water to stand: one less its `puddle_amount`.
+	var scale := 0.045
+	var level := 1.0
+	## What the rings of a splash on such a floor are drawn with: it reads
+	## the same mask.
+	var rings: ShaderMaterial
+
+	## How much water stands where the floor has `uv`: 1 in a puddle, 0 on
+	## dry floor and in between on the shore, as `puddle` is in the shader.
+	func puddle(uv: Vector2) -> float:
+		if mask.is_empty():
+			return 0.0
+		var value := _read(uv * scale) + (_read(uv * PATCHY) - 0.5) * RAGGED
+		return smoothstep(level, level + SHORE, value)
+
+	## The mask at `uv` as a shader reads it: between the four texels
+	## around, and round to the other side at an edge.
+	func _read(uv: Vector2) -> float:
+		var x := uv.x * size.x - 0.5
+		var y := uv.y * size.y - 0.5
+		var column := floori(x)
+		var row := floori(y)
+		var left := posmod(column, size.x)
+		var right := posmod(column + 1, size.x)
+		var top := posmod(row, size.y) * size.x
+		var bottom := posmod(row + 1, size.y) * size.x
+		var above := lerpf(mask[top + left], mask[top + right], x - column)
+		var below := lerpf(mask[bottom + left], mask[bottom + right], x - column)
+		return lerpf(above, below, y - row) / 255.0
+
+
+## A triangle of floor that faces up and that water can stand on.
+class Patch:
+	var water: Water
+	## One of its corners, in the world.
+	var corner: Vector3
+	## What a metre along the X and along the Z of the world adds to how far
+	## a point is on the way from that corner to each of the other two.
+	var towards_second: Vector2
+	var towards_third: Vector2
+	## What that adds to the height of the floor.
+	var slope: Vector2
+	## The UV of the floor at the corner, and what a metre along X and a
+	## metre along Z add to it. For the top of a floor that the level
+	## builder made, the UV is simply x and z.
+	var uv: Vector2
+	var uv_along_x: Vector2
+	var uv_along_z: Vector2
+
+	## Whether `position` lies on this triangle: over it, and no further
+	## above or below it than ON_FLOOR.
+	func holds(position: Vector3) -> bool:
+		var from := Vector2(position.x - corner.x, position.z - corner.z)
+		var second := towards_second.dot(from)
+		var third := towards_third.dot(from)
+		if second < -0.0001 or third < -0.0001 or second + third > 1.0001:
+			return false
+		return absf(position.y - corner.y - slope.dot(from)) <= ON_FLOOR
+
+	## The UV the floor has at `position`.
+	func uv_at(position: Vector3) -> Vector2:
+		return uv + uv_along_x * (position.x - corner.x) + uv_along_z * (position.z - corner.z)
+
+
+var _drops: ArrayMesh
+var _rings: ArrayMesh
+## Every triangle of floor in the level that water can stand on, and the
+## level they were looked up in: the id of its scene, 0 for none.
+var _floors: Array[Patch] = []
+var _charted := 0
 
 
 func _ready() -> void:
@@ -104,7 +319,6 @@ func _ready() -> void:
 	_flame = _flame_mesh()
 	_bursts = [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]
 	_ready_glass()
-	_ready_smoke()
 	_ready_burning()
 	_ready_splash()
 
@@ -231,7 +445,10 @@ func impact(hit: Dictionary, incoming: Vector3, light := false) -> void:
 
 
 ## What a shot sounds like where it lands. In a puddle that is duller than
-## on the concrete under it.
+## on the concrete under it: `impact_soft`, for as long as there is no
+## recording of a shot into water. Sfx picks up a folder
+## `assets/audio/impact_water/` by itself, and that is played here from then
+## on.
 func thud(position: Vector3, surface: String) -> void:
 	var sound := "concrete" if surface == "brick" else surface
 	if sound == "concrete" and in_puddle(position):
@@ -429,35 +646,6 @@ func _floor_under_lamp(position: Vector3) -> float:
 	return maxf(floor_below(position, LAMP_DROP), position.y - LAMP_DROP)
 
 
-## The layer the glass of the windows is on, see scripts/breakables.gd, and
-## the most panes one shot breaks on its way.
-const GLASS := 64
-const MOST_PANES := 6
-## How far a shot is followed on from where it went into a pane before the
-## next pane is looked for, in metres: further than a pane is thick.
-const PANE_STEP := 0.1
-## How near the camera a streak starts that is the shot of whoever looks
-## through it, in metres: no further than a weapon is long.
-const OWN_SHOT := 1.0
-## The pieces a pane of a square metre breaks into, the longest side of the
-## largest of them in metres and the seconds they are there, which is the
-## LINGER of shaders/glass.gdshader. A smaller pane leaves fewer and smaller
-## pieces, and one of more than PANE_PART m² breaks as several.
-const PANE_SHARDS := 64
-const PANE_SHARD := 0.3
-const PANE_TIME := 4.0
-const PANE_PART := 2.0
-## How far from a pane its glass is taken to land, in metres, and the speed
-## in m/s at which it leaves: let go by a shot, and thrown by a blast at its
-## hardest.
-const PANE_THROW := 0.5
-const PANE_SPEED := 2.2
-const PANE_BLOWN := 11.0
-
-## The shards of a pane of a window: those of a lamp, and more of them.
-var _pane_shards: ArrayMesh
-
-
 ## Makes ready what the glass of a window needs when it breaks, as _ready()
 ## does for the rest.
 func _ready_glass() -> void:
@@ -497,8 +685,18 @@ func _through_glass(from: Vector3, to: Vector3) -> void:
 ## The glass leaves on the side that `out` points to. `force` is how hard a
 ## blast throws it, up to 1. At 0 it is only let go of, which is what a shot
 ## does: then some of it comes down on the near side as well, and the dust
-## that lay on it hangs there for a moment.
+## that lay on it hangs there for a moment. A blast that has set off
+## MAX_BLOWN bursts of shards leaves none for the panes after that.
 func pane(frame: Transform3D, size: Vector2, out: Vector3, force := 0.0) -> void:
+	var area := size.x * size.y
+	var parts := clampi(ceili(area / PANE_PART), 1, 4)
+	if force > 0.0:
+		if _blown_frame != Engine.get_process_frames():
+			_blown_frame = Engine.get_process_frames()
+			_blown = 0
+		if _blown + parts > MAX_BLOWN:
+			return
+		_blown += parts
 	var through := frame.basis.y if frame.basis.y.dot(out) >= 0.0 else -frame.basis.y
 	var leaving := (through + out.normalized() * lerpf(0.5, 2.0, force)).normalized()
 	var beyond := floor_below(frame.origin + through * PANE_THROW, LAMP_DROP)
@@ -507,8 +705,6 @@ func pane(frame: Transform3D, size: Vector2, out: Vector3, force := 0.0) -> void
 	# as high as the floor on this side.
 	if beyond < frame.origin.y - LAMP_DROP:
 		beyond = before
-	var area := size.x * size.y
-	var parts := clampi(ceili(area / PANE_PART), 1, 4)
 	# A large pane breaks as several side by side, along its longer side.
 	var lengthwise := size.x >= size.y
 	var part := Vector2(size.x / parts, size.y) if lengthwise else Vector2(size.x, size.y / parts)
@@ -575,49 +771,6 @@ func explosion(position: Vector3, size := 1.0) -> void:
 		soot.size = Vector3(across, 0.3, across)
 		soot.transform = Transform3D(Basis(Vector3.UP, randf() * TAU), ground)
 		_keep(soot)
-
-
-## How far over an explosion its cloud of smoke hangs, in metres: where the
-## light on it is looked for.
-const SMOKE_HEIGHT := 1.2
-## How bright the light of the sky makes smoke, against a lamp of energy 1
-## that shines straight on it: a roof keeps half of it out.
-const SMOKE_SKY := 0.5
-## The share of the key light that comes back off the floor and the walls
-## around a cloud, as light from all around.
-const SMOKE_BOUNCE := 0.12
-## How much brighter than the light from all around the light from straight
-## above is taken to be, where no sun and no lamp gets to a cloud.
-const SMOKE_OVERHEAD := 4.0
-## How many of the brightest lights around a cloud are tried for a clear line
-## to it before it counts as standing in the dark.
-const SMOKE_TRIES := 3
-## A lamp counts as no nearer to a cloud than this, in metres: the cloud is a
-## good deal larger than the point its light is looked for at.
-const SMOKE_NEAR := 1.5
-## How far short of a lamp the line to it stops, in metres, so that what the
-## lamp hangs from is not in the way.
-const SMOKE_CLEAR := 0.5
-## How much of its colour a light loses on smoke, which scatters the blue of
-## it best: the low sun turns soot tan, not orange.
-const SMOKE_GREY := 0.35
-## The share of the key light that gets to the column of smoke inside the
-## cloud of an explosion.
-const SMOKE_SHROUDED := 0.6
-## How strongly a fire lights the smoke that rises off it.
-const SMOKE_EMBER := 8.0
-
-## How bright red, green and blue are to the eye.
-const LUMINANCE := Vector3(0.2126, 0.7152, 0.0722)
-
-## The lamps of the level that is being played, and which level that is.
-var _lamps: Array[Light3D] = []
-var _lamps_of := 0
-
-
-## Makes ready what the smoke of an explosion and of a fire is drawn with.
-func _ready_smoke() -> void:
-	pass
 
 
 ## The light on a cloud of smoke that hangs around `position`, as the instance
@@ -745,9 +898,17 @@ func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds
 	light.position = offset
 	flames.add_child(light)
 	var at := flames.global_transform * offset
-	var burning := {"flames": flames, "light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "spit": INF, "floor": at.y, "shade": light_at(at), "seed": randf() * 100.0}
+	var burning := {"flames": flames, "light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "spit": INF, "floor": at.y, "puffs": [], "seed": randf() * 100.0}
 	_fires.append(burning)
 	return burning
+
+
+## Tells the smoke that a fire still lights from below when that fire is
+## out: at the moment `end`, on the clock of the effects.
+func _embers(burning: Dictionary, end: float) -> void:
+	for puff: Variant in burning.puffs:
+		if is_instance_valid(puff):
+			(puff as MeshInstance3D).set_instance_shader_parameter(&"ember", Vector2(SMOKE_EMBER, end))
 
 
 ## Makes ready what something that has caught fire is drawn with.
@@ -756,30 +917,6 @@ func _ready_burning() -> void:
 	(_blaze.surface_get_material(0) as ShaderMaterial).set_shader_parameter(&"noise", preload("res://assets/masks/wear.png"))
 	_bursts.append(_blaze)
 	_soot = _soot_texture()
-
-
-# What follows is the fire on things that burn, as against fuel on the
-# floor: a crate, a cardboard box, a pile of pallets. Its constants and what
-# it keeps stand here with it, and not at the top with the rest.
-
-## How many balls of flame the largest of them has, a pile of pallets two
-## metres high, and how many there are to a square metre of what burns. Half
-## of them are on the far side of it at any time.
-const BLAZE_FLAMES := 64
-const BLAZE_DENSITY := 14.0
-## The longest anything burns, in seconds. Whoever sets something alight puts
-## it out as well; flames that were forgotten go by themselves after this.
-const BLAZE_TIME := 60.0
-## How far the flames of a burning thing are from the foot of it at most, in
-## metres: for when to leave them out of the picture.
-const BLAZE_REACH := 4.0
-## How far a burn mark on the floor reaches beyond what burnt there, as a
-## multiple of how wide that was. The mark is thin towards its rim.
-const SOOT_SPREAD := 2.6
-
-var _blaze: ArrayMesh
-## What lies on something that has burnt and still stands.
-var _soot: ImageTexture
 
 
 ## Flames on something that has caught fire: they come out of the sides and
@@ -800,10 +937,11 @@ func blaze(at: Transform3D, size: Vector3, seconds: float) -> Node3D:
 ## origin of `at`, `size` metres large, with `seconds` left to burn. A larger
 ## box gets larger flames, more of them, and more light. If it is `covered`,
 ## something stands on it that does not burn, and the flames keep to its
-## sides.
-func feed(flames: Node3D, at: Transform3D, size: Vector3, seconds: float, covered := false) -> void:
+## sides. False if that fire is over: its time was up, though whoever lit it
+## may still have the flames.
+func feed(flames: Node3D, at: Transform3D, size: Vector3, seconds: float, covered := false) -> bool:
 	if not is_instance_valid(flames):
-		return
+		return false
 	for burning in _fires:
 		if not is_same(burning.flames, flames):
 			continue
@@ -821,10 +959,13 @@ func feed(flames: Node3D, at: Transform3D, size: Vector3, seconds: float, covere
 		light.omni_range = 3.0 + grown
 		burning.energy = 0.9 + 0.35 * grown
 		burning.seconds = age + seconds
+		_embers(burning, burning.start + burning.seconds)
 		# Smoke and sparks leave from its top, and the sparks come down on
 		# what it stands on.
 		burning.at = at * Vector3(0.0, size.y, 0.0)
 		burning.floor = floor_below(at.origin + Vector3.UP * 0.1)
+		return true
+	return false
 
 
 ## Something that has burnt through falls apart around `position`: charred
@@ -841,8 +982,10 @@ func crumble(position: Vector3, across := 0.5) -> void:
 
 ## Soot where something has burnt: a burn mark on the floor around the origin
 ## of `at`, and, if what burnt still stands there as a box `size` metres
-## large, soot on that as well, down its sides as much as on its top. It
-## stays for as long as the level does.
+## large, soot on that as well, down its sides as much as on its top. The
+## oldest mark on the floor makes way once there are MAX_SOOT; the soot on
+## what still stands stays for as long as the level does, since that is what
+## shows it is burnt.
 func soot(at: Transform3D, size: Vector3) -> void:
 	var floor_y := floor_below(at.origin + Vector3.UP * 0.2, 1.2)
 	if floor_y > at.origin.y - 1.0:
@@ -852,6 +995,10 @@ func soot(at: Transform3D, size: Vector3) -> void:
 		mark.size = Vector3(across, 0.3, across)
 		mark.transform = Transform3D(at.basis.orthonormalized(), Vector3(at.origin.x, floor_y, at.origin.z))
 		_keep(mark)
+		_soot_marks.append(mark)
+		_soot_marks = _soot_marks.filter(is_instance_valid)
+		while _soot_marks.size() > MAX_SOOT:
+			_soot_marks.pop_front().queue_free()
 	if size.y > 0.0:
 		var coat := Decal.new()
 		coat.texture_albedo = _soot
@@ -892,106 +1039,6 @@ func _ready_splash() -> void:
 	_rings.surface_get_material(0).render_priority = -1
 	_bursts.append(_drops)
 	_bursts.append(_rings)
-
-
-## The shader of a floor that puddles stand on, which decides where they are
-## from a mask. What follows from here to RAGGED says what it does with that
-## mask and has to follow it: see shaders/wet_floor.gdshader.
-const WET_FLOOR := preload("res://shaders/wet_floor.gdshader")
-## How wide the shore of a puddle is, in what the mask is measured in.
-const SHORE := 0.035
-## The scale at which the mask is read a second time, and how much of that
-## is added to it, for a shore that is ragged.
-const PATCHY := 0.37
-const RAGGED := 0.09
-## The least the normal of a surface points up for water to stand on it.
-const FACES_UP := 0.7
-## How far above or below the top of a floor a point is still on it, in
-## metres. The ground outdoors lies 5 cm under the floors indoors.
-const ON_FLOOR := 0.03
-## Seconds the rings of a splash run out for, and how far they get in metres.
-const RING_TIME := 1.4
-const RING_REACH := 0.9
-
-
-## Where the water stands on the floors of one material, as the shader of
-## that material has it.
-class Water:
-	## The mask, one byte for each of its texels, row after row, and how many
-	## texels it is wide and high. Empty until the image of the mask is there.
-	var mask := PackedByteArray()
-	var size := Vector2i.ZERO
-	## `mask_scale` of the material, and the least the mask has to be for
-	## water to stand: one less its `puddle_amount`.
-	var scale := 0.045
-	var level := 1.0
-	## What the rings of a splash on such a floor are drawn with: it reads
-	## the same mask.
-	var rings: ShaderMaterial
-
-	## How much water stands where the floor has `uv`: 1 in a puddle, 0 on
-	## dry floor and in between on the shore, as `puddle` is in the shader.
-	func puddle(uv: Vector2) -> float:
-		if mask.is_empty():
-			return 0.0
-		var value := _read(uv * scale) + (_read(uv * PATCHY) - 0.5) * RAGGED
-		return smoothstep(level, level + SHORE, value)
-
-	## The mask at `uv` as a shader reads it: between the four texels
-	## around, and round to the other side at an edge.
-	func _read(uv: Vector2) -> float:
-		var x := uv.x * size.x - 0.5
-		var y := uv.y * size.y - 0.5
-		var column := floori(x)
-		var row := floori(y)
-		var left := posmod(column, size.x)
-		var right := posmod(column + 1, size.x)
-		var top := posmod(row, size.y) * size.x
-		var bottom := posmod(row + 1, size.y) * size.x
-		var above := lerpf(mask[top + left], mask[top + right], x - column)
-		var below := lerpf(mask[bottom + left], mask[bottom + right], x - column)
-		return lerpf(above, below, y - row) / 255.0
-
-
-## A triangle of floor that faces up and that water can stand on.
-class Patch:
-	var water: Water
-	## One of its corners, in the world.
-	var corner: Vector3
-	## What a metre along the X and along the Z of the world adds to how far
-	## a point is on the way from that corner to each of the other two.
-	var towards_second: Vector2
-	var towards_third: Vector2
-	## What that adds to the height of the floor.
-	var slope: Vector2
-	## The UV of the floor at the corner, and what a metre along X and a
-	## metre along Z add to it. For the top of a floor that the level
-	## builder made, the UV is simply x and z.
-	var uv: Vector2
-	var uv_along_x: Vector2
-	var uv_along_z: Vector2
-
-	## Whether `position` lies on this triangle: over it, and no further
-	## above or below it than ON_FLOOR.
-	func holds(position: Vector3) -> bool:
-		var from := Vector2(position.x - corner.x, position.z - corner.z)
-		var second := towards_second.dot(from)
-		var third := towards_third.dot(from)
-		if second < -0.0001 or third < -0.0001 or second + third > 1.0001:
-			return false
-		return absf(position.y - corner.y - slope.dot(from)) <= ON_FLOOR
-
-	## The UV the floor has at `position`.
-	func uv_at(position: Vector3) -> Vector2:
-		return uv + uv_along_x * (position.x - corner.x) + uv_along_z * (position.z - corner.z)
-
-
-var _drops: ArrayMesh
-var _rings: ArrayMesh
-## Every triangle of floor in the level that water can stand on, and the
-## level they were looked up in: the id of its scene, 0 for none.
-var _floors: Array[Patch] = []
-var _charted := 0
 
 
 ## How much water stands at `position`: 1 in a puddle, 0 on dry floor and
@@ -1158,8 +1205,11 @@ func facing(direction: Vector3) -> Basis:
 	return Basis.looking_at(direction, up)
 
 
-## Frees every effect at once, marks included.
+## Frees every effect at once, marks included. The flames on what burns go
+## with the rest, so what burns is put out; the soot of what has burnt stays,
+## as what has burnt does.
 func clear() -> void:
+	Blast.douse()
 	for entry: Array in _expiring:
 		if is_instance_valid(entry[0]):
 			entry[0].queue_free()
@@ -1242,6 +1292,9 @@ func _step(delta: float) -> void:
 		var burning := _fires[i]
 		var age: float = time - burning.start
 		if not is_instance_valid(burning.light) or age > burning.seconds:
+			# Put out before its time: its smoke is lit no longer.
+			if age <= burning.seconds:
+				_embers(burning, time)
 			_fires.remove_at(i)
 			continue
 		# Wood that burns spits a few sparks now and then.
@@ -1259,6 +1312,8 @@ func _step(delta: float) -> void:
 			var smoke := _burst(_smoke, Transform3D(Basis(), burning.at + Vector3.UP * 0.4), 3.0,
 				{&"tint": Color(0.14, 0.14, 0.148, 0.5), &"ember": Vector2(SMOKE_EMBER, burning.start + burning.seconds), &"speed": 0.7, &"spread": 0.5, &"size": Vector2(0.15, 0.75), &"life": 2.6, &"rise": 1.2, &"amount": 0.45}.merged(smoke_light(burning.at + Vector3.UP * SMOKE_HEIGHT)))
 			smoke.set_instance_shader_parameter(&"start", burning.smoke)
+			burning.puffs = (burning.puffs as Array).filter(is_instance_valid)
+			burning.puffs.append(smoke)
 			burning.smoke += 0.3
 
 	for i in range(_casings.size() - 1, -1, -1):
@@ -1365,18 +1420,6 @@ func _spawn(node: Node3D, seconds: float) -> void:
 
 func _expire(node: Node3D, seconds: float) -> void:
 	_expiring.append([node, time + seconds])
-
-
-## How much light falls on a point, as one number: 1 in the shade, more where
-## the sun reaches it. A fire keeps it for the spot it burns at; the smoke
-## itself asks smoke_light(), which says where the light comes from as well.
-func light_at(position: Vector3) -> float:
-	var sun := _sun()
-	if sun == null or not sun.visible:
-		return 1.0
-	var query := PhysicsRayQueryParameters3D.create(position, position + sun.global_basis.z * 80.0, WORLD)
-	var shaded := not get_viewport().find_world_3d().direct_space_state.intersect_ray(query).is_empty()
-	return 1.0 if shaded else 1.0 + sun.light_energy * 0.3
 
 
 ## Height of the floor below a point, or far below when there is none within `reach`.

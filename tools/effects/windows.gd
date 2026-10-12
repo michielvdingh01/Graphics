@@ -1,8 +1,9 @@
 extends RefCounted
 ## The glass of the windows: a shot goes through a pane and breaks it and no
-## other, a blast breaks the panes it gets to, what is left is the same for
-## whoever comes into the level later, and nothing of it is in the way of a
-## shot or of what an enemy sees.
+## other, a blast breaks the panes it gets to and no wall hides from it, and
+## only so many of them leave shards, what is left is the same for whoever
+## comes into the level later, and nothing of it is in the way of a shot or
+## of what an enemy sees.
 
 ## For every level: how many windows the level builder's glass makes, and how
 ## many panes they have together.
@@ -133,16 +134,49 @@ func run(test: SceneTree) -> void:
 		for i: int in other.size():
 			if other.middle(i).distance_to(centre) < reach:
 				near |= 1 << i
+		# With a wall between them the blast leaves the glass alone.
+		var wall := StaticBody3D.new()
+		var slab := CollisionShape3D.new()
+		slab.shape = BoxShape3D.new()
+		slab.shape.size = Vector3(12.0, 12.0, 0.1)
+		wall.add_child(slab)
+		game.add_child(wall)
+		wall.global_transform = Transform3D(_fx.facing(other.facing(0)), other.middle(0) + other.facing(0) * 0.5)
+		await test.frames(2)
 		standing = _standing(windows)
+		blast.explode(centre, reach, 150.0)
+		test.check(near != 0 and _standing(windows) == standing, "a wall between a blast and a window saves its glass")
+		wall.free()
+		await test.frames(2)
 		blast.explode(centre, reach, 150.0)
 		print("    a blast of %.1f m a metre from a window of %d panes broke %d" % [reach, other.size(), other.size() - other.standing()])
 		test.check(near != 0 and other.net_state() == near and other.standing() > 0, "a blast breaks the panes within its reach and leaves the ones beyond it")
 		test.check(standing - _standing(windows) == other.size() - other.standing(), "and those of no other window")
 
+		# A large blast breaks more panes than may leave shards: the glass of
+		# the rest is gone without any.
+		_fx.advance(_fx.PANE_TIME + 0.1)
+		await test.frames(2)
+		var whole_panes := {}
+		for one: StaticBody3D in windows:
+			whole_panes[one] = one.net_state()
+		blast.explode(centre, 9.0, 150.0)
+		var blown := 0
+		var wanted := 0
+		for one: StaticBody3D in windows:
+			for i: int in one.size():
+				if one.is_shape_owner_disabled(i) and whole_panes[one] & (1 << i) == 0:
+					blown += 1
+					var across: Vector2 = one.measures(i)
+					wanted += clampi(ceili(across.x * across.y / _fx.PANE_PART), 1, 4)
+		var thrown: int = _shards().filter(func(burst: MeshInstance3D) -> bool: return burst.mesh == _fx._pane_shards).size()
+		print("    a blast of 9 m broke %d panes, which would be %d bursts of shards, and set off %d" % [blown, wanted, thrown])
+		test.check(wanted > _fx.MAX_BLOWN and thrown <= _fx.MAX_BLOWN and thrown > _fx.MAX_BLOWN - 4, "a blast that breaks many panes sets off no more than %d bursts of shards" % _fx.MAX_BLOWN)
+
 	# Somebody who comes in later: a level afresh, and what the host says of it.
 	await test.frames(2)
 	var states: Array = windows.map(func(one: Node) -> int: return one.net_state())
-	var meshes: Array = _glasses(game).map(_teeth)
+	var meshes: Array = _glasses(game).map(_bites)
 	var corners: Array = _glasses(game).map(func(one: MeshInstance3D) -> int: return one.mesh.surface_get_array_index_len(0))
 	var gone: int = states.filter(func(state: int) -> bool: return state != 0).size()
 	game = await test.level()
@@ -157,7 +191,7 @@ func run(test: SceneTree) -> void:
 		same = same and windows[i].net_state() == states[i]
 	print("    %d windows had lost panes" % gone)
 	test.check(gone >= 2 and same and _shards().is_empty(), "what was broken before somebody came is gone for them too, without shards")
-	test.check(_glasses(game).map(_teeth) == meshes
+	test.check(_glasses(game).map(_bites) == meshes
 		and _glasses(game).map(func(one: MeshInstance3D) -> int: return one.mesh.surface_get_array_index_len(0)) == corners,
 		"and the teeth that stay are the same teeth")
 
@@ -264,6 +298,17 @@ func _glasses(game: Node) -> Array[Node]:
 ## three for each: its second surface, once there is one.
 func _teeth(glass: MeshInstance3D) -> PackedVector3Array:
 	return glass.mesh.surface_get_arrays(1)[Mesh.ARRAY_VERTEX] if glass.mesh.get_surface_count() > 1 else PackedVector3Array()
+
+
+## The teeth in a mesh of glass one by one, in an order that does not depend
+## on the order their panes broke in: a blast breaks the nearest first.
+func _bites(glass: MeshInstance3D) -> Array:
+	var points := _teeth(glass)
+	var found := []
+	for i in range(0, points.size(), 3):
+		found.append([points[i], points[i + 1], points[i + 2]])
+	found.sort()
+	return found
 
 
 ## The mesh that draws the glass of a window.

@@ -1,8 +1,10 @@
 extends Node
 ## What an explosion does: it hurts and throws whatever is near it and in the
-## open, sets off other explosives and shakes the player's view. A fire it
-## leaves burns whoever stands in it. How any of that looks is up to
-## Fx.explosion() and Fx.fire().
+## open, sets off other explosives, breaks the windows it can see, sears what
+## can catch fire and shakes the player's view. A fire it leaves burns
+## whoever stands in it and spreads to the stacks and the piles beside it, at
+## most MAX_ALIGHT of them at once: see kindle(), heat() and _spread(). How
+## any of that looks is up to Fx.explosion(), Fx.fire() and Fx.blaze().
 
 signal exploded(position: Vector3)
 
@@ -36,6 +38,13 @@ const TINDER := &"tinder"
 ## one pile of crates stand 0.6 to 1.1 m apart and catch from each other; an
 ## aisle is wider, and stops a fire.
 const REACH := 1.2
+## How much of the heat something took without catching it loses again, in
+## seconds of fire a second.
+const COOLING := 0.5
+## How far above what burns its flames light something, in metres. That is
+## less than a crate is high, so that a fire climbs a stack one crate at a
+## time.
+const CROWN := 0.3
 ## What stands that far off gets hot this many times as slowly as what the
 ## flames touch, and what stands as high as a fire lights at all this many
 ## times as slowly as what stands at its foot. What lies under a fire gets
@@ -95,11 +104,19 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 	if source:
 		ignored.append(source.get_rid())
 	reached.erase(source)
+	var through := _through(ignored)
 	# The glass of the windows is on none of those layers: a wall of panes
 	# would leave no room among the MOST for anything else. Every window sees
-	# for itself which of its panes are within reach.
+	# for itself which of its panes are within reach, the nearest window
+	# first: only so many panes leave shards, see Fx.pane().
+	var windows: Array[Array] = []
 	for window in get_tree().get_nodes_in_group("window"):
-		window.blast(position, radius)
+		var distance: float = window.distance_to(position)
+		if distance < radius:
+			windows.append([distance, window])
+	windows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	for found in windows:
+		found[1].blast(position, radius, through)
 	# How hard it hits each of them is worked out before any of them is hurt:
 	# a stack of crates that it breaks still stood in the way of whatever was
 	# behind it.
@@ -131,7 +148,7 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 			body.velocity += away * PUSH * strength
 		elif body is RigidBody3D:
 			body.apply_central_impulse(away * PUSH * strength * body.mass)
-	_sear(position, radius)
+	_sear(space, position, radius, through)
 
 
 ## What a blast looks and sounds like, and how it rattles the view of the
@@ -183,9 +200,18 @@ func _physics_process(delta: float) -> void:
 	_spread()
 
 
-## A scene change takes its fires with it.
+## A scene change takes its fires with it. Without one, what burns in the
+## level goes out as well, since its patch is gone from the list.
 func clear() -> void:
 	_burning.clear()
+	douse()
+
+
+## Puts out every stack and every pile that burns: each is as it was before
+## it caught, and can catch again. What has burnt stays burnt.
+func douse() -> void:
+	for thing in get_tree().get_nodes_in_group(TINDER):
+		thing.douse()
 
 
 ## True if the floor at `position` is on fire, or within `margin` of it: fuel
@@ -198,8 +224,8 @@ func burning(position: Vector3, margin := 0.0) -> bool:
 	return false
 
 
-## The patches of floor that are on fire: {at, radius, left} each, of fuel
-## and of whatever caught fire alike.
+## The patches of floor that are on fire, of fuel and of whatever caught
+## fire alike: {at, radius, left} each, and the rest of what _burning lists.
 func fires() -> Array[Dictionary]:
 	return _burning
 
@@ -304,11 +330,50 @@ func _near(at: Vector3, reach: float) -> Array[Node3D]:
 
 
 ## The fireball of a blast at `position` that reaches `radius` metres heats
-## what it has left standing, as a fire that stood there for SEAR seconds
-## would: cardboard and pallets close by catch at once, and so do crates that
-## were behind something.
-func _sear(position: Vector3, radius: float) -> void:
+## what it has left standing and can see, as a fire that stood there for SEAR
+## seconds would: cardboard and pallets close by catch at once, and so do
+## crates that were behind other crates. A wall or a floor in between keeps
+## it off, as it keeps off the blast itself. `through` is what _through()
+## gave for this blast.
+func _sear(space: PhysicsDirectSpaceState3D, position: Vector3, radius: float, through: Array[RID]) -> void:
 	var ball := radius * FIREBALL
 	var fire := {"at": position + Vector3.DOWN * 0.5, "flames": ball, "tall": ball + 0.5}
 	for thing in _near(position, ball + REACH):
-		thing.warm(fire, SEAR)
+		if _lit(space, position, thing, through):
+			thing.warm(fire, SEAR)
+
+
+## What a look from a blast goes through as if it were not there: `ignored`,
+## and every stack of crates and boxes. A stack is on the layer of the world
+## as well, but it is no wall: what stands behind it still gets the heat,
+## and the glass behind it still breaks.
+func _through(ignored: Array[RID]) -> Array[RID]:
+	var through := ignored.duplicate()
+	for thing in get_tree().get_nodes_in_group(TINDER):
+		if thing is CollisionObject3D:
+			through.append((thing as CollisionObject3D).get_rid())
+	return through
+
+
+## True if nothing of the level stands between `from` and `to`, going
+## through whatever is in `through`.
+func in_sight(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3, through: Array[RID]) -> bool:
+	return space.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, WORLD, through)).is_empty()
+
+
+## True if the fireball at `from` can see something that can catch fire: the
+## middle of one of the colliders of a stack, or a pile of pallets. The box of
+## a pile is part of the body of the level, so a look that ends on that box
+## has got to the pile.
+func _lit(space: PhysicsDirectSpaceState3D, from: Vector3, thing: Node3D, through: Array[RID]) -> bool:
+	if thing is CollisionObject3D:
+		for child in thing.get_children():
+			if child is CollisionShape3D and not child.disabled and in_sight(space, from, child.global_position, through):
+				return true
+		return false
+	var size: Vector3 = thing.size
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, thing.global_transform * Vector3(0.0, size.y * 0.5, 0.0), WORLD, through))
+	if hit.is_empty():
+		return true
+	var at: Vector3 = thing.global_transform.affine_inverse() * (hit.position as Vector3)
+	return absf(at.x) <= size.x * 0.5 + 0.05 and absf(at.z) <= size.z * 0.5 + 0.05 and at.y >= -0.05 and at.y <= size.y + 0.05

@@ -25,11 +25,6 @@ const CATCHES := 1.0
 ## sixteen.
 const BURNS := 10.0
 const BURNS_EACH := 0.4
-## How much of the heat it took without catching it loses again, in seconds
-## of fire a second. It gets no hotter than twice what it takes to catch.
-const COOLING := 0.5
-## How far above the pile its flames light something, in metres.
-const CROWN := 0.3
 
 ## The box around the pile, in metres, which stands on the origin of this.
 var size := Vector3.ZERO
@@ -79,9 +74,10 @@ func warm(fire: Dictionary, seconds: float) -> void:
 	var rate: float = Blast.heat(fire, global_transform.affine_inverse(), AABB(Vector3(-size.x * 0.5, 0.0, -size.z * 0.5), size))
 	if rate <= 0.0:
 		return
-	# What it took before has cooled since.
+	# What it took before has cooled since, and it gets no hotter than twice
+	# what it takes to catch.
 	var idle: float = Fx.time - _heated - seconds
-	_heat = minf(maxf(_heat - maxf(idle, 0.0) * COOLING, 0.0) + rate * seconds, CATCHES * 2.0)
+	_heat = minf(maxf(_heat - maxf(idle, 0.0) * Blast.COOLING, 0.0) + rate * seconds, CATCHES * 2.0)
 	_heated = Fx.time
 	if _heat >= CATCHES and Blast.room():
 		Net.show(self, &"_catch")
@@ -109,7 +105,7 @@ func _catch() -> void:
 	_left = burns()
 	_flames = Fx.blaze(global_transform, size, _left)
 	if not Net.is_guest():
-		_patch = Blast.kindle(global_position, (size.x + size.z) * 0.25, size.y + CROWN, _left)
+		_patch = Blast.kindle(global_position, (size.x + size.z) * 0.25, size.y + Blast.CROWN, _left)
 	set_physics_process(true)
 
 
@@ -118,6 +114,23 @@ func _physics_process(delta: float) -> void:
 	_left -= delta
 	if _left <= 0.0 and not Net.is_guest():
 		Net.show(self, &"_burn_out")
+
+
+## The fire is put out before the pile has burnt: it is as it was, and can
+## catch again. See Blast.douse().
+func douse() -> void:
+	_heat = 0.0
+	if not alight:
+		return
+	alight = false
+	set_physics_process(false)
+	if is_instance_valid(_flames):
+		_flames.queue_free()
+	_flames = null
+	if not _patch.is_empty():
+		# It goes from Blast's list at the next step, if it is still in it.
+		_patch.left = 0.0
+		_patch = {}
 
 
 ## The fire is out and the pile is burnt: black, and of no use to a fire.

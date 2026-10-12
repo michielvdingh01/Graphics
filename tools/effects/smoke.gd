@@ -18,7 +18,7 @@ func run(test: SceneTree) -> void:
 	var sun: DirectionalLight3D = game.find_children("*", "DirectionalLight3D", false, false)[0]
 	var over: Vector3 = Vector3.UP * fx.SMOKE_HEIGHT
 
-	test.check(fx.light_at(SUNLIT + over) > 1.0 and fx.light_at(SHADED + over) == 1.0, "one spot is in the sun and the other is not")
+	test.check(_in_sun(game, sun, SUNLIT + over) and not _in_sun(game, sun, SHADED + over), "one spot is in the sun and the other is not")
 	var bright: Dictionary = fx.smoke_light(SUNLIT + over)
 	var dim: Dictionary = fx.smoke_light(SHADED + over)
 	test.check(LIGHT.all(func(title: StringName) -> bool: return bright.has(title) and dim.has(title)), "the light on smoke comes as a key light and the light from all around")
@@ -78,6 +78,12 @@ func run(test: SceneTree) -> void:
 	flames.queue_free()
 	await test.frames(2)
 	test.check(_clouds(game, fx).is_empty(), "every cloud is freed when its time is over")
+
+
+## Whether nothing of the level stands between a point and the sun.
+func _in_sun(game: Node, sun: DirectionalLight3D, point: Vector3) -> bool:
+	var space: PhysicsDirectSpaceState3D = (game as Node3D).get_world_3d().direct_space_state
+	return space.intersect_ray(PhysicsRayQueryParameters3D.create(point, point + sun.global_basis.z * 80.0, 1)).is_empty()
 
 
 ## The bursts of smoke that are in the level now.

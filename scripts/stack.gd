@@ -61,13 +61,6 @@ const MAX_PIECES := 48
 ## How much quieter than breaking, in dB, landing on what is left is.
 const LANDING := -2.0
 const GRAVITY := 9.8
-## How much of the heat one took without catching it loses again, in seconds
-## of fire a second.
-const COOLING := 0.5
-## How far above what burns its flames light something, in metres. That is
-## less than a crate is high, so that a fire climbs a stack one crate at a
-## time.
-const CROWN := 0.3
 ## What a burning crate or box goes to: the black of charred wood, which it
 ## is when this share of its time to burn is over. From then on its boards
 ## are black as well when it breaks.
@@ -140,6 +133,10 @@ var _colliders: Array[CollisionShape3D] = []
 var _frames: Array[Transform3D] = []
 var _flames: Array[Node3D] = []
 var _patches: Array[Dictionary] = []
+## What rehearse_burning() has put the look of burning on, [mesh, surface]
+## each, and for how many frames more.
+var _worn: Array[Array] = []
+var _wearing := 0
 
 
 func _ready() -> void:
@@ -233,7 +230,7 @@ func warm(fire: Dictionary, seconds: float) -> void:
 		# twice what it takes to catch, however long it has to wait.
 		var catches: float = TUNING[member.kind].catches
 		var idle: float = Fx.time - member.heated - seconds
-		member.heat = minf(maxf(member.heat - maxf(idle, 0.0) * COOLING, 0.0) + rate * seconds, catches * 2.0)
+		member.heat = minf(maxf(member.heat - maxf(idle, 0.0) * Blast.COOLING, 0.0) + rate * seconds, catches * 2.0)
 		member.heated = Fx.time
 		if member.heat >= catches and (is_instance_valid(_flames[member.collider]) or Blast.room()):
 			Net.show(self, &"_catch", [1 << i])
@@ -466,14 +463,20 @@ func _stoke(column: int) -> void:
 		return
 	var at := _frames[column].translated(Vector3.UP * low)
 	var box := Vector3(size.x, high - low, size.z)
+	# Fx ends the flames on a clock of its own, which can be ahead of the one
+	# a crate burns on: flames that are over are made anew for what catches
+	# after that.
+	if is_instance_valid(_flames[column]) and not Fx.feed(_flames[column], at, box, left, top > high):
+		_flames[column].queue_free()
+		_flames[column] = null
 	if not is_instance_valid(_flames[column]):
 		_flames[column] = Fx.blaze(at, box, left)
-		if not Net.is_guest():
-			_patches[column] = Blast.kindle(at.origin, (size.x + size.z) * 0.25, box.y + CROWN, left)
-	Fx.feed(_flames[column], at, box, left, top > high)
+		if not Net.is_guest() and _patches[column].is_empty():
+			_patches[column] = Blast.kindle(at.origin, (size.x + size.z) * 0.25, box.y + Blast.CROWN, left)
+		Fx.feed(_flames[column], at, box, left, top > high)
 	if not _patches[column].is_empty():
 		_patches[column].at = at.origin
-		_patches[column].tall = box.y + CROWN
+		_patches[column].tall = box.y + Blast.CROWN
 		_patches[column].left = left
 
 
@@ -508,6 +511,40 @@ func burning_looks() -> Array[MeshInstance3D]:
 	return found
 
 
+## Has its lowest crate or box wear the look of one that burns for as long
+## as Fx.rehearse() draws. A mesh of its own, as burning_looks() gives, has
+## no patch of lightmap, and the renderer draws a material on something that
+## has one in another way, which it has to make ready for as well. It does
+## not glow yet and is no blacker, so there is nothing to see of it.
+func rehearse_burning() -> void:
+	if not _worn.is_empty():
+		return
+	for mesh: MeshInstance3D in _members[0].model.find_children("*", "MeshInstance3D", true, false):
+		for surface in mesh.mesh.get_surface_count():
+			var material := mesh.get_active_material(surface) as BaseMaterial3D
+			if material and mesh.get_surface_override_material(surface) == null:
+				mesh.set_surface_override_material(surface, _kindled(material))
+				_worn.append([mesh, surface])
+	if _worn.is_empty():
+		return
+	_wearing = Fx.REHEARSAL + 1
+	get_tree().process_frame.connect(_wear)
+
+
+## A frame of the rehearsal is over. After the last of them the crate is
+## drawn with its own material again, unless it has caught or broken
+## meanwhile and has seen to that itself.
+func _wear() -> void:
+	_wearing -= 1
+	if _wearing > 0:
+		return
+	get_tree().process_frame.disconnect(_wear)
+	if not _members[0].alight and not _members[0].gone:
+		for pair in _worn:
+			(pair[0] as MeshInstance3D).set_surface_override_material(pair[1], null)
+	_worn.clear()
+
+
 ## One that breaks burns no longer, whatever it was drawn with.
 func _quench(member: Member) -> void:
 	member.alight = false
@@ -517,6 +554,23 @@ func _quench(member: Member) -> void:
 	for mesh: MeshInstance3D in member.model.find_children("*", "MeshInstance3D", true, false):
 		for surface in mesh.mesh.get_surface_count():
 			mesh.set_surface_override_material(surface, null)
+
+
+## The fire is put out before it has burnt anything through: what burnt is
+## as it was, and can catch again. See Blast.douse().
+func douse() -> void:
+	var burnt := false
+	for member in _members:
+		member.heat = 0.0
+		if member.alight and not member.gone:
+			_quench(member)
+			member.burnt = 0.0
+			burnt = true
+	if not burnt:
+		return
+	for column in _colliders.size():
+		_stoke(column)
+	set_physics_process(false)
 
 
 ## True if a member has burnt for long enough to be black.

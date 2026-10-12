@@ -3,7 +3,9 @@ extends RefCounted
 ## pallets catch from a fire beside them, each after its own while and not
 ## before, burn, and are gone or burnt after that; what is out of reach does
 ## not catch, no more burn at once than may, a guest lights nothing, and in
-## the end nothing is left burning.
+## the end nothing is left burning. The fireball of an explosion lights what
+## it can see and not what a wall hides, Blast.clear() puts out what burns,
+## and the burn marks on the floor are no more than may be.
 ##
 ## It is timed in physics frames, which is the clock the fires run on, and
 ## the game runs a few times as fast as it is played for it, so that half a
@@ -82,11 +84,13 @@ func run(test: SceneTree) -> void:
 	carton._catch(1)
 	var told: bool = carton.burning() == 1 and is_instance_valid(carton._flames[0]) and blast.alight() == 0
 	blast.clear()
+	var doused: bool = carton.burning() == 0 and carton._flames[0] == null and carton._members[0].charring.is_empty() and not carton._members[0].alight
 	net.active = false
 	peer.close()
 	test.get_multiplayer().multiplayer_peer = OfflineMultiplayerPeer.new()
 	test.check(as_guest and untouched, "a guest lights nothing by itself")
 	test.check(told and not net.is_guest(), "and shows what the host says burns, without a patch of its own")
+	test.check(doused, "Blast.clear() puts that out again")
 
 	# From here on the clock runs. A fire beside the lowest crate of a stack of
 	# three, one beside the pile of pallets, one beside two cardboard boxes,
@@ -142,7 +146,7 @@ func run(test: SceneTree) -> void:
 	var flames: Node3D = stack._flames[0]
 	var box: Vector3 = flames.get_instance_shader_parameter(&"box") if is_instance_valid(flames) else Vector3.ZERO
 	test.check(is_equal_approx(box.y, crates[0].height) and is_equal_approx(box.x, stack._colliders[0].shape.size.x), "its flames are as large as the crate that burns")
-	# The box the guest was told of burns without a patch, and is not counted.
+	# Besides the stacks there is the pile, which is one fire as well.
 	var burning := 0
 	for body: Node in stacks:
 		burning += body._patches.filter(func(fire: Dictionary) -> bool: return not fire.is_empty()).size()
@@ -216,6 +220,84 @@ func run(test: SceneTree) -> void:
 	test.check(close.alight and not distant.alight and distant._heat == 0.0, "the fireball of an explosion lights a pile of pallets two metres away, and none out of its reach")
 	out = await _until(test, func() -> bool: return blast.fires().is_empty() and _flames(game, fx) == 0, 30.0)
 	test.check(out >= 0.0 and close.burnt, "and that burns out as well")
+
+	# A wall keeps the fireball off what stands behind it. A stack of crates
+	# is no wall to it.
+	var hidden: Node3D = distant
+	var space: PhysicsDirectSpaceState3D = hidden.get_world_3d().direct_space_state
+	var heart: Vector3 = hidden.global_transform * Vector3(0.0, hidden.size.y * 0.5, 0.0)
+	var none: Array[RID] = []
+	# A spot two metres from one of its sides that it can be seen from, and
+	# the point on that side that is looked at: the pile itself is part of
+	# the level.
+	var spot := Vector3.INF
+	var side := Vector3.INF
+	for way: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]:
+		var from: Vector3 = hidden.global_transform * (way * ((hidden.size * way).length() * 0.5 + 2.0)) + Vector3.UP * 0.45
+		var to: Vector3 = heart.move_toward(from, hidden.girth + 0.3)
+		if spot == Vector3.INF and blast.in_sight(space, from, to, blast._through(none)):
+			spot = from
+			side = to
+	test.check(spot != Vector3.INF, "there is a spot to see the pile from")
+	var wall := StaticBody3D.new()
+	var slab := CollisionShape3D.new()
+	slab.shape = BoxShape3D.new()
+	slab.shape.size = Vector3(6.0, 6.0, 0.2)
+	wall.add_child(slab)
+	game.add_child(wall)
+	wall.global_transform = Transform3D(fx.facing(heart - spot), (spot + heart) * 0.5)
+	await test.frames(2)
+	var shut: bool = not blast.in_sight(space, spot, side, none)
+	wall.add_to_group(blast.TINDER)
+	var through: Array[RID] = blast._through(none)
+	wall.remove_from_group(blast.TINDER)
+	test.check(shut and blast.in_sight(space, spot, side, through), "a wall is in the way of the look of a blast, and a stack of crates is not")
+	blast.explode(spot, 6.5, 150.0)
+	test.check(not hidden.alight and hidden._heat == 0.0, "the fireball does not light a pile of pallets behind a wall")
+	blast.clear()
+	wall.free()
+	await test.frames(2)
+	blast.explode(spot, 6.5, 150.0)
+	test.check(hidden.alight and is_instance_valid(hidden._flames) and blast.alight() >= 1, "with the wall gone it does")
+
+	# A round that starts again clears the effects and the fires without a
+	# new level: what burns is put out, and is as it was.
+	fx.clear()
+	blast.clear()
+	test.check(not hidden.alight and not hidden.burnt and hidden._flames == null and hidden._patch.is_empty() and blast.fires().is_empty() and blast.alight() == 0,
+		"Fx.clear() and Blast.clear() put out a pile that burns, which is not burnt by it")
+	var out_too := true
+	for body: Node in stacks:
+		out_too = out_too and body.burning() == 0 and body._flames.all(func(flames: Variant) -> bool: return flames == null)
+		out_too = out_too and body._patches.all(func(fire: Dictionary) -> bool: return fire.is_empty())
+	test.check(out_too, "and every stack that burns")
+	await test.frames(2)
+	test.check(_flames(game, fx) == 0, "no flame is left of them")
+	hidden.warm({"at": hidden.global_position, "flames": 1.0, "tall": 3.0}, 10.0)
+	test.check(hidden.alight and blast.alight() == 1, "what was put out can catch again")
+	var upright: Node3D = stacks.filter(func(body: Node) -> bool: return body.standing() > 0 and not body._members[0].gone)[0]
+	var lowest: RefCounted = upright._members[0]
+	upright._catch(1)
+	lowest.burnt = 1.0
+	var lit: bool = lowest.alight and not lowest.charring.is_empty() and is_instance_valid(upright._flames[lowest.collider]) and blast.alight() == 2
+	blast.clear()
+	var bare := true
+	for mesh: MeshInstance3D in lowest.model.find_children("*", "MeshInstance3D", true, false):
+		for surface in mesh.mesh.get_surface_count():
+			bare = bare and mesh.get_surface_override_material(surface) == null
+	test.check(lit and not lowest.alight and lowest.burnt == 0.0 and lowest.charring.is_empty() and bare and upright._flames[lowest.collider] == null and upright._patches[lowest.collider].is_empty()
+		and not hidden.alight and blast.alight() == 0, "a crate that is put out is drawn with its own material again, and has no patch")
+	await test.frames(2)
+	test.check(_flames(game, fx) == 0 and blast.fires().is_empty(), "and nothing burns after that")
+
+	# The burn marks on the floor: the oldest makes way.
+	var ground: Vector3 = (test.get_first_node_in_group("player") as Node3D).global_position
+	fx.soot(Transform3D(Basis(), ground), Vector3(1.0, 0.0, 1.0))
+	var oldest: Decal = fx._soot_marks.back()
+	for i: int in fx.MAX_SOOT:
+		fx.soot(Transform3D(Basis(), ground + Vector3(0.1 * i, 0.0, 0.0)), Vector3(1.0, 0.0, 1.0))
+	test.check(fx._soot_marks.size() == fx.MAX_SOOT and not fx._soot_marks.has(oldest) and oldest.is_queued_for_deletion()
+		and fx._soot_marks.all(func(mark: Decal) -> bool: return not mark.is_queued_for_deletion()), "there are no more than %d burn marks on the floor, and the oldest makes way" % fx.MAX_SOOT)
 
 	# What Blast.burn() and Blast.burning() meant, they mean.
 	var player: Node3D = test.get_first_node_in_group("player")
