@@ -425,7 +425,8 @@ func explosion(position: Vector3, size := 1.0) -> void:
 	var up := Transform3D(Basis(), position)
 	var floor_y := floor_below(position + Vector3.UP * 0.2)
 	var reach := 7.0 * size
-	var shade := light_at(position + Vector3.UP * 0.5)
+	# The cloud hangs over where it went off, and is lit as it is there.
+	var light := smoke_light(position + Vector3.UP * SMOKE_HEIGHT * size)
 	flash(position + Vector3.UP * 0.4, Color(1.0, 0.72, 0.45), 12.0 * size, 14.0 * size, 0.35)
 
 	var shell := MeshInstance3D.new()
@@ -439,9 +440,10 @@ func explosion(position: Vector3, size := 1.0) -> void:
 	_spawn(shell, 0.4)
 
 	# The fire is out within half a second; what it burnt hangs about as smoke.
-	_burst(_clouds, up, 3.6, {&"tint": Color(0.085, 0.08, 0.075, 0.9), &"shade": shade, &"glow": 1.0, &"fire": 0.16, &"speed": 12.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.5) * size, &"life": 3.4, &"rise": 0.9}, reach)
-	_burst(_smoke, up, 0.5, {&"tint": Color(1.0, 0.6, 0.25, 1.0), &"glow": 1.6, &"fire": 1.0, &"speed": 5.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.0) * size, &"life": 0.4, &"rise": 0.5}, reach)
-	var column := _burst(_smoke, up, 6.0, {&"tint": Color(0.09, 0.088, 0.085, 0.7), &"shade": shade, &"speed": 2.5 * size, &"spread": 0.8, &"size": Vector2(0.4, 1.8) * size, &"life": 5.0, &"rise": 0.9}, reach)
+	_burst(_clouds, up, 3.6, {&"tint": Color(0.17, 0.162, 0.154, 0.9), &"glow": 1.0, &"fire": 0.16, &"speed": 12.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.5) * size, &"life": 3.4, &"rise": 0.9}.merged(light), reach)
+	_burst(_smoke, up, 0.5, {&"tint": Color(1.0, 0.6, 0.25, 1.0), &"glow": 1.6, &"fire": 1.0, &"speed": 5.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.0) * size, &"life": 0.4, &"rise": 0.5}.merged(light), reach)
+	# The column stands in the cloud, which keeps part of the key light off it.
+	var column := _burst(_smoke, up, 6.0, {&"tint": Color(0.17, 0.166, 0.162, 0.7), &"key_light": (light.key_light as Vector3) * SMOKE_SHROUDED, &"speed": 2.5 * size, &"spread": 0.8, &"size": Vector2(0.4, 1.8) * size, &"life": 5.0, &"rise": 0.9}.merged(light), reach)
 	column.set_instance_shader_parameter(&"start", time + 0.25)
 	for turn in 3:
 		_burst(_sparks, up.rotated_local(Vector3.UP, turn * 2.1), 2.0, {&"floor_y": floor_y, &"speed": randf_range(11.0, 17.0) * size, &"spread": 1.0, &"life": randf_range(1.1, 1.8)}, reach * 2.0)
@@ -451,7 +453,7 @@ func explosion(position: Vector3, size := 1.0) -> void:
 	if floor_y > position.y - 2.0 * size:
 		var ground := Vector3(position.x, floor_y, position.z)
 		# The blast sweeps the dust off the floor in a ring.
-		_burst(_clouds, Transform3D(Basis(), ground + Vector3.UP * 0.15), 1.6, {&"tint": Color(0.33, 0.31, 0.28, 0.4), &"shade": shade, &"speed": 17.0 * size, &"spread": 2.0, &"size": Vector2(0.25, 1.0) * size, &"life": 1.4, &"rise": 0.2}, reach)
+		_burst(_clouds, Transform3D(Basis(), ground + Vector3.UP * 0.15), 1.6, {&"tint": Color(0.33, 0.31, 0.28, 0.4), &"speed": 17.0 * size, &"spread": 2.0, &"size": Vector2(0.25, 1.0) * size, &"life": 1.4, &"rise": 0.2}.merged(light), reach)
 		var soot := Decal.new()
 		soot.texture_albedo = _scorch_textures.pick_random()
 		var across := randf_range(3.0, 3.6) * size
@@ -460,9 +462,136 @@ func explosion(position: Vector3, size := 1.0) -> void:
 		_keep(soot)
 
 
+## How far over an explosion its cloud of smoke hangs, in metres: where the
+## light on it is looked for.
+const SMOKE_HEIGHT := 1.2
+## How bright the light of the sky makes smoke, against a lamp of energy 1
+## that shines straight on it: a roof keeps half of it out.
+const SMOKE_SKY := 0.5
+## The share of the key light that comes back off the floor and the walls
+## around a cloud, as light from all around.
+const SMOKE_BOUNCE := 0.12
+## How much brighter than the light from all around the light from straight
+## above is taken to be, where no sun and no lamp gets to a cloud.
+const SMOKE_OVERHEAD := 4.0
+## How many of the brightest lights around a cloud are tried for a clear line
+## to it before it counts as standing in the dark.
+const SMOKE_TRIES := 3
+## A lamp counts as no nearer to a cloud than this, in metres: the cloud is a
+## good deal larger than the point its light is looked for at.
+const SMOKE_NEAR := 1.5
+## How far short of a lamp the line to it stops, in metres, so that what the
+## lamp hangs from is not in the way.
+const SMOKE_CLEAR := 0.5
+## How much of its colour a light loses on smoke, which scatters the blue of
+## it best: the low sun turns soot tan, not orange.
+const SMOKE_GREY := 0.35
+## The share of the key light that gets to the column of smoke inside the
+## cloud of an explosion.
+const SMOKE_SHROUDED := 0.6
+## How strongly a fire lights the smoke that rises off it.
+const SMOKE_EMBER := 8.0
+
+## How bright red, green and blue are to the eye.
+const LUMINANCE := Vector3(0.2126, 0.7152, 0.0722)
+
+## The lamps of the level that is being played, and which level that is.
+var _lamps: Array[Light3D] = []
+var _lamps_of := 0
+
+
 ## Makes ready what the smoke of an explosion and of a fire is drawn with.
 func _ready_smoke() -> void:
 	pass
+
+
+## The light on a cloud of smoke that hangs around `position`, as the instance
+## uniforms of shaders/smoke.gdshader: the renderer does not light that smoke,
+## so whoever sets it off hands this in with the rest. The key light is the
+## brightest of the sun and the lamps that get to the cloud with nothing in
+## the way. A cloud that none of them gets to is lit from above, by the light
+## that comes from all around.
+func smoke_light(position: Vector3) -> Dictionary:
+	# Every light that reaches this far: [how bright, the way to it, its
+	# colour, how far the line to it has to be clear].
+	var lights: Array[Array] = []
+	var sun := _sun()
+	if sun and sun.visible:
+		lights.append([sun.light_energy, sun.global_basis.z, sun.light_color, 80.0])
+	for lamp in _level_lamps():
+		var strength := _lamp_strength(lamp, position)
+		if strength > 0.0:
+			var to := lamp.global_position - position
+			lights.append([strength, to.normalized(), lamp.light_color, to.length() - SMOKE_CLEAR])
+	lights.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	var space := get_viewport().find_world_3d().direct_space_state
+	var around := _ambient()
+	for light: Array in lights.slice(0, SMOKE_TRIES):
+		var way: Vector3 = light[1]
+		var query := PhysicsRayQueryParameters3D.create(position, position + way * maxf(light[3], 0.0), WORLD)
+		if space.intersect_ray(query).is_empty():
+			var colour := _rgb(light[2])
+			var key: Vector3 = colour.lerp(Vector3.ONE * colour.dot(LUMINANCE), SMOKE_GREY) * light[0]
+			return {&"key": way, &"key_light": key, &"fill": around + key * SMOKE_BOUNCE}
+	return {&"key": Vector3.UP, &"key_light": around * SMOKE_OVERHEAD, &"fill": around}
+
+
+## How brightly a lamp lights a point, by the renderer's own reckoning: its
+## energy, less what is lost over the distance and, for a spot, towards the
+## edge of its beam. Nothing for a lamp that is out or out of reach.
+func _lamp_strength(lamp: Light3D, position: Vector3) -> float:
+	if not is_instance_valid(lamp) or not lamp.visible:
+		return 0.0
+	var reach := lamp.get_param(Light3D.PARAM_RANGE)
+	var from := position - lamp.global_position
+	var distance := maxf(from.length(), SMOKE_NEAR)
+	if distance >= reach:
+		return 0.0
+	var strength := lamp.light_energy * (1.0 - (distance / reach) ** 4.0) ** 2.0 * distance ** -lamp.get_param(Light3D.PARAM_ATTENUATION)
+	if lamp is SpotLight3D:
+		var edge := cos(deg_to_rad(lamp.get_param(Light3D.PARAM_SPOT_ANGLE)))
+		var off := (1.0 - maxf(from.normalized().dot(-lamp.global_basis.z), edge)) / (1.0 - edge)
+		strength *= 1.0 - off ** lamp.get_param(Light3D.PARAM_SPOT_ATTENUATION)
+	return strength
+
+
+## The lamps the level builder put in the level, looked up once per level.
+func _level_lamps() -> Array[Light3D]:
+	var scene := get_tree().current_scene
+	if scene.get_instance_id() != _lamps_of:
+		_lamps_of = scene.get_instance_id()
+		_lamps.assign(scene.find_children("*", "Light3D", true, false).filter(
+			func(light: Light3D) -> bool: return light.get_parent().name == &"Lights" and not light is DirectionalLight3D))
+	return _lamps
+
+
+## The sun of the level, or its moon; nothing if it has neither.
+func _sun() -> DirectionalLight3D:
+	var sun: DirectionalLight3D = null
+	for light in get_tree().current_scene.find_children("*", "DirectionalLight3D", false, false):
+		sun = light
+	return sun
+
+
+## The light that comes from all around in the level, going by what its
+## environment says: the ambient colour, and white for the share of it that
+## the sky gives.
+func _ambient() -> Vector3:
+	var environment := get_viewport().find_world_3d().environment
+	if environment == null:
+		return Vector3.ONE * SMOKE_SKY
+	var source := environment.ambient_light_source
+	var sky := 0.0
+	if source == Environment.AMBIENT_SOURCE_BG or source == Environment.AMBIENT_SOURCE_SKY:
+		sky = environment.ambient_light_sky_contribution
+	var colour := Vector3.ZERO if source == Environment.AMBIENT_SOURCE_DISABLED else _rgb(environment.ambient_light_color) * (1.0 - sky)
+	return (colour + Vector3.ONE * sky * environment.background_energy_multiplier) * environment.ambient_light_energy * SMOKE_SKY
+
+
+## A colour as the three numbers a shader works with.
+func _rgb(colour: Color) -> Vector3:
+	var linear := colour.srgb_to_linear()
+	return Vector3(linear.r, linear.g, linear.b)
 
 
 ## A fire that burns for `seconds` on a patch `across` metres wide around
@@ -616,8 +745,9 @@ func _step(delta: float) -> void:
 		var flicker := 0.8 + 0.12 * sin(time * 23.0 + burning.seed) + 0.08 * sin(time * 57.0 + burning.seed * 2.0)
 		burning.light.light_energy = burning.energy * strength * flicker
 		while time >= burning.smoke and burning.smoke < burning.start + burning.seconds - dying:
+			# The fire lights its smoke from below until it is out.
 			var smoke := _burst(_smoke, Transform3D(Basis(), burning.at + Vector3.UP * 0.4), 3.0,
-				{&"tint": Color(0.07, 0.07, 0.075, 0.5), &"shade": burning.shade, &"speed": 0.7, &"spread": 0.5, &"size": Vector2(0.15, 0.75), &"life": 2.6, &"rise": 1.2, &"amount": 0.45})
+				{&"tint": Color(0.14, 0.14, 0.148, 0.5), &"ember": Vector2(SMOKE_EMBER, burning.start + burning.seconds), &"speed": 0.7, &"spread": 0.5, &"size": Vector2(0.15, 0.75), &"life": 2.6, &"rise": 1.2, &"amount": 0.45}.merged(smoke_light(burning.at + Vector3.UP * SMOKE_HEIGHT)))
 			smoke.set_instance_shader_parameter(&"start", burning.smoke)
 			burning.smoke += 0.3
 
@@ -727,12 +857,11 @@ func _expire(node: Node3D, seconds: float) -> void:
 	_expiring.append([node, time + seconds])
 
 
-## How much light falls on a point, for smoke that is not lit by the renderer:
-## 1 in the shade, more where the sun reaches it.
+## How much light falls on a point, as one number: 1 in the shade, more where
+## the sun reaches it. A fire keeps it for the spot it burns at; the smoke
+## itself asks smoke_light(), which says where the light comes from as well.
 func light_at(position: Vector3) -> float:
-	var sun: DirectionalLight3D = null
-	for light in get_tree().current_scene.find_children("*", "DirectionalLight3D", false, false):
-		sun = light
+	var sun := _sun()
 	if sun == null or not sun.visible:
 		return 1.0
 	var query := PhysicsRayQueryParameters3D.create(position, position + sun.global_basis.z * 80.0, WORLD)

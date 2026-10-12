@@ -1,6 +1,6 @@
-// The body of puff.gdshader and smoke.gdshader: soft balls of dust, smoke or
-// fire. The first lights them like anything else in the level. The second
-// defines UNLIT, which leaves the lighting out and lets them burn.
+// The body of puff.gdshader: soft balls of dust or smoke, lit like anything
+// else in the level. The fire and smoke of an explosion are the same balls
+// with a light of their own, see smoke.gdshader.
 #include "fx_common.gdshaderinc"
 
 // Three channels of tiling noise; the wear mask of the painted steel will do.
@@ -20,14 +20,6 @@ instance uniform float rise = 0.1;
 instance uniform float amount = 1.0;
 // Light it gives off itself while it is young: a ball of fire, not of dust.
 instance uniform float glow = 0.0;
-#ifdef UNLIT
-// Fraction of its life it burns for before it is smoke of the colour above:
-// an explosion rather than a puff. `glow` is then how bright the fire is.
-instance uniform float fire = 0.0;
-// How much light falls on it, which nothing works out for it here: 1 is the
-// shade, more is a patch of sunlight.
-instance uniform float shade = 1.0;
-#endif
 
 // How quickly the air stops it, per second.
 const float DRAG = 5.0;
@@ -37,11 +29,8 @@ varying float course;
 
 void vertex() {
 	random = VERTEX * 0.5 + 0.5;
-	// They do not all leave at the same moment, unless they are blown out.
+	// They do not all leave at the same moment.
 	float stagger = 0.12;
-#ifdef UNLIT
-	stagger = fire > 0.0 ? 0.03 : 0.12;
-#endif
 	float age = fx_time - start - random.z * stagger * life;
 	float span = life * (0.6 + 0.4 * random.x);
 	course = clamp(age / span, 0.0, 1.0);
@@ -74,34 +63,12 @@ void fragment() {
 	ALPHA = smoothstep(gone, gone + 0.8, density) * tint.a * smoothstep(0.0, 0.08, course) * (1.0 - smoothstep(0.5, 1.0, course));
 	ALBEDO = tint.rgb * (0.75 + 0.5 * billow);
 	ROUGHNESS = 1.0;
-#ifdef UNLIT
-	// Darker towards the rim, as a ball is that is lit from the front.
-	vec3 lit = tint.rgb * (0.75 + 0.5 * billow) * shade * (0.5 + 0.5 * sqrt(inside));
-	vec3 glowing = tint.rgb * glow * (1.0 - course);
-	if (fire > 0.0) {
-		// Burning, it is hottest where it is thickest: yellow through orange
-		// to a dull red, and soot where it has burnt out. The thin parts go
-		// out first, so the fire breaks up into the smoke it leaves.
-		float left = max(1.0 - course / fire, 0.0);
-		float heat = left * (0.3 + 0.7 * inside) * (0.15 + 2.6 * billow * billow) + left * left * left * 0.6;
-		glowing = (vec3(1.0, 0.16, 0.02) * smoothstep(0.05, 0.4, heat) * 1.5 + vec3(1.0, 0.5, 0.12) * smoothstep(0.35, 0.8, heat) * 2.6 + vec3(1.0, 0.85, 0.6) * smoothstep(0.8, 1.3, heat) * 5.0) * glow;
-		// The fire lights the smoke around it for as long as it burns.
-		lit *= 1.0 + 6.0 * left * left;
-		lit *= 1.0 - smoothstep(0.0, 0.3, heat);
-		// Fire is not something to see through.
-		ALPHA = mix(ALPHA, smoothstep(0.02, 0.25, density) * smoothstep(0.0, 0.04, course), smoothstep(0.0, 0.25, left));
-	}
-	ALBEDO = lit + glowing;
-#else
 	EMISSION = tint.rgb * glow * (1.0 - course);
 	// Shade it as the ball it stands for instead of the flat card it is.
 	NORMAL = normalize(vec3(p * 0.7, sqrt(inside) + 0.35));
-#endif
 }
 
-#ifndef UNLIT
 void light() {
 	// Smoke scatters light every way, a little more towards where it came from.
 	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * (0.3 + 0.3 * max(dot(NORMAL, LIGHT), 0.0)) / PI;
 }
-#endif
