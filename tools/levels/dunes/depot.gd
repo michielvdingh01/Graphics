@@ -19,6 +19,8 @@ const PANE := "depot_glass"
 const FRAME := "depot_frame"
 ## Slabs of concrete laid as a road.
 const SLAB := "depot_slab"
+## Dark steel wire, seen from either side.
+const WIRE := "depot_wire"
 const WHITEWASH := Color(0.74, 0.73, 0.68)
 const SIGNAL_YELLOW := Color(0.78, 0.56, 0.08)
 const STENCIL_BLACK := Color(0.05, 0.05, 0.05)
@@ -29,11 +31,11 @@ const FOOT := 4.4
 ## The wall round the complex: how far apart its piers stand, how wide and
 ## how deep a pier is, and how thick the wall between them.
 const BAY := 4.0
-const PIER := Vector2(0.5, 0.56)
+const PIER := Vector2(0.55, 0.78)
 const WALL_THICK := 0.4
-## How high over the foot of the wall its weep holes are, as the material of
-## the wall has it for the rust under them.
-const WEEP_HEIGHT := 0.62
+## How high the first lift of the wall was poured: it is a little thicker
+## than the one on top of it, and the ledge between them shows.
+const FIRST_LIFT := 2.3
 
 ## How far off what is small is still drawn: what is only seen from close
 ## by, what shows across the yard, and what is never left out but casts no
@@ -42,6 +44,9 @@ const WEEP_HEIGHT := 0.62
 const NEAR := 70.0
 const MID := 150.0
 const FAR := 420.0
+## How many metres of ground such a mesh covers each way: twice what a block
+## of the land does, since every surface of it is drawn by itself.
+const FINE_BLOCK := 64.0
 
 ## How far off what is being built is still drawn, or nought for what is
 ## drawn from anywhere and casts a shadow: see fine().
@@ -86,7 +91,7 @@ func coarse() -> void:
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 	if _fine <= 0.0 or flags & GLASS or _moving:
 		return super(mat, flags, at)
-	var block := (at / _detail_block + Vector3(0.5, 0, 0)).floor()
+	var block := (at / FINE_BLOCK).floor()
 	var key := "%d %d %d/%s" % [int(_fine), int(block.x), int(block.z), mat]
 	if not _fine_tools.has(key):
 		var st := SurfaceTool.new()
@@ -143,7 +148,11 @@ func _commit_fine() -> void:
 		node.visibility_range_end_margin = maxf(4.0, reach * 0.08)
 		_add(node, holder)
 		_strewn["complex/fine_" + group.replace(" ", "_")] = {"mesh": mesh, "fit": Transform3D()}
-	print("The complex, what is small: %d meshes of %d surfaces, %d triangles" % [names.size(), _fine_tools.size(), triangles])
+	var used := {}
+	for key: String in _fine_tools:
+		var slot := "%s %s" % [key.get_slice(" ", 0), key.get_slice("/", 1)]
+		used[slot] = used.get(slot, 0) + 1
+	print("The complex, what is small: %d meshes of %d surfaces, %d triangles: %s" % [names.size(), _fine_tools.size(), triangles, used])
 	_fine_tools.clear()
 
 
@@ -225,9 +234,10 @@ func stencil_number(figures: String, xf: Transform3D, height: float, colour: Col
 ## A stretch of the wall round the complex from `from` to `to` (x and z),
 ## with its outside on the right of the way it runs: concrete poured in bays
 ## between piers, on a footing, under a coping, each bay with two weep holes
-## and its number stencilled on the inside. With `wire`, an arm leans out
-## over the outside from every pier, with three strands of barbed wire on it
-## and a coil on top. A stretch has a pier at either end unless `ends` says
+## (which its concrete shows: see shaders/weathered_wall.gdshader) and its
+## number stencilled on the inside. With `wire`, an arm of concrete leans
+## out over the outside from every pier, with three strands of barbed wire
+## on it and a coil on top. A stretch has a pier at either end unless `ends` says
 ## not: a corner and a gate post stand there instead. Returns the number of
 ## the bay after its last.
 func wall_run(from: Vector2, to: Vector2, number := 1, wire := true, ends := Vector2i(1, 1)) -> int:
@@ -246,26 +256,21 @@ func wall_run(from: Vector2, to: Vector2, number := 1, wire := true, ends := Vec
 		var x0 := i * pitch + PIER.x * 0.5
 		var x1 := (i + 1) * pitch - PIER.x * 0.5
 		var mid := (x0 + x1) * 0.5
-		square_box(WALL, xf, Vector3(mid, (WALL_HIGH + low) * 0.5, 0), Vector3(x1 - x0, WALL_HIGH - low, WALL_THICK))
-		square_box(WALL, xf, Vector3(mid, -0.02, 0), Vector3(x1 - x0, 0.96, WALL_THICK + 0.14))
-		square_box(WALL, xf, Vector3(mid, WALL_HIGH + 0.06, 0), Vector3(pitch - 0.7, 0.12, WALL_THICK + 0.2))
+		square_box(WALL, xf, Vector3(mid, (WALL_HIGH + FIRST_LIFT) * 0.5, 0), Vector3(x1 - x0, WALL_HIGH - FIRST_LIFT, WALL_THICK))
+		square_box(WALL, xf, Vector3(mid, (FIRST_LIFT + low) * 0.5, 0), Vector3(x1 - x0, FIRST_LIFT - low, WALL_THICK + 0.09))
+		square_box(WALL, xf, Vector3(mid, 0.05, 0), Vector3(x1 - x0, 1.1, WALL_THICK + 0.3))
+		square_box(WALL, xf, Vector3(mid, WALL_HIGH + 0.07, 0), Vector3(pitch - 0.75, 0.14, WALL_THICK + 0.3))
+		# Its number, stencilled at head height on the inside.
 		fine(NEAR)
-		for share: float in [0.25, 0.75]:
-			for side: float in [-1.0, 1.0]:
-				var hole := Vector3(lerpf(x0, x1, share), WEEP_HEIGHT, side * WALL_THICK * 0.5)
-				rod("dark_steel", xf * (hole - Vector3(0, 0, side * 0.05)), xf * (hole + Vector3(0, 0, side * 0.012)), 0.032, SLIGHT, 8)
-		# Its number, on a panel of whitewash at head height on the inside.
-		var plate := xf * Transform3D(Basis(Vector3.UP, PI), Vector3(mid, 2.05, -WALL_THICK * 0.5 - 0.004))
-		painted(plate, Vector2(0.56, 0.38), WHITEWASH)
-		stencil_number("%02d" % (number + i), plate * Transform3D(Basis(), Vector3(0, 0, 0.003)), 0.28, STENCIL_BLACK)
+		stencil_number("%02d" % (number + i), xf * Transform3D(Basis(Vector3.UP, PI), Vector3(mid, 1.85, -WALL_THICK * 0.5 - 0.049)), 0.3, STENCIL_BLACK)
 		coarse()
 	for i in bays + 1:
 		if (i == 0 and ends.x == 0) or (i == bays and ends.y == 0):
 			continue
 		var x := i * pitch
 		square_box(WALL, xf, Vector3(x, (WALL_HIGH + low) * 0.5, 0), Vector3(PIER.x, WALL_HIGH - low, PIER.y))
-		square_box(WALL, xf, Vector3(x, 0.05, 0), Vector3(PIER.x + 0.14, 1.1, PIER.y + 0.14))
-		square_box(WALL, xf, Vector3(x, WALL_HIGH + 0.08, 0), Vector3(PIER.x + 0.16, 0.16, PIER.y + 0.16))
+		square_box(WALL, xf, Vector3(x, 0.1, 0), Vector3(PIER.x + 0.16, 1.2, PIER.y + 0.16))
+		square_box(WALL, xf, Vector3(x, WALL_HIGH + 0.09, 0), Vector3(PIER.x + 0.2, 0.18, PIER.y + 0.18))
 	if wire:
 		_wall_wire(xf, length, bays)
 	return number + bays
@@ -275,33 +280,34 @@ func wall_run(from: Vector2, to: Vector2, number := 1, wire := true, ends := Vec
 ## beginning on the ground, with X along it and Z to its outside.
 func _wall_wire(xf: Transform3D, length: float, bays: int) -> void:
 	var pitch := length / bays
-	var top := WALL_HIGH + 0.16
+	var top := WALL_HIGH + 0.18
 	var knee := Vector3(0, top + 0.34, 0)
 	var tip := Vector3(0, top + 0.86, 0.52)
-	fine(MID)
 	for i in bays + 1:
 		var at := Vector3(i * pitch, 0, 0)
-		_local_box("wire", xf, at + Vector3(0, top + 0.01, 0), Vector3(0.16, 0.02, 0.16), SLIGHT)
-		beam("wire", xf * (at + Vector3(0, top, 0)), xf * (at + knee), 0.05, SLIGHT)
-		beam("wire", xf * (at + knee), xf * (at + tip), 0.05, SLIGHT)
-		if i == 0:
-			continue
-		var before := at - Vector3(pitch, 0, 0)
+		beam(CONCRETE, xf * (at + Vector3(0, top - 0.02, 0)), xf * (at + knee + Vector3(0, 0.04, 0)), 0.11, SLIGHT)
+		beam(CONCRETE, xf * (at + knee), xf * (at + tip), 0.1, SLIGHT)
+	fine(MID)
+	for i in range(1, bays + 1):
+		var before := Vector3((i - 1) * pitch, 0, 0)
+		var at := Vector3(i * pitch, 0, 0)
 		for share: float in [0.2, 0.58, 0.96]:
-			var hung := knee.lerp(tip, share) + Vector3(0, 0.03, 0)
-			beam("wire", xf * (before + hung), xf * (at + hung), 0.014, SLIGHT)
-		_coil(xf * Transform3D(Basis(), before + Vector3(0, top + 0.27, 0.03)), pitch, 0.27)
+			var hung := knee.lerp(tip, share) + Vector3(0, 0.07, 0)
+			beam(WIRE, xf * (before + hung), xf * (at + hung), 0.014, SLIGHT)
+		_coil(xf * Transform3D(Basis(), before + Vector3(0, top + 0.27, -0.02)), pitch, 0.27)
 	coarse()
 
 
 ## A coil of barbed wire, `length` long along the X of `xf` and `radius`
 ## round: two bands of steel wound against each other, as it comes off the
-## lorry, sagging a little between where it is tied down.
+## lorry, sagging a little between where it is tied down. A band is wider
+## than wire is: a coil has to show from across the yard, where a wire
+## would be less than a dot of the screen.
 func _coil(xf: Transform3D, length: float, radius: float) -> void:
-	var st := _tool("wire", SLIGHT, xf * Vector3(length * 0.5, 0, 0))
-	var turns := maxi(2, roundi(length / 0.46))
-	var steps := 10
-	var band := 0.013
+	var st := _tool(WIRE, SLIGHT, xf * Vector3(length * 0.5, 0, 0))
+	var turns := maxi(2, roundi(length / 0.5))
+	var steps := 8
+	var band := 0.016
 	for wound: float in [1.0, -1.0]:
 		var loose := _depot_rng.randf_range(0.9, 1.08)
 		var phase := _depot_rng.randf() * TAU
@@ -327,9 +333,9 @@ func _coil(xf: Transform3D, length: float, radius: float) -> void:
 func corner_pier(at: Vector2) -> void:
 	var low := FOOT - YARD_Y
 	var foot := Vector3(at.x, YARD_Y, at.y)
-	box(WALL, foot + Vector3.UP * (WALL_HIGH + 0.3 + low) * 0.5, Vector3(0.84, WALL_HIGH + 0.3 - low, 0.84), Vector3.ZERO, SLIGHT)
-	box(WALL, foot + Vector3.UP * 0.05, Vector3(1.0, 1.1, 1.0), Vector3.ZERO, SLIGHT)
-	box(WALL, foot + Vector3.UP * (WALL_HIGH + 0.39), Vector3(1.02, 0.18, 1.02), Vector3.ZERO, SLIGHT)
+	box(WALL, foot + Vector3.UP * (WALL_HIGH + 0.3 + low) * 0.5, Vector3(1.0, WALL_HIGH + 0.3 - low, 1.0), Vector3.ZERO, SLIGHT)
+	box(WALL, foot + Vector3.UP * 0.1, Vector3(1.18, 1.2, 1.18), Vector3.ZERO, SLIGHT)
+	box(WALL, foot + Vector3.UP * (WALL_HIGH + 0.39), Vector3(1.2, 0.18, 1.2), Vector3.ZERO, SLIGHT)
 
 
 ## A concrete watch post on a corner of the wall at `at` (x and z), its
@@ -358,12 +364,10 @@ func watch_post(at: Vector2, looks: Vector3) -> void:
 		for z: float in [-1.0, 1.0]:
 			_local_box(WALL, xf, Vector3(x * (half - 0.11), 1.6, z * (half - 0.11)), Vector3(0.22, 0.6, 0.22), SLIGHT)
 	_local_box(WALL, xf, Vector3(0, 2.5, 0), Vector3(half * 2.0 + 0.7, 0.2, half * 2.0 + 0.7), SLIGHT)
-	fine(FAR)
-	_local_box("dark_steel", xf, Vector3(0, 2.62, 0), Vector3(half * 2.0 + 0.5, 0.04, half * 2.0 + 0.5), SLIGHT)
 	# A searchlight on the roof, off by day.
-	cylinder("dark_steel", xf * Vector3(0.5, 2.64, 0.6), 0.03, 0.5, SLIGHT, Vector3.ZERO, -1.0, 6)
-	rod("army_green", xf * Vector3(0.5, 3.2, 0.42), xf * Vector3(0.5, 3.3, 0.86), 0.24, SLIGHT, 12)
-	rod("paper", xf * Vector3(0.5, 3.3, 0.86), xf * Vector3(0.5, 3.302, 0.87), 0.21, SLIGHT, 12)
+	fine(FAR)
+	cylinder("galvanised", xf * Vector3(0.5, 2.6, 0.6), 0.03, 0.54, SLIGHT, Vector3.ZERO, -1.0, 6)
+	rod("galvanised", xf * Vector3(0.5, 3.2, 0.42), xf * Vector3(0.5, 3.3, 0.86), 0.24, SLIGHT, 12)
 	coarse()
 
 
@@ -434,18 +438,17 @@ func gate_post(hinge: Vector3, out: Vector3) -> void:
 	coarse()
 
 
-## A board on a wall: white enamel in a red border, with `lines` of text on
+## A board on a wall: a plate of steel painted white in a red border, with `lines` of text on
 ## it one under the other, each [text, height of its letters, colour]. `xf`
 ## stands in the middle of its back on the face of the wall, with Z out of
 ## it. Its texts are stencils, so it is read from as far as it is drawn.
 func sign_board(xf: Transform3D, size: Vector2, lines: Array) -> void:
 	fine(MID)
-	_local_box("paper", xf, Vector3(0, 0, 0.012), Vector3(size.x, size.y, 0.024), SLIGHT)
+	_local_box("dark_steel", xf, Vector3(0, 0, 0.012), Vector3(size.x, size.y, 0.024), SLIGHT)
+	painted(xf * Transform3D(Basis(), Vector3(0, 0, 0.0245)), size - Vector2(0.01, 0.01), WHITEWASH)
 	for edge: float in [-1.0, 1.0]:
-		_local_box("enamel_red", xf, Vector3(0, edge * (size.y * 0.5 - 0.03), 0.026), Vector3(size.x, 0.06, 0.004), SLIGHT)
-		_local_box("enamel_red", xf, Vector3(edge * (size.x * 0.5 - 0.03), 0, 0.026), Vector3(0.06, size.y, 0.004), SLIGHT)
-		for corner: float in [-1.0, 1.0]:
-			_local_box("dark_steel", xf, Vector3(edge * (size.x * 0.5 - 0.1), corner * (size.y * 0.5 - 0.1), 0.028), Vector3(0.03, 0.03, 0.008), SLIGHT)
+		painted(xf * Transform3D(Basis(), Vector3(0, edge * (size.y * 0.5 - 0.03), 0.0255)), Vector2(size.x, 0.06), SIGNAL_RED)
+		painted(xf * Transform3D(Basis(), Vector3(edge * (size.x * 0.5 - 0.03), 0, 0.0255)), Vector2(0.06, size.y), SIGNAL_RED)
 	var total := 0.0
 	for line: Array in lines:
 		total += (line[1] as float) * 1.5
@@ -469,19 +472,19 @@ func flood_mast(at: Vector2, inwards: Vector3, height := 8.2, aims := Vector3.ZE
 	fine(FAR)
 	cylinder("galvanised", foot + Vector3.UP * 0.45, 0.075, height - 0.45, SLIGHT, Vector3.ZERO, 0.05, 10)
 	for y: float in [1.6, WALL_HIGH - 0.3]:
-		box("dark_steel", foot - inwards * 0.1 + Vector3.UP * y, inwards.abs() * 0.24 + Vector3(absf(inwards.z), 0, absf(inwards.x)) * 0.22 + Vector3.UP * 0.05, Vector3.ZERO, SLIGHT)
+		box("galvanised", foot - inwards * 0.1 + Vector3.UP * y, inwards.abs() * 0.24 + Vector3(absf(inwards.z), 0, absf(inwards.x)) * 0.22 + Vector3.UP * 0.05, Vector3.ZERO, SLIGHT)
 	var across := Vector3.UP.cross(look)
 	var head := foot + Vector3.UP * (height - 0.12)
 	beam("galvanised", head - across * 0.62, head + across * 0.62, 0.06, SLIGHT)
 	for side: float in [-1.0, 1.0]:
 		var aim := (look + across * side * 0.45 + Vector3.DOWN * 0.55).normalized()
 		var lamp := Transform3D(Basis.looking_at(-aim), head + across * side * 0.5 + Vector3.UP * 0.12 + aim * 0.08)
-		_box("dark_steel", lamp, Vector3(0.42, 0.34, 0.2), SLIGHT)
-		_box("paper", lamp * Transform3D(Basis(), Vector3(0, 0, 0.102)), Vector3(0.36, 0.28, 0.01), SLIGHT)
-		_box("dark_steel", lamp * Transform3D(Basis(), Vector3(0, 0.19, 0.06)), Vector3(0.46, 0.02, 0.34), SLIGHT)
+		_box("galvanised", lamp, Vector3(0.42, 0.34, 0.2), SLIGHT)
+		_box("galvanised", lamp * Transform3D(Basis(), Vector3(0, 0, 0.102)), Vector3(0.36, 0.28, 0.01), SLIGHT)
+		_box("galvanised", lamp * Transform3D(Basis(), Vector3(0, 0.19, 0.06)), Vector3(0.46, 0.02, 0.34), SLIGHT)
 	refine(NEAR)
 	# The conduit down the mast to its switch.
-	rod("dark_steel", foot + inwards * 0.085 + Vector3.UP * 1.3, head + inwards * 0.06, 0.012, SLIGHT, 5)
+	rod("galvanised", foot + inwards * 0.085 + Vector3.UP * 1.3, head + inwards * 0.06, 0.012, SLIGHT, 5)
 	rounded_box("galvanised", Transform3D(Basis(), foot + inwards * 0.12 + Vector3.UP * 1.3), Vector3(0.16, 0.24, 0.1), 0.01, SLIGHT)
 	coarse()
 
@@ -765,7 +768,8 @@ func guardroom(centre: Vector2, size: Vector3) -> void:
 ## its middle, with Z out of the wall.
 func fire_point(xf: Transform3D) -> void:
 	fine(NEAR)
-	_local_box("enamel_red", xf, Vector3(0, 1.35, 0.012), Vector3(1.1, 0.9, 0.024), SLIGHT)
+	_local_box("dark_steel", xf, Vector3(0, 1.35, 0.012), Vector3(1.1, 0.9, 0.024), SLIGHT)
+	painted(xf * Transform3D(Basis(), Vector3(0, 1.35, 0.0245)), Vector2(1.09, 0.89), SIGNAL_RED)
 	for x: float in [-0.28, 0.28]:
 		_local_box("dark_steel", xf, Vector3(x, 1.62, 0.07), Vector3(0.02, 0.02, 0.1), SLIGHT)
 		rod("dark_steel", xf * Vector3(x - 0.13, 1.5, 0.13), xf * Vector3(x, 1.63, 0.11), 0.005, SLIGHT, 4)
@@ -903,9 +907,7 @@ func yard_cover(area: Rect2, ways: Array, seed := 5, walled := Vector4(1, 1, 1, 
 					# Two ruts, a wheel's width either side of the middle of the way.
 					var gap := absf(_nearest_on(ways[i], at).x - 0.9)
 					earth = maxf(earth, 0.95 * (1.0 - smoothstep(0.4, 1.3, gap)))
-			var dot := _cover.get_pixel(x, y)
-			dot.b = clampf(earth, 0.0, 1.0)
-			_cover.set_pixel(x, y, dot)
+			_lay_dot(x, y, COVERS.earth, clampf(earth, 0.0, 1.0))
 
 
 ## Moss on the ground along the foot of a wall the sun never reaches, from
@@ -923,9 +925,7 @@ func moss_along(from: Vector2, to: Vector2, out: Vector2, width := 1.6) -> void:
 			var dot_at := ((at - _land.position) * COVER_SCALE).floor()
 			if dot_at.x < 0.0 or dot_at.y < 0.0 or dot_at.x >= _cover.get_width() or dot_at.y >= _cover.get_height():
 				continue
-			var dot := _cover.get_pixel(int(dot_at.x), int(dot_at.y))
-			dot.g = maxf(dot.g, much * (1.0 - smoothstep(0.2, width, (j + 0.5) / COVER_SCALE)))
-			_cover.set_pixel(int(dot_at.x), int(dot_at.y), dot)
+			_lay_dot(int(dot_at.x), int(dot_at.y), COVERS.moss, much * (1.0 - smoothstep(0.2, width, (j + 0.5) / COVER_SCALE)))
 
 
 ## Sand that the wind has laid against the foot of a wall: along its face
@@ -955,19 +955,30 @@ func sand_drift(from: Vector2, to: Vector2, out: Vector3, height := 0.5, reach :
 		var points: Array[Vector3] = [inner, half, outer]
 		var normals: Array[Vector3] = [steep, (steep + gentle).normalized(), Vector3.UP]
 		if i > 0:
-			var st := _tool("dune_ground", SLIGHT, half)
+			# With the grass of that block of ground: not drawn from afar, and
+			# without a shadow, see _commit() in tools/kit/land.gd.
+			@warning_ignore("integer_division")
+			var st := _tool_named("|strewn %d %d/dune_ground" % [int(half.x) / GROUND_BLOCK, int(half.z) / GROUND_BLOCK])
 			for row in 2:
 				var corners := [before[row + 1], points[row + 1], points[row], before[row]]
 				var facing := [before_normals[row + 1], normals[row + 1], normals[row], before_normals[row]]
 				if flip:
 					corners.reverse()
 					facing.reverse()
-				_quad(st, corners, facing, corners.map(func(corner: Vector3) -> Vector2: return Vector2(corner.x, corner.z)))
+				for corner: int in [0, 2, 1, 0, 3, 2]:
+					# What the ground's material reads off a mesh, see
+					# shaders/dune_ground.gdshader: level, loose sand without
+					# crust or grass, and far from any track.
+					st.set_color(Color(0.5, 1.0, 0.0, 0.0))
+					st.set_normal(facing[corner])
+					st.set_uv(Vector2(corners[corner].x, corners[corner].z))
+					st.set_uv2(Vector2(6.0, 0.0))
+					st.add_vertex(corners[corner])
 		before = points
 		before_normals = normals
 
 
-## Tufts of marram at the foot of a wall, along its face from `from` to `to`
+## Clumps of marram at the foot of a wall, along its face from `from` to `to`
 ## (x and z) and within `reach` of it on the side `out`: about one every
 ## `every` metres, in twos and threes.
 func wall_tufts(from: Vector2, to: Vector2, out: Vector2, every := 5.0, reach := 1.2) -> void:
@@ -976,8 +987,7 @@ func wall_tufts(from: Vector2, to: Vector2, out: Vector2, every := 5.0, reach :=
 	while run < length:
 		for one in _depot_rng.randi_range(1, 3):
 			var at := from.lerp(to, clampf((run + _depot_rng.randf_range(-0.7, 0.7)) / length, 0.0, 1.0)) + out * _depot_rng.randf_range(0.25, reach)
-			var size := _depot_rng.randf_range(0.6, 1.25)
-			marram_clump(at, size * 0.6, _depot_rng.randi())
+			marram_clump(at, _depot_rng.randf_range(0.45, 0.95), _depot_rng.randi())
 		run += every * _depot_rng.randf_range(0.5, 1.7)
 
 

@@ -21,7 +21,7 @@ uniform float marks : hint_range(0.0, 1.0) = 0.6;
 uniform float oil : hint_range(0.0, 1.0) = 0.5;
 uniform float cracks : hint_range(0.0, 1.0) = 0.5;
 uniform float sand : hint_range(0.0, 1.0) = 0.6;
-uniform vec3 sand_tint : source_color = vec3(0.6, 0.5, 0.36);
+uniform vec3 sand_tint : source_color = vec3(0.6, 0.555, 0.49);
 
 void fragment() {
 	vec2 uv = UV * uv_scale;
@@ -65,7 +65,7 @@ void fragment() {
 	albedo = mix(albedo, vec3(0.07, 0.06, 0.05), joint * 0.7);
 
 	// Sand, in drifts and along the joints.
-	float drift = smoothstep(0.5, 0.74, wide.g * 0.66 + fine.b * 0.42 + (1.0 - smoothstep(0.0, 0.25, away)) * 0.22) * sand;
+	float drift = smoothstep(0.6, 0.8, wide.g * 0.7 + fine.b * 0.4 + (1.0 - smoothstep(0.0, 0.18, away)) * 0.12) * sand;
 	albedo = mix(albedo, sand_tint * (0.86 + 0.28 * fine.r), drift);
 	rough = mix(rough, 0.96, drift);
 
