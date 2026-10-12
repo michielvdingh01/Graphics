@@ -57,6 +57,11 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 	if source:
 		ignored.append(source.get_rid())
 	reached.erase(source)
+	# The glass of the windows is on none of those layers: a wall of panes
+	# would leave no room among the MOST for anything else. Every window sees
+	# for itself which of its panes the blast gets to.
+	for window in get_tree().get_nodes_in_group("window"):
+		window.blast(position, radius, ignored)
 	# How hard it hits each of them is worked out before any of them is hurt:
 	# a stack of crates that it breaks still stood in the way of whatever was
 	# behind it.
