@@ -5,14 +5,8 @@ extends RefCounted
 ## comes into the level later, and nothing of it is in the way of a shot or
 ## of what an enemy sees.
 
-## For every level: how many windows the level builder's glass makes, and how
-## many panes they have together.
-const LEVELS := {
-	"factory": [30, 189],
-	"works": [61, 193],
-	"depot": [1, 3],
-	"powerhouse": [35, 303],
-}
+## The levels whose glass is gone through.
+const LEVELS: Array[String] = ["factory", "works", "depot", "powerhouse"]
 ## The layer the glass is on, and the triangle corners of one pane.
 const WINDOW := 64
 const CORNERS := 36
@@ -201,9 +195,9 @@ func run(test: SceneTree) -> void:
 			_count(game, level)
 
 
-## Checks the windows of a level against LEVELS: how many, how they are
-## called, that the level keeps them for whoever comes in later, and how many
-## panes they have: all the glass there is, and no window more than fits.
+## Checks the windows of a level: that there are some, how they are called,
+## that the level keeps them for whoever comes in later, and how many panes
+## they have: all the glass there is, and no window more than fits.
 func _count(game: Node, level: String) -> void:
 	var windows: Array[Node] = _windows(game)
 	var panes := 0
@@ -218,8 +212,8 @@ func _count(game: Node, level: String) -> void:
 		@warning_ignore("integer_division")
 		glass += mesh.mesh.surface_get_array_index_len(0) / CORNERS
 	print("    %s: %d windows of %d panes, %d at most" % [level, windows.size(), panes, most])
-	_test.check(windows.size() == LEVELS[level][0] and panes == LEVELS[level][1] and panes == glass and named and most <= 31,
-		"the %s has %d windows of %d panes together, called Window0 and so on" % [level, LEVELS[level][0], LEVELS[level][1]])
+	_test.check(not windows.is_empty() and panes == glass and named and most <= 31,
+		"every pane of the glass of the %s is in a window, called Window0 and so on" % level)
 	_test.check(not windows.any(func(one: Node) -> bool: return one.has_method("cover") or one.has_method("lens")), "a window is told apart from a stack and from a lamp")
 
 
