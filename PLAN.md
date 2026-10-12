@@ -1989,3 +1989,45 @@ De hele selftest slaagt (315 controles), net als `--fights` (5 van 5 vanuit dekk
 - **Het slot ziet alleen wie het neemt.** De editor, het spel dat Michiel daaruit speelt en een branch van vóór dit werk tekenen erbuiten. `ps` blijft dus nodig, en `houding`, `wapens` en `zestig` wachten pas op elkaar als ze de trunk binnenhalen.
 - Een Godot die bij het afsluiten blijft hangen, zoals op 10 oktober, houdt het slot vermoedelijk vast zolang hij in de proceslijst staat. Dan wacht alles, wat toen ook het beste was; wie wacht leest wie het heeft. Dat is niet uitgeprobeerd.
 - De sandbox en de dekkingsfix zijn niet gespeeld.
+
+## Effecten: rook, ramen, plassen, vuur en de uitgang
+
+Op 12 oktober 2026 gebouwd op de branch `effecten`, door vijf agents elk in een eigen worktree en daarna samengevoegd en nagekeken. De levels zijn er niet voor herbouwd of gebakken: alles komt erbij als een level laadt, via `scripts/breakables.gd`. De regels onder "Nog open" van "Moderne shooter-eisen" over vuur dat niet overslaat, ramen en de plas zijn hiermee achterhaald, net als het slot van "De rook van een explosie wordt niet per pixel belicht".
+
+**Wat er staat**
+
+- **Rook als volume.** De wolk van een explosie en de rook van een vuur zijn nog steeds onbelicht (`shaders/smoke.gdshader`, geen lampen of schaduwen per pixel, dezelfde twee ruisopzoekingen), maar krijgen per salvo één hoofdlicht mee: `Fx.smoke_light()` kiest uit de zon en de lampen van het level de sterkste die de wolk kan zien, met een straal elk. De shader belicht elke bol als bol, maakt de kant van de wolk die van het licht af ligt donker en laat dunne randen licht door. Het roet was 0,8% helder en is nu houtskoolgrijs.
+- **Ramen breken.** Een ruit houdt geen kogel tegen: het schot gaat erdoor en de ruit breekt. Het glas zit op een eigen laag (7) die geen schot, zichtlijn of loper ziet; `Fx.tracer()` kijkt welke ruiten de baan kruist, voor schoten van speler, medespelers en vijanden. Een klap breekt de ruiten die hij kan zien. `scripts/window.gd` maakt per raamopening één lichaam `Window<N>` met een vorm per ruit; wat breekt verdwijnt uit een eigen kopie van de glasmesh en laat tanden van glas langs de roeden achter. Fabriek 189 ruiten, fabrieksterrein 416, depot 3, centrale 314.
+- **Een plons.** `Fx` houdt per level bij waar de vloershader water tekent (dezelfde formule, uit het masker van het vloermateriaal) en `Fx.strike()` geeft op water druppels, een pluim en kringen die bij de oever ophouden (`shaders/drops.gdshader`, `shaders/rings.gdshader`) in plaats van stof en scherven.
+- **Vuur slaat over.** Brandende brandstof en de vuurbal van een klap verhitten kisten, dozen en stapels pallets (`scripts/tinder.gd`); die vatten vlam, branden met vlammen die om hun vorm passen, zijn zelf een brandplek voor wie ernaast staat en steken hun buren binnen 1,2 m aan. Een kist breekt na zes seconden in zwarte planken, een stapel pallets brandt uit en houdt roet. Hooguit vier vuren tegelijk; een gangpad houdt het tegen.
+- **Licht bij de uitgang.** `scripts/daylight.gd` zet buiten elke uitgangsdeur een schijnwerper met schaduw en een zacht licht in de opening, die de deur volgen: in de fabriek langs de zon, op het fabrieksterrein en in de centrale koel hemellicht, in het depot het licht van de lamp achter de deur. Het gordijn van de deur werpt zelf de schaduw, dus de vlek groeit met de opening.
+
+**Gemeten** op 12 oktober 2026, M1 Pro aan een lader van 30 W met de accu op 53%, 1440p met FSR 2 op 67%, om en om met de trunk (a865564), vier rondes, load 2,7 tot 4. De trunk zelf liep tussen rondes tot 6 fps uiteen, dus alleen het gemiddelde verschil zegt iets.
+
+| Standpunt | `--firefight=12` | `--barrage=1` |
+|---|---|---|
+| Overview | +2,2 fps | -0,3 fps |
+| Corridor | +1,2 | +1,1 |
+| Platform | +1,4 | +2,0 |
+| Hall | +1,1 | -0,4 |
+| Boiler | +1,6 | +0,1 |
+
+Een eerste reeks van drie rondes, begonnen onder load 8, gaf voor het vuurgevecht 1,6 tot 4,9 fps minder en voor de explosies +3,2 tot -3,8; die is door de tweede niet bevestigd. Niet gemeten: 3456×2160 met MetalFX, en een echte klap die ramen breekt en vuur sticht (de benchmark roept alleen `Fx.explosion` aan).
+
+Eerste gebruik, geteld op de GPU in de fabriek: plons, explosie, kist die vlam vat en doorbrandt, pallets en gebroken glas maken tijdens het tekenen geen enkele pipeline. De drukgolf, de tracer en de mondingsvlam gaan nu ook mee in de repetitie; de drukgolf kostte er op de trunk één. De uitgang die opengaat kost er twee, op de trunk ook.
+
+**Getest.** `tools/test_effects.sh` (239 controles, een onderdeel per effect in `tools/effects/`, speelt in een eigen thuismap), naast de selftest en de test van samen spelen.
+
+**Buiten de bestanden van de opdracht geraakt**, in een eigen commit: `VERSION` in `scripts/net.gd` is 7, want de lijst van wat kapot kan telt nu ramen en pallets mee.
+
+**Niet kunnen beoordelen.** Niets is in beweging gezien of gespeeld: alle beelden zijn stilstaand. Geluid: een ruit klinkt als `lamp_break`, een deurruitje als `bulb_break`, een schot in water als `impact_soft`; vuur heeft geen geluid. De getallen van het vuur zijn een eerste gok.
+
+**Nog open**
+
+- Van een lading hagel breekt alleen elke derde korrel glas: `weapons.gd` en `puppet.gd` tekenen maar één tracer op drie. Een aanroep `Fx.shot(muzzle, end)` voor de andere korrels lost het op.
+- Een granaat vliegt door glas zonder het te breken, een klap met het wapen breekt het niet, en het blad van een deur houdt een schot door zijn gebroken ruitje tegen.
+- Het schot van een medespeler wordt op de host vanaf de loop van zijn pop gevolgd; vlak bij een roede kan de ruit ernaast breken.
+- Wie later binnenkomt ziet niet wat er op dat moment brandt, en geen roet van wat al was afgebrand.
+- De bundel bij de uitgang staat 18 m buiten de deur (verder weg streept de schaduw), dus de stralen lopen een graad of vijf uiteen. Robots en het wapen in beeld vangen het koele licht op het fabrieksterrein en in de centrale niet.
+- Alleen schoten spatten op; een granaat of een explosie boven een plas niet.
+- De nieuwe scripts en shaders zonder `.uid`-bestand krijgen er een zodra de editor het project opent.

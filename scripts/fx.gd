@@ -581,6 +581,15 @@ func rehearse(extras: Array[MeshInstance3D] = []) -> void:
 		# Less than none of it: every one of its particles is left out.
 		burst.set_instance_shader_parameter(&"amount", -1.0)
 		stage.add_child(burst)
+	# The pressure wave, the streak of a shot and the flame at a muzzle are
+	# no bursts, and each is long over at the moment it starts out with.
+	for mesh: Mesh in [_shell, _tracer, _flame]:
+		var looks := MeshInstance3D.new()
+		looks.mesh = mesh
+		looks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		looks.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		looks.custom_aabb = AABB(Vector3.ONE * -REACH, Vector3.ONE * REACH * 2.0)
+		stage.add_child(looks)
 	for extra in extras:
 		stage.add_child(extra)
 	add_child(stage)
