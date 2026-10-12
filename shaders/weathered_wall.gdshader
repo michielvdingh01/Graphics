@@ -28,7 +28,7 @@ uniform float damp : hint_range(0.0, 1.0) = 0.6;
 uniform float green : hint_range(0.0, 1.0) = 0.5;
 // Sand blown against the foot, and its colour.
 uniform float sand : hint_range(0.0, 1.0) = 0.6;
-uniform vec3 sand_tint : source_color = vec3(0.6, 0.5, 0.36);
+uniform vec3 sand_tint : source_color = vec3(0.6, 0.555, 0.49);
 // How high over the foot a bay of a wall has its two weep holes, or nought
 // for none. A bay is a face between two and a half and a good four metres
 // wide: that is how wide the wall of the complex is between its piers.
@@ -105,6 +105,9 @@ void fragment() {
 	float rust = (1.0 - smoothstep(0.0, 0.035 + below * 0.14, off)) * step(0.0, below) * exp(-max(below, 0.0) / 0.5) * bay;
 	rust *= 0.55 + 0.45 * fine.r;
 	albedo = mix(albedo, vec3(0.3, 0.14, 0.05) * (0.7 + 0.5 * fine.b), rust * 0.85);
+	// And the hole itself, the end of a pipe a fist wide.
+	float hole = (1.0 - smoothstep(0.028, 0.036, length(vec2(off, below)))) * bay;
+	albedo = mix(albedo, vec3(0.012), hole);
 
 	// Whatever faces up has lichen on it, and dirt in it.
 	float lichen = faces_up * smoothstep(0.52, 0.6, fine.g * 0.65 + wide.g * 0.45);
