@@ -1,22 +1,24 @@
 extends SceneTree
 ## Generates the procedural textures listed in assets/manifest.json (source
 ## "procedural"): decals into assets/decals/ and the noise masks that shaders
-## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh
+## scatter wear with into assets/masks/. Run with: tools/gen_decals.sh, for
+## all of them, or tools/gen_decals.sh <id> ... for those named.
 ##
 ## Each entry names a kind (leak, stain, grime, scorch, blood, blood_pool,
-## warning, text or hole for a decal, wear or grain for a mask), a size and a seed, so a texture can
+## warning, text, hole or print for a decal, wear or grain for a mask), a size and a seed, so a texture can
 ## be regenerated or varied without touching this script. A text has a height
 ## only; its width follows from what it says. A grain names the pattern it is
 ## made of, and a hole the surface it is shot in; a hole comes with a normal
-## map and more, see _hole().
+## map and more, see _hole(), and so does the print of a boot, see _print().
 
 const OUT_DIR := {"decal": "res://assets/decals/", "mask": "res://assets/masks/"}
 
 
 func _init() -> void:
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/manifest.json"))
+	var named := OS.get_cmdline_user_args()
 	for asset: Dictionary in manifest.assets:
-		if asset.source != "procedural":
+		if asset.source != "procedural" or not (named.is_empty() or asset.id in named):
 			continue
 		var folder: String = OUT_DIR[asset.type]
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
@@ -27,6 +29,10 @@ func _init() -> void:
 			image = _lettering(asset)
 		elif asset.kind == "hole":
 			_hole(asset, folder)
+			print(asset.id)
+			continue
+		elif asset.kind == "print":
+			_print(asset, folder)
 			print(asset.id)
 			continue
 		else:
@@ -208,6 +214,50 @@ func _hole(asset: Dictionary, folder: String) -> void:
 	orm.save_png(folder + asset.id + "_orm.png")
 	if asset.surface == "metal":
 		glow.save_png(folder + asset.id + "_e.png")
+
+
+## The print a boot leaves in sand, toe to the top of the texture: the sole
+## pressed in, its lugs deeper, and sand pushed up around it. Mostly a normal
+## map (<id>_n), which a decal lays down where the texture itself is not
+## clear: that is dark where the sole pressed, as damp sand under a dry crust
+## is, and pale on the rim, and is meant to be mixed in thinly.
+func _print(asset: Dictionary, folder: String) -> void:
+	var size: int = asset.size[0]
+	var noise := FastNoiseLite.new()
+	noise.seed = asset.seed
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.fractal_octaves = 3
+	var albedo := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var height := PackedFloat32Array()
+	height.resize(size * size)
+	for y in size:
+		for x in size:
+			var uv := Vector2(x + 0.5, y + 0.5) / size
+			var p := uv * 2.0 - Vector2.ONE
+			var crumble := _n(noise, uv.x * 900.0, uv.y * 900.0)
+			var grit := _n(noise, uv.x * 6000.0 + 300.0, uv.y * 6000.0)
+			# The sole of an army boot: the ball of the foot, a waist and a heel.
+			# Each is 1 at its middle and 0 at its edge; `grown` is how far
+			# outside the sole a point may lie and still be in its rim.
+			var edge := 1.0 + (crumble - 0.5) * 0.16
+			var ball := 1.0 - Vector2(p.x / 0.3, (p.y + 0.34) / 0.5).length() / edge
+			var waist := 1.0 - maxf(absf(p.x) / 0.19, absf(p.y - 0.2) / 0.3) / edge
+			var heel := 1.0 - Vector2(p.x / 0.24, (p.y - 0.56) / 0.27).length() / edge
+			var within := maxf(ball, maxf(waist, heel))
+			var sole := smoothstep(-0.02, 0.2, within)
+			var rim := smoothstep(-0.4, -0.02, within) * (1.0 - sole)
+			# Lugs: chevrons under the ball of the foot, bars under the heel,
+			# and none under the waist, which hardly touches the ground.
+			var chevron := fposmod((p.y - absf(p.x) * 0.7) * 5.5, 1.0)
+			var bar := fposmod(p.y * 6.5, 1.0)
+			var lugs := smoothstep(0.1, 0.2, chevron) * smoothstep(0.62, 0.52, chevron) * smoothstep(0.0, 0.12, ball)
+			lugs = maxf(lugs, smoothstep(0.12, 0.22, bar) * smoothstep(0.66, 0.56, bar) * smoothstep(0.0, 0.14, heel))
+			var pressed := sole * (0.7 + 0.3 * lugs)
+			height[y * size + x] = -pressed + rim * 0.22 * (0.6 + 0.8 * crumble) + (grit - 0.5) * 0.12 * maxf(sole, rim)
+			albedo.set_pixel(x, y, Color(Color(0.6, 0.53, 0.41).lerp(Color(0.3, 0.25, 0.18), pressed), clampf(sole + rim * 0.6, 0.0, 1.0) * 0.95))
+	albedo.generate_mipmaps()
+	albedo.save_png(folder + asset.id + ".png")
+	_normals(height, size, asset.get("depth", 1.0) * size / 24.0).save_png(folder + asset.id + "_n.png")
 
 
 ## Stencilled lettering in white, for a decal to tint. Letters with a closed
