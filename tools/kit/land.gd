@@ -715,7 +715,7 @@ func _read_land() -> void:
 		for column in across:
 			var i := row * across + column
 			var low := clampf((mean - 1.0 - _heights[i]) / 2.5, 0.0, 1.0)
-			var high := clampf(0.5 + (_heights[i] - around[i]) / 3.0 - low * 0.3, 0.0, 1.0)
+			var high := clampf(0.5 + (_heights[i] - around[i]) / 3.0 - low * 0.22, 0.0, 1.0)
 			var loose := 1.0 - firm[i]
 			# The crust takes where the sand lies still: by a wood, on a
 			# back that looks north, and not on a crest, on a face that
@@ -727,23 +727,57 @@ func _read_land() -> void:
 			_looks[i] = Color(high, loose, crust, 0.0)
 
 	_by_track.resize(count)
-	_by_track.fill(Vector2(TRACK_FAR, 0.0))
+	_by_track.fill(Vector2(TRACK_FAR, -TRACK_FAR * 10.0))
 	var run := 0.0
 	for cut: Dictionary in _tracks:
+		# A track is measured a little beyond both its ends, as if it ran
+		# straight on: there the way along it counts down from nought, and
+		# the material lets the ruts run out.
 		var way: PackedVector2Array = cut.path
-		for i in way.size() - 1:
-			var along := way[i + 1] - way[i]
+		var before := way[0] + (way[0] - way[1]).normalized() * TRACK_FAR
+		var after := way[way.size() - 1] + (way[way.size() - 1] - way[way.size() - 2]).normalized() * TRACK_FAR
+		for i in range(-1, way.size()):
+			var from := before if i < 0 else way[i]
+			var to := after if i == way.size() - 1 else way[i + 1]
+			var along := to - from
 			var length := along.length()
-			var box := _spots_in(Rect2(way[i], Vector2.ZERO).expand(way[i + 1]).grow(TRACK_FAR))
+			var box := _spots_in(Rect2(from, Vector2.ZERO).expand(to).grow(TRACK_FAR))
 			for row in range(box[1], box[3] + 1):
 				for column in range(box[0], box[2] + 1):
 					var at := _spot(column, row)
-					var share := clampf((at - way[i]).dot(along) / maxf(length * length, 0.0001), 0.0, 1.0)
-					var gap := at.distance_to(way[i] + along * share)
+					var share := clampf((at - from).dot(along) / maxf(length * length, 0.0001), 0.0, 1.0)
+					var gap := at.distance_to(from + along * share)
 					var spot := row * across + column
 					if gap < absf(_by_track[spot].x):
-						_by_track[spot] = Vector2(gap if along.cross(at - way[i]) >= 0.0 else -gap, run + length * share)
-			run += length
+						var gone := run + length * share
+						if i < 0:
+							gone = -length * (1.0 - share)
+						elif i == way.size() - 1:
+							gone = -length * share
+						_by_track[spot] = Vector2(gap if along.cross(at - from) >= 0.0 else -gap, gone)
+			if i >= 0 and i < way.size() - 1:
+				run += length
+	# A spot with no track near has none on the side its neighbours have
+	# theirs: between a spot on the left of a track and one that was simply
+	# far from it, the mesh would otherwise pass through the middle of a
+	# track that is not there.
+	var reached := PackedInt32Array()
+	var sided := PackedByteArray()
+	sided.resize(count)
+	for spot in count:
+		if absf(_by_track[spot].x) < TRACK_FAR:
+			reached.append(spot)
+			sided[spot] = 1
+	var next := 0
+	while next < reached.size():
+		var spot := reached[next]
+		next += 1
+		var side := -TRACK_FAR if _by_track[spot].x < 0.0 else TRACK_FAR
+		for beside: int in [spot - 1, spot + 1, spot - across, spot + across]:
+			if beside >= 0 and beside < count and absi(beside % across - spot % across) <= 1 and sided[beside] == 0:
+				_by_track[beside] = Vector2(side, -TRACK_FAR * 10.0)
+				sided[beside] = 1
+				reached.append(beside)
 
 
 ## `values`, one for every spot of the land, each evened out with what lies
@@ -1259,20 +1293,27 @@ func _stand_marram() -> void:
 				var at := area.position + (Vector2(column, row) + Vector2(_strew_rng.randf(), _strew_rng.randf())) * step
 				var chance := _strew_rng.randf()
 				var size := _strew_rng.randf()
-				var seed := _strew_rng.randi()
+				var seed := int(_strew_rng.randi())
 				if not _land.grow(-1.0).has_point(at) or firm_at(at) > 0.15 or cover_at("needles", at) > 0.4 or cover_at("earth", at) > 0.15:
 					continue
 				if absf(_by_track[_spot_at(at)].x) < 3.0:
 					continue
 				var look := look_at_ground(at)
-				# How thick it stands here, 0 to 1.
-				var thick := 0.5 + drifts.get_noise_2dv(at) * 0.55 + knots.get_noise_2dv(at) * 0.2 + (look.r - 0.5) * 0.9 - (asked.gaps as float) * 0.5
-				thick = smoothstep(0.45, 0.78, thick)
-				if chance > thick * thick * 0.85 + 0.012:
+				# How thick it stands here, 0 to 1: nothing outside a drift,
+				# and the heart of a drift is thick with it.
+				var thick := 0.5 + drifts.get_noise_2dv(at) * 0.6 + (look.r - 0.5) * 0.9 - (asked.gaps as float) * 0.5
+				thick = smoothstep(0.47, 0.72, thick)
+				# Within a drift it stands in knots: large clumps together,
+				# and little between one knot and the next.
+				var knot := smoothstep(-0.25, 0.45, knots.get_noise_2dv(at))
+				if chance > thick * (0.14 + 0.8 * knot * thick):
 					continue
-				# Large clumps stand in the thick of a drift, with small
-				# ones between them and around its edge.
-				_clumps.append({"at": at, "size": lerpf(0.35, 1.05, pow(size, 1.6)) * lerpf(0.7, 1.2, thick), "seed": seed})
+				var large := lerpf(0.45, 1.1, pow(size, 1.3)) * lerpf(0.62, 1.22, thick * knot)
+				_clumps.append({"at": at, "size": large, "seed": seed})
+				# A large clump has young ones around its foot.
+				for i in (seed % 4 if large > 0.75 else 0):
+					var beside := at + Vector2.RIGHT.rotated((seed >> 4) * 0.37 + i * 2.1) * (0.55 + 0.2 * i) * large
+					_clumps.append({"at": beside, "size": 0.22 + 0.06 * ((seed >> (8 + i)) % 4), "seed": seed + i + 1})
 	for clump: Dictionary in _clumps:
 		_clump("marram", clump.at, clump.size, clump.seed)
 	# How much grass stands around each spot, for the ground to show when
@@ -1379,7 +1420,7 @@ func _clump(mat: String, at: Vector2, size: float, seed: int) -> void:
 func _mound(at: Vector2, size: float, points: PackedVector3Array, facing: PackedVector3Array, uvs: PackedVector2Array, tracks: PackedVector2Array, looks: PackedColorArray, corners: PackedInt32Array) -> void:
 	const SIDES := 7
 	var first := points.size()
-	var reach := 0.5 * size + 0.25
+	var reach := 0.42 * size + 0.14
 	var shadow := -Vector2(_sunward.x, _sunward.z).normalized()
 	var lie := ground_normal(at.x, at.y, 0.6)
 	points.append(ground(at.x, at.y, MOUND_HIGH * size))
@@ -1391,7 +1432,7 @@ func _mound(at: Vector2, size: float, points: PackedVector3Array, facing: Packed
 		var share := 0.5 if ring == 0 else 1.0
 		for i in SIDES:
 			var out := Vector2.RIGHT.rotated(TAU * (i + ring * 0.5) / SIDES)
-			var far := reach * (1.0 + 0.6 * maxf(out.dot(shadow), 0.0) + 0.3 * maxf(out.y, 0.0))
+			var far := reach * (1.0 + 0.5 * maxf(out.dot(shadow), 0.0) + 0.25 * maxf(out.y, 0.0))
 			var spot := at + out * far * share
 			points.append(ground(spot.x, spot.y, MOUND_HIGH * size * 0.5 if ring == 0 else -0.035))
 			facing.append((lie + Vector3(out.x, 0.0, out.y) * (0.3 if ring == 0 else 0.1)).normalized())
