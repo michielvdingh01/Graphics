@@ -11,6 +11,8 @@ extends Node
 ## screenshots with and without them. _profile_targets() lists the names.
 ## --at=x,y,z,yaw,pitch looks from that point instead of the fixed views, to
 ## inspect one corner of a level; several poses are separated by semicolons.
+## A y that begins with a plus is that far above the ground at x and z, for
+## a level on land: --at="120,+1.6,187,-88,-2".
 ## --weapon=3 puts that weapon of the loadout in view as the player holds it,
 ## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
@@ -160,6 +162,14 @@ func _ready() -> void:
 		_run.call_deferred()
 
 
+## How high the ground lies at x and z: the highest thing there that stops a
+## walker, and nought where there is nothing.
+func _ground_under(x: float, z: float) -> float:
+	var ray := PhysicsRayQueryParameters3D.create(Vector3(x, 500.0, z), Vector3(x, -100.0, z), 1)
+	var hit := get_viewport().world_3d.direct_space_state.intersect_ray(ray)
+	return (hit.position as Vector3).y if hit else 0.0
+
+
 ## Runs what was given with --eval, one expression after the other, with the
 ## level as `game` and the player as `player`: for trying something out in a
 ## level as it is measured or pictured, without building it in first.
@@ -283,6 +293,8 @@ func _run() -> void:
 			marker.name = "Shot%d" % (markers.size() + 1)
 			add_child(marker)
 			marker.position = Vector3(numbers[0], numbers[1], numbers[2])
+			if pose.get_slice(",", 1).strip_edges().begins_with("+"):
+				marker.position.y += _ground_under(numbers[0], numbers[2])
 			marker.rotation_degrees = Vector3(numbers[4], numbers[3], 0.0)
 			markers.append(marker)
 
