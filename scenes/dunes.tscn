@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
 [ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
 [ext_resource type="Shader" path="res://shaders/dune_sky.gdshader" id="sky_shader"]
+[ext_resource type="Script" path="res://scripts/hidden.gd" id="hidden"]
 
 [sub_resource type="NavigationMesh" id="navmesh"]
 geometry_parsed_geometry_type = 1
@@ -73,6 +74,9 @@ directional_shadow_blend_splits = false
 directional_shadow_max_distance = 110.0
 
 [node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
+
+[node name="Hidden" type="Node3D" parent="."]
+script = ExtResource("hidden")
 
 [node name="Post" type="CanvasLayer" parent="."]
 layer = 0
