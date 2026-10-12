@@ -24,6 +24,10 @@ extends "res://tools/kit/furniture.gd"
 ## sun does not come. That is worked out when everything stands, see
 ## _shade_land(), and it is what somebody stands in who is not to be seen:
 ## the game reads it off the level, see scripts/land.gd.
+##
+## The collider is laid at once and the mesh when everything stands, see
+## _dress_ground(): what the sand looks like at a spot depends on what has
+## come to stand around it, and the mesh carries that to the material.
 
 ## How far apart the heights of the land lie, in metres. One, which is what
 ## the collider of a height field takes without being scaled.
@@ -42,6 +46,13 @@ const SHADE_HEIGHT := 1.2
 const SHADE_REACH := 80.0
 ## A sheet of paper: no lightmap and in nobody's way.
 const SLIGHT_SHEET := DETAIL | NO_COLLIDE
+## A track that is further off than this is none to the ground material, in
+## metres.
+const TRACK_FAR := 10.0
+## A clump of grass this large and larger has caught a mound of sand, this
+## high for a clump of size one.
+const MOUND_FROM := 0.5
+const MOUND_HIGH := 0.13
 
 ## The land of the level (x and z), or nothing for a level without any.
 var _land := Rect2()
@@ -57,6 +68,28 @@ var _firm := PackedFloat32Array()
 var _cover: Image
 ## The tracks that were cut, for whatever follows them: {path, width}.
 var _tracks: Array[Dictionary] = []
+## The earth that was laid by anything but a track, a dot of the map each:
+## the ground material draws a track itself, rut by rut, and wants to know
+## what earth lies there besides. And whether it is a track that is laying.
+var _earth_beside: Image
+var _cutting_track := false
+## The material the ground was laid in, once it has been: its mesh is made
+## when everything stands.
+var _ground_mat := ""
+## What the ground material is told of every spot of the land, see
+## _read_land(): its look, and where it lies by the nearest track.
+var _looks := PackedColorArray()
+var _by_track := PackedVector2Array()
+## How much of the ground around each spot of the land lies under needles:
+## how deep in a wood it is.
+var _wooded := PackedFloat32Array()
+## Where marram was asked for, see marram(): {area, spacing, gaps}. And the
+## clumps that came of it, once the ground is dressed: {at, size}.
+var _marram: Array[Dictionary] = []
+var _clumps: Array[Dictionary] = []
+## The dice for whatever is strewn on the land. Their own: what stands, and
+## was thrown with the dice of the level, stays where it stood.
+var _strew_rng := RandomNumberGenerator.new()
 ## What stands in the way of the sun without being a collider, the crowns of
 ## trees: [centre, radii] of a ball each.
 var _crowns: Array = []
@@ -103,6 +136,8 @@ func land(area: Rect2, height: float) -> void:
 	_firm.fill(0.0)
 	_cover = Image.create(int(area.size.x * COVER_SCALE), int(area.size.y * COVER_SCALE), false, Image.FORMAT_RGBA8)
 	_cover.fill(Color(0, 0, 0, 0))
+	_earth_beside = Image.create(_cover.get_width(), _cover.get_height(), false, Image.FORMAT_L8)
+	_earth_beside.fill(Color(0, 0, 0))
 
 
 ## Says what the open air of the level sounds like: the bed "ambience_<kind>"
@@ -375,7 +410,9 @@ func track(points: Array, width: float, margin := 4.0, ease := 9.0) -> void:
 			_heights[i] = lerpf(_heights[i], level[nearest], hold)
 			_firm[i] = maxf(_firm[i], hold)
 	_tracks.append({"path": way, "width": width})
+	_cutting_track = true
 	cover_along("earth", way, half + 0.6, 0.8)
+	_cutting_track = false
 
 
 ## Takes the edges off the land, `times` over: the creases where one dune
@@ -473,9 +510,7 @@ func cover(kind: String, at: Vector2, radius: float, amount := 1.0, soft := 0.5)
 			var share := Vector2(x + 0.5, y + 0.5).distance_to(middle) / reach
 			if share >= 1.0:
 				continue
-			var dot := _cover.get_pixel(x, y)
-			dot[channel] = maxf(dot[channel], amount * (1.0 - smoothstep(1.0 - soft, 1.0, share)))
-			_cover.set_pixel(x, y, dot)
+			_lay_dot(x, y, channel, amount * (1.0 - smoothstep(1.0 - soft, 1.0, share)))
 
 
 ## The same along a path, `reach` to either side of it.
@@ -491,9 +526,7 @@ func cover_along(kind: String, way: PackedVector2Array, reach: float, amount := 
 			var share := _nearest_on(way, _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE).x / reach
 			if share >= 1.0:
 				continue
-			var dot := _cover.get_pixel(x, y)
-			dot[channel] = maxf(dot[channel], amount * (1.0 - smoothstep(1.0 - soft, 1.0, share)))
-			_cover.set_pixel(x, y, dot)
+			_lay_dot(x, y, channel, amount * (1.0 - smoothstep(1.0 - soft, 1.0, share)))
 
 
 ## The same over the whole of `area` (x and z), evenly.
@@ -505,9 +538,16 @@ func cover_over(kind: String, area: Rect2, amount := 1.0) -> void:
 	var to := ((area.end - _land.position) * COVER_SCALE).ceil()
 	for y in range(maxi(int(from.y), 0), mini(int(to.y), _cover.get_height())):
 		for x in range(maxi(int(from.x), 0), mini(int(to.x), _cover.get_width())):
-			var dot := _cover.get_pixel(x, y)
-			dot[channel] = maxf(dot[channel], amount)
-			_cover.set_pixel(x, y, dot)
+			_lay_dot(x, y, channel, amount)
+
+
+## Lays `amount` of a cover on one dot of the map, unless more lies there.
+func _lay_dot(x: int, y: int, channel: int, amount: float) -> void:
+	var dot := _cover.get_pixel(x, y)
+	dot[channel] = maxf(dot[channel], amount)
+	_cover.set_pixel(x, y, dot)
+	if channel == COVERS.earth and not _cutting_track:
+		_earth_beside.set_pixel(x, y, Color(maxf(_earth_beside.get_pixel(x, y).r, amount), 0, 0))
 
 
 ## How much of `kind` covers the ground at `at`.
@@ -539,14 +579,12 @@ func track_gap(at: Vector2) -> float:
 # --- Laying it ---------------------------------------------------------------------
 
 
-## Lays the ground as it has been shaped: its collider, and its mesh in
-## blocks. Nothing shapes it after this.
+## Lays the ground as it has been shaped: its collider now, and its mesh, in
+## blocks, when everything stands. Nothing shapes it after this.
 func lay_ground(mat := "dune_ground") -> void:
-	var across := _across()
-	var down := _down()
 	var field := HeightMapShape3D.new()
-	field.map_width = across
-	field.map_depth = down
+	field.map_width = _across()
+	field.map_depth = _down()
 	field.map_data = _heights
 	var body := StaticBody3D.new()
 	body.name = "Ground"
@@ -556,18 +594,43 @@ func lay_ground(mat := "dune_ground") -> void:
 	collider.position = Vector3(_land.get_center().x, 0.0, _land.get_center().y)
 	collider.set_meta(&"surface", "sand")
 	_add(collider, body)
+	_ground_mat = mat
 
+
+## The ground is dressed when the level has been looked over: every tree
+## stands by then, every cover lies and the shade is known.
+func _survey() -> bool:
+	var done: bool = await super()
+	_dress_ground()
+	return done
+
+
+## Makes the mesh of the ground, in blocks, with what _read_land() says of
+## every spot on its corners.
+func _dress_ground() -> void:
+	if _ground_mat == "":
+		return
+	_read_land()
+	_strew_rng.seed = hash(_level_name() + " strewn")
+	_stand_marram()
+	var across := _across()
+	var down := _down()
+	# The clumps of each block: the sand each has caught is part of the
+	# ground.
+	var caught := {}
+	for clump: Dictionary in _clumps:
+		if clump.size >= MOUND_FROM:
+			var block := Vector2i(((clump.at as Vector2) - _land.position) / (GROUND_BLOCK * LAND_CELL))
+			if not caught.has(block):
+				caught[block] = []
+			caught[block].append(clump)
 	# Which way every spot faces, from its neighbours on the whole land: the
 	# blocks then meet without a seam.
 	var normals := PackedVector3Array()
 	normals.resize(across * down)
 	for row in down:
 		for column in across:
-			var west := _heights[row * across + maxi(column - 1, 0)]
-			var east := _heights[row * across + mini(column + 1, across - 1)]
-			var north := _heights[maxi(row - 1, 0) * across + column]
-			var south := _heights[mini(row + 1, down - 1) * across + column]
-			normals[row * across + column] = Vector3(west - east, 2.0 * LAND_CELL, north - south).normalized()
+			normals[row * across + column] = _facing(column, row)
 	for first_row in range(0, down - 1, GROUND_BLOCK):
 		for first_column in range(0, across - 1, GROUND_BLOCK):
 			var columns := mini(GROUND_BLOCK, across - 1 - first_column)
@@ -575,6 +638,8 @@ func lay_ground(mat := "dune_ground") -> void:
 			var points := PackedVector3Array()
 			var facing := PackedVector3Array()
 			var uvs := PackedVector2Array()
+			var tracks := PackedVector2Array()
+			var looks := PackedColorArray()
 			var corners := PackedInt32Array()
 			for row in rows + 1:
 				for column in columns + 1:
@@ -583,6 +648,8 @@ func lay_ground(mat := "dune_ground") -> void:
 					points.append(Vector3(at.x, _heights[i], at.y))
 					facing.append(normals[i])
 					uvs.append(at)
+					tracks.append(_by_track[i])
+					looks.append(_looks[i])
 			for row in rows:
 				for column in columns:
 					var nw := row * (columns + 1) + column
@@ -590,17 +657,144 @@ func lay_ground(mat := "dune_ground") -> void:
 					var sw := nw + columns + 1
 					var se := sw + 1
 					corners.append_array([nw, se, sw, nw, ne, se])
+			@warning_ignore("integer_division")
+			for clump: Dictionary in caught.get(Vector2i(first_column / GROUND_BLOCK, first_row / GROUND_BLOCK), []):
+				_mound(clump.at, clump.size, points, facing, uvs, tracks, looks, corners)
 			var arrays := []
 			arrays.resize(Mesh.ARRAY_MAX)
 			arrays[Mesh.ARRAY_VERTEX] = points
 			arrays[Mesh.ARRAY_NORMAL] = facing
 			arrays[Mesh.ARRAY_TEX_UV] = uvs
+			arrays[Mesh.ARRAY_TEX_UV2] = tracks
+			arrays[Mesh.ARRAY_COLOR] = looks
 			arrays[Mesh.ARRAY_INDEX] = corners
 			@warning_ignore("integer_division")
-			var key := "|ground %d %d/%s" % [first_column / GROUND_BLOCK, first_row / GROUND_BLOCK, mat]
+			var key := "|ground %d %d/%s" % [first_column / GROUND_BLOCK, first_row / GROUND_BLOCK, _ground_mat]
 			var st := SurfaceTool.new()
 			st.create_from_arrays(arrays)
 			_tools[key] = st
+
+
+## Which way the spot (`column`, `row`) of the land faces, from its
+## neighbours.
+func _facing(column: int, row: int) -> Vector3:
+	var across := _across()
+	var west := _heights[row * across + maxi(column - 1, 0)]
+	var east := _heights[row * across + mini(column + 1, across - 1)]
+	var north := _heights[maxi(row - 1, 0) * across + column]
+	var south := _heights[mini(row + 1, _down() - 1) * across + column]
+	return Vector3(west - east, 2.0 * LAND_CELL, north - south).normalized()
+
+
+## Reads off the land what its material cannot see for itself, for every
+## spot of it, see shaders/dune_ground.gdshader. Its look, as the red,
+## green, blue and alpha of a colour: how high it lies among what is around
+## it (a half for level with it, more for a crest, less for a hollow, and
+## less again for what lies low on the whole land, where the sand is damp);
+## how loose its sand is; how much of a crust of moss and lichen it has,
+## the grey dune; how much grass stands on it. And where it lies by the
+## nearest track: metres to the right of its middle, and metres along it.
+func _read_land() -> void:
+	var across := _across()
+	var down := _down()
+	var count := across * down
+	var around := _evened(_heights, 9)
+	var firm := _evened(_firm, 1)
+	var litter := PackedFloat32Array()
+	litter.resize(count)
+	var mean := 0.0
+	for row in down:
+		for column in across:
+			var i := row * across + column
+			litter[i] = cover_at("needles", _spot(column, row))
+			mean += _heights[i] / count
+	_wooded = _evened(litter, 7)
+	var patches := _noise(4711, 38.0)
+	_looks.resize(count)
+	for row in down:
+		for column in across:
+			var i := row * across + column
+			var low := clampf((mean - 1.0 - _heights[i]) / 2.5, 0.0, 1.0)
+			var high := clampf(0.5 + (_heights[i] - around[i]) / 3.0 - low * 0.3, 0.0, 1.0)
+			var loose := 1.0 - firm[i]
+			# The crust takes where the sand lies still: by a wood, on a
+			# back that looks north, and not on a crest, on a face that
+			# slides or on the floor of a hollow the wind has blown out.
+			var faces := _facing(column, row)
+			var slides := smoothstep(0.1, 0.2, 1.0 - faces.y)
+			var crest := clampf((high - 0.5) * 2.5, 0.0, 1.0)
+			var crust := clampf(0.38 + patches.get_noise_2dv(_spot(column, row)) * 0.7 + _wooded[i] * 1.2 - faces.z * 0.6 - crest * 1.5 - slides * 1.5 - low * 0.6, 0.0, 1.0) * loose
+			_looks[i] = Color(high, loose, crust, 0.0)
+
+	_by_track.resize(count)
+	_by_track.fill(Vector2(TRACK_FAR, 0.0))
+	var run := 0.0
+	for cut: Dictionary in _tracks:
+		var way: PackedVector2Array = cut.path
+		for i in way.size() - 1:
+			var along := way[i + 1] - way[i]
+			var length := along.length()
+			var box := _spots_in(Rect2(way[i], Vector2.ZERO).expand(way[i + 1]).grow(TRACK_FAR))
+			for row in range(box[1], box[3] + 1):
+				for column in range(box[0], box[2] + 1):
+					var at := _spot(column, row)
+					var share := clampf((at - way[i]).dot(along) / maxf(length * length, 0.0001), 0.0, 1.0)
+					var gap := at.distance_to(way[i] + along * share)
+					var spot := row * across + column
+					if gap < absf(_by_track[spot].x):
+						_by_track[spot] = Vector2(gap if along.cross(at - way[i]) >= 0.0 else -gap, run + length * share)
+			run += length
+
+
+## `values`, one for every spot of the land, each evened out with what lies
+## within `reach` spots of it to either side.
+func _evened(values: PackedFloat32Array, reach: int) -> PackedFloat32Array:
+	var across := _across()
+	var down := _down()
+	# The sum of everything north-west of each spot: what lies in a square
+	# is then four of these.
+	var sums := PackedFloat64Array()
+	sums.resize((across + 1) * (down + 1))
+	for row in down:
+		var line := 0.0
+		for column in across:
+			line += values[row * across + column]
+			sums[(row + 1) * (across + 1) + column + 1] = sums[row * (across + 1) + column + 1] + line
+	var evened := PackedFloat32Array()
+	evened.resize(across * down)
+	for row in down:
+		var top := maxi(row - reach, 0)
+		var bottom := mini(row + reach, down - 1) + 1
+		for column in across:
+			var left := maxi(column - reach, 0)
+			var right := mini(column + reach, across - 1) + 1
+			var sum := sums[bottom * (across + 1) + right] - sums[top * (across + 1) + right] - sums[bottom * (across + 1) + left] + sums[top * (across + 1) + left]
+			evened[row * across + column] = sum / ((bottom - top) * (right - left))
+	return evened
+
+
+## What `values`, one for every spot of the land, come to at `at`, between
+## the spots.
+func _between(values: PackedFloat32Array, at: Vector2) -> float:
+	var spot := (at - _land.position) / LAND_CELL
+	var column := clampi(int(floorf(spot.x)), 0, _across() - 2)
+	var row := clampi(int(floorf(spot.y)), 0, _down() - 2)
+	var u := clampf(spot.x - column, 0.0, 1.0)
+	var v := clampf(spot.y - row, 0.0, 1.0)
+	var i := row * _across() + column
+	return lerpf(lerpf(values[i], values[i + 1], u), lerpf(values[i + _across()], values[i + _across() + 1], u), v)
+
+
+## What _read_land() says of the ground at `at`, between the spots it was
+## read at.
+func look_at_ground(at: Vector2) -> Color:
+	var spot := (at - _land.position) / LAND_CELL
+	var column := clampi(int(floorf(spot.x)), 0, _across() - 2)
+	var row := clampi(int(floorf(spot.y)), 0, _down() - 2)
+	var u := clampf(spot.x - column, 0.0, 1.0)
+	var v := clampf(spot.y - row, 0.0, 1.0)
+	var i := row * _across() + column
+	return _looks[i].lerp(_looks[i + 1], u).lerp(_looks[i + _across()].lerp(_looks[i + _across() + 1], u), v)
 
 
 ## The ground material with the map of this level on it, and every other
@@ -619,7 +813,16 @@ func _material(mat: String) -> Material:
 		return super(mat)
 	if _own_ground == null:
 		_own_ground = (load("res://materials/dune_ground.tres") as ShaderMaterial).duplicate()
+		# The map as the material gets it has no earth where a track laid
+		# it: the material draws the track itself. And where pines stand
+		# close their litter lies everywhere, not under each by itself.
 		var map := _cover.duplicate() as Image
+		for y in map.get_height():
+			for x in map.get_width():
+				var dot := map.get_pixel(x, y)
+				dot.b = _earth_beside.get_pixel(x, y).r
+				dot.r = maxf(dot.r, smoothstep(0.3, 0.55, _between(_wooded, _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE)))
+				map.set_pixel(x, y, dot)
 		map.generate_mipmaps()
 		_own_ground.set_shader_parameter("cover", ImageTexture.create_from_image(map))
 		_own_ground.set_shader_parameter("cover_rect", Vector4(_land.position.x, _land.position.y, 1.0 / _land.size.x, 1.0 / _land.size.y))
@@ -1026,36 +1229,171 @@ func ferns(at: Vector2, radius: float, count: int) -> void:
 		sprig("fern_02", parts[_prop_rng.randi() % 4], Transform3D(Basis(Vector3.UP, _prop_rng.randf() * TAU).scaled(Vector3.ONE * size), ground(spot.x, spot.y, -0.02)))
 
 
-## A tuft of grass at `xf`: three cards that stand through each other, wider
-## at the top than at the foot. The tufts of a block of ground are one mesh,
-## which casts no shadow and is not drawn from far off, see _commit().
-func tuft(mat: String, xf: Transform3D) -> void:
-	@warning_ignore("integer_division")
-	var st := _tool_named("|strewn %d %d/%s" % [int(xf.origin.x) / GROUND_BLOCK, int(xf.origin.z) / GROUND_BLOCK, mat])
-	var phase := fposmod(xf.origin.x * 0.37 + xf.origin.z * 0.61, 1.0)
-	var up := xf.basis * Vector3.UP
-	for card in 3:
-		var side := Vector3.RIGHT.rotated(Vector3.UP, card * PI / 3.0 + 0.2) * 0.45
-		var lean := side.cross(Vector3.UP) * 0.12
-		var corners: Array[Vector3] = [xf * (-side * 0.9), xf * (side * 0.9), xf * (side + lean + Vector3.UP * 0.85), xf * (-side + lean + Vector3.UP * 0.85)]
-		var uvs: Array[Vector2] = [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
-		var lit: Array[Color] = [Color(0, phase, 0.6, 0), Color(0, phase, 0.6, 0), Color(1, phase, 1, 0), Color(1, phase, 1, 0)]
-		for i: int in [0, 2, 1, 0, 3, 2]:
-			st.set_color(lit[i])
-			st.set_normal(up)
-			st.set_uv(uvs[i])
-			st.add_vertex(corners[i])
-
-
-## Marram over `area` (x and z), tufts about `spacing` apart, where the sand
-## is loose and bare; `gaps` as for a wood.
+## Marram over `area` (x and z), where the sand is loose and bare. It grows
+## in drifts: clumps about `spacing` apart where it stands thick, on crests
+## and on the backs the wind climbs more than in the hollows, and none at
+## all between the drifts; the higher `gaps`, the more of the area has none.
+## The clumps are stood when the ground is dressed, see _stand_marram().
 func marram(area: Rect2, spacing: float, gaps := 0.0) -> void:
-	var bare := _noise(hash(area) & 0xffff, 17.0)
-	for row in int(area.size.y / spacing):
-		for column in int(area.size.x / spacing):
-			var at := area.position + (Vector2(column, row) + Vector2(_prop_rng.randf(), _prop_rng.randf())) * spacing
-			var size := _prop_rng.randf_range(0.75, 1.5)
-			var yaw := _prop_rng.randf() * TAU
-			if bare.get_noise_2dv(at) < gaps or not _land.grow(-1.0).has_point(at) or firm_at(at) > 0.15 or cover_at("needles", at) > 0.4 or cover_at("earth", at) > 0.15:
-				continue
-			tuft("marram", Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(size, size * _prop_rng.randf_range(0.8, 1.2), size)), ground(at.x, at.y, -0.04)))
+	_marram.append({"area": area, "spacing": spacing, "gaps": gaps})
+
+
+## Stands the marram that was asked for, now that the land has been read:
+## where it grows depends on how the land lies. Each clump is thrown with
+## dice of its own kind, whether it comes to stand or not.
+func _stand_marram() -> void:
+	var drifts := _noise(977, 27.0)
+	var knots := _noise(978, 6.0)
+	for asked: Dictionary in _marram:
+		var area: Rect2 = asked.area
+		var step: float = asked.spacing * 0.6
+		for row in int(area.size.y / step):
+			for column in int(area.size.x / step):
+				var at := area.position + (Vector2(column, row) + Vector2(_strew_rng.randf(), _strew_rng.randf())) * step
+				var chance := _strew_rng.randf()
+				var size := _strew_rng.randf()
+				var seed := _strew_rng.randi()
+				if not _land.grow(-1.0).has_point(at) or firm_at(at) > 0.15 or cover_at("needles", at) > 0.4 or cover_at("earth", at) > 0.15:
+					continue
+				if absf(_by_track[_spot_at(at)].x) < 3.0:
+					continue
+				var look := look_at_ground(at)
+				# How thick it stands here, 0 to 1.
+				var thick := 0.5 + drifts.get_noise_2dv(at) * 0.55 + knots.get_noise_2dv(at) * 0.2 + (look.r - 0.5) * 0.9 - (asked.gaps as float) * 0.5
+				thick = smoothstep(0.45, 0.78, thick)
+				if chance > thick * thick * 0.85 + 0.012:
+					continue
+				# Large clumps stand in the thick of a drift, with small
+				# ones between them and around its edge.
+				_clumps.append({"at": at, "size": lerpf(0.35, 1.05, pow(size, 1.6)) * lerpf(0.7, 1.2, thick), "seed": seed})
+	for clump: Dictionary in _clumps:
+		_clump("marram", clump.at, clump.size, clump.seed)
+	# How much grass stands around each spot, for the ground to show when
+	# it is too far off to be drawn; and where it stands the sand moves,
+	# and no crust forms.
+	var grass := PackedFloat32Array()
+	grass.resize(_looks.size())
+	for clump: Dictionary in _clumps:
+		grass[_spot_at(clump.at)] += clump.size * clump.size
+	grass = _evened(grass, 2)
+	for i in _looks.size():
+		var stands := clampf(grass[i] * 5.0, 0.0, 1.0)
+		_looks[i] = Color(_looks[i].r, _looks[i].g, _looks[i].b * (1.0 - stands * 0.7), stands)
+	print("Marram: %d clumps" % _clumps.size())
+
+
+## The spot of the land nearest to `at`, as its place in the lists that
+## have one entry a spot.
+func _spot_at(at: Vector2) -> int:
+	var spot := ((at - _land.position) / LAND_CELL).round()
+	return clampi(int(spot.y), 0, _down() - 1) * _across() + clampi(int(spot.x), 0, _across() - 1)
+
+
+## A clump of grass at `at`, `size` times a clump that stands a metre high:
+## sheaves of blades on cards (shaders/grass.gdshader) that rise from one
+## foot, upright in the middle and arching further out the further out they
+## stand. `seed` is what makes it this clump and no other. The clumps of a
+## block of ground are one mesh, which casts no shadow and is not drawn
+## from far off, see _commit().
+func _clump(mat: String, at: Vector2, size: float, seed: int) -> void:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = seed
+	@warning_ignore("integer_division")
+	var st := _tool_named("|strewn %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.y) / GROUND_BLOCK, mat])
+	var foot := ground(at.x, at.y, (MOUND_HIGH * size if size >= MOUND_FROM else 0.0) - 0.04)
+	var phase := dice.randf()
+	# How much of it is last year's straw.
+	var withered := dice.randf() * dice.randf()
+	var sheaves := 2 + int(size * 5.5)
+	var turn := dice.randf() * TAU
+	for i in sheaves:
+		# From the middle outwards.
+		var share := (i + 0.5) / sheaves
+		var angle := turn + i * 2.4 + dice.randf_range(-0.35, 0.35)
+		var out := Vector3(cos(angle), 0.0, sin(angle))
+		# A card does not stand square to the way it leans.
+		var side := Vector3(-out.z, 0.0, out.x).rotated(Vector3.UP, dice.randf_range(-0.6, 0.6))
+		var long := size * dice.randf_range(0.85, 1.15) * lerpf(1.05, 0.78, share)
+		var wide := long * 0.5 * dice.randf_range(0.9, 1.2)
+		var lean := lerpf(0.06, 0.8, share) + dice.randf_range(-0.08, 0.12)
+		var droop := lerpf(0.3, 0.9, share) * dice.randf_range(0.6, 1.3)
+		# Which sheaf of the four in the picture: tall ones in the middle,
+		# one in flower now and then, straw and short ones around them.
+		var roll := dice.randf()
+		var sheaf := 3
+		if share < 0.4:
+			sheaf = 1 if roll < 0.25 and size > 0.6 else 0
+		elif roll < 0.3 + withered * 0.5:
+			sheaf = 2
+		elif roll < 0.6:
+			sheaf = 0
+		var left := sheaf * 0.25 + 0.003
+		var right := sheaf * 0.25 + 0.247
+		if dice.randf() < 0.5:
+			var swap := left
+			left = right
+			right = swap
+		var at_row := foot + out * size * 0.14 * share
+		var points: Array[Vector3] = []
+		var normals: Array[Vector3] = []
+		var uvs: Array[Vector2] = []
+		var lit: Array[Color] = []
+		var before := 0.0
+		for row in 3:
+			var t: float = [0.0, 0.42, 1.0][row]
+			var slant := lean + droop * (t + before) * (t + before) * 0.25
+			at_row += (Vector3.UP * cos(slant) + out * sin(slant)) * long * (t - before)
+			before = t
+			var half: float = wide * 0.5 * [0.6, 0.9, 1.0][row]
+			var normal := (Vector3.UP * 0.9 + out * (0.2 + 0.5 * t)).normalized()
+			var light := lerpf(0.45, 1.0, t) * lerpf(0.82, 1.0, share)
+			for edge: float in [-1.0, 1.0]:
+				points.append(at_row + side * half * edge)
+				normals.append(normal)
+				uvs.append(Vector2(left if edge < 0.0 else right, 1.0 - t))
+				lit.append(Color(t * t, phase, light, withered))
+		for row in 2:
+			for i_corner: int in [0, 1, 3, 0, 3, 2]:
+				var corner: int = row * 2 + i_corner
+				st.set_color(lit[corner])
+				st.set_normal(normals[corner])
+				st.set_uv(uvs[corner])
+				st.add_vertex(points[corner])
+
+
+## The sand a clump of grass at `at` has caught: a low mound, added to the
+## corners of a block of ground as the lists of _dress_ground() have them.
+## It is ground like the ground around it, but that the material is told
+## where each corner lies under the clump, in place of where it lies by a
+## track: (0, 0) at its foot and one out at its rim, put TRACK_FAR + 2 to
+## the right. By that it draws the foot dark, which is all the shadow the
+## grass has. The mound reaches further on the side away from the sun,
+## where that shadow would fall, and to the lee, where the sand drops.
+func _mound(at: Vector2, size: float, points: PackedVector3Array, facing: PackedVector3Array, uvs: PackedVector2Array, tracks: PackedVector2Array, looks: PackedColorArray, corners: PackedInt32Array) -> void:
+	const SIDES := 7
+	var first := points.size()
+	var reach := 0.5 * size + 0.25
+	var shadow := -Vector2(_sunward.x, _sunward.z).normalized()
+	var lie := ground_normal(at.x, at.y, 0.6)
+	points.append(ground(at.x, at.y, MOUND_HIGH * size))
+	facing.append(lie)
+	uvs.append(at)
+	tracks.append(Vector2(TRACK_FAR + 2.0, 0.0))
+	looks.append(look_at_ground(at))
+	for ring in 2:
+		var share := 0.5 if ring == 0 else 1.0
+		for i in SIDES:
+			var out := Vector2.RIGHT.rotated(TAU * (i + ring * 0.5) / SIDES)
+			var far := reach * (1.0 + 0.6 * maxf(out.dot(shadow), 0.0) + 0.3 * maxf(out.y, 0.0))
+			var spot := at + out * far * share
+			points.append(ground(spot.x, spot.y, MOUND_HIGH * size * 0.5 if ring == 0 else -0.035))
+			facing.append((lie + Vector3(out.x, 0.0, out.y) * (0.3 if ring == 0 else 0.1)).normalized())
+			uvs.append(spot)
+			tracks.append(Vector2(TRACK_FAR + 2.0, 0.0) + out * share)
+			looks.append(look_at_ground(spot))
+	for i in SIDES:
+		var inner := first + 1 + i
+		var inner_next := first + 1 + (i + 1) % SIDES
+		var outer := first + 1 + SIDES + i
+		var outer_next := first + 1 + SIDES + (i + 1) % SIDES
+		corners.append_array([first, inner, inner_next, inner, outer, inner_next, inner_next, outer, outer_next])

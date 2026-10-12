@@ -140,6 +140,7 @@
 		{"id": "chainlink", "type": "foliage", "source": "drawn", "generator": "tools/gen_foliage.gd", "kind": "chainlink", "size": [256, 256], "seed": 11, "use": "wire fencing"},
 		{"id": "tree_line", "type": "foliage", "source": "drawn", "generator": "tools/gen_foliage.gd", "kind": "treeline", "size": [2048, 512], "seed": 13, "use": "the edge of the wood around the land, from afar"},
 		{"id": "tyre_ruts", "type": "foliage", "source": "drawn", "generator": "tools/gen_foliage.gd", "kind": "ruts", "size": [256, 512], "seed": 15, "use": "the ruts of the track"},
+		{"id": "marram_blades", "type": "foliage", "source": "rendered", "generator": "tools/render_grass.py", "kind": "marram", "use": "the sheaves a clump of marram is made of, four side by side: blades modelled one by one and rendered, with marram_blades_n for which way they face"},
 		{"id": "text_10_t", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "10 t", "height": 128, "seed": 50, "use": "safe working load on the crane"},
 		{"id": "text_t1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T1", "height": 128, "seed": 51, "use": "tank number"},
 		{"id": "text_t2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "text", "text": "T2", "height": 128, "seed": 52, "use": "tank number"},
