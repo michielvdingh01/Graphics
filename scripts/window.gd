@@ -383,17 +383,17 @@ func shot(shape: int, along: Vector3) -> void:
 		Net.show(self, &"_shatter", [1 << pane, along])
 
 
-## A blast of `radius` metres goes off at `position`: it breaks every pane
-## within its reach. A wall in between does not save the glass.
-func blast(position: Vector3, radius: float) -> void:
-	if not (global_transform * _around).grow(radius).has_point(position):
+## A blast of `radius` metres goes off at `at`: it breaks every pane within
+## its reach. A wall in between does not save the glass.
+func blast(at: Vector3, radius: float) -> void:
+	if not (global_transform * _around).grow(radius).has_point(at):
 		return
 	var broken := 0
 	for pane in _panes.size():
-		if not is_shape_owner_disabled(pane) and middle(pane).distance_to(position) < radius:
+		if not is_shape_owner_disabled(pane) and middle(pane).distance_to(at) < radius:
 			broken |= 1 << pane
 	if broken:
-		Net.show(self, &"_blow_out", [broken, position, radius])
+		Net.show(self, &"_blow_out", [broken, at, radius])
 
 
 ## Which panes are gone, as bits: all there is to tell somebody who comes
