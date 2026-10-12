@@ -25,8 +25,46 @@ const PUSH := 9.0
 ## A fire hurts this much a second, in ticks this far apart.
 const BURN_DAMAGE := 24.0
 const BURN_TICK := 0.25
+## How far outside its flames a fire still burns somebody, in metres: half
+## the width of whoever stands there.
+const BESIDE := 0.45
+## The group of what can catch fire: the stacks of crates and boxes and the
+## piles of pallets. Each of them has `girth`, how far it reaches sideways
+## from where it stands, and `warm(fire, seconds)`, see _spread().
+const TINDER := &"tinder"
+## How far from the flames something still gets hot, in metres. The stacks of
+## one pile of crates stand 0.6 to 1.1 m apart and catch from each other; an
+## aisle is wider, and stops a fire.
+const REACH := 1.2
+## What stands that far off gets hot this many times as slowly as what the
+## flames touch, and what stands as high as a fire lights at all this many
+## times as slowly as what stands at its foot. What lies under a fire gets
+## this share of it, from the embers that come down, if it is no deeper
+## under it than DEPTH metres.
+const FAR := 0.35
+const HIGH := 0.6
+const UNDER := 0.3
+const DEPTH := 1.0
+## How high above the floor burning fuel lights something, in metres: what
+## stands on that floor beside it, and not the crate or the box on top of
+## that. From there a fire climbs by itself, one crate at a time.
+const LOW := 0.3
+## The most fires on crates, boxes and pallets at once: every one of them is
+## flames, a light and a column of smoke, and costs about what the fuel of a
+## barrel does while it burns. What gets hot while there are that many waits
+## its turn, and catches when one of them is out if a fire is still near it.
+const MAX_ALIGHT := 4
+## The fireball of an explosion lights what it does not break: it fills this
+## share of the reach of the blast, and is as much heat as this many seconds
+## of fire.
+const FIREBALL := 0.45
+const SEAR := 2.0
 
-## Patches of floor on fire: {at, radius, left}.
+## Patches of floor on fire: {at, radius, left}. A patch says as well how far
+## its flames reach from `at` and how high above it they light something,
+## `flames` and `tall`, for how many seconds it has burnt since it last heated
+## what is near it, `owed`, and has `tinder` if it is something that caught
+## fire and not fuel.
 var _burning: Array[Dictionary] = []
 var _tick := 0.0
 
@@ -88,6 +126,7 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 			body.velocity += away * PUSH * strength
 		elif body is RigidBody3D:
 			body.apply_central_impulse(away * PUSH * strength * body.mass)
+	_sear(position, radius)
 
 
 ## What a blast looks and sounds like, and how it rattles the view of the
@@ -106,7 +145,7 @@ func _show_blast(position: Vector3, radius: float, size: float) -> void:
 ## `seconds`.
 func burn(position: Vector3, across: float, seconds: float) -> void:
 	Net.show(self, &"_show_fire", [position, across, seconds])
-	_burning.append({"at": position, "radius": across * 0.5 + 0.45, "left": seconds})
+	_burning.append({"at": position, "radius": across * 0.5 + BESIDE, "left": seconds, "flames": across * 0.5, "tall": LOW, "owed": 0.0})
 
 
 func _show_fire(position: Vector3, across: float, seconds: float) -> void:
@@ -118,6 +157,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for i in range(_burning.size() - 1, -1, -1):
 		_burning[i].left -= delta
+		_burning[i].owed += delta
 		if _burning[i].left <= 0.0:
 			_burning.remove_at(i)
 	_tick -= delta
@@ -135,6 +175,7 @@ func _physics_process(delta: float) -> void:
 			if absf(offset.y) < 1.5 and Vector2(offset.x, offset.z).length() < patch.radius:
 				body.take_damage(BURN_DAMAGE * BURN_TICK * (PLAYER_SHARE if body.is_in_group("player") else 1.0), body.global_position + Vector3.UP * 0.5, Vector3.UP)
 				break
+	_spread()
 
 
 ## A scene change takes its fires with it.
@@ -142,7 +183,8 @@ func clear() -> void:
 	_burning.clear()
 
 
-## True if the floor at `position` is on fire, or within `margin` of it.
+## True if the floor at `position` is on fire, or within `margin` of it: fuel
+## that burns there, or a crate or a pile of pallets that does.
 func burning(position: Vector3, margin := 0.0) -> bool:
 	for patch in _burning:
 		var offset: Vector3 = position - patch.at
@@ -151,7 +193,8 @@ func burning(position: Vector3, margin := 0.0) -> bool:
 	return false
 
 
-## The patches of floor that are on fire: {at, radius, left} each.
+## The patches of floor that are on fire: {at, radius, left} each, of fuel
+## and of whatever caught fire alike.
 func fires() -> Array[Dictionary]:
 	return _burning
 
@@ -177,3 +220,90 @@ func _exposure(space: PhysicsDirectSpaceState3D, from: Vector3, body: Node3D, ig
 		if space.intersect_ray(query).is_empty():
 			open += 1
 	return float(open) / points.size()
+
+
+## Something that can catch fire has done so: a patch like that of burn(),
+## but with no fuel on the floor, since what burns shows its own flames. `at`
+## is the middle of its underside, `flames` how far its flames reach from
+## there and `tall` how high they light something. What comes back is the
+## patch itself, for whoever burns to move along with and to put out: with
+## `left` at 0 it is gone at the next step. Only the host has patches.
+func kindle(at: Vector3, flames: float, tall: float, seconds: float) -> Dictionary:
+	var patch := {"at": at, "radius": flames + BESIDE, "left": seconds, "flames": flames, "tall": tall, "owed": 0.0, "tinder": true}
+	_burning.append(patch)
+	return patch
+
+
+## How many crates, boxes and piles of pallets are on fire.
+func alight() -> int:
+	var count := 0
+	for patch in _burning:
+		if patch.has("tinder") and patch.left > 0.0:
+			count += 1
+	return count
+
+
+## True if one more of them may catch fire: see MAX_ALIGHT.
+func room() -> bool:
+	return alight() < MAX_ALIGHT
+
+
+## How fast a fire heats something that stands upright, in seconds of fire a
+## second: 1 where its flames touch it, less the further off it stands and
+## the higher up, a little where it lies under the fire, and 0 out of its
+## reach. `fire` is a patch, `box` the box around the thing and `inverse`
+## what takes a point in the level to the space that box is in.
+func heat(fire: Dictionary, inverse: Transform3D, box: AABB) -> float:
+	var from: Vector3 = inverse * (fire.at as Vector3)
+	var middle := box.get_center()
+	var gap: float = Vector2(maxf(absf(from.x - middle.x) - box.size.x * 0.5, 0.0), maxf(absf(from.z - middle.z) - box.size.z * 0.5, 0.0)).length() - fire.flames
+	if gap > REACH:
+		return 0.0
+	var near := lerpf(1.0, FAR, clampf(gap / REACH, 0.0, 1.0))
+	# Its top is no higher than the foot of the fire, give or take the
+	# thickness of a board: it lies under it.
+	if box.end.y <= from.y + 0.02:
+		return UNDER * near if from.y - box.end.y <= DEPTH else 0.0
+	# How far up what the fire lights its underside is.
+	var rise: float = (box.position.y - from.y) / fire.tall
+	if rise >= 1.0:
+		return 0.0
+	return near * lerpf(1.0, HIGH, clampf(rise, 0.0, 1.0))
+
+
+## Every fire heats what can catch fire around it, for as long as it has
+## burnt since it last did: `owed`, which is a tick, or less for a fire that
+## has only just begun. What is near enough to a patch is looked up once,
+## when its first tick comes: neither of them moves sideways after that.
+func _spread() -> void:
+	# What catches adds a patch of its own, which waits for the next tick.
+	for patch: Dictionary in _burning.duplicate():
+		if not patch.has("near"):
+			patch.near = _near(patch.at, patch.flames + REACH)
+		var seconds: float = patch.owed
+		patch.owed = 0.0
+		for thing: Variant in patch.near:
+			if is_instance_valid(thing):
+				thing.warm(patch, seconds)
+
+
+## What can catch fire and stands within `reach` of the upright through a
+## point.
+func _near(at: Vector3, reach: float) -> Array[Node3D]:
+	var found: Array[Node3D] = []
+	for thing: Node3D in get_tree().get_nodes_in_group(TINDER):
+		var offset := thing.global_position - at
+		if Vector2(offset.x, offset.z).length() < reach + thing.girth:
+			found.append(thing)
+	return found
+
+
+## The fireball of a blast at `position` that reaches `radius` metres heats
+## what it has left standing, as a fire that stood there for SEAR seconds
+## would: cardboard and pallets close by catch at once, and so do crates that
+## were behind something.
+func _sear(position: Vector3, radius: float) -> void:
+	var ball := radius * FIREBALL
+	var fire := {"at": position + Vector3.DOWN * 0.5, "flames": ball, "tall": ball + 0.5}
+	for thing in _near(position, ball + REACH):
+		thing.warm(fire, SEAR)

@@ -485,9 +485,11 @@ func jet(position: Vector3, direction: Vector3, length: float, seconds: float) -
 
 
 ## The light of a fire, which flickers for as long as it burns: it hangs at
-## `offset` from the flames and goes when they do. Smoke starts to rise at
-## the moment `smoke`.
-func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds: float, smoke: float) -> void:
+## `offset` from the flames and goes when they do. It throws no shadows.
+## Smoke starts to rise at the moment `smoke`. What comes back is what
+## _step() keeps of the fire, with the flames it belongs to as `flames` and
+## the moment it next spits sparks as `spit`: never, unless somebody says so.
+func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds: float, smoke: float) -> Dictionary:
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.55, 0.22)
 	light.light_energy = 0.0
@@ -498,12 +500,133 @@ func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds
 	light.position = offset
 	flames.add_child(light)
 	var at := flames.global_transform * offset
-	_fires.append({"light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "shade": light_at(at), "seed": randf() * 100.0})
+	var burning := {"flames": flames, "light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "spit": INF, "shade": light_at(at), "seed": randf() * 100.0}
+	_fires.append(burning)
+	return burning
 
 
 ## Makes ready what something that has caught fire is drawn with.
 func _ready_burning() -> void:
-	pass
+	_blaze = _burst_mesh(BLAZE_FLAMES, preload("res://shaders/flames.gdshader"))
+	(_blaze.surface_get_material(0) as ShaderMaterial).set_shader_parameter(&"noise", preload("res://assets/masks/wear.png"))
+	_bursts.append(_blaze)
+	_soot = _soot_texture()
+
+
+# What follows is the fire on things that burn, as against fuel on the
+# floor: a crate, a cardboard box, a pile of pallets. Its constants and what
+# it keeps stand here with it, and not at the top with the rest.
+
+## How many balls of flame the largest of them has, a pile of pallets two
+## metres high, and how many there are to a square metre of what burns. Half
+## of them are on the far side of it at any time.
+const BLAZE_FLAMES := 64
+const BLAZE_DENSITY := 14.0
+## The longest anything burns, in seconds. Whoever sets something alight puts
+## it out as well; flames that were forgotten go by themselves after this.
+const BLAZE_TIME := 60.0
+## How far the flames of a burning thing are from the foot of it at most, in
+## metres: for when to leave them out of the picture.
+const BLAZE_REACH := 4.0
+## How far a burn mark on the floor reaches beyond what burnt there, as a
+## multiple of how wide that was. The mark is thin towards its rim.
+const SOOT_SPREAD := 2.6
+
+var _blaze: ArrayMesh
+## What lies on something that has burnt and still stands.
+var _soot: ImageTexture
+
+
+## Flames on something that has caught fire: they come out of the sides and
+## the top of a box `size` metres large that stands on the origin of `at`,
+## lick up along it and stand over it, for `seconds`, with the light they
+## throw, the smoke that rises off them and the sparks that wood spits.
+## Freeing what it returns puts it out, and feed() fits it to what burns when
+## that changes.
+func blaze(at: Transform3D, size: Vector3, seconds: float) -> Node3D:
+	var flames := _burst(_blaze, at, BLAZE_TIME, {}, BLAZE_REACH)
+	var burning := _burn(flames, Vector3.ZERO, 0.0, 4.0, seconds, time + 0.3)
+	burning.spit = time + randf_range(0.2, 0.7)
+	feed(flames, at, size, seconds)
+	return flames
+
+
+## Fits the flames of blaze() to what burns now: the box that stands on the
+## origin of `at`, `size` metres large, with `seconds` left to burn. A larger
+## box gets larger flames, more of them, and more light. If it is `covered`,
+## something stands on it that does not burn, and the flames keep to its
+## sides.
+func feed(flames: Node3D, at: Transform3D, size: Vector3, seconds: float, covered := false) -> void:
+	if not is_instance_valid(flames):
+		return
+	for burning in _fires:
+		if not is_same(burning.flames, flames):
+			continue
+		var age: float = time - burning.start
+		# Flames are sized by how much there is to burn: the root of its area.
+		var grown := sqrt(2.0 * (size.x + size.z) * size.y + (0.0 if covered else size.x * size.z))
+		flames.global_transform = at
+		flames.set_instance_shader_parameter(&"box", size)
+		flames.set_instance_shader_parameter(&"crown", 0.0 if covered else 1.0)
+		flames.set_instance_shader_parameter(&"size", Vector2(0.2 + 0.07 * grown, 0.6 + 0.3 * grown))
+		flames.set_instance_shader_parameter(&"amount", clampf(grown * grown * BLAZE_DENSITY / BLAZE_FLAMES, 0.22, 1.0))
+		flames.set_instance_shader_parameter(&"life", age + seconds)
+		var light: OmniLight3D = burning.light
+		light.position = Vector3.UP * (size.y * 0.5 + 0.3)
+		light.omni_range = 3.0 + grown
+		burning.energy = 0.9 + 0.35 * grown
+		burning.seconds = age + seconds
+		# Smoke and sparks leave from its top.
+		burning.at = at * Vector3(0.0, size.y, 0.0)
+
+
+## Something that has burnt through falls apart around `position`: charred
+## splinters, a shower of sparks and a cloud of ash. `across` is how large it
+## was in metres. The boards themselves are up to whoever burnt: see
+## scripts/stack.gd.
+func crumble(position: Vector3, across := 0.5) -> void:
+	var floor_y := floor_below(position)
+	var about := Transform3D(Basis(), position)
+	_burst(_chips, about, 3.0, {&"floor_y": floor_y, &"tint": Color(0.05, 0.045, 0.04), &"slender": 4.0, &"size": 0.08, &"speed": 2.6, &"spread": 1.0})
+	_burst(_sparks, about, 1.6, {&"floor_y": floor_y, &"speed": 3.5, &"spread": 0.9, &"life": 1.3, &"amount": 0.7})
+	_burst(_puffs, about, 1.8, {&"tint": Color(0.1, 0.095, 0.09, 0.5), &"speed": 1.3, &"spread": 1.0, &"size": Vector2(0.12, across * 1.3), &"life": 1.6, &"rise": 0.35, &"amount": 0.7})
+
+
+## Soot where something has burnt: a burn mark on the floor around the origin
+## of `at`, and, if what burnt still stands there as a box `size` metres
+## large, soot on that as well, down its sides as much as on its top. It
+## stays for as long as the level does.
+func soot(at: Transform3D, size: Vector3) -> void:
+	var floor_y := floor_below(at.origin + Vector3.UP * 0.2, 1.2)
+	if floor_y > at.origin.y - 1.0:
+		var mark := Decal.new()
+		mark.texture_albedo = _scorch_textures.pick_random()
+		var across := maxf(size.x, size.z) * SOOT_SPREAD
+		mark.size = Vector3(across, 0.3, across)
+		mark.transform = Transform3D(at.basis.orthonormalized(), Vector3(at.origin.x, floor_y, at.origin.z))
+		_keep(mark)
+	if size.y > 0.0:
+		var coat := Decal.new()
+		coat.texture_albedo = _soot
+		coat.size = size + Vector3.ONE * 0.1
+		coat.transform = at * Transform3D(Basis(), Vector3.UP * size.y * 0.5)
+		_keep(coat)
+		# It is thrown down from above, and what it meets on the way down are
+		# the sides.
+		coat.normal_fade = 0.0
+
+
+## What lies on something that has burnt: black, thick in patches and thin
+## between them, where a little of the wood shows through.
+func _soot_texture() -> ImageTexture:
+	var noise := FastNoiseLite.new()
+	noise.seed = 7
+	noise.frequency = 0.09
+	var image := Image.create_empty(64, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		for x in 64:
+			image.set_pixel(x, y, Color(0.035, 0.032, 0.03, clampf(0.86 + 0.3 * noise.get_noise_2d(x, y), 0.0, 1.0)))
+	return ImageTexture.create_from_image(image)
 
 
 ## The wisp of smoke a barrel leaves once it falls silent, drifting on along
@@ -610,6 +733,11 @@ func _step(delta: float) -> void:
 		if not is_instance_valid(burning.light) or age > burning.seconds:
 			_fires.remove_at(i)
 			continue
+		# Wood that burns spits a few sparks now and then.
+		while time >= burning.spit:
+			var sparks := _burst(_sparks, Transform3D(Basis(), burning.at), 1.5, {&"floor_y": floor_below(burning.at), &"speed": randf_range(2.0, 3.5), &"spread": 0.5, &"life": randf_range(0.8, 1.4), &"amount": randf_range(0.08, 0.2)})
+			sparks.set_instance_shader_parameter(&"start", burning.spit)
+			burning.spit += randf_range(0.3, 0.9)
 		# In step with the flames: up at once, down over the last second or so.
 		var dying := minf(1.5, burning.seconds * 0.4)
 		var strength := smoothstep(0.0, 0.2, age) * (1.0 - smoothstep(burning.seconds - dying, burning.seconds, age))
