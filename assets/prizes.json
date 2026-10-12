@@ -1,0 +1,33 @@
+{
+	"_doc": "What two teams can fight over, see scripts/prize.gd. Every prize names its 'model' and the 'stand' it has at home, both scenes in scenes/models/ built by tools/models/prizes.gd, and three ways of sitting, each as 'at' in metres and 'turn' in degrees about x, y and z: 'home' from the foot of its stand, 'down' from the spot on the floor where it was dropped, and 'carried' from the bone that bears it, which 'on' names ('back' or 'hips'), in hip heights of whoever carries it, with that figure looking along +z and its left arm along +x. 'the' is how a sentence speaks of it. 'wind' is for a prize whose model says it flies: how hard it blows standing still and at a run, from 0 to 1. A new prize is a model, a stand and a line here.",
+	"prizes": {
+		"flag": {
+			"name": "Flag",
+			"the": "the flag",
+			"model": "flag",
+			"stand": "flag_stand",
+			"home": {"at": [0, 0.1, 0], "turn": [0, 0, 0]},
+			"carried": {"on": "hips", "at": [0, -0.1, -0.17], "turn": [-12, 0, 0]},
+			"down": {"at": [0, 0, 0], "turn": [-5, 0, 3]},
+			"wind": [0.72, 1.0]
+		},
+		"football": {
+			"name": "Football",
+			"the": "the ball",
+			"model": "football",
+			"stand": "football_stand",
+			"home": {"at": [0, 0.115, 0], "turn": [0, 25, 0]},
+			"carried": {"on": "hips", "at": [0.11, -0.06, -0.25], "turn": [0, 0, 0]},
+			"down": {"at": [0, 0.11, 0], "turn": [35, 0, 20]}
+		},
+		"banana": {
+			"name": "Giant banana",
+			"the": "the banana",
+			"model": "banana",
+			"stand": "banana_stand",
+			"home": {"at": [0, 0.396, 0], "turn": [0, 0, 0]},
+			"carried": {"on": "back", "at": [0, -0.15, -0.2], "turn": [0, 0, 122]},
+			"down": {"at": [0, 0.09, 0], "turn": [90, 0, 0]}
+		}
+	}
+}

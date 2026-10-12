@@ -2240,3 +2240,67 @@ Bij zijn akkoord van 12 oktober 2026 heeft hij er niets apart over gezegd: ze ge
 - Samen spelen is nooit over een echt netwerk gespeeld, en schutter tegen schutter is gevoeliger voor vertraging dan samen tegen robots.
 - De soldaten dragen het camouflagepatroon en de vlag van het Amerikaanse leger; stap 2e haalt de vlag weg bij het tweede team, niet bij het eerste.
 - Een bot die niet bukt, neemt alleen staand dekking, zoals de personages op de route.
+
+## De buit: vlag, voetbal en banaan
+
+Op 12 oktober 2026 gebouwd op de branch `buit`: stap 2d van "Wedstrijden: teams, bots en een buit (plan)". Wat twee teams elkaar afpakken, waar het thuis op staat en hoe iemand het draagt. De regels van capture the flag horen hier niet bij; die komen in stap 3. Niet in de trunk gezet.
+
+**Wat er staat**
+
+- **Drie buiten, elk met zijn standaard**, in code gebouwd (`tools/models/prizes.gd`):
+  - een vlag op een mast van 1,95 m, met een doek van 90 bij 60 cm (1866 driehoeken), en een gegoten voet met een koker waar de mast 20 cm in staat (684);
+  - een voetbal van tweeëndertig vlakken, 22 cm, met het net waarin hij gedragen wordt (2700 driehoeken, en 2544 voor het net), op een mat met een rubberen ring (480);
+  - een banaan van 1,05 m met een lint en een strik (2164), op een kist van latten (300).
+- **De kleur van het team** zit in een onderdeel `Team` van elk model: het doek, de vijfhoeken van de bal, het lint van de banaan, een band om de voet en om de koker, de rand van de mat, een lat rondom de kist. Het materiaal daarvan heeft een shader met twee instance uniforms, `team` en `teamed` (`shaders/team.gdshader`, en voor het doek `shaders/flag.gdshader`), zodat elk exemplaar zijn eigen kleur heeft op één materiaal. Van niemand is de bal zwart-wit, het doek grijs en het lint wit.
+- **Het doek beweegt in de shader**: golven die naar het uiteinde lopen en onderweg groter worden, en een wind van 0 (het hangt langs de mast) tot 1 (het staat recht uit). Thuis waait het 0,72; op iemands rug hangt het af van hoe hard hij loopt. Op het doek staat een lichte chevron en verder niets: het is de vlag van geen land.
+- **`assets/prizes.json`** noemt per buit het model, de standaard en drie manieren van zitten, elk als plek en draaiing: thuis op de standaard, op wie hem draagt, en op de grond. Daarbij hoe hij heet en hoe een zin hem noemt ("the banana"). **Een nieuwe buit is een model, een standaard en een regel in die tabel.**
+- **`scripts/prize.gd`** (`scenes/prize.tscn`) is het huis van één buit: het staat waar de buit thuishoort, met de standaard, en de buit zelf is thuis, gedragen of gevallen. Het kent geen regels. Het zegt wie de buit aanraakt (`touched`), wie bij de standaard komt (`reached`) en dat er iets veranderd is (`moved`), en doet wat het gezegd wordt: `take()`, `drop()`, `send_home()`. Wie de wedstrijd leidt vraagt verder waar de buit is (`where()`), wie er nu bij staat (`within_reach()`, `at_stand()`) en hoe lang hij al ligt (`down_for`).
+- **Dragen** doet de rig van de personages: `bear()` en `release()` in `scripts/humanoid_rig.gd`. Wat gedragen wordt hangt aan de heupen of aan de rug en gaat mee met dat bot, op zijn eigen maat, hoe groot het personage ook is. De banaan ligt schuin over de rug. De vlag en de bal hangen aan de heupen: wie aanlegt buigt zijn bovenlijf een graad of dertig voorover, en een mast die daaraan vastzit wijst dan naar voren over zijn hoofd. De heupen draaien bovendien mee met de benen, dus het doek wijst weg van waar hij heen loopt.
+- **De speler van deze machine heeft geen figuur** en draagt de buit op zijn eigen lijf. Zelf ziet hij er alleen de schaduw van.
+- **Wat onderweg mis kan gaan, gaat goed.** Een pop die van wapen wisselt wordt een nieuw figuur: de buit verhuist mee. Wie uit het level verdwijnt zonder los te laten: de buit komt neer waar hij stond.
+- **Waar hij staat of ligt gloeit hij zwak** in de kleur van zijn team, zoals wat je opraapt: een licht zonder schaduw van 2,2 m.
+- **De eerste keer.** Een buit laat alles wat hij kan worden één keer tekenen als hij in het level komt (`Fx.rehearse()`), dus bij het laden en niet als de eerste speler hem ziet.
+
+**Het blad** `assets/prizes/sheets/prizes.jpg`, gemaakt door `tools/prize_sheet.py`: per buit thuis in de kleur van beide kanten, op een soldaat van voren, van links en van achteren, en gevallen naast zijn standaard.
+
+**Getest.** `tools/test_prize.sh`, 86 controles, zonder venster: elke buit uit de tabel staat in de hal van de fabriek, in de kleur van zijn team; wie erheen loopt raakt hem aan en staat bij de standaard; hij is te pakken en gaat mee, op de rug, en is daar niet aan te raken; het doek staat verder uit naarmate de drager harder loopt; hij valt op de vloer waar de drager stond, telt hoe lang hij ligt en gaat naar huis; een pop draagt hem op zijn rig, op zijn eigen maat, houdt hem bij het wisselen van wapen, en laat hem achter als hij uit het level verdwijnt; de speler draagt hem op zijn eigen lijf. Daarnaast slagen `tools/selftest.sh`, `tools/test_humanoid.sh` en `tools/nettest.sh`.
+
+**Gemeten** op 12 oktober 2026, M1 Pro op de accu, in de fabriek, met de buit eerst achter de speler neergezet, die zich dan omdraait. Geteld zijn de pipelines die tijdens het tekenen gemaakt worden, en het langste beeld van elke stap.
+
+| | Vlag | Voetbal | Banaan |
+|---|---|---|---|
+| Zonder repetitie: bij het neerzetten, en bij de eerste aanblik | 0, 4 | 0, 2 | 0, 4 |
+| Met repetitie: bij het neerzetten, en bij de eerste aanblik | 4, 0 | 2, 0 | 4, 0 |
+| Gepakt, gevallen, weer thuis | 0 | 0 | 0 |
+| Langste beeld met repetitie | 51 ms, bij het neerzetten | 14 ms | 16 ms |
+
+- De repetitie doet wat ze moet doen: het werk verhuist naar het moment van neerzetten, en dat is in een wedstrijd het laden. Deze machine had alles al eens getekend; hoe lang het duurt op een machine die dat niet heeft, is niet gemeten.
+- **Een pop die voor het eerst in beeld komt kost drie pipelines**, met of zonder buit. Dat is van de pop en niet van dit werk; in een wedstrijd met elf bots hoort het bij stap 1.
+- Wat de buit per beeld kost is niet gemeten: een paar duizend driehoeken en één licht zonder schaduw.
+
+**Buiten de bestanden van de opdracht geraakt:** `scripts/humanoid_rig.gd`, 51 regels erbij voor `bear()` en `release()`. Aan wat de rig al deed is niets veranderd.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| De modellen opnieuw bouwen | `tools/build_model.sh prizes` |
+| De buit testen | `tools/test_prize.sh` |
+| Het blad opnieuw maken, of van één buit | `tools/prize_sheet.py [flag]` (`--run` voor een soldaat in de pas, `--compose` zonder opnieuw te fotograferen) |
+| Eén buit in een level bekijken: 1 thuis, 2 gedragen, 3 gedragen in de pas, 4 gevallen; het eerste cijfer achter de komma kiest de buit, het tweede de kant | `tools/benchmark.sh --quick --spawn="res://scenes/prize.tscn@1.6,0,-1.5,0,1,2.21" --at="4.8,1.35,0.1,90,-3"` |
+
+**Wat ik niet kon beoordelen**
+
+- **Alles is stilstaand bekeken.** Of het doek mooi beweegt, of de bal aan de heup niet raar meedeint en of de banaan over de rug blijft liggen als iemand rent, moet in beweging blijken.
+- Of een banaan van een meter grappig is of flauw.
+- Er klinkt niets: pakken, vallen en thuiskomen hebben geen geluid. Dat is stap 2c.
+
+**Nog open**
+
+- **Het gaat nog niet over de lijn.** Wie de buit heeft, weet alleen de machine waar het gebeurt. Dat wacht op het nummer dat elke deelnemer in stap 1 krijgt, en op stap 4.
+- **De vlag op de rug reikt bijna drie meter hoog.** Hij steekt door een deurpost en door het plafond van een gang. Hij botst nergens tegen, dus het is alleen te zien.
+- De standaard botst ook nergens tegen: je loopt door de kist heen. Met een botsvorm staat hij de bots in de weg, want het navmesh kent hem niet.
+- Wie zelf de buit draagt, ziet daar niets van in beeld.
+- Wat valt, blijft liggen: een bal rolt niet.
+- Wie achteruit loopt met de vlag, heeft het doek naar voren: de heupen staan dan andersom.
+- Het net van de bal is alleen van dichtbij te zien, en de bal hangt links: van rechts gezien zit het lijf ervoor.
