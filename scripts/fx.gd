@@ -188,8 +188,11 @@ func flash(position: Vector3, color := Color(1.0, 0.75, 0.4), energy := 2.0, rea
 	_lights.append([light, time, seconds, energy])
 
 
-## The streak of a bullet on its way from `from` to `to`.
+## The streak of a bullet on its way from `from` to `to`. Every shot that is
+## fired comes by here, on every machine, so this is also where the glass it
+## went through breaks: see _through_glass().
 func tracer(from: Vector3, to: Vector3, tint := Color(1.0, 0.7, 0.35)) -> void:
+	_through_glass(from, to)
 	var length := from.distance_to(to)
 	if length < 2.0:
 		return
@@ -412,10 +415,108 @@ func _floor_under_lamp(position: Vector3) -> float:
 	return maxf(floor_below(position, LAMP_DROP), position.y - LAMP_DROP)
 
 
+## The layer the glass of the windows is on, see scripts/breakables.gd, and
+## the most panes one shot breaks on its way.
+const GLASS := 64
+const MOST_PANES := 6
+## How far a shot is followed on from where it went into a pane before the
+## next pane is looked for, in metres: further than a pane is thick.
+const PANE_STEP := 0.1
+## How near the camera a streak starts that is the shot of whoever looks
+## through it, in metres: no further than a weapon is long.
+const OWN_SHOT := 1.0
+## The pieces a pane of a square metre breaks into, the longest side of the
+## largest of them in metres and the seconds they are there, which is the
+## LINGER of shaders/glass.gdshader. A smaller pane leaves fewer and smaller
+## pieces, and one of more than PANE_PART m² breaks as several.
+const PANE_SHARDS := 64
+const PANE_SHARD := 0.3
+const PANE_TIME := 4.0
+const PANE_PART := 2.0
+## How far from a pane its glass is taken to land, in metres, and the speed
+## in m/s at which it leaves: let go by a shot, and thrown by a blast at its
+## hardest.
+const PANE_THROW := 0.5
+const PANE_SPEED := 2.2
+const PANE_BLOWN := 11.0
+
+## The shards of a pane of a window: those of a lamp, and more of them.
+var _pane_shards: ArrayMesh
+
+
 ## Makes ready what the glass of a window needs when it breaks, as _ready()
 ## does for the rest.
 func _ready_glass() -> void:
-	pass
+	_pane_shards = _burst_mesh(PANE_SHARDS, preload("res://shaders/glass.gdshader"))
+	(_pane_shards.surface_get_material(0) as ShaderMaterial).set_shader_parameter(&"pieces", float(PANE_SHARDS))
+	_bursts.append(_pane_shards)
+
+
+## Breaks the panes of glass that a shot went through on its way from `from`,
+## where its streak starts, to `to`. Glass stops no shot, so whoever fired it
+## never knew: the windows are found here, on the layer that only they are
+## on, see scripts/window.gd. The host decides what breaks.
+func _through_glass(from: Vector3, to: Vector3) -> void:
+	if Net.is_guest() or from.is_equal_approx(to):
+		return
+	# The streak of the player's own shot leaves the muzzle, a hand's breadth
+	# beside the line the shot itself went along, which starts at the eye:
+	# the pane under the crosshair is the one that has to break.
+	var camera := get_viewport().get_camera_3d()
+	if camera and from.distance_to(camera.global_position) < OWN_SHOT:
+		from = camera.global_position
+	var space := get_viewport().find_world_3d().direct_space_state
+	var along := from.direction_to(to)
+	var query := PhysicsRayQueryParameters3D.create(from, to, GLASS)
+	for i in MOST_PANES:
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or not hit.collider.has_method("shot"):
+			return
+		hit.collider.shot(hit.shape, along)
+		query.from = (hit.position as Vector3) + along * PANE_STEP
+		if (to - query.from).dot(along) <= 0.0:
+			return
+
+
+## A pane of glass breaks. `frame` stands in the middle of it with its X and
+## Z along its sides, which are `size` metres, and its Y through the glass.
+## The glass leaves on the side that `out` points to. `force` is how hard a
+## blast throws it, up to 1. At 0 it is only let go of, which is what a shot
+## does: then some of it comes down on the near side as well, and the dust
+## that lay on it hangs there for a moment.
+func pane(frame: Transform3D, size: Vector2, out: Vector3, force := 0.0) -> void:
+	var through := frame.basis.y if frame.basis.y.dot(out) >= 0.0 else -frame.basis.y
+	var leaving := (through + out.normalized() * lerpf(0.5, 2.0, force)).normalized()
+	var beyond := floor_below(frame.origin + through * PANE_THROW, LAMP_DROP)
+	var before := _floor_under_lamp(frame.origin - through * PANE_THROW)
+	# Where there is nothing out there to land on, the ground is taken to be
+	# as high as the floor on this side.
+	if beyond < frame.origin.y - LAMP_DROP:
+		beyond = before
+	var area := size.x * size.y
+	var parts := clampi(ceili(area / PANE_PART), 1, 4)
+	# A large pane breaks as several side by side, along its longer side.
+	var lengthwise := size.x >= size.y
+	var part := Vector2(size.x / parts, size.y) if lengthwise else Vector2(size.x, size.y / parts)
+	var share := part.x * part.y
+	# A blast breaks many panes at once: each of them leaves half its shards.
+	var away := {&"floor_y": beyond, &"area": part, &"size": PANE_SHARD * clampf(sqrt(share), 0.4, 1.2), &"spread": lerpf(0.8, 0.5, force),
+		&"amount": clampf(share, 0.15, 1.0) * (0.5 if force > 0.0 else 1.0)}
+	var back := away.merged({&"floor_y": before, &"speed": PANE_SPEED * 0.4, &"amount": away.amount * 0.35}, true)
+	for i in parts:
+		var offset := (i + 0.5) / parts - 0.5
+		var middle := frame.origin + (frame.basis.x * size.x if lengthwise else frame.basis.z * size.y) * offset
+		# The same shards every time, so they are turned another way round
+		# for every pane.
+		var x := frame.basis.x * (1.0 if randf() < 0.5 else -1.0)
+		var z := frame.basis.z * (1.0 if randf() < 0.5 else -1.0)
+		away[&"speed"] = lerpf(PANE_SPEED, PANE_BLOWN, force) * randf_range(0.8, 1.2)
+		_burst(_pane_shards, Transform3D(Basis(x, leaving, z), middle), PANE_TIME, away, maxf(REACH, middle.y - beyond + 1.0))
+		if force == 0.0:
+			_burst(_pane_shards, Transform3D(Basis(-x, -through, -z), middle), PANE_TIME, back, maxf(REACH, middle.y - before + 1.0))
+	if force == 0.0:
+		_burst(_puffs, Transform3D(_up_along(leaving), frame.origin), 0.8, {&"tint": Color(0.8, 0.82, 0.84, 0.16), &"speed": 0.9, &"spread": 1.0,
+			&"size": Vector2(0.05, 0.28 * clampf(sqrt(area), 0.3, 1.5)), &"life": 0.7, &"rise": -0.1, &"amount": 0.45})
 
 
 ## Something blows up at `position`: a flash, a pressure wave, a ball of fire

@@ -240,9 +240,24 @@ func _adopt_lamps(level: Node3D) -> void:
 			lamps[light].bare()
 
 
-## Gives the glass in the windows bodies of its own, on the layer WINDOW.
-func _adopt_windows(_level: Node3D) -> void:
-	pass
+## Gives the glass in the windows bodies of its own, on the layer WINDOW:
+## one for the panes of every opening, see scripts/window.gd. The builder
+## puts all the glass of a zone into one mesh called Glass, and that of a
+## level without zones into one for the level. The teeth a broken pane
+## leaves are a look of their own.
+func _adopt_windows(level: Node3D) -> void:
+	const PANES := preload("res://scripts/window.gd")
+	var count := 0
+	for glass: MeshInstance3D in level.find_children("Glass", "MeshInstance3D", true, false):
+		var windows: Array[StaticBody3D] = PANES.glaze(glass, WINDOW)
+		if windows.is_empty():
+			push_warning("Breakables: %s is not one box to a pane and stays as it is" % level.get_path_to(glass))
+		for window in windows:
+			window.name = "Window%d" % count
+			count += 1
+			add_child(window)
+			window.global_transform = glass.global_transform
+	_looks.append_array(PANES.first_teeth())
 
 
 ## Has everything that breaking brings into view drawn once now, while the
