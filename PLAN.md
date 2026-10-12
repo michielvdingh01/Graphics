@@ -2301,6 +2301,7 @@ Op 12 oktober 2026 gebouwd op de branch `buit`: stap 2d van "Wedstrijden: teams,
 - **De vlag op de rug reikt bijna drie meter hoog.** Hij steekt door een deurpost en door het plafond van een gang. Hij botst nergens tegen, dus het is alleen te zien.
 - De standaard botst ook nergens tegen: je loopt door de kist heen. Met een botsvorm staat hij de bots in de weg, want het navmesh kent hem niet.
 - Wie zelf de buit draagt, ziet daar niets van in beeld.
+- De buit voelt wie op de botslaag van de spelers staat (laag 2). Krijgen de teams in stap 1 elk een eigen laag, dan horen die erbij: `PLAYERS` in `scripts/prize.gd`.
 - Wat valt, blijft liggen: een bal rolt niet.
 - Wie achteruit loopt met de vlag, heeft het doek naar voren: de heupen staan dan andersom.
 - Het net van de bal is alleen van dichtbij te zien, en de bal hangt links: van rechts gezien zit het lijf ervoor.
