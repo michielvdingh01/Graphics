@@ -1,0 +1,104 @@
+shader_type spatial;
+render_mode cull_disabled, alpha_to_coverage;
+
+// The cards a crown is made of: the needles of a pine, the leaves of a
+// bush. The texture has the holes; what is left of it is lit from both
+// sides and lets some of the sun through. A card is flat and a crown is
+// not, so its normals are not its own: whoever builds the tree hands every
+// corner the normal of the tuft and of the crown it belongs to, and those
+// are what is shaded.
+//
+// The vertex colour says how a corner moves in the wind and how much light
+// gets to it: red is how far it sways, green where in its sway it is next to
+// the others, blue how deep in the crown it sits (0) or how far out (1), and
+// alpha is 1 for a card that lies on a bough: its back is then its underside,
+// which the sun does not see. Alpha one half is wood that is drawn along
+// with the needles, the trunk of a tree far off: it takes the colour of the
+// texture as it is and lets no light through.
+uniform sampler2D leaf_tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform vec3 tint : source_color = vec3(1.0);
+// What counts as a hole. Where the picture is drawn with several samples to
+// the dot, the edge of a hole is as soft as `feather` makes it, and a needle
+// thinner than a dot is still part of one.
+uniform float cut : hint_range(0.0, 1.0) = 0.4;
+uniform float feather : hint_range(0.0, 1.0) = 0.15;
+// What counts as a hole to the sun, whose shadow has the holes of the
+// texture too: the light that falls through a crown.
+uniform float cut_shadow : hint_range(0.0, 1.0) = 0.3;
+// How far a corner that sways fully moves, in metres.
+uniform float sway = 0.07;
+// How much of the sun comes through a card from behind.
+uniform float through : hint_range(0.0, 1.0) = 0.3;
+uniform float roughness : hint_range(0.0, 1.0) = 0.9;
+// How dark what sits deep in a crown is, next to what is on its outside.
+uniform float deep : hint_range(0.0, 1.0) = 0.45;
+// How much one tree differs from the next in colour, by where it stands:
+// no two trees of a wood are the same green.
+uniform float vary : hint_range(0.0, 0.5) = 0.0;
+// How far out along its normal a dot looks for the sun, in metres. A card
+// is handed the normal of its tuft, and the cards of a tuft stand in each
+// other's shadow dot by dot, which shows as stripes: from a little way out
+// of the tuft the sun is either there or it is not.
+uniform float lift = 0.0;
+// How square to the look a card has to stand to be drawn whole: a card seen
+// along its own plane is a bright line where nothing is, and leaves it to
+// the cards that stand through it to show what is there.
+uniform float edge = 0.0;
+// How many steps sharper than the distance asks the texture is read: thin
+// needles then stay needles for longer, and a sprig does not close up into
+// the shape of its card.
+uniform float sharp = 0.0;
+
+varying vec3 own;
+
+void vertex() {
+	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float phase = COLOR.g * 6.283 + world.x * 0.21 + world.z * 0.17;
+	vec3 push = vec3(sin(TIME * 1.3 + phase), 0.35 * sin(TIME * 2.9 + phase * 1.7), cos(TIME * 1.1 + phase * 0.8)) * sway * COLOR.r;
+	VERTEX += push * mat3(MODEL_MATRIX);
+	// Yellower or bluer, and lighter or darker, from where the tree stands.
+	vec2 stands = MODEL_MATRIX[3].xz;
+	float warm = fract(sin(dot(stands, vec2(12.9898, 78.233))) * 43758.5453) * 2.0 - 1.0;
+	float light = fract(sin(dot(stands, vec2(39.346, 11.135))) * 24634.6345) * 2.0 - 1.0;
+	own = vec3(1.0 + vary * warm, 1.0 + vary * 0.35 * warm, 1.0 - vary * 0.8 * warm) * (1.0 + vary * light);
+}
+
+void fragment() {
+	vec4 leaf = texture(leaf_tex, UV, -sharp);
+	float wood = 1.0 - abs(COLOR.a - 0.5) * 2.0;
+	float lies = max(COLOR.a * 2.0 - 1.0, 0.0);
+	// The normal it was handed, whichever side of the card is looked at.
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
+	float under = 0.0;
+	ALPHA = leaf.a;
+	if (IN_SHADOW_PASS) {
+		ALPHA_SCISSOR_THRESHOLD = cut_shadow;
+	} else {
+		ALPHA_SCISSOR_THRESHOLD = cut;
+		// The side of the card that is looked at, as it really faces.
+		vec3 faces = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+		vec3 look = normalize(VERTEX);
+		faces *= -sign(dot(faces, look));
+		ALPHA *= clamp(-dot(faces, look) / max(edge, 0.0001), 0.0, 1.0);
+		// A card that lies is a plate of needles. Looked at squarely, its
+		// top looks at the sky and its underside at the ground, whatever
+		// its tuft does; looked at along its plane it is what the tuft is.
+		vec3 up = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+		float skyward = clamp(dot(faces, up) * 4.0, -1.0, 1.0);
+		float squarely = lies * smoothstep(0.3, 0.85, -dot(faces, look));
+		NORMAL = normalize(mix(NORMAL, (NORMAL - up * dot(NORMAL, up)) * 0.6 + up * skyward, squarely));
+		under = squarely * clamp(-skyward, 0.0, 1.0);
+	}
+	vec3 colour = leaf.rgb * mix(tint * own, vec3(1.0), wood);
+	ALBEDO = colour * mix(deep, 1.0, COLOR.b) * mix(1.0, 0.8, under);
+	ALPHA_ANTIALIASING_EDGE = feather;
+	ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(leaf_tex, 0)) * exp2(-sharp);
+	ROUGHNESS = roughness;
+	SPECULAR = 0.1;
+	// What sits deep in a crown sees little of the sky either.
+	AO = mix(0.7, 1.0, COLOR.b);
+	BACKLIGHT = colour * through * 2.0 * (1.0 - wood);
+	LIGHT_VERTEX = VERTEX + NORMAL * lift;
+}
