@@ -33,11 +33,11 @@ CELL_WIDE = 0.55
 CELL_HIGH = 1.10
 DOTS = 1024
 
-GREEN = (0.12, 0.165, 0.08)
-BLUE_GREEN = (0.10, 0.155, 0.095)
+GREEN = (0.10, 0.15, 0.07)
+BLUE_GREEN = (0.09, 0.14, 0.085)
 YELLOW_GREEN = (0.19, 0.215, 0.07)
-STRAW = (0.42, 0.33, 0.15)
-PALE = (0.50, 0.44, 0.26)
+STRAW = (0.36, 0.28, 0.125)
+PALE = (0.42, 0.36, 0.2)
 GREY_STRAW = (0.30, 0.26, 0.17)
 SHEATH = (0.36, 0.30, 0.16)
 
@@ -102,11 +102,11 @@ class Sheaf:
     def plume(self, height, lean):
         """A stalk with the spike of marram in flower at its top."""
         rng = self.rng
-        self.blade(height, 0.0035, lean, lambda t: mix(SHEATH, PALE, t), fold=0.5)
+        self.blade(height, 0.006, lean, lambda t: mix(SHEATH, STRAW, t), fold=0.5)
         foot = self.points[-2]
         long = rng.uniform(0.12, 0.17)
         thick = rng.uniform(0.008, 0.011)
-        tone = mix(PALE, STRAW, rng.random() * 0.6)
+        tone = mix(STRAW, GREY_STRAW, rng.random() * 0.6)
         sides = 7
         rings = 8
         first = len(self.points)
