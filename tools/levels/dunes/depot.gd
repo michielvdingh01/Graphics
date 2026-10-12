@@ -977,7 +977,7 @@ func wall_tufts(from: Vector2, to: Vector2, out: Vector2, every := 5.0, reach :=
 		for one in _depot_rng.randi_range(1, 3):
 			var at := from.lerp(to, clampf((run + _depot_rng.randf_range(-0.7, 0.7)) / length, 0.0, 1.0)) + out * _depot_rng.randf_range(0.25, reach)
 			var size := _depot_rng.randf_range(0.6, 1.25)
-			tuft("marram", Transform3D(Basis(Vector3.UP, _depot_rng.randf() * TAU).scaled(Vector3(size, size * _depot_rng.randf_range(0.8, 1.2), size)), ground(at.x, at.y, -0.04)))
+			marram_clump(at, size * 0.6, _depot_rng.randi())
 		run += every * _depot_rng.randf_range(0.5, 1.7)
 
 
