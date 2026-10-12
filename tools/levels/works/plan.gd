@@ -36,35 +36,38 @@ func _plan() -> void:
 	# Set to true while the works are being laid out, to walk and fight
 	# through them before anything is hung, dirtied or stood about.
 	_bare = false
-	_detail_inside = AABB(Vector3(-0.5, 0, -0.5), Vector3(85.0, 9.5, 58.0))
+	_detail_inside = AABB(Vector3(-0.5, 0, -0.5), Vector3(85.0, 12.0, 58.0))
 
 	# The west range: offices along a corridor.
-	room("lodge", "office", Rect2(0, 0, 12, 8), 3.2)
+	room("lodge", "office", Rect2(0, 0, 12, 8), 3.2, {"stock": "lodge"})
 	room("vestibule", "corridor", Rect2(12, 0, 3, 8), 3.0)
 	room("west_corridor", "corridor", Rect2(12, 8, 3, 33), 3.0)
 	room("office_a", "office", Rect2(0, 8, 12, 8), 3.2)
 	room("office_b", "office", Rect2(0, 16, 12, 8), 3.2)
-	room("archive", "storage", Rect2(0, 24, 12, 10), 3.4)
-	room("locker_room", "office", Rect2(0, 34, 12, 7), 3.2)
+	room("archive", "storage", Rect2(0, 24, 12, 10), 3.4, {"stock": "archive"})
+	room("locker_room", "changing", Rect2(0, 34, 12, 7), 3.2)
 	# The north range, and the yard it stands along.
 	room("stores", "storage", Rect2(15, 0, 18, 12), 4.0)
-	room("tool_room", "storage", Rect2(15, 12, 9, 9), 3.4)
-	room("compressor_room", "plant", Rect2(24, 12, 9, 9), 5.0)
-	room("workshop", "hall", Rect2(33, 0, 21, 21), 6.5)
+	room("tool_room", "storage", Rect2(15, 12, 9, 9), 3.4, {"stock": "tools"})
+	room("compressor_room", "plant", Rect2(24, 12, 9, 9), 5.0, {"sign": "COMPRESSORS"})
+	# The trusses of the workshop stand between its windows.
+	room("workshop", "hall", Rect2(33, 0, 21, 21), 6.5, {"lines": [35.2, 40.75, 46.25, 51.8]})
 	room("yard", "yard", Rect2(15, 21, 39, 20), 7.0)
 	# The south range.
 	room("south_corridor_w", "corridor", Rect2(0, 41, 28, 3), 3.0)
 	room("south_corridor_e", "corridor", Rect2(28, 41, 26, 3), 3.0)
 	room("canteen", "canteen", Rect2(0, 44, 18, 13), 3.6)
-	room("kitchen", "storage", Rect2(18, 44, 10, 13), 3.4)
+	room("kitchen", "kitchen", Rect2(18, 44, 10, 13), 3.4)
 	room("boiler_house", "plant", Rect2(28, 44, 14, 13), 7.0)
 	room("switch_room", "plant", Rect2(42, 44, 12, 13), 5.0)
 	# The east range.
 	room("east_corridor", "corridor", Rect2(54, 0, 3, 44), 3.0)
-	room("assembly", "hall", Rect2(57, 0, 27, 30), 8.0)
-	room("paint_shop", "hall", Rect2(57, 30, 13, 14), 5.5)
-	room("despatch", "storage", Rect2(70, 30, 14, 14), 4.5)
-	room("loading_bay", "hall", Rect2(57, 44, 27, 13), 6.5)
+	# The assembly hall has a sawtooth roof whose glass looks south, into
+	# the evening sun; the paint shop a flat one on steel with rooflights.
+	room("assembly", "hall", Rect2(57, 0, 27, 30), 8.0, {"roof": "sawtooth", "glazed": SOUTH})
+	room("paint_shop", "hall", Rect2(57, 30, 13, 14), 5.5, {"roof": "beams", "stock": "paint"})
+	room("despatch", "storage", Rect2(70, 30, 14, 14), 4.5, {"stock": "despatch"})
+	room("loading_bay", "hall", Rect2(57, 44, 27, 13), 6.5, {"stock": "bay", "lines": [59.8, 67.0, 74.0, 80.5]})
 
 	door("lodge", "vestibule", 4.0)
 	door("vestibule", "west_corridor", 13.5)
@@ -120,19 +123,25 @@ func _plan() -> void:
 	for x: float in [63.0, 71.0]:
 		window("loading_bay", SOUTH, x, 3.0, 3.2, 5.4)
 
-	# Where the machines go: see the file of each of these rooms.
-	keep_clear("workshop", Rect2(39.6, 0.6, 7.8, 4.0))
+	# Where the machines go: see the file of each of these rooms. The first
+	# of a room is what the player should see when he comes in, and gets a
+	# lamp that burns: the press of the workshop, which stands straight
+	# ahead of its door, and the nearer press of the assembly hall.
 	keep_clear("workshop", Rect2(47.4, 9.0, 5.2, 4.0))
+	keep_clear("workshop", Rect2(39.6, 0.6, 7.8, 4.0))
 	keep_clear("workshop", Rect2(49.6, 0.8, 3.6, 3.6))
 	keep_clear("workshop", Rect2(36.0, 18.6, 5.8, 2.0))
 	keep_clear("compressor_room", Rect2(28.6, 17.2, 4.0, 3.6))
-	keep_clear("assembly", Rect2(69.2, 0.8, 7.6, 4.0))
 	keep_clear("assembly", Rect2(62.4, 4.0, 5.2, 4.0))
+	keep_clear("assembly", Rect2(69.2, 0.8, 7.6, 4.0))
 	keep_clear("assembly", Rect2(70.4, 22.0, 5.2, 4.0))
 	keep_clear("assembly", Rect2(76.6, 0.8, 6.9, 3.6))
 	keep_clear("boiler_house", Rect2(30.6, 51.6, 9.0, 5.0))
 	keep_clear("boiler_house", Rect2(28.4, 46.0, 1.4, 3.8))
 	keep_clear("switch_room", Rect2(43.0, 55.0, 10.4, 1.6))
+	# And the boards of gauges on two walls.
+	keep_clear("boiler_house", Rect2(37.7, 44.4, 1.6, 0.6))
+	keep_clear("switch_room", Rect2(50.8, 44.4, 1.6, 0.6))
 
 	start_in("lodge")
 	# A wing that is fought over as one sends everybody in it at the player

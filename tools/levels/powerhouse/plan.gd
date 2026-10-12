@@ -36,7 +36,7 @@ func _plan() -> void:
 	# Set to true while the powerhouse is being laid out, to walk and fight
 	# through it before anything is hung, dirtied or stood about.
 	_bare = false
-	_detail_inside = AABB(Vector3(-0.5, 0, -0.5), Vector3(77.0, 12.5, 57.0))
+	_detail_inside = AABB(Vector3(-0.5, 0, -0.5), Vector3(77.0, 14.5, 57.0))
 
 	# The west range: where the power leaves.
 	room("receiving", "storage", Rect2(0, 0, 16, 9), 4.0)
@@ -44,14 +44,19 @@ func _plan() -> void:
 	room("switch_room", "plant", Rect2(0, 12, 16, 12), 5.0)
 	room("switch_yard", "yard", Rect2(16, 0, 27, 24), 7.0)
 	# South of the yard, and the boiler house south of that.
-	room("pump_house", "plant", Rect2(29, 24, 14, 14), 6.5)
+	# The pump house has pipes enough of its own under its roof.
+	room("pump_house", "plant", Rect2(29, 24, 14, 14), 6.5, {"mains": false})
 	room("workshop", "hall", Rect2(14, 24, 15, 14), 6.5)
-	room("boiler_house", "plant", Rect2(16, 38, 30, 18), 9.0)
+	# The beams of the boiler house leave the two flues between them.
+	room("boiler_house", "plant", Rect2(16, 38, 30, 18), 9.0, {"bay": 5.0})
 	room("fuel_store", "storage", Rect2(4, 40, 12, 12), 4.0)
 	# The east range: where it is made.
 	room("passage", "corridor", Rect2(43, 34, 12, 4), 3.0)
 	room("control_room", "control", Rect2(43, 24, 12, 10), 3.6)
-	room("turbine_hall", "hall", Rect2(43, 0, 33, 24), 10.0)
+	# The trusses of the turbine hall stand between its windows, and every
+	# bay of its roof has a skylight: the hall the level ends in is the
+	# lightest of them.
+	room("turbine_hall", "hall", Rect2(43, 0, 33, 24), 10.0, {"lines": [45.6, 53.5, 62.3, 69.0], "glass": "all"})
 
 	# In the order of the way through: a checkpoint looks at the last door
 	# of its room.
@@ -97,16 +102,20 @@ func _plan() -> void:
 	# And one over the roof of the control room.
 	window("turbine_hall", SOUTH, 50.0, 4.0, 5.0, 8.5)
 
-	# What goes in by hand: see the file of each of these rooms.
-	keep_clear("receiving", Rect2(3.0, 0.2, 4.2, 2.6))
+	# What goes in by hand: see the file of each of these rooms. The first
+	# of a room is what the player should see when he comes in, and gets a
+	# lamp that burns.
+	keep_clear("receiving", Rect2(1.0, 0.2, 8.4, 3.0))
 	keep_clear("switch_room", Rect2(1.4, 14.8, 8.6, 1.6))
 	keep_clear("switch_room", Rect2(1.4, 19.6, 8.6, 1.6))
 	keep_clear("switch_yard", Rect2(16.4, 0.4, 26.2, 9.6))
+	# The starters of the pump house are what whoever comes in from the yard
+	# sees: their row comes first, and has the lamp.
+	keep_clear("pump_house", Rect2(33.2, 27.6, 7.6, 1.2))
+	keep_clear("pump_house", Rect2(31.4, 32.2, 6.2, 3.2))
 	keep_clear("pump_house", Rect2(39.4, 30.8, 3.2, 3.2))
 	keep_clear("pump_house", Rect2(37.6, 34.2, 3.2, 3.2))
-	keep_clear("pump_house", Rect2(31.4, 32.2, 6.2, 3.2))
 	keep_clear("pump_house", Rect2(29.6, 26.0, 2.0, 4.6))
-	keep_clear("pump_house", Rect2(33.2, 27.6, 7.6, 1.2))
 	keep_clear("workshop", Rect2(17.6, 25.6, 7.0, 2.8))
 	keep_clear("workshop", Rect2(24.4, 25.4, 4.0, 4.2))
 	keep_clear("workshop", Rect2(20.0, 36.4, 6.0, 1.2))
@@ -115,10 +124,27 @@ func _plan() -> void:
 	keep_clear("boiler_house", Rect2(21.6, 38.4, 4.4, 2.6))
 	keep_clear("boiler_house", Rect2(37.6, 38.4, 5.0, 3.4))
 	keep_clear("fuel_store", Rect2(4.4, 43.2, 2.6, 5.6))
+	# The desk of the control room and the way round it to the door, the
+	# panel behind it, and what stands along its west wall.
+	keep_clear("control_room", Rect2(48.8, 29.8, 6.0, 2.4))
+	keep_clear("control_room", Rect2(47.4, 26.6, 7.6, 1.8))
+	keep_clear("control_room", Rect2(43.2, 24.9, 0.9, 2.0))
+	keep_clear("control_room", Rect2(43.2, 30.0, 0.9, 1.2))
+	keep_clear("control_room", Rect2(44.4, 31.8, 2.6, 2.0))
 	keep_clear("turbine_hall", Rect2(46.9, 9.8, 11.4, 4.4))
 	keep_clear("turbine_hall", Rect2(60.7, 9.8, 11.4, 4.4))
 	keep_clear("turbine_hall", Rect2(48.6, 22.4, 1.6, 1.2))
 	keep_clear("turbine_hall", Rect2(62.4, 22.4, 1.6, 1.2))
+	# The boards of gauges on the walls, the drills and the welder's cart of
+	# the workshop, and what stands about in the fuel store.
+	keep_clear("switch_room", Rect2(12.8, 23.0, 1.6, 0.6))
+	keep_clear("pump_house", Rect2(33.7, 37.0, 1.6, 0.6))
+	keep_clear("workshop", Rect2(14.4, 29.9, 1.6, 6.4))
+	keep_clear("workshop", Rect2(26.7, 31.9, 1.5, 1.5))
+	keep_clear("fuel_store", Rect2(8.4, 49.0, 2.0, 2.2))
+	keep_clear("fuel_store", Rect2(12.8, 41.4, 1.8, 1.8))
+	keep_clear("fuel_store", Rect2(14.3, 49.6, 1.5, 1.6))
+	keep_clear("fuel_store", Rect2(7.1, 42.1, 1.4, 1.4))
 
 	# Where the player carries on from in the yard and in the workshop: kept
 	# clear before their fights are planned, which comes first.

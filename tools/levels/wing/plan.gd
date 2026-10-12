@@ -24,12 +24,12 @@ func _plan() -> void:
 	# Set to true while the wing is being laid out, to walk and fight through
 	# it before anything is hung, dirtied or stood about.
 	_bare = false
-	_detail_inside = AABB(Vector3(-0.5, 0, -0.5), Vector3(28.0, 8.5, 24.0))
+	_detail_inside = AABB(Vector3(-0.5, 0, -0.5), Vector3(28.0, 10.0, 24.0))
 	room("lobby", "office", Rect2(0, 0, 8, 6), 3.2)
-	room("store", "storage", Rect2(0, 6, 8, 10), 3.4)
+	room("store", "storage", Rect2(0, 6, 8, 10), 3.4, {"sign": "STORES"})
 	room("corridor", "corridor", Rect2(8, 0, 3, 20), 3.0)
 	room("workshop", "hall", Rect2(11, 0, 16, 14), 6.5)
-	room("plant", "plant", Rect2(11, 14, 10, 9), 6.5)
+	room("plant", "plant", Rect2(11, 14, 10, 9), 6.5, {"sign": "BOILER ROOM"})
 	door("lobby", "corridor", 3.0)
 	door("store", "corridor", 11.0)
 	door("corridor", "workshop", 5.0, 2.4, 2.6)
@@ -48,6 +48,7 @@ func _plan() -> void:
 	keep_clear("workshop", Rect2(11.8, 0.8, 3.2, 3.4))
 	keep_clear("plant", Rect2(11.6, 18.4, 9.0, 4.2))
 	keep_clear("plant", Rect2(19.3, 14.6, 1.3, 3.6))
+	keep_clear("plant", Rect2(12.4, 14.4, 1.6, 0.6))
 	# The way through: out of the lobby, down the corridor, the storeroom and
 	# the boiler room off it, and through the workshop to the loading door.
 	start_in("lobby")
