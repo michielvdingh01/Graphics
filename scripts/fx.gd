@@ -487,8 +487,9 @@ func jet(position: Vector3, direction: Vector3, length: float, seconds: float) -
 ## The light of a fire, which flickers for as long as it burns: it hangs at
 ## `offset` from the flames and goes when they do. It throws no shadows.
 ## Smoke starts to rise at the moment `smoke`. What comes back is what
-## _step() keeps of the fire, with the flames it belongs to as `flames` and
-## the moment it next spits sparks as `spit`: never, unless somebody says so.
+## _step() keeps of the fire, with the flames it belongs to as `flames`, the
+## moment it next spits sparks as `spit`, which is never unless somebody says
+## so, and the height of the floor they land on as `floor`.
 func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds: float, smoke: float) -> Dictionary:
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.55, 0.22)
@@ -500,7 +501,7 @@ func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds
 	light.position = offset
 	flames.add_child(light)
 	var at := flames.global_transform * offset
-	var burning := {"flames": flames, "light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "spit": INF, "shade": light_at(at), "seed": randf() * 100.0}
+	var burning := {"flames": flames, "light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "spit": INF, "floor": at.y, "shade": light_at(at), "seed": randf() * 100.0}
 	_fires.append(burning)
 	return burning
 
@@ -576,8 +577,10 @@ func feed(flames: Node3D, at: Transform3D, size: Vector3, seconds: float, covere
 		light.omni_range = 3.0 + grown
 		burning.energy = 0.9 + 0.35 * grown
 		burning.seconds = age + seconds
-		# Smoke and sparks leave from its top.
+		# Smoke and sparks leave from its top, and the sparks come down on
+		# what it stands on.
 		burning.at = at * Vector3(0.0, size.y, 0.0)
+		burning.floor = floor_below(at.origin + Vector3.UP * 0.1)
 
 
 ## Something that has burnt through falls apart around `position`: charred
@@ -735,7 +738,7 @@ func _step(delta: float) -> void:
 			continue
 		# Wood that burns spits a few sparks now and then.
 		while time >= burning.spit:
-			var sparks := _burst(_sparks, Transform3D(Basis(), burning.at), 1.5, {&"floor_y": floor_below(burning.at), &"speed": randf_range(2.0, 3.5), &"spread": 0.5, &"life": randf_range(0.8, 1.4), &"amount": randf_range(0.08, 0.2)})
+			var sparks := _burst(_sparks, Transform3D(Basis(), burning.at), 1.5, {&"floor_y": burning.floor, &"speed": randf_range(2.0, 3.5), &"spread": 0.5, &"life": randf_range(0.8, 1.4), &"amount": randf_range(0.08, 0.2)})
 			sparks.set_instance_shader_parameter(&"start", burning.spit)
 			burning.spit += randf_range(0.3, 0.9)
 		# In step with the flames: up at once, down over the last second or so.
