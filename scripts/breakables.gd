@@ -267,9 +267,24 @@ func _rehearse() -> void:
 	Fx.rehearse(looks)
 
 
-## Sees to what the way out of the level lets in once its door goes up.
-func _adopt_exits(_level: Node3D) -> void:
-	pass
+## Sees to what the way out of the level lets in once its door goes up: a
+## daylight for every door in the group "exit_door", see scripts/daylight.gd.
+## It goes with what else the zone of the door holds, which is not drawn
+## while that zone is out of sight, or next to the door in a level without
+## zones. Not into this node: what is in here can break, and the game keeps
+## a list of it.
+func _adopt_exits(level: Node3D) -> void:
+	var count := 0
+	for door: Node3D in get_tree().get_nodes_in_group("exit_door"):
+		if not level.is_ancestor_of(door):
+			continue
+		var daylight: Node3D = preload("res://scripts/daylight.gd").new()
+		daylight.name = "Daylight%d" % count
+		count += 1
+		daylight.door = door
+		var home := door.get_parent()
+		var contents := home.get_node_or_null("Contents") if home.is_in_group("level_zone") else null
+		(contents if contents else home).add_child(daylight)
 
 
 ## The kind of lamp a light is, or -1 if it is not one of the LAMPS.
