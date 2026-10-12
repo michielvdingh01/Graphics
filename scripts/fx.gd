@@ -51,6 +51,10 @@ var _puffs: ArrayMesh
 var _smoke: ArrayMesh
 var _clouds: ArrayMesh
 var _flames: ArrayMesh
+## Every mesh a burst is drawn with, which is what rehearse() goes through:
+## whoever adds a kind of burst adds its mesh to this. The shader of each
+## has an instance uniform `amount`, below which a particle is left out.
+var _bursts: Array[Mesh] = []
 var _shell := SphereMesh.new()
 var _tracer: ArrayMesh
 var _flame: ArrayMesh
@@ -98,6 +102,11 @@ func _ready() -> void:
 	_shell.material = wave
 	_tracer = _burst_mesh(1, preload("res://shaders/tracer.gdshader"))
 	_flame = _flame_mesh()
+	_bursts = [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]
+	_ready_glass()
+	_ready_smoke()
+	_ready_burning()
+	_ready_splash()
 
 	for surface: String in HOLE_VARIANTS:
 		var variants := []
@@ -329,7 +338,7 @@ func wreck(position: Vector3, tint := Color(1.0, 0.5, 0.15)) -> void:
 ## a metre in front of the camera, a thousandth of its size.
 func rehearse(extras: Array[MeshInstance3D] = []) -> void:
 	var stage := Node3D.new()
-	for mesh: Mesh in [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]:
+	for mesh: Mesh in _bursts:
 		var burst := MeshInstance3D.new()
 		burst.mesh = mesh
 		burst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -403,6 +412,12 @@ func _floor_under_lamp(position: Vector3) -> float:
 	return maxf(floor_below(position, LAMP_DROP), position.y - LAMP_DROP)
 
 
+## Makes ready what the glass of a window needs when it breaks, as _ready()
+## does for the rest.
+func _ready_glass() -> void:
+	pass
+
+
 ## Something blows up at `position`: a flash, a pressure wave, a ball of fire
 ## that burns out into smoke, a ring of dust along the floor, sparks, debris
 ## and soot where it stood. `size` 1 is a fuel barrel or a hand grenade.
@@ -445,6 +460,11 @@ func explosion(position: Vector3, size := 1.0) -> void:
 		_keep(soot)
 
 
+## Makes ready what the smoke of an explosion and of a fire is drawn with.
+func _ready_smoke() -> void:
+	pass
+
+
 ## A fire that burns for `seconds` on a patch `across` metres wide around
 ## `position`: the flames, the light they throw and the smoke that rises off
 ## them. Freeing what it returns puts it out.
@@ -481,11 +501,21 @@ func _burn(flames: Node3D, offset: Vector3, energy: float, reach: float, seconds
 	_fires.append({"light": light, "at": at, "start": time, "seconds": seconds, "energy": energy, "smoke": smoke, "shade": light_at(at), "seed": randf() * 100.0})
 
 
+## Makes ready what something that has caught fire is drawn with.
+func _ready_burning() -> void:
+	pass
+
+
 ## The wisp of smoke a barrel leaves once it falls silent, drifting on along
 ## `direction`; `amount` is 1 after a long burst.
 func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
 	_burst(_puffs, Transform3D(_up_along(direction), position), 1.2,
 		{&"tint": Color(0.62, 0.62, 0.64, 0.42), &"speed": 0.9, &"spread": 0.3, &"size": Vector2(0.015, 0.17), &"life": 1.0, &"rise": 0.3, &"amount": lerpf(0.45, 1.0, amount)})
+
+
+## Makes ready what a shot into a puddle throws up.
+func _ready_splash() -> void:
+	pass
 
 
 ## Looking along `direction`, whichever way that is.

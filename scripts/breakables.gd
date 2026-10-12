@@ -19,6 +19,9 @@ const LAMP := preload("res://scripts/lamp.gd")
 ## one alone, so nothing else finds it: it is in nobody's way, as before.
 const WORLD := 1
 const BREAKABLE := 32
+## The layer of the glass in the windows, which no shot stops at and no look.
+## Whatever asks where a shot went finds it there, see Fx.tracer().
+const WINDOW := 64
 ## The models that are stacked, by the folder they come from: what their
 ## collider is made of, and what kind of thing they are to a stack.
 const STACKED := {
@@ -64,10 +67,18 @@ class Box:
 	var on: Box
 
 
+## What _rehearse() has drawn once, besides the boards and the lamps: each
+## of the _adopt functions adds the looks that are new with it.
+var _looks: Array[MeshInstance3D] = []
+
+
 func _ready() -> void:
 	var level := get_parent() as Node3D
 	_adopt_stacks(level)
 	_adopt_lamps(level)
+	_adopt_windows(level)
+	_adopt_tinder(level)
+	_adopt_exits(level)
 	_rehearse()
 
 
@@ -157,6 +168,13 @@ func _adopt_stacks(level: Node3D) -> void:
 			body.cover(part.node, part.kind, part.models, part.on.node if part.on else null)
 
 
+## Finds what can catch fire besides the stacks. Whatever becomes a child of
+## this node is kept by scripts/game.gd in a list for those who come into the
+## level later, and has a net_state() and a net_restore() as a stack has.
+func _adopt_tinder(_level: Node3D) -> void:
+	pass
+
+
 ## Gives every lamp a body of its own: the hall lamps, which are models,
 ## lit or not, and every light of one of the LAMPS, with what glows by it.
 func _adopt_lamps(level: Node3D) -> void:
@@ -222,12 +240,18 @@ func _adopt_lamps(level: Node3D) -> void:
 			lamps[light].bare()
 
 
+## Gives the glass in the windows bodies of its own, on the layer WINDOW.
+func _adopt_windows(_level: Node3D) -> void:
+	pass
+
+
 ## Has everything that breaking brings into view drawn once now, while the
 ## level comes up out of black: a board of every model that is stacked, a
 ## hall lamp without its glass, the dark glass of the other lamps, and the
 ## splinters, the shards and the sparks. See Fx.rehearse() for why.
 func _rehearse() -> void:
 	var looks: Array[MeshInstance3D] = STACK.first_pieces()
+	looks.append_array(_looks)
 	var hall := false
 	var other := false
 	for body in get_children():
@@ -241,6 +265,11 @@ func _rehearse() -> void:
 			else:
 				other = true
 	Fx.rehearse(looks)
+
+
+## Sees to what the way out of the level lets in once its door goes up.
+func _adopt_exits(_level: Node3D) -> void:
+	pass
 
 
 ## The kind of lamp a light is, or -1 if it is not one of the LAMPS.
