@@ -1,14 +1,18 @@
-extends "res://tools/levels/dunes/plan.gd"
+extends "res://tools/levels/dunes/depot.gd"
 ## The last leg of the way: the wire in front of the wall, the yard inside
 ## the gate, and round the back of the main building, past where the current
 ## and the fuel come in, to its back door. That door is the way out, and
 ## where the next level begins.
+##
+## What it is all built from is in tools/levels/dunes/depot.gd; this file
+## says where everything stands.
 
-## The foot of everything that is built here: well under the ground, so that
-## nothing shows daylight where the ground dips.
-const FOOT := 4.4
 ## How wide the way in behind the back door is, and how far it goes back.
 const WAY_IN := Vector2(4.8, 9.0)
+## Into how many bays the long faces of the main building are divided, and
+## its ends.
+const BLOCK_BAYS := 15
+const END_BAYS := 4
 
 
 func _describe() -> void:
@@ -17,65 +21,71 @@ func _describe() -> void:
 	_inner_yard()
 	_main_building()
 	_behind()
+	_commit_fine()
 
 
-## A stretch of the wall round the complex from `from` to `to` (x and z),
-## which lie on one line from west to east or from north to south: concrete
-## with a pier every eight metres and a coping, and over it three strands of
-## barbed wire.
-func _wall_run(from: Vector2, to: Vector2, wire := true) -> void:
-	var length := from.distance_to(to)
-	var along_x := is_equal_approx(from.y, to.y)
-	var middle := (from + to) * 0.5
-	var top := YARD_Y + WALL_HIGH
-	box("concrete", Vector3(middle.x, (top + FOOT) * 0.5, middle.y), Vector3(length if along_x else 0.4, top - FOOT, 0.4 if along_x else length), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3(middle.x, top + 0.06, middle.y), Vector3(length if along_x else 0.62, 0.12, 0.62 if along_x else length), Vector3.ZERO, SLIGHT)
-	var way := (to - from) / length
-	var piers := maxi(1, roundi(length / 8.0))
-	var before := Vector3.INF
-	for i in piers + 1:
-		var at := from + way * length * i / piers
-		box("concrete", Vector3(at.x, (top + FOOT) * 0.5, at.y), Vector3(0.6, top - FOOT, 0.6), Vector3.ZERO, SLIGHT)
-		if not wire:
-			continue
-		var head := Vector3(at.x, top + 0.6, at.y)
-		box("dark_steel", head - Vector3.UP * 0.26, Vector3(0.05, 0.6, 0.05), Vector3.ZERO, SLIGHT)
-		if before != Vector3.INF:
-			for strand in 3:
-				beam("dark_steel", before - Vector3.UP * strand * 0.17, head - Vector3.UP * strand * 0.17, 0.012, SLIGHT)
-		before = head
-
-
+## The wall round the complex, the gate in it and what stands by the gate.
 func _perimeter() -> void:
-	_wall_run(Vector2(WALL_WEST, WALL_Z), Vector2(GATE_X - 3.4, WALL_Z))
-	_wall_run(Vector2(GATE_X + 3.4, WALL_Z), Vector2(WALL_EAST, WALL_Z))
-	_wall_run(Vector2(WALL_WEST, WALL_NORTH), Vector2(WALL_WEST, WALL_Z))
-	_wall_run(Vector2(WALL_WEST, WALL_NORTH), Vector2(WALL_EAST, WALL_NORTH))
-	_wall_run(Vector2(WALL_EAST, WALL_NORTH), Vector2(WALL_EAST, WALL_Z))
-	_wall_run(Vector2(BLOCK_EAST, BLOCK_NORTH), Vector2(WALL_EAST, BLOCK_NORTH), false)
+	# The wall, its bays numbered from the gate eastwards and round. Its
+	# outside is on the right of the way a stretch runs.
+	var gate_east := Vector2(GATE_X + 3.4, WALL_Z)
+	var gate_west := Vector2(GATE_X - 3.4, WALL_Z)
+	var south_east := Vector2(WALL_EAST, WALL_Z)
+	var north_east := Vector2(WALL_EAST, WALL_NORTH)
+	var north_west := Vector2(WALL_WEST, WALL_NORTH)
+	var south_west := Vector2(WALL_WEST, WALL_Z)
+	var bay := 1
+	for stretch: Array in [[gate_east, south_east], [south_east, north_east], [north_east, north_west], [north_west, south_west], [south_west, gate_west]]:
+		bay = wall_run(stretch[0], stretch[1], bay, true, Vector2i(0, 0))
+	wall_run(Vector2(WALL_EAST, BLOCK_NORTH), Vector2(BLOCK_EAST, BLOCK_NORTH), 1, false, Vector2i(0, 0))
+	for corner: Vector2 in [south_east, north_east, north_west, south_west, Vector2(WALL_EAST, BLOCK_NORTH)]:
+		corner_pier(corner)
+	watch_post(north_west, Vector3(-1, 0, -1))
+	watch_post(south_east, Vector3(1, 0, 1))
 	# The gate: two posts, and its leaves standing open into the yard.
 	for side: float in [-1.0, 1.0]:
 		var hinge := Vector3(GATE_X + side * 3.4, YARD_Y, WALL_Z)
-		box("concrete", hinge + Vector3.UP * 2.6, Vector3(0.9, 5.2 + (YARD_Y - FOOT) * 0.0, 0.9), Vector3.ZERO, DETAIL)
+		gate_post(hinge, Vector3.BACK)
 		var swung := Vector3(-side * 0.2, 0, -0.98).normalized()
 		var leaf := Transform3D(Basis(Vector3.UP, atan2(-swung.z, swung.x)), hinge + Vector3(-side * 0.5, 1.75, -0.5) + swung * 1.5)
-		_box("door", leaf, Vector3(3.0, 3.4, 0.08), DETAIL)
-		for bar: float in [-1.2, 0.0, 1.2]:
-			_local_box("dark_steel", leaf, Vector3(bar, 0, 0.06), Vector3(0.08, 3.4, 0.05), SLIGHT)
-	label("GATE 2", Vector3(GATE_X + 7.2, YARD_Y + 2.7, WALL_Z + 0.21), Vector3.BACK, 0.55)
-	for x: float in [30.0, 52.0, 96.0, 124.0, 150.0]:
-		wall_decal(_pick("leak"), Vector3(x + _decal_rng.randf_range(-2, 2), YARD_Y + 2.4, WALL_Z + 0.21), Vector3.BACK, 2.2, 3.6)
-		wall_decal("grime", Vector3(x, YARD_Y + 0.7, WALL_Z + 0.22), Vector3.BACK, 11.0, 1.5)
+		_collide_box(leaf, Vector3(3.0, 3.4, 0.08), "metal")
+		gate_leaf(leaf, Vector2(3.0, 3.4), -side)
+	# What the wall says to whoever comes up the track.
+	var face := WALL_Z + WALL_THICK * 0.5
+	var named := Transform3D(Basis(), Vector3(bay_middle(gate_east, south_east, 2).x, YARD_Y + 2.75, face))
+	fine(MID)
+	painted(named * Transform3D(Basis(), Vector3(0, 0, 0.004)), Vector2(3.1, 1.0), WHITEWASH)
+	stencil("GATE 2", named * Transform3D(Basis(), Vector3(0, 0, 0.007)), 0.6, STENCIL_BLACK)
+	coarse()
+	sign_board(Transform3D(Basis(), Vector3(bay_middle(south_west, gate_west, 11).x, YARD_Y + 2.7, face)), Vector2(3.0, 1.3), [["RESTRICTED AREA", 0.3, SIGNAL_RED], ["KEEP OUT", 0.34, STENCIL_BLACK]])
+	for warned: Array in [[south_west, gate_west, 3, "KEEP OUT"], [south_west, gate_west, 7, "NO ENTRY"], [gate_east, south_east, 6, "NO ENTRY"], [gate_east, south_east, 11, "KEEP OUT"], [gate_east, south_east, 17, "NO ENTRY"]]:
+		sign_board(Transform3D(Basis(), Vector3(bay_middle(warned[0], warned[1], warned[2]).x, YARD_Y + 2.5, face)), Vector2(1.7, 0.56), [[warned[3], 0.26, SIGNAL_RED]])
+	# The lamps that light the wall by night, on masts inside it.
+	for x: float in [40.0, 100.0, 136.0, 168.0]:
+		flood_mast(Vector2(x, WALL_Z - WALL_THICK * 0.5), Vector3.FORWARD)
+	for x: float in [30.0, 66.0, 150.0, 180.0, 216.0, 252.0, 288.0]:
+		flood_mast(Vector2(x, WALL_NORTH + WALL_THICK * 0.5), Vector3.BACK)
+	flood_mast(Vector2(WALL_WEST + WALL_THICK * 0.5, 28.0), Vector3.RIGHT)
+	flood_mast(Vector2(WALL_EAST - WALL_THICK * 0.5, 17.0), Vector3.LEFT)
 	# What stops a lorry before the gate, and who stands by it.
 	barrier_pole(Vector2(65.4, 61.6), 0.0, 6.4)
 	sentry_box(Vector2(74.2, 60.4), 0.0)
 	sign_post(Vector2(62.2, 66.5), 0.0, "HALT", 0.3, "paper")
-	# The guardroom, just inside.
-	box("brick", Vector3(79.0, YARD_Y + 1.5, 51.6), Vector3(6.0, 3.0, 5.0), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3(79.0, YARD_Y + 3.1, 51.6), Vector3(6.6, 0.22, 5.6), Vector3.ZERO, SLIGHT)
-	box("door", Vector3(75.97, YARD_Y + 1.0, 51.0), Vector3(0.06, 2.0, 0.9), Vector3.ZERO, SLIGHT)
-	box("scope_glass", Vector3(79.0, YARD_Y + 1.7, 49.07), Vector3(2.4, 0.9, 0.06), Vector3.ZERO, SLIGHT)
-	wall_decal("grime", Vector3(79.0, YARD_Y + 0.6, 49.08), Vector3.FORWARD, 5.6, 1.2)
+	guardroom(Vector2(79.0, 51.6), Vector3(6.0, 3.0, 5.0))
+	# Where the wall meets the ground: sand the wind has laid against it on
+	# the outside and along the sides the sun warms, moss in its own shade,
+	# and marram that nobody pulls up.
+	sand_drift(Vector2(WALL_WEST + 0.3, face), Vector2(GATE_X - 4.0, face), Vector3.BACK, 0.55, 2.6, 3)
+	sand_drift(Vector2(GATE_X + 4.0, face), Vector2(WALL_EAST - 0.3, face), Vector3.BACK, 0.55, 2.6, 4)
+	sand_drift(Vector2(WALL_WEST + 0.4, WALL_NORTH + 0.2), Vector2(76.4, WALL_NORTH + 0.2), Vector3.BACK, 0.3, 1.3, 11)
+	sand_drift(Vector2(162.6, WALL_NORTH + 0.2), Vector2(WALL_EAST - 0.4, WALL_NORTH + 0.2), Vector3.BACK, 0.3, 1.3, 13)
+	sand_drift(Vector2(WALL_WEST + 0.2, WALL_NORTH + 0.4), Vector2(WALL_WEST + 0.2, WALL_Z - 0.4), Vector3.RIGHT, 0.3, 1.2, 17)
+	wall_tufts(Vector2(WALL_WEST + 0.5, face), Vector2(GATE_X - 5.0, face), Vector2(0, 1), 6.0, 1.8)
+	wall_tufts(Vector2(GATE_X + 9.0, face), Vector2(BLOCK_WEST, face), Vector2(0, 1), 6.0, 1.8)
+	wall_tufts(Vector2(WALL_WEST + 1.0, WALL_NORTH + 0.2), Vector2(76.0, WALL_NORTH + 0.2), Vector2(0, 1), 8.0, 1.0)
+	wall_tufts(Vector2(WALL_WEST + 1.0, WALL_Z - 0.2), Vector2(GATE_X - 5.0, WALL_Z - 0.2), Vector2(0, -1), 7.0, 0.8)
+	wall_tufts(Vector2(84.0, WALL_Z - 0.2), Vector2(BLOCK_WEST - 1.0, WALL_Z - 0.2), Vector2(0, -1), 7.0, 0.8)
+	wall_tufts(Vector2(165.0, WALL_NORTH + 0.2), Vector2(WALL_EAST - 1.0, WALL_NORTH + 0.2), Vector2(0, 1), 9.0, 1.0)
 
 
 func _wire_belts() -> void:
@@ -100,7 +110,7 @@ func _wire_belts() -> void:
 
 
 func _inner_yard() -> void:
-	cover_over("earth", Rect2(WALL_WEST, WALL_NORTH, BLOCK_WEST - WALL_WEST, WALL_Z - WALL_NORTH), 0.85)
+	_yard_ground()
 	nissen_hut(Vector2(38.0, 20.0), 0.0, 14.0)
 	nissen_hut(Vector2(38.0, 34.0), 0.0, 14.0)
 	# A flagstaff between the huts and the gate.
@@ -148,9 +158,66 @@ func _inner_yard() -> void:
 	probe("Yard", Vector3(97.0, YARD_Y + 4.0, 31.0), Vector3(156, 10, 49), Vector3.ZERO)
 
 
-## The main building: a block of concrete, ribbed, with two bands of dark
-## windows high up and what it listens with on its roof. Its back, the north
-## face, has the door.
+## What the yard is laid with: slab roads from the gate to the sheds and on
+## round the main building, an apron before the shed and a hardstanding
+## beyond it, and between them sand packed with gravel, rutted where lorries
+## turn. And what is painted on the slabs.
+func _yard_ground() -> void:
+	var inside := WALL_THICK * 0.5
+	yard_cover(Rect2(WALL_WEST + inside, WALL_NORTH + inside, BLOCK_WEST - WALL_WEST - inside, WALL_Z - WALL_NORTH - inside * 2.0), [
+		curve([Vector2(96, 27), Vector2(98, 35), Vector2(109, 44), Vector2(128, 45.5), Vector2(146, 43), Vector2(156, 36), Vector2(158, 27)], 1.5),
+		curve([Vector2(66, 41), Vector2(59, 44), Vector2(52, 42), Vector2(49, 34), Vector2(48, 27)], 1.5),
+		curve([Vector2(72, 38), Vector2(80, 36), Vector2(92, 33), Vector2(96, 27)], 1.5),
+	], 5, Vector4(1, 1, 0, 1))
+	yard_cover(Rect2(BLOCK_WEST, WALL_NORTH + inside, WALL_EAST - BLOCK_WEST - inside, BLOCK_NORTH - WALL_NORTH - inside), [
+		curve([Vector2(178, 17), Vector2(198, 18.5), Vector2(222, 16), Vector2(246, 16.5), Vector2(270, 15.5), Vector2(292, 17)], 1.5),
+	], 8, Vector4(0, 1, 1, 0))
+	moss_along(Vector2(WALL_WEST + 1.0, WALL_Z - inside), Vector2(BLOCK_WEST - 0.5, WALL_Z - inside), Vector2(0, -1), 1.9)
+	moss_along(Vector2(BLOCK_WEST - 0.3, BLOCK_NORTH + 0.5), Vector2(BLOCK_WEST - 0.3, WALL_Z - 1.0), Vector2(-1, 0), 0.9)
+	# The roads: in from the gate, along the shed and on behind the main
+	# building, and the path past the doors of the huts.
+	paving(Rect2(66.1, 26.6, 5.8, 33.4), Vector2(2.9, 4.7))
+	paving(Rect2(47.5, 20.6, 253.0, 6.0), Vector2(5.0, 3.0))
+	paving(Rect2(77.0, 6.9, 52.0, 13.7), Vector2(4.33, 4.6))
+	paving(Rect2(129.0, 6.9, 33.0, 13.7), Vector2(4.7, 4.6))
+	paving(Rect2(45.6, 16.0, 1.9, 34.5), Vector2(1.9, 1.9))
+	paving(Rect2(168.0, 26.6, 8.0, 23.5), Vector2(4.0, 4.7))
+	paving(Rect2(71.9, 49.6, 4.1, 2.8), Vector2(2.05, 1.4))
+	paving(Rect2(230.0, 13.6, 16.0, 7.0), Vector2(4.0, 3.5))
+	for x: float in [66.02, 71.98]:
+		kerb(Vector2(x, 27.6), Vector2(x, 49.4) if x > 70.0 else Vector2(x, 55.3), true)
+	kerb(Vector2(71.98, 52.6), Vector2(71.98, 55.3), true)
+	kerb(Vector2(47.6, 26.68), Vector2(65.9, 26.68))
+	kerb(Vector2(72.1, 26.68), Vector2(167.9, 26.68))
+	kerb(Vector2(47.6, 20.52), Vector2(76.9, 20.52))
+	fine(MID)
+	# Stop before the gate, for whoever drives out.
+	road_line(Vector2(66.3, 53.6), Vector2(71.7, 53.6), 0.3)
+	stencil("STOP", on_ground_frame(Vector2(69.0, 51.4), Vector2(0, 1)), 1.5, WHITEWASH)
+	# Where the lorries stand, beyond the shed.
+	for i in 9:
+		road_line(Vector2(130.4 + i * 3.4, 7.4), Vector2(130.4 + i * 3.4, 13.6))
+		if i < 8:
+			stencil_number(str(i + 1), on_ground_frame(Vector2(132.1 + i * 3.4, 14.6), Vector2(0, -1)), 0.8, WHITEWASH)
+	road_line(Vector2(77.2, 20.3), Vector2(128.8, 20.3), 0.14, SIGNAL_YELLOW)
+	road_hatch(Rect2(172.2, 34.6, 3.5, 13.9))
+	road_hatch(Rect2(235.4, 22.6, 5.2, 3.8))
+	stencil("KEEP CLEAR", on_ground_frame(Vector2(BACK_DOOR_X, 21.7), Vector2(0, 1)), 0.6, SIGNAL_YELLOW)
+	coarse()
+	for at: Vector2 in [Vector2(66.5, 36.0), Vector2(71.5, 30.0), Vector2(84.0, 26.2), Vector2(112.0, 26.2), Vector2(141.0, 26.2), Vector2(181.0, 21.0), Vector2(226.0, 21.0), Vector2(262.0, 21.0)]:
+		gully(at, at.x < 72.0)
+	for at: Vector2 in [Vector2(69.6, 39.5), Vector2(97.0, 23.6), Vector2(150.5, 23.8), Vector2(214.0, 23.4), Vector2(137.0, 17.0)]:
+		manhole(at)
+	# The flagstaff stands in a square of whitewashed kerbs.
+	for side: Array in [[Vector2(56.2, 26.2), Vector2(59.8, 26.2)], [Vector2(59.8, 26.2), Vector2(59.8, 29.8)], [Vector2(59.8, 29.8), Vector2(56.2, 29.8)], [Vector2(56.2, 29.8), Vector2(56.2, 26.2)]]:
+		kerb(side[0], side[1], true)
+	box(CONCRETE, Vector3(58.0, YARD_Y + 0.1, 28.0), Vector3(0.9, 0.3, 0.9), Vector3.ZERO, SLIGHT)
+	box(CONCRETE, Vector3(58.0, YARD_Y + 0.3, 28.0), Vector3(0.5, 0.2, 0.5), Vector3.ZERO, SLIGHT)
+
+
+## The main building: a frame of concrete filled in with brick, three
+## storeys of it, with two rows of steel windows high up and what it listens
+## with on its roof. Its back, the north face, has the door.
 func _main_building() -> void:
 	var top := YARD_Y + BLOCK_HIGH
 	var south := WALL_Z - 0.2
@@ -161,66 +228,204 @@ func _main_building() -> void:
 	var way_east := BACK_DOOR_X + WAY_IN.x * 0.5
 	var way_back := front + WAY_IN.y
 	var lintel := YARD_Y + 3.9
-	# The block itself, around the way in behind the back door.
-	box("concrete", Vector3((BLOCK_WEST + way_west) * 0.5, mid_y, (front + south) * 0.5), Vector3(way_west - BLOCK_WEST, high, south - front), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3((way_east + BLOCK_EAST) * 0.5, mid_y, (front + south) * 0.5), Vector3(BLOCK_EAST - way_east, high, south - front), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3(BACK_DOOR_X, mid_y, (way_back + south) * 0.5), Vector3(WAY_IN.x, high, south - way_back), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3(BACK_DOOR_X, (lintel + top) * 0.5, (front + way_back) * 0.5), Vector3(WAY_IN.x, top - lintel, WAY_IN.y), Vector3.ZERO, DETAIL)
-	box("floor", Vector3(BACK_DOOR_X, YARD_Y - 0.04, (BLOCK_NORTH + way_back) * 0.5), Vector3(WAY_IN.x, 0.1, way_back - BLOCK_NORTH), Vector3.ZERO, SLIGHT)
-	# Its back wall, with the doorway in it.
 	var face := BLOCK_NORTH + 0.25
-	box("concrete", Vector3((BLOCK_WEST + BACK_DOOR_X - 2.0) * 0.5, mid_y, face), Vector3(BACK_DOOR_X - 2.0 - BLOCK_WEST, high, 0.5), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3((BACK_DOOR_X + 2.0 + BLOCK_EAST) * 0.5, mid_y, face), Vector3(BLOCK_EAST - BACK_DOOR_X - 2.0, high, 0.5), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3(BACK_DOOR_X, (YARD_Y + 3.82 + top) * 0.5, face), Vector3(4.0, top - YARD_Y - 3.82, 0.5), Vector3.ZERO, DETAIL)
+	# What is in the way is what it was: the block itself around the way in
+	# behind the back door, and its back wall with the doorway in it. What is
+	# seen of it is built in front of that, face by face.
+	for part: Array in [
+		[Vector3((BLOCK_WEST + way_west) * 0.5, mid_y, (front + south) * 0.5), Vector3(way_west - BLOCK_WEST, high, south - front)],
+		[Vector3((way_east + BLOCK_EAST) * 0.5, mid_y, (front + south) * 0.5), Vector3(BLOCK_EAST - way_east, high, south - front)],
+		[Vector3(BACK_DOOR_X, mid_y, (way_back + south) * 0.5), Vector3(WAY_IN.x, high, south - way_back)],
+		[Vector3(BACK_DOOR_X, (lintel + top) * 0.5, (front + way_back) * 0.5), Vector3(WAY_IN.x, top - lintel, WAY_IN.y)],
+		[Vector3((BLOCK_WEST + BACK_DOOR_X - 2.0) * 0.5, mid_y, face), Vector3(BACK_DOOR_X - 2.0 - BLOCK_WEST, high, 0.5)],
+		[Vector3((BACK_DOOR_X + 2.0 + BLOCK_EAST) * 0.5, mid_y, face), Vector3(BLOCK_EAST - BACK_DOOR_X - 2.0, high, 0.5)],
+		[Vector3(BACK_DOOR_X, (YARD_Y + 3.82 + top) * 0.5, face), Vector3(4.0, top - YARD_Y - 3.82, 0.5)],
+	]:
+		_collide_box(Transform3D(Basis(), part[0]), part[1])
+	# The way in, as it is seen from inside: its floor, walls and ceiling.
+	box("floor", Vector3(BACK_DOOR_X, YARD_Y - 0.04, (BLOCK_NORTH + way_back) * 0.5), Vector3(WAY_IN.x, 0.1, way_back - BLOCK_NORTH), Vector3.ZERO, SLIGHT)
+	fine(FAR)
+	for x: float in [way_west - 0.1, way_east + 0.1]:
+		box("concrete", Vector3(x, YARD_Y + 1.95, (front + way_back) * 0.5), Vector3(0.2, 3.9, WAY_IN.y), Vector3.ZERO, SLIGHT)
+	box("concrete", Vector3(BACK_DOOR_X, YARD_Y + 1.95, way_back + 0.1), Vector3(WAY_IN.x + 0.4, 3.9, 0.2), Vector3.ZERO, SLIGHT)
+	box("concrete", Vector3(BACK_DOOR_X, lintel + 0.1, (front + way_back) * 0.5), Vector3(WAY_IN.x + 0.4, 0.2, WAY_IN.y), Vector3.ZERO, SLIGHT)
+	coarse()
 	roller_door(Vector3(BACK_DOOR_X, YARD_Y + 1.7, face + 0.01), Vector3.FORWARD, Vector2(4.0, 3.4), true)
 	tube(Vector3(BACK_DOOR_X, lintel - 0.16, front + 5.5), false, true, false, 5.0)
 	crates(Vector3(BACK_DOOR_X - 1.1, YARD_Y, way_back - 1.3), 3)
 	pallet(Vector3(BACK_DOOR_X + 1.3, YARD_Y, way_back - 1.2), 8.0, 3)
-	# A canopy over the door, what it says, and posts to keep a lorry off it.
-	box("roof", Vector3(BACK_DOOR_X, YARD_Y + 4.35, BLOCK_NORTH - 1.4), Vector3(6.6, 0.1, 2.8), Vector3(-5, 0, 0), SLIGHT)
+	# Posts to keep a lorry off the door.
+	fine(MID)
 	for x: float in [-3.0, 3.0]:
-		beam("steel", Vector3(BACK_DOOR_X + x, YARD_Y + 4.25, BLOCK_NORTH - 2.7), Vector3(BACK_DOOR_X + x, YARD_Y + 5.3, BLOCK_NORTH), 0.07, SLIGHT)
 		cylinder("steel_yellow", Vector3(BACK_DOOR_X + x * 0.9, YARD_Y, BLOCK_NORTH - 1.0), 0.09, 1.0, DETAIL)
-	label("LOADING", Vector3(BACK_DOOR_X, YARD_Y + 4.95, BLOCK_NORTH - 0.01), Vector3.FORWARD, 0.42, Color(0.1, 0.1, 0.1))
-	label("BLOCK C", Vector3(212.0, YARD_Y + 8.8, BLOCK_NORTH - 0.01), Vector3.FORWARD, 1.7, Color(0.12, 0.12, 0.12))
-	# Ribs up its long faces and its west end, with the windows between
-	# them, and stains under those.
-	var bays := 15
-	for i in bays + 1:
-		var x := lerpf(BLOCK_WEST, BLOCK_EAST, float(i) / bays)
-		box("concrete", Vector3(x, mid_y, BLOCK_NORTH - 0.16), Vector3(0.8, high, 0.34), Vector3.ZERO, SLIGHT)
-		box("concrete", Vector3(x, (top + YARD_Y + WALL_HIGH) * 0.5, WALL_Z + 0.1), Vector3(0.8, top - YARD_Y - WALL_HIGH, 0.5), Vector3.ZERO, SLIGHT)
-		if i == bays:
-			continue
-		var middle := x + (BLOCK_EAST - BLOCK_WEST) / bays * 0.5
-		for row: float in [6.6, 11.0]:
-			if absf(middle - BACK_DOOR_X) > 5.0 or row > 8.0:
-				box("scope_glass", Vector3(middle, YARD_Y + row, BLOCK_NORTH - 0.02), Vector3(6.2, 1.5, 0.06), Vector3.ZERO, SLIGHT)
-			box("scope_glass", Vector3(middle, YARD_Y + row, WALL_Z - 0.17), Vector3(6.2, 1.5, 0.06), Vector3.ZERO, SLIGHT)
-		if i % 2 == 0:
-			wall_decal(_pick("leak"), Vector3(middle + _decal_rng.randf_range(-2, 2), YARD_Y + 3.9, BLOCK_NORTH - 0.01), Vector3.FORWARD, 2.4, 4.4)
-		wall_decal("grime", Vector3(middle, YARD_Y + 0.8, BLOCK_NORTH - 0.01), Vector3.FORWARD, 8.4, 1.6)
-	for z: float in [34.0, 42.0, 50.0]:
-		box("concrete", Vector3(BLOCK_WEST - 0.16, mid_y, z - 4.0), Vector3(0.34, high, 0.8), Vector3.ZERO, SLIGHT)
-		for row: float in [6.6, 11.0]:
-			box("scope_glass", Vector3(BLOCK_WEST - 0.02, YARD_Y + row, z), Vector3(0.06, 1.5, 6.0), Vector3.ZERO, SLIGHT)
-		wall_decal("grime", Vector3(BLOCK_WEST - 0.01, YARD_Y + 0.8, z - 2.0), Vector3.LEFT, 8.0, 1.6)
-	box("concrete", Vector3((BLOCK_WEST + BLOCK_EAST) * 0.5, top + 0.3, (BLOCK_NORTH + south) * 0.5), Vector3(BLOCK_EAST - BLOCK_WEST + 1.0, 0.6, south - BLOCK_NORTH + 1.0), Vector3.ZERO, SLIGHT)
-	# On the roof: the dish on its tower, a mast, a plant room and its fans.
-	lattice_mast(Vector3(252.0, top + 0.6, 42.0), 8.0, 1.4)
-	revolve("galvanised", Transform3D(Basis(Vector3(1, 0, 0.3).normalized(), deg_to_rad(52.0)), Vector3(252.0, top + 9.6, 42.0)), PackedVector2Array([
-		Vector2(0.0, 0.0), Vector2(1.2, 0.09), Vector2(2.4, 0.36), Vector2(3.4, 0.72), Vector2(4.2, 1.1), Vector2(4.3, 1.1),
-		Vector2(3.4, 0.62), Vector2(2.4, 0.26), Vector2(1.2, -0.02), Vector2(0.0, -0.12),
-	]), SLIGHT, 24)
-	rod("dark_steel", Vector3(252.0, top + 9.6, 42.0), Vector3(252.0, top + 9.6, 42.0) + Basis(Vector3(1, 0, 0.3).normalized(), deg_to_rad(52.0)) * Vector3.UP * 3.0, 0.05, SLIGHT, 6)
-	lattice_mast(Vector3(196.0, top + 0.6, 40.0), 13.0, 0.6)
-	box("concrete", Vector3(281.0, top + 2.1, 42.0), Vector3(11.0, 3.0, 8.0), Vector3.ZERO, SLIGHT)
+	coarse()
+	# Its four faces. The south one stands on the wall of the complex and
+	# begins where that ends.
+	var length := BLOCK_EAST - BLOCK_WEST
+	var depth := south - BLOCK_NORTH
+	var ground := Vector3(0, YARD_Y, 0)
+	var north := Transform3D(Basis(Vector3.LEFT, Vector3.UP, Vector3.FORWARD), ground + Vector3(BLOCK_EAST, 0, BLOCK_NORTH))
+	var doorway := Rect2(-2.0, -3.0, 4.0, 6.82)
+	var high_light := Rect2(-2.4, 2.75, 4.8, 1.1)
+	var open := {}
+	for i in BLOCK_BAYS:
+		open[i] = [high_light]
+	# Counted from the east, as the face is seen: the door is in the middle.
+	open[7] = [doorway]
+	open[10] = [Rect2(-0.55, -3.0, 1.1, 5.15)]
+	open[11] = []
+	open[13] = []
+	open[14] = []
+	block_face(north, length, BLOCK_BAYS, 0.5, 0.0, open, {7: [0]})
+	for i in BLOCK_BAYS:
+		if open[i].size() == 1 and open[i][0] == high_light:
+			steel_window(bay_frame(north, length, BLOCK_BAYS, i) * Transform3D(Basis(), Vector3(0, high_light.get_center().y, 0)), high_light.size, REVEAL, Vector2i(6, 1))
+			square_box(CONCRETE, bay_frame(north, length, BLOCK_BAYS, i), Vector3(0, high_light.position.y - 0.045, (0.07 - REVEAL) * 0.5), Vector3(high_light.size.x + 0.24, 0.11, REVEAL + 0.07))
+	var west := Transform3D(Basis(Vector3.BACK, Vector3.UP, Vector3.LEFT), ground + Vector3(BLOCK_WEST, 0, BLOCK_NORTH))
+	var sunny := Transform3D(Basis(Vector3.RIGHT, Vector3.UP, Vector3.BACK), ground + Vector3(BLOCK_WEST, 0, south))
+	block_face(west, depth, END_BAYS, 0.4)
+	block_face(sunny, length, BLOCK_BAYS, 0.4, WALL_HIGH)
+	# Nothing is behind its faces but the dark: wherever a pane is out or a
+	# door stands off its frame, that is what shows.
+	for part: Array in [
+		[Vector3((BLOCK_WEST + way_west) * 0.5 + 0.1, mid_y, (front + south) * 0.5), Vector3(way_west - BLOCK_WEST - 1.1, high - 1.0, south - front - 0.9)],
+		[Vector3((way_east + BLOCK_EAST) * 0.5 - 0.1, mid_y, (front + south) * 0.5), Vector3(BLOCK_EAST - way_east - 1.1, high - 1.0, south - front - 0.9)],
+		[Vector3(BACK_DOOR_X, mid_y, (way_back + south) * 0.5 + 0.2), Vector3(WAY_IN.x + 1.0, high - 1.0, south - way_back - 1.0)],
+		[Vector3(BACK_DOOR_X, (lintel + top) * 0.5 + 0.2, (front + way_back) * 0.5), Vector3(WAY_IN.x + 1.0, top - lintel - 1.2, WAY_IN.y)],
+	]:
+		fine(FAR)
+		box("rubber", part[0], part[1], Vector3.ZERO, SLIGHT)
+		coarse()
+	_north_face(north, length)
+	_west_end(west, depth)
+	# Its letter, where it is read from the dunes.
+	fine(FAR)
+	for i: int in [0, BLOCK_BAYS - 1]:
+		stencil("C", bay_frame(sunny, length, BLOCK_BAYS, i) * Transform3D(Basis(), Vector3(0, (BEAMS[2].y + ROOF_EDGE.x) * 0.5, 0.006)), 1.45, WHITEWASH)
+	coarse()
+	block_face(Transform3D(Basis(Vector3.FORWARD, Vector3.UP, Vector3.RIGHT), ground + Vector3(BLOCK_EAST, 0, south)), depth, END_BAYS, 0.4)
+	block_corner(Vector2(BLOCK_WEST, BLOCK_NORTH), Vector3.LEFT, Vector3.FORWARD)
+	block_corner(Vector2(BLOCK_EAST, BLOCK_NORTH), Vector3.RIGHT, Vector3.FORWARD)
+	block_corner(Vector2(BLOCK_WEST, south), Vector3.LEFT, Vector3.BACK)
+	block_corner(Vector2(BLOCK_EAST, south), Vector3.RIGHT, Vector3.BACK)
+	box(CONCRETE, Vector3((BLOCK_WEST + BLOCK_EAST) * 0.5, top - 0.3, (BLOCK_NORTH + south) * 0.5), Vector3(length - 0.4, 0.3, depth - 0.4), Vector3.ZERO, SLIGHT)
+	# On the roof: the dish on its tower, a mast with its aerials, a plant
+	# room and its fans.
+	# The masts stand where they stood, on blocks of concrete on the roof.
+	var roof := top - 0.15
+	var mast_foot := top + 0.6
+	box(CONCRETE, Vector3(252.0, (roof + mast_foot) * 0.5, 42.0), Vector3(2.6, mast_foot - roof, 2.6), Vector3.ZERO, SLIGHT)
+	box(CONCRETE, Vector3(196.0, (roof + mast_foot) * 0.5, 40.0), Vector3(1.6, mast_foot - roof, 1.6), Vector3.ZERO, SLIGHT)
+	lattice_mast(Vector3(252.0, mast_foot, 42.0), 8.0, 1.4)
+	var tower := Vector3(252.0, mast_foot + 8.0, 42.0)
+	dish(Transform3D(Basis(Vector3(1, 0, 0.3).normalized(), deg_to_rad(52.0)), tower + Vector3(0, 2.5, 0)), 3.6, tower)
+	lattice_mast(Vector3(196.0, mast_foot, 40.0), 13.0, 0.6)
+	fine(FAR)
+	for aerial: Array in [[11.6, 1.5, 0.0], [10.2, 1.1, 90.0], [8.4, 1.8, 40.0]]:
+		var arm := Basis(Vector3.UP, deg_to_rad(aerial[2])) * Vector3.RIGHT
+		var hub := Vector3(196.0, mast_foot + aerial[0], 40.0)
+		rod("galvanised", hub - arm * aerial[1], hub + arm * aerial[1], 0.025, SLIGHT, 6)
+		for prong: float in [-1.0, -0.5, 0.5, 1.0]:
+			rod("galvanised", hub + arm * aerial[1] * prong - Vector3.UP * 0.5, hub + arm * aerial[1] * prong + Vector3.UP * 0.5, 0.012, SLIGHT, 5)
+	rod("galvanised", Vector3(196.0, mast_foot + 13.0, 40.0), Vector3(196.0, mast_foot + 17.0, 40.0), 0.02, SLIGHT, 6)
 	for x: float in [214.0, 222.0, 268.0]:
-		box("galvanised", Vector3(x, top + 1.3, 44.0), Vector3(3.2, 1.4, 2.2), Vector3.ZERO, SLIGHT)
+		box("galvanised", Vector3(x, roof + 0.7, 44.0), Vector3(3.2, 1.4, 2.2), Vector3.ZERO, SLIGHT)
+		cylinder("galvanised", Vector3(x, roof + 1.4, 44.0), 0.7, 0.5, SLIGHT, Vector3.ZERO, -1.0, 14)
+	coarse()
+	box(BRICK, Vector3(281.0, roof + 1.5, 42.0), Vector3(11.0, 3.0, 8.0), Vector3.ZERO, SLIGHT)
+	box(CONCRETE, Vector3(281.0, roof + 3.1, 42.0), Vector3(11.6, 0.2, 8.6), Vector3.ZERO, SLIGHT)
+
+
+## What the north face of the main building has on it besides its windows:
+## the back door under its canopy, with what tells a driver that this is the
+## door, a door for men further along, the pipes that take the rain down,
+## the letter of the building, and where the current comes in. `face` stands
+## at its east end on the ground, as block_face() has it.
+func _north_face(face: Transform3D, length: float) -> void:
+	var door := bay_frame(face, length, BLOCK_BAYS, 7)
+	# The doorway, lined in concrete and banded yellow and black to a
+	# lorry's height.
+	for side: float in [-1.0, 1.0]:
+		square_box(CONCRETE, door, Vector3(side * 2.22, 2.1, 0.07), Vector3(0.44, 4.2, 0.26))
+	square_box(CONCRETE, door, Vector3(0, 4.1, 0.07), Vector3(4.9, 0.56, 0.26))
+	fine(MID)
+	for side: float in [-1.0, 1.0]:
+		for band in 8:
+			painted(door * Transform3D(Basis(), Vector3(side * 2.22, 0.18 + band * 0.32, 0.202)), Vector2(0.44, 0.32), SIGNAL_YELLOW if band % 2 == 0 else STENCIL_BLACK)
+		_local_box("rubber", door, Vector3(side * 2.22, 0.75, 0.26), Vector3(0.3, 0.5, 0.12), SLIGHT)
+	coarse()
+	# The canopy: a roof of sheet on two brackets, hung from the wall by a
+	# rod each, with a gutter along its edge and a bar for the headroom.
+	var eave := 4.55
+	var reach := 3.2
+	fine(FAR)
+	for side: float in [-1.0, 1.0]:
+		beam("steel", door * Vector3(side * 3.1, eave + 0.22, 0.0), door * Vector3(side * 3.1, eave, reach), 0.16, SLIGHT, 0.24)
+		rod("dark_steel", door * Vector3(side * 3.1, eave + 2.3, 0.05), door * Vector3(side * 3.1, eave + 0.1, reach - 0.3), 0.022, SLIGHT, 6)
+		_local_box("dark_steel", door, Vector3(side * 3.1, eave + 2.3, 0.04), Vector3(0.24, 0.3, 0.08), SLIGHT)
+	for purlin in 4:
+		var out := 0.25 + purlin * (reach - 0.4) / 3.0
+		_local_box("steel", door, Vector3(0, eave + 0.2 - out * 0.069, out), Vector3(6.6, 0.1, 0.07), SLIGHT)
+	corrugated("roof", door * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-86.0)), Vector3(0, eave + 0.2, reach * 0.5)), Vector2(7.0, reach + 0.2), 0.19, 0.03, SLIGHT)
+	corrugated("roof", door * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(94.0)), Vector3(0, eave + 0.19, reach * 0.5)), Vector2(7.0, reach + 0.2), 0.19, 0.03, SLIGHT)
+	_local_box("galvanised", door, Vector3(0, eave - 0.02, reach + 0.12), Vector3(7.1, 0.12, 0.14), SLIGHT)
+	refine(MID)
+	_local_box("steel_yellow", door, Vector3(0, 3.62, reach - 0.3), Vector3(4.6, 0.12, 0.05), SLIGHT)
+	for side: float in [-1.0, 1.0]:
+		rod("dark_steel", door * Vector3(side * 2.1, 3.68, reach - 0.3), door * Vector3(side * 2.1, eave + 0.02, reach - 0.3), 0.008, SLIGHT, 4)
+	stencil("MAX 3.4 M", door * Transform3D(Basis(), Vector3(0, 3.62, reach - 0.27)), 0.085, STENCIL_BLACK)
+	wall_lamp(door * Vector3(-1.4, 4.42, 0.2), Vector3.FORWARD, false)
+	wall_lamp(door * Vector3(1.4, 4.42, 0.2), Vector3.FORWARD, false)
+	coarse()
+	# What it is, in letters a driver reads from the corner of the building.
+	var board := door * Transform3D(Basis(), Vector3(0, 6.75, 0.0))
+	fine(FAR)
+	painted(board * Transform3D(Basis(), Vector3(0, 0, 0.005)), Vector2(6.2, 1.5), WHITEWASH)
+	stencil("GOODS IN", board * Transform3D(Basis(), Vector3(0, 0, 0.009)), 0.95, STENCIL_BLACK)
+	stencil("C", bay_frame(face, length, BLOCK_BAYS, 14) * Transform3D(Basis(), Vector3(0, 2.75, 0.006)), 2.6, WHITEWASH)
+	coarse()
+	# The door for men, under a slab, with a lamp and a name.
+	var side_door := bay_frame(face, length, BLOCK_BAYS, 10)
+	steel_door(side_door * Transform3D(Basis(), Vector3(0, 0.03, 0)), Vector2(1.1, 2.12), 0.2)
+	square_box(CONCRETE, side_door, Vector3(0, 0.0, 0.35), Vector3(1.6, 0.14, 0.7))
+	square_box(CONCRETE, side_door, Vector3(0, 2.42, 0.4), Vector3(1.9, 0.12, 0.9))
+	fine(MID)
+	wall_lamp(side_door * Vector3(0, 2.75, 0), Vector3.FORWARD, false)
+	sign_plate(side_door * Vector3(0, 2.28, 0.012), Vector3.FORWARD, "STORES", 0.16)
+	coarse()
+	# The rain off the roof comes down beside every third column.
+	fine(FAR)
+	for i: int in [1, 4, 7, 10, 13]:
+		downpipe(face * Vector3(i * length / BLOCK_BAYS + COLUMN.x * 0.5 + 0.2, 0.05, 0), Vector3.FORWARD, ROOF_EDGE.x - 0.1)
+	coarse()
+	# Where the current comes in: two cabinets, and the cables up from them
+	# on a tray to the floor above.
+	for bay: int in [13, 14]:
+		var by := bay_frame(face, length, BLOCK_BAYS, bay)
+		hang("utility_box_02" if bay == 13 else "utility_box_01", by * Vector3(-2.2, 2.3, 0.0), Vector3.FORWARD)
+	fine(MID)
+	cable_tray(bay_frame(face, length, BLOCK_BAYS, 13) * Vector3(-3.4, 3.9, 0.0), bay_frame(face, length, BLOCK_BAYS, 13) * Vector3(3.2, 3.9, 0.0), Vector3.FORWARD, 4)
+	coarse()
+
+
+## The west end of the main building, which looks down the yard: two great
+## sliding doors, shut, and the letter of the building beside them.
+func _west_end(face: Transform3D, depth: float) -> void:
+	sliding_door(bay_frame(face, depth, END_BAYS, 1), Vector2(5.2, 4.3), -1.0)
+	sliding_door(bay_frame(face, depth, END_BAYS, 2), Vector2(5.2, 4.3), 1.0)
+	fine(FAR)
+	stencil("C", bay_frame(face, depth, END_BAYS, 3) * Transform3D(Basis(), Vector3(0, 2.75, 0.006)), 2.6, WHITEWASH)
+	coarse()
+	fine(FAR)
+	downpipe(face * Vector3(depth / END_BAYS + COLUMN.x * 0.5 + 0.2, 0.05, 0), Vector3.LEFT, ROOF_EDGE.x - 0.1)
+	coarse()
+	fine(MID)
+	for bay: int in [1, 2]:
+		wall_lamp(bay_frame(face, depth, END_BAYS, bay) * Vector3(0, 5.3, 0.06), Vector3.LEFT, false)
+	coarse()
 
 
 func _behind() -> void:
-	cover_over("earth", Rect2(BLOCK_WEST - 6.0, WALL_NORTH, WALL_EAST - BLOCK_WEST + 6.0, BLOCK_NORTH - WALL_NORTH), 0.85)
 	# Where the current comes in: two transformers under their mast, fed
 	# over the wall from the powerhouse.
 	var mast := Vector3(190.0, YARD_Y, 9.4)

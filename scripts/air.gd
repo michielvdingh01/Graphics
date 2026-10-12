@@ -2,7 +2,8 @@ extends GPUParticles3D
 ## What hangs in the air of open land: pollen, midges and dust, as specks
 ## that show only where the sun falls on them. Under the pines they glitter
 ## in the beams between the crowns; against sand in full sun they are lost,
-## as they are to the eye.
+## as they are to the eye, and against the sky they are left out, see
+## shaders/mote.gdshader.
 ##
 ## A room has its dust where the builder put it (dust() in
 ## tools/level_builder.gd). Land is too large for that: the specks are let
@@ -43,8 +44,7 @@ func _ready() -> void:
 	drift.turbulence_influence_min = 0.03
 	drift.turbulence_influence_max = 0.12
 	var speck := ShaderMaterial.new()
-	speck.shader = load("res://shaders/dust.gdshader")
-	speck.set_shader_parameter("brightness", 0.2)
+	speck.shader = load("res://shaders/mote.gdshader")
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.008, 0.008)
 	quad.material = speck

@@ -18,11 +18,32 @@ const CANVAS := "canvas"
 const SIDE := Basis(Vector3.BACK, Vector3.UP, Vector3.LEFT)
 
 
+## The surfaces that are canvas, and what their vertex colour tells
+## shaders/canvas.gdshader of the cloth: how much of the ground has got into
+## it, how far it has faded, how much light gets into its folds and how much
+## of the sun comes through it.
+var _cloths := {}
+var _dye := Color(0.2, 0.5, 0.9, 0.0)
+
+
 func _describe() -> void:
 	_jeep()
 	_truck()
 	_tank("tank", 0.0)
 	_tank("tank_b", 38.0)
+
+
+func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	var st := super(mat, flags, at)
+	if mat == CANVAS:
+		_cloths[st] = true
+	return st
+
+
+## Canvas is not worn along its edges as steel is: its vertex colour says
+## what has happened to the cloth instead.
+func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> void:
+	super(st, p, n, uv, [_dye, _dye, _dye] if _cloths.has(st) else edge)
 
 
 ## A wheel with its middle at `at`, on an axle that leaves the vehicle along

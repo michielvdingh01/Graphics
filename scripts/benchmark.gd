@@ -9,6 +9,8 @@ extends Node
 ## --profile also switches each effect off in turn and reports what it costs;
 ## --off=ssil,glow leaves those effects off for the whole run, to compare
 ## screenshots with and without them. _profile_targets() lists the names.
+## Every view also says how many pipelines the renderer made while it was
+## drawn: what was seen for the first time there, see Fx.rehearse().
 ## --at=x,y,z,yaw,pitch looks from that point instead of the fixed views, to
 ## inspect one corner of a level; several poses are separated by semicolons.
 ## A y that begins with a plus is that far above the ground at x and z, for
@@ -320,10 +322,12 @@ func _run() -> void:
 			if not _weapon.is_empty():
 				player.weapons.smoke(1.0)
 			Fx.advance(_shoot[0])
+		var compiled := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW)
 		for i in _warmup_frames:
 			await tree.process_frame
 
 		var frame_ms: PackedFloat64Array = await _measure(_measure_frames, view.name)
+		compiled = RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW) - compiled
 
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(out_dir.path_join(view.name + ".png"))
@@ -347,6 +351,9 @@ func _run() -> void:
 			"primitives": RenderingServer.get_rendering_info(
 				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
 			),
+			# Pipelines the renderer had to make while it drew this view:
+			# each is something seen for the first time, and may be a hitch.
+			"pipelines": compiled,
 		}
 		print("%-12s %7.1f fps avg  %7.1f fps 1%% low  %6.1f ms worst frame" % [view.name, result.avg_fps, result.low_1pct_fps, result.worst_ms])
 		if _profile:
