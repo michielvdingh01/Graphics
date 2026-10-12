@@ -8,15 +8,8 @@ func _describe() -> void:
 	# Receiving: the roller door the stores come in by, shut, and what was
 	# wheeled in last.
 	roller_door(spot_in("receiving", 5.0, 0.25, 1.6), Vector3.BACK, Vector2(3.2, 3.2))
-	# A tube over the door that still burns: where the level begins, there
-	# has to be enough light to see which way it goes on.
-	tube(spot_in("receiving", 5.0, 2.4, _floor_plan["receiving"].height - 0.08), true, true, false)
 	place("hand_truck", spot_in("receiving", 8.4, 1.0), 200)
 	place("industrial_storage_cart", spot_in("receiving", 2.0, 2.4), 80)
-
-	# The cable corridor: the cables of the switch room on a ladder under the
-	# ceiling, down its south side.
-	cable_ladder(spot_in("cable_corridor", 0.4, 2.45, 2.5), spot_in("cable_corridor", 15.6, 2.45, 2.5), 3.0, 6)
 
 	# The switch room: two rows of gear facing each other across an aisle,
 	# with rubber mats to stand on, and the cables over both on ladders that

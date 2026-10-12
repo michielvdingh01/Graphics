@@ -1,5 +1,5 @@
-extends "res://tools/kit/rooms.gd"
-## Sixth drawer of the kit, see tools/kit.gd: what makes electricity, switches
+extends "res://tools/kit/fittings.gd"
+## Fifth drawer of the kit, see tools/kit.gd: what makes electricity, switches
 ## it and sends it on its way.
 
 # Materials of the electrical plant.

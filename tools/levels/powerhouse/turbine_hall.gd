@@ -10,16 +10,14 @@ const SEAT := 7.2
 func _describe() -> void:
 	turbine(spot_in("turbine_hall", 9.6, 12.0), 0, "G1")
 	turbine(spot_in("turbine_hall", 23.4, 12.0), 0, "G2")
-	# The runway beams of the crane lie on corbels along both long walls.
-	for z: float in [0.7, 23.3]:
-		for x: float in [2.5, 8.5, 14.5, 20.5, 26.5, 31.5]:
-			box("concrete", spot_in("turbine_hall", x, z, SEAT - 0.25), Vector3(0.5, 0.5, 0.6), Vector3.ZERO, NO_COLLIDE)
+	# The runway beams of the crane lie on corbels along both long walls: on
+	# every pier there is, and at either end of the hall.
+	for side: int in [NORTH, SOUTH]:
+		var bearings := piers_along("turbine_hall", side)
+		bearings.append_array([spot_in("turbine_hall", 0.9, 0).x, spot_in("turbine_hall", 32.1, 0).x])
+		for x in bearings:
+			box("concrete", _wall_spot("turbine_hall", side, x, 0.3, SEAT - 0.25), Vector3(0.5, 0.5, 0.6), Vector3.ZERO, NO_COLLIDE)
 	crane(spot_in("turbine_hall", 16.5, 12.0), 16.1, 11.6, SEAT, 11.0)
-	# A lamp over the gangway beside the first machine: of those the builder
-	# hung over this end of the hall, three are out, and the machine the
-	# player sees first stood in the dark.
-	var high: float = _floor_plan["turbine_hall"].height
-	lamp(spot_in("turbine_hall", 8.5, 16.2, high - 0.9), high, true, true)
 
 	# The steam main comes in through the west end of the south wall and runs
 	# along it under the runway, with a branch down into the floor for each

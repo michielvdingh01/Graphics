@@ -59,9 +59,6 @@ func _pump_house() -> void:
 	_line("pipe", [Vector3(9.3, 2.5, 0.39), Vector3(9.65, 2.5, 0.39), Vector3(9.9, 2.75, 0.39), Vector3(9.9, 3.4, 0.39), Vector3(9.9, _floor_plan["pump_house"].height + 0.05, 0.39)], 0.09, 12)
 	box("deck", row + Vector3(2.1, 0.008, 1.3), Vector3(6.4, 0.016, 0.5), Vector3.ZERO, NO_COLLIDE)
 	gauge_board(spot_in("pump_house", 5.5, 13.6, 1.75), Vector3.FORWARD)
-	# And a lamp over the pumps, where the builder's is out.
-	var high: float = _floor_plan["pump_house"].height
-	lamp(spot_in("pump_house", 6.2, 8.0, high - 0.9), high, true, false)
 
 	vessel(spot_in("pump_house", 1.5, 4.3), 0, 3.6, 0.7)
 	switchboard(spot_in("pump_house", 8.0, 4.2), 180, 9)

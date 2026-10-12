@@ -5,10 +5,11 @@ extends "res://tools/levels/works/plan.gd"
 
 func _describe() -> void:
 	var middle := spot_in("assembly", 13.5, 15.0)
-	# The runway beams of the crane lie on corbels along both long walls.
-	for z: float in [0.7, 29.3]:
-		for x: float in [3.0, 9.0, 15.0, 21.0, 26.0]:
-			box("concrete", spot_in("assembly", x, z, 5.75), Vector3(0.5, 0.5, 0.6), Vector3.ZERO, NO_COLLIDE)
+	# The runway beams of the crane lie on corbels along both long walls: on
+	# every pier there is.
+	for side: int in [NORTH, SOUTH]:
+		for x in piers_along("assembly", side):
+			box("concrete", _wall_spot("assembly", side, x, 0.3, 5.75), Vector3(0.5, 0.5, 0.6), Vector3.ZERO, NO_COLLIDE)
 	crane(middle, 13.1, 14.6, 6.0, 5.0)
 	lathe(spot_in("assembly", 16.0, 2.8))
 	press(spot_in("assembly", 8.0, 6.0))
