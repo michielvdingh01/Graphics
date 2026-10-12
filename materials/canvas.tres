@@ -1,13 +1,21 @@
-[gd_resource type="StandardMaterial3D" format=3]
+[gd_resource type="ShaderMaterial" format=3]
 
+[ext_resource type="Shader" path="res://shaders/canvas.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/rough_linen/rough_linen_diff.jpg" id="diff"]
 [ext_resource type="Texture2D" path="res://assets/textures/rough_linen/rough_linen_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
 
 [resource]
-cull_mode = 2
-albedo_color = Color(0.2, 0.2, 0.125, 1)
-roughness = 0.95
-normal_enabled = true
-normal_texture = ExtResource("nor")
-backlight_enabled = true
-backlight = Color(0.3, 0.3, 0.17, 1)
-uv1_scale = Vector3(3.5, 3.5, 3.5)
+shader = ExtResource("shader")
+shader_parameter/color = Color(0.2, 0.196, 0.14, 1)
+shader_parameter/faded = Color(0.33, 0.315, 0.245, 1)
+shader_parameter/soil = Color(0.6, 0.52, 0.38, 1)
+shader_parameter/weave_tex = ExtResource("diff")
+shader_parameter/weave_normal = ExtResource("nor")
+shader_parameter/weave_value = 0.437
+shader_parameter/weave_scale = 2.5
+shader_parameter/weave_depth = 1.0
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/strip = 0.9
+shader_parameter/through = 1.1
+shader_parameter/roughness = 0.93

@@ -17,6 +17,13 @@ const ARMY := "army_green"
 const SACK := Vector3(0.6, 0.14, 0.3)
 ## Thin things that are in nobody's way.
 const SLIGHT := DETAIL | NO_COLLIDE
+## What the canvas shader is told of cloth that nothing has happened to: no
+## dirt in it, not faded, hanging free and letting the sun through. See
+## shaders/canvas.gdshader.
+const CLOTH := Color(0.0, 0.5, 1.0, 1.0)
+## From how far off the small things are still drawn: ropes, pegs, strands
+## of wire. See _trim().
+const TRIM_REACH := 80.0
 ## The vehicles of tools/models/vehicles.gd: what of each is in the way, as
 ## [middle, size] of a box in the model, and over how many metres of ground
 ## it rests.
@@ -38,20 +45,192 @@ func _surface(mat: String) -> String:
 	return super(mat)
 
 
+# --- What it is all made with --------------------------------------------------------
+
+
+## Dice of its own for the piece that stands at `at`: what is added to a
+## piece later rolls these, and leaves where everything else stands alone.
+func _dice(at: Vector2, salt := 0) -> RandomNumberGenerator:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = hash("%.2f/%.2f/%d" % [at.x, at.y, salt])
+	return dice
+
+
+## The surface that small things of `mat` near `at` go into: a rope, a
+## strand of wire, a toggle. They throw no shadow and are not drawn from
+## further off than TRIM_REACH, see _commit().
+func _trim(mat: String, at: Vector3) -> SurfaceTool:
+	@warning_ignore("integer_division")
+	return _tool_named("|trim %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.z) / GROUND_BLOCK, mat])
+
+
+func _commit(zone_name: String, kind: String) -> void:
+	super(zone_name, kind)
+	if kind.begins_with("trim "):
+		var small := _root.get_child(0) as MeshInstance3D
+		small.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		small.visibility_range_end = TRIM_REACH
+		small.visibility_range_end_margin = 8.0
+
+
+## One corner at a time: the spot, which way it faces, where on the texture
+## it lies and what its vertex colour says.
+func _corner(st: SurfaceTool, at: Vector3, normal: Vector3, uv: Vector2, tone: Color) -> void:
+	st.set_color(tone)
+	st.set_normal(normal)
+	st.set_uv(uv)
+	st.add_vertex(at)
+
+
+## Cloth through a grid of `spots`, `across` squares to a row, that faces
+## the side `out` points to. It is shaded as one smooth sheet: every spot
+## faces the way the cloth lies there. `uvs` and `tones` go with the spots.
+func _cloth(st: SurfaceTool, spots: PackedVector3Array, across: int, uvs: PackedVector2Array, tones: PackedColorArray, out: Vector3) -> void:
+	var wide := across + 1
+	@warning_ignore("integer_division")
+	var down := spots.size() / wide - 1
+	var normals := PackedVector3Array()
+	var turned := false
+	for j in down + 1:
+		for i in wide:
+			var east := spots[j * wide + mini(i + 1, across)] - spots[j * wide + maxi(i - 1, 0)]
+			var south := spots[mini(j + 1, down) * wide + i] - spots[maxi(j - 1, 0) * wide + i]
+			var normal := east.cross(south)
+			normals.append(normal.normalized() if normal.length_squared() > 1e-12 else out)
+	@warning_ignore("integer_division")
+	turned = normals[(down / 2) * wide + across / 2].dot(out) < 0.0
+	for j in down:
+		for i in across:
+			var corners: Array[int] = [j * wide + i, j * wide + i + 1, (j + 1) * wide + i + 1, (j + 1) * wide + i]
+			if turned:
+				corners.reverse()
+			# Godot's winding is clockwise: two triangles, each given backwards.
+			for c: int in [0, 2, 1, 0, 3, 2]:
+				var k := corners[c]
+				_corner(st, spots[k], -normals[k] if turned else normals[k], uvs[k], tones[k])
+
+
+## A skin over rings of spots, `around` to a ring and one more that lies on
+## the first, counter-clockwise seen from the far end: a sack, a roll of
+## canvas, a rope. Shaded as one smooth skin. `caps` closes the first ring
+## (1), the last (2) or both (3).
+func _skin(st: SurfaceTool, spots: PackedVector3Array, around: int, uvs: PackedVector2Array, tones: PackedColorArray, caps := 0) -> void:
+	var wide := around + 1
+	@warning_ignore("integer_division")
+	var last := spots.size() / wide - 1
+	var normals := PackedVector3Array()
+	for j in last + 1:
+		for i in wide:
+			var round := spots[j * wide + (i + 1) % around] - spots[j * wide + (i + around - 1) % around]
+			var along := spots[mini(j + 1, last) * wide + i % around] - spots[maxi(j - 1, 0) * wide + i % around]
+			var normal := round.cross(along)
+			normals.append(normal.normalized() if normal.length_squared() > 1e-14 else Vector3.UP)
+	for j in last:
+		for i in around:
+			var corners: Array[int] = [j * wide + i, j * wide + i + 1, (j + 1) * wide + i + 1, (j + 1) * wide + i]
+			for c: int in [0, 2, 1, 0, 3, 2]:
+				var k := corners[c]
+				_corner(st, spots[k], normals[k], uvs[k], tones[k])
+	for end: int in [0, last]:
+		if not caps & (1 if end == 0 else 2):
+			continue
+		var middle := Vector3.ZERO
+		for i in around:
+			middle += spots[end * wide + i] / around
+		var faces := (spots[end * wide] - middle).cross(spots[end * wide + 1] - middle).normalized() * (-1.0 if end == 0 else 1.0)
+		for i in around:
+			var a := end * wide + i
+			var b := end * wide + i + 1
+			var first := a if end == 0 else b
+			var second := b if end == 0 else a
+			_corner(st, middle, faces, uvs[a], tones[a])
+			_corner(st, spots[first], faces, uvs[first], tones[first])
+			_corner(st, spots[second], faces, uvs[second], tones[second])
+
+
+## A round pole of sawn wood from `from` to `to`. The grain of one board
+## runs along it: a pole wound round with the boards of the scan looks like
+## bamboo.
+func _pole(from: Vector3, to: Vector3, radius: float, top_radius := -1.0, sides := 6) -> void:
+	var st := _tool("wood", SLIGHT, (from + to) * 0.5)
+	var frame := Transform3D(_up_along(to - from), from)
+	var length := from.distance_to(to)
+	var top := radius if top_radius < 0.0 else top_radius
+	# Which of the seven boards of the scan, and where along it.
+	var board := (floorf(fposmod(from.x * 3.7 + from.z * 5.3, 7.0)) + 0.2) * 0.2143
+	var start := fposmod(from.x * 1.3 + from.z * 0.7, 1.5)
+	var up := frame.basis.y
+	for s in sides:
+		var a0 := TAU * s / sides
+		var a1 := TAU * (s + 1) / sides
+		var d0 := Vector3(cos(a1), 0, sin(a1))
+		var d1 := Vector3(cos(a0), 0, sin(a0))
+		var v0 := board + absf(float(s + 1) / sides * 2.0 - 1.0) * 0.128
+		var v1 := board + absf(float(s) / sides * 2.0 - 1.0) * 0.128
+		_quad(st, [frame * (d0 * radius), frame * (d1 * radius), frame * (d1 * top + Vector3.UP * length), frame * (d0 * top + Vector3.UP * length)],
+			[frame.basis * d0, frame.basis * d1, frame.basis * d1, frame.basis * d0],
+			[Vector2(start, v0), Vector2(start, v1), Vector2(start + length, v1), Vector2(start + length, v0)])
+		_tri(st, [frame * (Vector3.UP * length), frame * (d0 * top + Vector3.UP * length), frame * (d1 * top + Vector3.UP * length)], [up, up, up],
+			[Vector2(start, board), Vector2(start + top, board + 0.05), Vector2(start + top, board)])
+
+
+## A rope from `from` to `to` that hangs `sag` lower in its middle. It is of
+## the stuff sandbags are made of, and too thin to throw a shadow.
+func _rope(from: Vector3, to: Vector3, sag := 0.02, radius := 0.006) -> void:
+	var st := _trim(SACKING, (from + to) * 0.5)
+	var steps := 4 if sag > 0.0 else 1
+	var around := 4
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	var frame := _up_along(to - from)
+	var length := from.distance_to(to)
+	for step in steps + 1:
+		var t := float(step) / steps
+		var middle := from.lerp(to, t) + Vector3.DOWN * sag * sin(PI * t)
+		for s in around + 1:
+			var turn := TAU * s / around
+			spots.append(middle + (frame.x * cos(turn) - frame.z * sin(turn)) * radius)
+			uvs.append(Vector2(0.37 + 0.04 * s / around, t * length))
+			tones.append(Color(0.82, 0.78, 0.68, 1.0))
+	_skin(st, spots, around, uvs, tones)
+
+
+## A peg driven into the ground at `at`, leaning away from what it holds:
+## `pull` is the way to that, on the ground.
+func _peg(at: Vector3, pull: Vector3, length := 0.4) -> void:
+	var away := -Vector3(pull.x, 0, pull.z).normalized()
+	var lean := (Vector3.UP + away * 0.45).normalized()
+	var foot := on_ground(at, -length * 0.62)
+	_box("wood", Transform3D(_up_along(lean), foot + lean * length * 0.5), Vector3(0.045, length, 0.03), SLIGHT)
+
+
+## A guy rope from `head` down to a peg at `foot`, with the wooden runner it
+## is tightened with.
+func _guy(head: Vector3, foot: Vector3) -> void:
+	var peg := on_ground(foot, 0.1)
+	_rope(head, peg, 0.03)
+	_peg(peg, head - peg)
+	var runner := peg.lerp(head, 0.3)
+	_box("wood", Transform3D(_along(head - peg), runner + Vector3.DOWN * 0.012), Vector3(0.035, 0.016, 0.11), SLIGHT)
+
+
 # --- Sandbags ----------------------------------------------------------------------
 
 
 ## A wall of sandbags from `from` to `to` (x and z), `layers` bags high, laid
 ## as bricks are and following the ground. Seven layers is a wall to kneel
-## behind.
+## behind. Every other course is closed at either end with half a bag.
 func sandbags(from: Vector2, to: Vector2, layers := 7) -> void:
 	var length := from.distance_to(to)
 	var way := (to - from) / length
 	var along := Vector3(way.x, 0, way.y)
 	var count := maxi(1, roundi(length / SACK.x))
 	var pitch := length / count
+	var own := _dice((from + to) * 0.5, layers)
 	for layer in layers:
 		var shift := 0.5 if layer % 2 == 1 else 0.0
+		var top := layer == layers - 1
 		for i in range(-1 if shift > 0.0 else 0, count):
 			var run := (i + 0.5 + shift) * pitch
 			if run < 0.15 or run > length - 0.15:
@@ -60,7 +239,20 @@ func sandbags(from: Vector2, to: Vector2, layers := 7) -> void:
 			var turn := Basis(Vector3.UP, _clutter_rng.randf_range(-0.07, 0.07))
 			var across := turn * Vector3.UP.cross(along)
 			var middle := ground(at.x, at.y, layer * SACK.y - 0.02) + across * _clutter_rng.randf_range(-0.025, 0.025)
-			_sack(Transform3D(Basis(across, Vector3.UP, turn * along), middle), pitch * _clutter_rng.randf_range(0.9, 0.98))
+			var long := pitch * _clutter_rng.randf_range(0.9, 0.98)
+			var shade := _clutter_rng.randf_range(0.72, 1.0)
+			var tint := Color(shade, shade * _clutter_rng.randf_range(0.94, 1.0), shade * _clutter_rng.randf_range(0.86, 0.98))
+			_sack(Transform3D(Basis(across, Vector3.UP, turn * along), middle), long, tint, own, top)
+		if shift > 0.0:
+			for run: float in [pitch * 0.25, length - pitch * 0.25]:
+				var at := from + way * run
+				var turn := Basis(Vector3.UP, own.randf_range(-0.09, 0.09))
+				var across := turn * Vector3.UP.cross(along)
+				var shade := own.randf_range(0.72, 1.0)
+				var tint := Color(shade, shade * own.randf_range(0.94, 1.0), shade * own.randf_range(0.86, 0.98))
+				_sack(Transform3D(Basis(across, Vector3.UP, turn * along), ground(at.x, at.y, layer * SACK.y - 0.02)), pitch * own.randf_range(0.46, 0.5), tint, own, top)
+	# What has run out of them lies against the foot of the wall.
+	_drift(from, to, SACK.z * 0.5 + 0.02, own)
 	var low := minf(ground_height(from.x, from.y), ground_height(to.x, to.y)) - 0.5
 	var high := maxf(ground_height(from.x, from.y), ground_height(to.x, to.y)) + layers * SACK.y
 	var middle := (from + to) * 0.5
@@ -68,50 +260,76 @@ func sandbags(from: Vector2, to: Vector2, layers := 7) -> void:
 
 
 ## One sandbag: lying along the Z of `xf` with its underside at the origin.
-## A sack that was filled and thrown down: flat underneath, round on top,
-## and pinched at both ends where it was tied and folded. No two are quite
-## the same shade.
-func _sack(xf: Transform3D, length: float) -> void:
+## A sack of hessian that was filled, tied and thrown down: flat underneath,
+## round on top, and pressed flat at either end where its seam is, or
+## gathered where it was tied. `tint` is its shade; `own` are the dice of
+## the wall it lies in. One that lies on `top` has nothing pressing on it.
+func _sack(xf: Transform3D, length: float, tint: Color, own: RandomNumberGenerator, top := false) -> void:
 	var st := _tool(SACKING, SLIGHT, xf.origin)
 	var half := SACK.z * 0.5
-	var rise := SACK.y * 0.54
-	var shade := _clutter_rng.randf_range(0.72, 1.0)
-	var tint := Color(shade, shade * _clutter_rng.randf_range(0.94, 1.0), shade * _clutter_rng.randf_range(0.86, 0.98))
-	var sides := 8
-	var rings: Array[Vector2] = [Vector2(-0.5, 0.45), Vector2(-0.4, 0.9), Vector2(0.0, 1.0), Vector2(0.4, 0.9), Vector2(0.5, 0.45)]
-	var before: Array[Vector3] = []
-	var before_out: Array[Vector3] = []
-	for ring in rings.size():
-		var around: Array[Vector3] = []
-		var out: Array[Vector3] = []
-		for s in sides + 1:
-			var turn := TAU * s / sides
-			# Squarer than a circle, and flatter underneath than on top.
-			var x := signf(cos(turn)) * pow(absf(cos(turn)), 0.6) * half * rings[ring].y
-			var y := rise + signf(sin(turn)) * pow(absf(sin(turn)), 0.6) * rise * rings[ring].y * (1.0 if sin(turn) > 0.0 else 0.92)
-			around.append(xf * Vector3(x, y, rings[ring].x * length))
-			out.append(xf.basis * Vector3(cos(turn), sin(turn), rings[ring].x * 0.6).normalized())
-		if ring > 0:
-			for s in sides:
-				var u0 := float(s) / sides * 0.9
-				var u1 := float(s + 1) / sides * 0.9
-				var v0 := (rings[ring - 1].x + 0.5) * length
-				var v1 := (rings[ring].x + 0.5) * length
-				_quad(st, [before[s], before[s + 1], around[s + 1], around[s]], [before_out[s], before_out[s + 1], out[s + 1], out[s]],
-					[Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1), Vector2(u0, v1)], [tint, tint, tint, tint])
-		before = around
-		before_out = out
-	# Its two ends.
-	for end: int in [0, rings.size() - 1]:
-		var face := xf.basis * Vector3(0, 0, signf(rings[end].x))
-		var middle := xf * Vector3(0, rise, rings[end].x * length)
-		for s in sides:
-			var turn := TAU * s / sides
-			var next := TAU * (s + 1) / sides
-			var a := xf * Vector3(signf(cos(turn)) * pow(absf(cos(turn)), 0.6) * half * rings[end].y, rise + signf(sin(turn)) * pow(absf(sin(turn)), 0.6) * rise * rings[end].y, rings[end].x * length)
-			var b := xf * Vector3(signf(cos(next)) * pow(absf(cos(next)), 0.6) * half * rings[end].y, rise + signf(sin(next)) * pow(absf(sin(next)), 0.6) * rise * rings[end].y, rings[end].x * length)
-			var corners := [middle, a, b] if end > 0 else [middle, b, a]
-			_tri(st, corners, [face, face, face], [Vector2(0.45, 0.1), Vector2(0.4, 0.0), Vector2(0.5, 0.0)], [tint, tint, tint])
+	var rise := SACK.y * (0.58 if top else 0.54) * own.randf_range(0.93, 1.06)
+	var around := 8
+	# Some have been out a winter longer: darker, or bleached to grey.
+	var age := own.randf()
+	if age < 0.12:
+		tint = tint * Color(0.72, 0.7, 0.66)
+	elif age > 0.86:
+		tint = tint.lerp(Color(tint.g, tint.g, tint.g) * 1.05, 0.55)
+	# Along the sack: where a ring lies, how wide and how high it is there,
+	# and how round: 0.6 is a sack under load, 1 a neck that was tied.
+	var rings: Array[Vector4] = [
+		Vector4(-0.5, 0.86, 0.07, 0.6), Vector4(-0.455, 0.95, 0.62, 0.6), Vector4(-0.33, 1.0, 0.97, 0.6), Vector4(0.0, 1.0, 1.0, 0.6),
+		Vector4(0.33, 1.0, 0.97, 0.6), Vector4(0.455, 0.95, 0.62, 0.6), Vector4(0.5, 0.86, 0.07, 0.6),
+	]
+	if own.randf() < 0.22:
+		rings = rings.slice(0, 5)
+		rings.append_array([Vector4(0.44, 0.7, 0.8, 0.85), Vector4(0.5, 0.25, 0.34, 1.0), Vector4(0.525, 0.2, 0.26, 1.0), Vector4(0.58, 0.42, 0.14, 1.0)])
+	var mirror := -1.0 if own.randf() < 0.5 else 1.0
+	var lean := own.randf_range(-0.12, 0.12)
+	var droop := own.randf_range(0.0, 0.22)
+	var slide := own.randf() * 3.0
+	var girth := half * 5.2
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	for ring in rings:
+		var full := ring.z * (1.0 + lean * ring.x * 2.0)
+		var middle := rise * (1.0 - 0.25 * (1.0 - minf(ring.z, 1.0))) - droop * rise * ring.x * ring.x * 4.0
+		for s in around + 1:
+			# Round from the side its seam is on, by way of the top.
+			var turn := TAU * s / around + PI
+			var x := signf(cos(turn)) * pow(absf(cos(turn)), ring.w) * half * ring.y * mirror
+			var y := middle + signf(sin(turn)) * pow(absf(sin(turn)), ring.w) * rise * full * (1.0 if sin(turn) > 0.0 else 0.92)
+			spots.append(xf * Vector3(x, maxf(y, 0.0), ring.x * length * mirror))
+			uvs.append(Vector2((float(s) / around - 0.5) * girth, slide + ring.x * length))
+			# Dark underneath and where two sacks meet end to end.
+			var lit := (0.72 + 0.28 * sin(turn) if top else 0.7 + 0.2 * absf(cos(turn)) + 0.1 * sin(turn)) * (0.8 if ring.z < 0.5 else 1.0)
+			tones.append(Color(tint.r, tint.g, tint.b, lit))
+	_skin(st, spots, around, uvs, tones, 3)
+
+
+## Sand along the foot of something that stands from `from` to `to` (x and
+## z), on either side of it `off` from its middle: what the wind has laid
+## against it and what has run out of it. It is the ground, a little higher.
+func _drift(from: Vector2, to: Vector2, off: float, own: RandomNumberGenerator) -> void:
+	var length := from.distance_to(to)
+	var way := (to - from) / length
+	var across := way.orthogonal()
+	var steps := maxi(2, roundi(length / 0.5))
+	for side: float in [-1.0, 1.0]:
+		var spots := PackedVector3Array()
+		var uvs := PackedVector2Array()
+		var tones := PackedColorArray()
+		for step in steps + 1:
+			var at := from + way * length * step / steps
+			var reach := own.randf_range(0.1, 0.3)
+			var high := own.randf_range(0.03, 0.1) * (0.4 if step == 0 or step == steps else 1.0)
+			for row: Vector2 in [Vector2(-0.06, high), Vector2(reach * 0.45, high * 0.55), Vector2(reach, -0.015)]:
+				var spot := at + across * side * (off + row.x)
+				spots.append(ground(spot.x, spot.y, row.y))
+				uvs.append(spot)
+				tones.append(Color.WHITE)
+		_cloth(_trim("dune_ground", ground(from.x, from.y)), spots, 2, uvs, tones, Vector3.UP)
 
 
 ## A post of sandbags to shoot from: a wall `width` wide across the way
@@ -154,24 +372,17 @@ func _sheet(mat: String, corners: Array, sag := 0.0, across := 4, down := 2) -> 
 	var st := _tool(mat, SLIGHT, (first + third) * 0.5)
 	var wide := first.distance_to(second)
 	var high := first.distance_to(fourth)
-	var spots: Array[Vector3] = []
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
 	for j in down + 1:
 		for i in across + 1:
 			var u := float(i) / across
 			var v := float(j) / down
 			spots.append(first.lerp(second, u).lerp(fourth.lerp(third, u), v) + Vector3.DOWN * sag * sin(PI * u) * sin(PI * v))
-	for j in down:
-		for i in across:
-			var a := spots[j * (across + 1) + i]
-			var b := spots[j * (across + 1) + i + 1]
-			var c := spots[(j + 1) * (across + 1) + i + 1]
-			var d := spots[(j + 1) * (across + 1) + i]
-			var normal := (b - a).cross(d - a).normalized()
-			var u0 := wide * i / across
-			var u1 := wide * (i + 1) / across
-			var v0 := -high * j / down
-			var v1 := -high * (j + 1) / down
-			_quad(st, [a, b, c, d], [normal, normal, normal, normal], [Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1), Vector2(u0, v1)])
+			uvs.append(Vector2(wide * u, -high * v))
+			tones.append(CLOTH)
+	_cloth(st, spots, across, uvs, tones, (second - first).cross(fourth - first))
 
 
 ## A tent on the ground at `at`, its ridge along the X of the way it is
@@ -180,83 +391,401 @@ func _sheet(mat: String, corners: Array, sag := 0.0, across := 4, down := 2) -> 
 ## and the two ends are shut, and those stop a look and a shot. Returns where
 ## it stands, for whatever goes into it: X along the ridge, +Z out of the
 ## open side, the origin on the ground in its middle.
+##
+## A ridge tent of proofed canvas: a ridge pole on two uprights, the roof
+## drawn out over a pole at every seam of the wall and roped down to pegs,
+## the walls hanging from its eaves into the sand. Nothing of it is straight:
+## the roof hangs between its poles and the walls belly.
 func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transform3D:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
 	var half := size.x * 0.5
 	var deep := size.z * 0.5
 	var eaves := 1.8
-	var over := 0.3
-	# The roof: a panel either side of the ridge, hanging a little between poles.
+	var over := 0.2
+	var own := _dice(at, 1)
+	var st := _tool(CANVAS, SLIGHT, xf.origin)
+	# An odd number of bays: no pole in the middle of the open side.
+	var bays := 2 * maxi(0, roundi((size.x / 2.6 - 1.0) * 0.5)) + 1
+	var bay := size.x / bays
+	var slope := Vector2(deep, size.y - eaves).length()
+	# How high the roof hangs over a spot of the floor: taut from the ridge
+	# to every pole, and hanging in between.
+	var roof := func(x: float, z: float) -> float:
+		var s := absf(z) / deep
+		var between := pow(sin(PI * fposmod((x + half) / bay, 1.0)), 2.0) if absf(x) < half else 0.0
+		var fall := (sqrt(s * s + 0.0012) - 0.0346) / 0.966
+		return size.y - (size.y - eaves) * fall - (0.035 + 0.075 * between) * sin(PI * minf(s, 1.0)) - 0.07 * between * s * s
+	# Puts a spot of the tent where it stands, and on the ground where it
+	# hangs that low.
+	var stood := func(x: float, y: float, z: float) -> Vector3:
+		var spot := xf * Vector3(x, y, z)
+		return on_ground(spot, y) if y < 0.12 else spot
+
+	# The roof, from the eave at the back over the ridge to the eave in front.
+	var columns := PackedFloat32Array([-half - 0.14])
+	for i in bays * 6 + 1:
+		columns.append(-half + bay * i / 6.0)
+	columns.append(half + 0.14)
+	var rows := PackedFloat32Array([-1.0 - over / deep, -1.0, -0.82, -0.58, -0.32, -0.1, 0.0, 0.1, 0.32, 0.58, 0.82, 1.0, 1.0 + over / deep])
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	var fade := PackedFloat32Array()
+	for x in columns:
+		fade.append(own.randf_range(-0.07, 0.07))
+	for s in rows:
+		for i in columns.size():
+			var x := columns[i]
+			spots.append(xf * Vector3(x, roof.call(x, s * deep), -s * deep))
+			uvs.append(Vector2(x + 50.0, s * slope))
+			tones.append(Color(0.1 * absf(s) * absf(s), 0.62 - 0.12 * absf(s) + fade[i], 1.0, 1.0))
+	_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3.UP)
+	# A band doubled over the ridge, and a patch or two where it was mended.
 	for side: float in [-1.0, 1.0]:
-		var ridge_a := xf * Vector3(-half - over, size.y, 0)
-		var ridge_b := xf * Vector3(half + over, size.y, 0)
-		var eave_a := xf * Vector3(-half - over, eaves - 0.12, side * (deep + over))
-		var eave_b := xf * Vector3(half + over, eaves - 0.12, side * (deep + over))
-		_sheet(CANVAS, [eave_a, eave_b, ridge_b, ridge_a] if side > 0.0 else [eave_b, eave_a, ridge_a, ridge_b], 0.07, 6, 3)
-	# The ends, and the back.
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for s: float in [0.0, 0.035, 0.07]:
+			for x in columns:
+				spots.append(xf * Vector3(x, roof.call(x, s * deep) + 0.006, s * deep * side))
+				uvs.append(Vector2(s * slope + 7.3, x))
+				tones.append(Color(0.0, 0.42, 1.0, 0.3))
+		_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3.UP)
+	for patch in 3:
+		var x := own.randf_range(-half * 0.8, half * 0.8)
+		var s := own.randf_range(0.2, 0.8) * (1.0 if patch < 2 else -1.0)
+		var wide := own.randf_range(0.2, 0.4)
+		var long := own.randf_range(0.18, 0.3)
+		var shade := own.randf_range(0.3, 0.42) if patch != 1 else 0.72
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for j in 3:
+			for i in 3:
+				var px := x + wide * (i - 1)
+				var pz := (s + long / slope * (j - 1)) * deep
+				spots.append(xf * Vector3(px, roof.call(px, pz) + 0.005, pz))
+				uvs.append(Vector2(pz + 3.1 * patch, px))
+				tones.append(Color(0.0, shade, 1.0, 0.25))
+		_cloth(st, spots, 2, uvs, tones, Vector3.UP)
+
+	# What hangs from the eaves: the valance, and under it the wall.
+	for side: float in [-1.0, 1.0]:
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for drop: float in [0.0, 0.08, 0.17]:
+			for x in columns:
+				var z := (deep + over + drop * 0.12) * side
+				spots.append(xf * Vector3(x, roof.call(x, (deep + over) * side) - drop, z))
+				uvs.append(Vector2(x + 50.0, slope * (1.0 + over / deep) + drop))
+				tones.append(Color(0.1, 0.5, 1.0 - drop * 0.9, 1.0))
+		_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3(0, 0, side))
+	# The back, a length of wall to every bay, laced to the next at a pole.
+	var heights := PackedFloat32Array([1.0, 0.85, 0.55, 0.25, 0.06, 0.0])
+	spots.clear()
+	uvs.clear()
+	tones.clear()
+	var belly := PackedFloat32Array()
+	for i in bays:
+		belly.append(own.randf_range(-0.05, 0.06))
+	var folds := own.randf() * 6.0
+	for h in heights:
+		for i in bays * 4 + 1:
+			var x := -half + bay * i / 4.0
+			var top: float = roof.call(x, -deep) - 0.015
+			var out := belly[mini(floori(i / 4.0), bays - 1)] * sin(PI * fposmod(i / 4.0, 1.0)) * sin(PI * h) + 0.014 * sin(x * 7.3 + folds) * (1.0 - h) * (1.0 - h)
+			out += 0.02 if h < 0.1 else 0.0
+			spots.append(stood.call(x, h * top, -deep - out))
+			uvs.append(Vector2(x + 20.0, -h * top))
+			tones.append(Color(pow(clampf(1.0 - h * top / 0.34, 0.0, 1.0), 2.0), 0.47 + 0.05 * sin(i * 1.7), 1.0 - 0.3 * smoothstep(0.8, 1.0, h), 1.0))
+	# The sod cloth: what lies on the ground along its foot, with sand on it.
+	for i in bays * 4 + 1:
+		var x := -half + bay * i / 4.0
+		spots.append(stood.call(x, 0.004, -deep - 0.13 - 0.03 * sin(i * 2.3)))
+		uvs.append(Vector2(x + 20.0, 0.12))
+		tones.append(Color(1.0, 0.5, 1.0, 0.0))
+	_cloth(st, spots, bays * 4, uvs, tones, Vector3(0, 0, -1))
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, eaves * 0.5, -deep)), Vector3(size.x, eaves, 0.06), "soft")
+	# The ends: each in two halves that lap over one another under the ridge
+	# and are held shut there with toggles.
 	for end: float in [-1.0, 1.0]:
 		var x := end * half
-		_sheet(CANVAS, [xf * Vector3(x, 0, -deep * end), xf * Vector3(x, 0, deep * end), xf * Vector3(x, eaves, deep * end), xf * Vector3(x, eaves, -deep * end)], 0.0, 3, 1)
-		var st := _tool(CANVAS, SLIGHT, xf * Vector3(x, eaves, 0))
-		var out := xf.basis * Vector3(end, 0, 0)
-		_tri(st, [xf * Vector3(x, eaves, -deep * end), xf * Vector3(x, eaves, deep * end), xf * Vector3(x, size.y, 0)], [out, out, out], [Vector2(0, 0), Vector2(size.z, 0), Vector2(deep, -(size.y - eaves))])
+		for part: float in [-1.0, 1.0]:
+			spots.clear()
+			uvs.clear()
+			tones.clear()
+			var swell := own.randf_range(-0.03, 0.05)
+			var across := PackedFloat32Array([1.0, 0.75, 0.5, 0.25, 0.0, -0.035] if part < 0.0 else [1.0, 0.75, 0.5, 0.25, 0.0])
+			for h in heights:
+				for share in across:
+					var z := share * deep * part
+					var top: float = roof.call(x, z) - 0.015
+					var out := swell * sin(PI * clampf(share, 0.0, 1.0)) * sin(PI * h) + 0.012 * sin(z * 8.1 + folds) * (1.0 - h) * (1.0 - h)
+					out += (0.02 if h < 0.1 else 0.0) + (0.016 if part < 0.0 and share < 0.1 else 0.0)
+					spots.append(stood.call(x + end * out, h * top, z))
+					uvs.append(Vector2(z + 31.0 + end, -h * top))
+					tones.append(Color(pow(clampf(1.0 - h * top / 0.34, 0.0, 1.0), 2.0), 0.47 + 0.04 * part, 1.0 - 0.25 * smoothstep(0.8, 1.0, h), 1.0))
+			for share in across:
+				var z := share * deep * part
+				spots.append(stood.call(x + end * 0.14, 0.004, z))
+				uvs.append(Vector2(z + 31.0 + end, 0.12))
+				tones.append(Color(1.0, 0.5, 1.0, 0.0))
+			_cloth(st, spots, across.size() - 1, uvs, tones, Vector3(end, 0, 0))
+		for toggle in 6:
+			var y := 0.3 + toggle * 0.42
+			_box("wood", xf * Transform3D(Basis(Vector3.RIGHT, 0.3), Vector3(x + end * 0.03, y, -0.02)), Vector3(0.022, 0.018, 0.07), SLIGHT)
 		_collide_box(xf * Transform3D(Basis(), Vector3(x, eaves * 0.5, 0)), Vector3(0.06, eaves, size.z), "soft")
-	_sheet(CANVAS, [xf * Vector3(half, 0, -deep), xf * Vector3(-half, 0, -deep), xf * Vector3(-half, eaves, -deep), xf * Vector3(half, eaves, -deep)], 0.0, 6, 1)
-	_collide_box(xf * Transform3D(Basis(), Vector3(0, eaves * 0.5, -deep)), Vector3(size.x, eaves, 0.06), "soft")
-	# What the front was rolled up into, under its eave.
-	rod(CANVAS, xf * Vector3(-half, eaves - 0.1, deep), xf * Vector3(half, eaves - 0.1, deep), 0.09, SLIGHT, 8)
-	# Poles: three under the ridge and one at every corner and half-way, with
-	# the ridge pole on them, and a guy from every pole of the sides.
-	for x: float in [-half, 0.0, half]:
-		# No pole under the middle of the ridge: that is where a table stands.
-		if x != 0.0:
-			cylinder("wood", xf * Vector3(x, 0, 0), 0.05, size.y, SLIGHT, Vector3.ZERO, -1.0, 6)
+
+	# The front is rolled up under its eave and tied there with tapes; at
+	# either end a width of it hangs, gathered and tied back to the pole.
+	var ties := bays * 2
+	spots.clear()
+	uvs.clear()
+	tones.clear()
+	for i in ties * 4 + 1:
+		var x := -half + 0.04 + (size.x - 0.08) * i / (ties * 4.0)
+		var slack := pow(sin(PI * fposmod(i / 4.0, 1.0)), 2.0)
+		var thick := 0.082 * (1.0 + 0.2 * slack + own.randf_range(-0.08, 0.08))
+		var middle := Vector3(x, roof.call(x, deep) - 0.22 - 0.045 * slack, deep + 0.02)
+		for s in 9:
+			var turn := TAU * s / 8.0
+			spots.append(xf * (middle + Vector3(0, sin(turn) * thick, -cos(turn) * thick * 0.9)))
+			uvs.append(Vector2(x + 20.0, s * 0.055 + 1.0))
+			tones.append(Color(0.05, 0.46 + 0.05 * sin(i * 0.9), 0.68 + 0.2 * sin(turn), 0.0))
+	_skin(st, spots, 8, uvs, tones, 3)
+	for i in ties + 1:
+		var x := -half + 0.05 + (size.x - 0.1) * i / ties
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for edge: float in [-0.02, 0.02]:
+			for s in 9:
+				var turn := TAU * s / 8.0
+				spots.append(xf * Vector3(x + edge, roof.call(x, deep) - 0.2 + sin(turn) * 0.105, deep + 0.02 - cos(turn) * 0.088))
+				uvs.append(Vector2(0.3 + edge, s * 0.06))
+				tones.append(Color(0.0, 0.9, 0.9, 0.0))
+		_skin(st, spots, 8, uvs, tones)
+	for end: float in [-1.0, 1.0]:
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		var top: float = roof.call(end * (half - 0.2), deep) - 0.16
+		# From the eave down: how high, how wide along the wall, how thick,
+		# and how far it is drawn to the pole.
+		for ring: Vector4 in [Vector4(top, 0.3, 0.03, 0.0), Vector4(1.45, 0.17, 0.05, 0.08), Vector4(1.12, 0.06, 0.05, 0.16), Vector4(0.8, 0.13, 0.07, 0.12), Vector4(0.42, 0.2, 0.08, 0.06), Vector4(0.2, 0.24, 0.07, 0.04)]:
+			for s in 13:
+				var turn := TAU * s / 12.0
+				var fold := 1.0 + 0.3 * sin(turn * 4.0 + ring.x * 3.0)
+				spots.append(xf * Vector3(end * (half - 0.3 + ring.w) - cos(turn) * ring.y * fold * end, ring.x, deep - 0.03 + sin(turn) * ring.z * fold))
+				uvs.append(Vector2(s * 0.08 + 40.0, -ring.x))
+				tones.append(Color(pow(clampf(1.0 - ring.x / 0.4, 0.0, 1.0), 2.0), 0.5, 0.75 + 0.25 * sin(turn * 4.0 + ring.x * 3.0), 0.15))
+		if end > 0.0:
+			# Seen from above the rings run the other way round at this end.
+			var turned := PackedVector3Array()
+			for k in spots.size():
+				turned.append(spots[k - k % 13 + 12 - k % 13])
+			spots = turned
+		_skin(st, spots, 12, uvs, tones)
+		_rope(xf * Vector3(end * (half - 0.14), 1.12, deep - 0.02), xf * Vector3(end * (half - 0.03), 1.2, deep), 0.0, 0.005)
+
+	# Its poles: two under the ridge with the ridge pole on them, and one
+	# under the eave at every seam of the wall.
+	for end: float in [-1.0, 1.0]:
+		_pole(xf * Vector3(end * (half - 0.07), 0, 0), xf * Vector3(end * (half - 0.07), size.y - 0.07, 0), 0.042, 0.036)
+	_pole(xf * Vector3(-half - 0.1, size.y - 0.045, 0), xf * Vector3(half + 0.1, size.y - 0.045, 0), 0.032)
+	for i in bays + 1:
+		var x := -half + bay * i
+		var inset := 0.05 if i == 0 else (-0.05 if i == bays else 0.0)
 		for side: float in [-1.0, 1.0]:
-			var head := xf * Vector3(x, eaves, side * deep)
-			cylinder("wood", xf * Vector3(x, 0, side * deep), 0.035, eaves, SLIGHT, Vector3.ZERO, -1.0, 6)
-			var peg := xf * Vector3(x * 1.08, 0, side * (deep + 1.7))
-			rod(SACKING, head, on_ground(peg, 0.05), 0.008, SLIGHT, 4)
-			cylinder("wood", on_ground(peg, -0.05), 0.02, 0.3, SLIGHT, Vector3(side * 20, 0, 0), -1.0, 5)
-	rod("wood", xf * Vector3(-half - over, size.y - 0.03, 0), xf * Vector3(half + over, size.y - 0.03, 0), 0.04, SLIGHT, 6)
+			var head: float = roof.call(x, deep)
+			_pole(xf * Vector3(x + inset, 0, side * (deep - 0.04)), xf * Vector3(x + inset, head + 0.05, side * (deep - 0.04)), 0.028, 0.022)
+			# The rope from the eave over that pole to its peg, and the
+			# cloth the eave is doubled with where the rope pulls on it.
+			var eave := Vector3(x, roof.call(x, deep + over) - 0.01, side * (deep + over))
+			var splay := (-0.9 if i == 0 else (0.9 if i == bays else own.randf_range(-0.12, 0.12)))
+			_guy(xf * eave, xf * Vector3(x + splay, 0, side * (deep + over + own.randf_range(1.35, 1.6))))
+			spots.clear()
+			uvs.clear()
+			tones.clear()
+			for j in 2:
+				for k: float in [-0.13, 0.0, 0.13]:
+					var pz := (deep + over - 0.24 * j * (1.0 - absf(k) * 5.0)) * side
+					spots.append(xf * Vector3(x + k, roof.call(x + k, pz) + 0.005, pz))
+					uvs.append(Vector2(k + 9.0, j * 0.2))
+					tones.append(Color(0.1, 0.36, 1.0, 0.2))
+			_cloth(st, spots, 2, uvs, tones, Vector3.UP)
+	# Two ropes from either end of the ridge, against the wind.
+	for end: float in [-1.0, 1.0]:
+		for side: float in [-1.0, 1.0]:
+			_guy(xf * Vector3(end * (half + 0.1), size.y - 0.05, 0), xf * Vector3(end * (half + own.randf_range(1.9, 2.3)), 0, side * own.randf_range(1.2, 1.6)))
 	casts_shade(xf * Vector3(0, size.y * 0.75, 0), Vector3(half + 0.4, 0.9, half + 0.4) if absf(fposmod(yaw_deg, 180.0) - 90.0) < 45.0 else Vector3(half + 0.4, 0.9, deep + 0.4))
 	cover("earth", at, maxf(half, deep) + 1.6, 0.9)
 	return xf
 
 
 ## A shelter half pitched low over two poles, for two men to sleep under:
-## its ridge along the X of the way it is turned.
+## its ridge along the X of the way it is turned. Two sheets buttoned
+## together along the ridge, pegged down along their hems, shut at one end;
+## inside, a groundsheet with a bedroll and a pack on it.
 func bivouac(at: Vector2, yaw_deg: float) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
+	var own := _dice(at, 2)
+	var st := _tool(CANVAS, SLIGHT, xf.origin)
+	var long := 1.1
+	var wide := 0.95
+	var ridge := func(x: float) -> float:
+		return 1.05 - 0.05 * (1.0 - x * x / (long * long))
+	var hem := func(x: float) -> float:
+		return 0.015 + 0.05 * pow(sin(PI * (x / long * 0.5 + 0.5) * 2.0), 2.0)
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	var shade := own.randf_range(0.42, 0.58)
 	for side: float in [-1.0, 1.0]:
-		var corners := [xf * Vector3(-1.1, 0.02, side * 0.95), xf * Vector3(1.1, 0.02, side * 0.95), xf * Vector3(1.1, 1.05, 0), xf * Vector3(-1.1, 1.05, 0)]
-		if side < 0.0:
-			corners = [corners[1], corners[0], corners[3], corners[2]]
-		_sheet(CANVAS, corners, 0.03, 2, 1)
-	for x: float in [-1.1, 1.1]:
-		cylinder("wood", xf * Vector3(x, 0, 0), 0.025, 1.08, SLIGHT, Vector3.ZERO, -1.0, 5)
-		rod(SACKING, xf * Vector3(x, 1.05, 0), xf * Vector3(x * 2.1, 0.05, 0), 0.006, SLIGHT, 4)
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for j in 5:
+			var v := j / 4.0
+			for i in 9:
+				var x := -long + 2.0 * long * i / 8.0
+				var low: float = hem.call(x)
+				var y: float = lerpf(ridge.call(x), low, v) - 0.045 * sin(PI * v)
+				var spot := xf * Vector3(x, y, side * wide * v * (1.0 - 0.04 * sin(PI * (x / long * 0.5 + 0.5) * 2.0) * v))
+				spots.append(on_ground(spot, y) if j == 4 else spot)
+				uvs.append(Vector2(x + 3.0 + side, v * 1.4))
+				tones.append(Color(pow(clampf(v * 3.0 - 2.0, 0.0, 1.0), 2.0), shade + 0.04 * side, 1.0, 1.0))
+		_cloth(st, spots, 8, uvs, tones, Vector3(0, 0.6, side))
+		for x: float in [-long, 0.0, long]:
+			_peg(on_ground(xf * Vector3(x, 0, side * (wide + 0.03)), 0.08), Vector3(0, 0, -side), 0.26)
+	# The end that is shut: two flaps, one over the other.
+	for side: float in [-1.0, 1.0]:
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for j in 4:
+			var v := j / 3.0
+			for i in 3:
+				var u := i / 2.0
+				var z := side * wide * v * (1.0 - u) - side * 0.05 * u
+				var spot := xf * Vector3(-long - 0.02 - 0.012 * side * u, lerpf(ridge.call(-long), 0.015, v), z)
+				spots.append(on_ground(spot, 0.015) if j == 3 else spot)
+				uvs.append(Vector2(z + 8.0, v * 1.1))
+				tones.append(Color(pow(clampf(v * 3.0 - 2.0, 0.0, 1.0), 2.0), shade - 0.04, 1.0, 1.0))
+		_cloth(st, spots, 2, uvs, tones, Vector3(-1, 0, 0))
+	# What they sleep on, and what lies on it.
+	spots.clear()
+	uvs.clear()
+	tones.clear()
+	for z: float in [-0.7, 0.0, 0.7]:
+		for x: float in [-1.0, 0.0, 1.25]:
+			spots.append(on_ground(xf * Vector3(x, 0, z), 0.012))
+			uvs.append(Vector2(z + 5.0, x))
+			tones.append(Color(0.75, 0.35, 0.85, 0.0))
+	_cloth(st, spots, 2, uvs, tones, Vector3.UP)
+	_bundle(st, xf * Vector3(-0.72, 0.1, own.randf_range(-0.35, 0.35)), xf.basis * Vector3(0.12, 0, 1.0).normalized(), 0.62, 0.095, Color(0.15, 0.78, 1.0, 0.0))
+	_bundle(st, xf * Vector3(-0.2, 0.13, 0.42), xf.basis * Vector3(1.0, 0, 0.25).normalized(), 0.5, 0.13, Color(0.3, 0.38, 1.0, 0.0))
+	for x: float in [-long, long]:
+		_pole(on_ground(xf * Vector3(x, 0, 0)), xf * Vector3(x, 1.09, 0), 0.022, 0.018, 5)
+		_guy(xf * Vector3(x, 1.06, 0), xf * Vector3(x * 2.15, 0, 0))
 	_collide_box(xf * Transform3D(Basis(), Vector3(0, 0.45, 0)), Vector3(2.2, 0.9, 1.5), "soft")
+
+
+## A roll or a bag of cloth lying at `middle` along `way`: a blanket rolled
+## up and strapped, a pack. `tone` is what the canvas shader is told of it.
+func _bundle(st: SurfaceTool, middle: Vector3, way: Vector3, length: float, radius: float, tone: Color) -> void:
+	var side := Vector3.UP.cross(way).normalized()
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	for ring: Vector2 in [Vector2(-0.5, 0.55), Vector2(-0.44, 0.94), Vector2(-0.15, 1.0), Vector2(0.15, 1.0), Vector2(0.44, 0.94), Vector2(0.5, 0.55)]:
+		for s in 9:
+			var turn := TAU * s / 8.0
+			spots.append(middle + way * ring.x * length + (side * cos(turn) + Vector3.UP * sin(turn) * 0.9) * radius * ring.y)
+			uvs.append(Vector2(ring.x * length + 0.45, s * radius * 0.8))
+			tones.append(Color(tone.r, tone.g, 0.6 + 0.4 * maxf(sin(turn), -0.2), tone.a))
+	_skin(st, spots, 8, uvs, tones, 3)
 
 
 ## A camouflage net over the ground at `at`, `size` long (along the X of the
 ## way it is turned) and deep, `height` up on poles and pegged down along its
 ## long sides. Whoever stands under it stands in the shade.
+##
+## It lies on its poles as a net does: up at every pole, hanging between
+## them, deepest in the middle. Its skirts come down to a peg every few
+## feet and lift off the ground between one peg and the next; at its open
+## ends it hangs over its ropes in a ragged apron.
 func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), Vector3(at.x, 0, at.y))
 	var half := size * 0.5
+	var own := _dice(at, 3)
+	var st := _tool("camo_net", SLIGHT, ground(at.x, at.y))
 	var corner := func(x: float, z: float, lift: float) -> Vector3:
 		var spot := xf * Vector3(x, 0, z)
 		return ground(spot.x, spot.z, lift)
-	_sheet("camo_net", [corner.call(-half.x, half.y, height), corner.call(half.x, half.y, height), corner.call(half.x, -half.y, height), corner.call(-half.x, -half.y, height)], 0.5, 6, 4)
+	# How far under the tops of its poles the net hangs over a spot.
+	var hang := func(x: float, z: float) -> float:
+		var between := pow(sin(PI * absf(x) / half.x), 2.0)
+		var inward := pow(cos(PI * 0.5 * clampf(z / half.y, -1.0, 1.0)), 2.0)
+		return 0.5 * inward * (0.62 + 0.38 * between) + 0.3 * between * (1.0 - inward * 0.6)
+	var pegs := maxi(2, roundi(size.x / 1.7))
+	var across := pegs * 4
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	for j in 7:
+		var z := half.y - size.y * j / 6.0
+		for i in across + 1:
+			var x := -half.x + size.x * i / across
+			spots.append(corner.call(x, z, height - hang.call(x, z) + (own.randf_range(-0.04, 0.04) if j > 0 and j < 6 else 0.0)))
+			uvs.append(Vector2(x, z))
+			tones.append(Color.WHITE)
+	_cloth(st, spots, across, uvs, tones, Vector3.UP)
 	for side: float in [-1.0, 1.0]:
-		var skirt := [corner.call(-half.x, side * (half.y + 2.2), 0.1), corner.call(half.x, side * (half.y + 2.2), 0.1), corner.call(half.x, side * half.y, height), corner.call(-half.x, side * half.y, height)]
-		if side < 0.0:
-			skirt = [skirt[1], skirt[0], skirt[3], skirt[2]]
-		_sheet("camo_net", skirt, 0.25, 6, 2)
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		# How far out each peg stands; between two pegs the hem is drawn in
+		# and lifts off the ground.
+		var out := PackedFloat32Array()
+		for peg in pegs + 1:
+			out.append(2.2 + own.randf_range(-0.3, 0.2))
+		for j in 5:
+			var v := j / 4.0
+			for i in across + 1:
+				var x := -half.x + size.x * i / across
+				var lift := pow(sin(PI * fposmod(i / 4.0, 1.0)), 2.0)
+				var reach := lerpf(out[floori(i / 4.0)], out[mini(floori(i / 4.0) + 1, pegs)], fposmod(i / 4.0, 1.0)) - 0.3 * lift
+				var top: Vector3 = corner.call(x, side * half.y, height - hang.call(x, side * half.y))
+				var foot: Vector3 = corner.call(x, side * (half.y + reach), 0.05 + 0.3 * lift)
+				spots.append(top.lerp(foot, v) + Vector3.DOWN * 0.28 * sin(PI * v))
+				uvs.append(Vector2(x, side * (half.y + v * 2.6)))
+				tones.append(Color.WHITE)
+		_cloth(st, spots, across, uvs, tones, Vector3(0, 0.7, side))
+		for peg in pegs + 1:
+			var x := -half.x + size.x * peg / pegs
+			_peg(corner.call(x, side * (half.y + out[peg] + 0.03), 0.08), xf.basis * Vector3(0, 0, -side), 0.3)
+	# The apron over either open end.
+	for end: float in [-1.0, 1.0]:
+		spots.clear()
+		uvs.clear()
+		tones.clear()
+		for j in 3:
+			for i in 9:
+				var z := -half.y + size.y * i / 8.0
+				var drop := (0.32 + 0.3 * absf(sin(i * 2.4 + end))) * j * 0.5
+				spots.append(corner.call(end * (half.x + 0.1 * j), z, height - hang.call(end * half.x, z) - drop))
+				uvs.append(Vector2(end * (half.x + drop), z))
+				tones.append(Color.WHITE)
+		_cloth(st, spots, 8, uvs, tones, Vector3(end, 0.3, 0))
 	for x: float in [-half.x, 0.0, half.x]:
 		for z: float in [-half.y, half.y]:
 			var foot: Vector3 = corner.call(x, z, 0.0)
-			cylinder("wood", foot, 0.04, height + 0.05, SLIGHT, Vector3.ZERO, -1.0, 6)
+			_pole(foot, foot + Vector3.UP * (height + 0.03), 0.04, 0.032)
+			cylinder("wood", foot + Vector3.UP * (height - 0.01), 0.13, 0.03, SLIGHT, Vector3.ZERO, -1.0, 8)
+			if x != 0.0:
+				_guy(foot + Vector3.UP * height, corner.call(x + signf(x) * 2.1, z + signf(z) * 0.5, 0.0))
 	var middle: Vector3 = corner.call(0.0, 0.0, height - 0.3)
 	var reach := maxf(half.x, half.y) if absf(fposmod(yaw_deg, 90.0) - 45.0) < 20.0 else 0.0
 	casts_shade(middle, Vector3(maxf(half.x, reach) + 0.5, 0.7, maxf(half.y, reach) + 1.2) if absf(fposmod(yaw_deg, 180.0) - 90.0) > 45.0 else Vector3(maxf(half.y, reach) + 1.2, 0.7, maxf(half.x, reach) + 0.5))
@@ -265,46 +794,128 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 # --- Wire and barriers ---------------------------------------------------------------
 
 
+## A strand of barbed wire from `from` to `to` that hangs `sag` in its
+## middle: two ribbons through one another, with the picture of a strand out
+## of the concertina on them (see _concertina() in tools/gen_foliage.gd).
+func _strand(from: Vector3, to: Vector3, sag := 0.0) -> void:
+	var length := from.distance_to(to)
+	var pieces := maxi(1, ceili(length / 0.3))
+	var way := (to - from) / length
+	var flat := way.cross(Vector3.UP).normalized() if absf(way.y) < 0.95 else Vector3.RIGHT
+	var up := flat.cross(way)
+	var st := _trim("wire", (from + to) * 0.5)
+	for piece in pieces:
+		var t0 := float(piece) / pieces
+		var t1 := float(piece + 1) / pieces
+		var a := from.lerp(to, t0) + Vector3.DOWN * sag * sin(PI * t0)
+		var b := from.lerp(to, t1) + Vector3.DOWN * sag * sin(PI * t1)
+		# Up one wire of the picture and back down it.
+		var u0 := 0.05 if piece % 2 == 0 else 0.45
+		var u1 := 0.45 if piece % 2 == 0 else 0.05
+		for side: Vector3 in [flat, up]:
+			var off := side * 0.016
+			var faces := way.cross(side)
+			_quad(st, [a - off, b - off, b + off, a + off], [faces, faces, faces, faces],
+				[Vector2(u0 + 0.02, u0 - 0.02), Vector2(u1 + 0.02, u1 - 0.02), Vector2(u1 - 0.02, u1 + 0.02), Vector2(u0 - 0.02, u0 + 0.02)])
+
+
+## An angle-iron picket driven in at `at`, `height` out of the ground,
+## leaning as `lean_deg` says.
+func _iron_picket(at: Vector3, height: float, lean_deg: Vector3) -> Transform3D:
+	var xf := Transform3D(Basis.from_euler(lean_deg * PI / 180.0), at + Vector3.DOWN * 0.2)
+	_box("steel", xf * Transform3D(Basis(), Vector3(0.016, (height + 0.2) * 0.5, 0)), Vector3(0.038, height + 0.2, 0.005), SLIGHT)
+	_box("steel", xf * Transform3D(Basis(), Vector3(0, (height + 0.2) * 0.5, 0.016)), Vector3(0.005, height + 0.2, 0.038), SLIGHT)
+	return xf * Transform3D(Basis(), Vector3(0, height + 0.2, 0))
+
+
 ## A fence of barbed wire along `path`: posts with five strands between
 ## them. It shuts a level in, and is as solid to the game as a wall: there
 ## is nothing beyond it to shoot at.
 func wire_fence(path: Array, height := 1.7) -> void:
 	var way := curve(path, 3.0)
+	var heads: Array[Transform3D] = []
 	for i in way.size():
 		var foot := ground(way[i].x, way[i].y, -0.3)
-		cylinder("wood", foot, 0.05, height + 0.4, SLIGHT, Vector3(_clutter_rng.randf_range(-3, 3), 0, _clutter_rng.randf_range(-3, 3)), -1.0, 6)
+		var lean := Vector3(_clutter_rng.randf_range(-3, 3), 0, _clutter_rng.randf_range(-3, 3))
+		var frame := Transform3D(Basis.from_euler(lean * PI / 180.0), foot)
+		_pole(foot, frame * Vector3(0, height + 0.4, 0), 0.055, 0.045)
+		heads.append(frame)
 		if i == 0:
 			continue
 		var before := ground(way[i - 1].x, way[i - 1].y)
 		var here := ground(way[i].x, way[i].y)
 		for strand in 5:
-			var lift := Vector3.UP * (0.25 + strand * (height - 0.3) / 4.0)
-			beam("dark_steel", before + lift, here + lift, 0.012, SLIGHT)
+			var lift := 0.55 + strand * (height - 0.3) / 4.0
+			_strand(heads[i - 1] * Vector3(0, lift, 0), frame * Vector3(0, lift, 0), 0.03 + 0.01 * strand)
+		# Two that cross, to keep the others apart.
+		_strand(heads[i - 1] * Vector3(0, 0.55, 0), frame * Vector3(0, height + 0.25, 0))
+		_strand(heads[i - 1] * Vector3(0, height + 0.25, 0), frame * Vector3(0, 0.55, 0))
 		var middle := (before + here) * 0.5
 		_collide_box(Transform3D(Basis.looking_at(Vector3(here.x - before.x, 0, here.z - before.z)), middle + Vector3.UP * (height * 0.5 + 0.3)), Vector3(0.12, height + 2.2, before.distance_to(here) + 0.1), "metal")
 
 
 ## Coils of barbed wire from `from` to `to`, chest high: nobody walks through
 ## them, but a look and a shot go over.
+##
+## Concertina: one coil of spring steel a yard across, pulled out along the
+## ground between pickets and tied to a strand that runs along their tops.
+## It hangs between one picket and the next, and no two turns of it stand
+## alike.
 func wire_coil(from: Vector2, to: Vector2) -> void:
 	var length := from.distance_to(to)
 	var way := (to - from) / length
 	var along := Vector3(way.x, 0, way.y)
 	var across := Vector3.UP.cross(along)
-	var st := _tool("wire", SLIGHT, ground(from.x, from.y))
 	var rings := int(length / 0.42)
+	# The dice fall as they always did: two for every turn, two for a picket.
+	var turns: Array[Vector2] = []
 	for i in rings:
-		var at := from + way * length * (i + 0.5) / rings
-		var middle := ground(at.x, at.y, 0.5) + along * _clutter_rng.randf_range(-0.08, 0.08)
-		var lean := Basis(Vector3.UP, _clutter_rng.randf_range(-0.3, 0.3))
-		for s in 7:
-			var a := lean * (across * cos(TAU * s / 7.0) + Vector3.UP * sin(TAU * s / 7.0)) * 0.48
-			var b := lean * (across * cos(TAU * (s + 1) / 7.0) + Vector3.UP * sin(TAU * (s + 1) / 7.0)) * 0.48
-			var out := (a + b).normalized()
-			_quad(st, [middle + a - along * 0.012, middle + b - along * 0.012, middle + b + along * 0.012, middle + a + along * 0.012], [out, out, out, out], [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
-	for stake in maxi(2, int(length / 3.0) + 1):
-		var at := from + way * length * stake / maxf(int(length / 3.0), 1.0)
-		cylinder("dark_steel", ground(at.x, at.y, -0.2), 0.02, 1.3, SLIGHT, Vector3(_clutter_rng.randf_range(-6, 6), 0, _clutter_rng.randf_range(-6, 6)), -1.0, 5)
+		turns.append(Vector2(_clutter_rng.randf_range(-0.08, 0.08), _clutter_rng.randf_range(-0.3, 0.3)))
+	var pickets := maxi(2, int(length / 3.0) + 1)
+	var gap := length / maxf(int(length / 3.0), 1.0)
+	var heads: Array[Vector3] = []
+	for stake in pickets:
+		var at := from + way * gap * stake
+		var lean := Vector3(_clutter_rng.randf_range(-6, 6), 0, _clutter_rng.randf_range(-6, 6))
+		if gap * stake > length + 0.01:
+			continue
+		heads.append(_iron_picket(ground(at.x, at.y), 1.1, lean).origin)
+	for i in heads.size() - 1:
+		_strand(heads[i] + Vector3.DOWN * 0.08, heads[i + 1] + Vector3.DOWN * 0.08, 0.07)
+	var around := 10
+	var before := PackedVector3Array()
+	var run_before := 0.0
+	# Where the coil lies bunched and where it is pulled out, and how it was
+	# turned as it was laid: by where it lies, so that two runs do not match.
+	var twist := fposmod(from.x * 0.37 + from.y * 0.61, 1.0)
+	var paid := 0.0
+	var paid_before := 0.0
+	for i in rings + 2:
+		var run := clampf((i - 0.5) / rings, 0.0, 1.0) * length
+		var turn := turns[clampi(i - 1, 0, rings - 1)]
+		var at := from + way * run
+		# Slack between two pickets: lower there, and spread wider.
+		var slack := pow(sin(PI * fposmod(run / gap, 1.0)), 2.0)
+		var high := 0.47 * (1.0 + turn.x) * (1.0 - 0.13 * slack)
+		var wide := 0.45 * (1.0 - turn.x * 0.5) * (1.0 + 0.1 * slack)
+		var middle := ground(at.x, at.y, high * 0.97) + across * turn.y * 0.2
+		var ring := PackedVector3Array()
+		for s in around + 1:
+			var angle := TAU * s / around
+			ring.append(middle + across * cos(angle) * wide + Vector3.UP * sin(angle) * high)
+		paid += (run - run_before) / 0.566 * (1.0 + turn.y * 1.6)
+		if i > 0:
+			var st := _tool("wire", SLIGHT, middle)
+			for s in around:
+				var u0 := 5.0 * s / around + twist
+				var u1 := 5.0 * (s + 1) / around + twist
+				var out0 := (across * cos(TAU * s / around) + Vector3.UP * sin(TAU * s / around))
+				var out1 := (across * cos(TAU * (s + 1) / around) + Vector3.UP * sin(TAU * (s + 1) / around))
+				_quad(st, [before[s], before[s + 1], ring[s + 1], ring[s]], [out0, out1, out1, out0],
+					[Vector2(u0, paid_before), Vector2(u1, paid_before), Vector2(u1, paid), Vector2(u0, paid)])
+		before = ring
+		run_before = run
+		paid_before = paid
 	var low := minf(ground_height(from.x, from.y), ground_height(to.x, to.y)) - 0.4
 	var high := maxf(ground_height(from.x, from.y), ground_height(to.x, to.y)) + 1.15
 	var half := (from + to) * 0.5

@@ -1,14 +1,20 @@
 [gd_resource type="ShaderMaterial" format=3]
 
-[ext_resource type="Shader" path="res://shaders/foliage.gdshader" id="shader"]
-[ext_resource type="Texture2D" path="res://assets/foliage/marram.png" id="leaf"]
+[ext_resource type="Shader" path="res://shaders/grass.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/foliage/marram_blades.png" id="blades"]
+[ext_resource type="Texture2D" path="res://assets/foliage/marram_blades_n.png" id="blades_n"]
 
 [resource]
 shader = ExtResource("shader")
-shader_parameter/leaf_tex = ExtResource("leaf")
-shader_parameter/tint = Color(0.62, 0.6, 0.42, 1)
-shader_parameter/cut_near = 0.45
-shader_parameter/cut_far = 0.12
-shader_parameter/sway = 0.05
-shader_parameter/through = 0.45
-shader_parameter/roughness = 0.9
+shader_parameter/blades_tex = ExtResource("blades")
+shader_parameter/blades_normal = ExtResource("blades_n")
+shader_parameter/tint = Color(1, 1, 1, 1)
+shader_parameter/straw_tint = Color(0.9, 0.84, 0.66, 1)
+shader_parameter/cut_near = 0.42
+shader_parameter/cut_far = 0.14
+shader_parameter/fade_from = 62.0
+shader_parameter/fade_to = 84.0
+shader_parameter/wind = Vector2(0.12, 1)
+shader_parameter/sway = 0.1
+shader_parameter/through = 0.35
+shader_parameter/roughness = 0.8
