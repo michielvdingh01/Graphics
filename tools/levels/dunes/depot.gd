@@ -987,7 +987,8 @@ func wall_tufts(from: Vector2, to: Vector2, out: Vector2, every := 5.0, reach :=
 	while run < length:
 		for one in _depot_rng.randi_range(1, 3):
 			var at := from.lerp(to, clampf((run + _depot_rng.randf_range(-0.7, 0.7)) / length, 0.0, 1.0)) + out * _depot_rng.randf_range(0.25, reach)
-			_clump("marram", at, _depot_rng.randf_range(0.45, 0.95), _depot_rng.randi())
+			var size := _depot_rng.randf_range(0.6, 1.25)
+			marram_clump(at, size * 0.6, _depot_rng.randi())
 		run += every * _depot_rng.randf_range(0.5, 1.7)
 
 

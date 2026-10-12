@@ -1238,6 +1238,13 @@ func marram(area: Rect2, spacing: float, gaps := 0.0) -> void:
 	_marram.append({"area": area, "spacing": spacing, "gaps": gaps})
 
 
+## One clump of marram by itself at `at`, `size` times a clump that stands a
+## metre high: at the foot of a wall, beside a post. `seed` makes it this
+## clump and no other. It is stood with the rest, see _stand_marram().
+func marram_clump(at: Vector2, size: float, seed: int) -> void:
+	_clumps.append({"at": at, "size": size, "seed": seed})
+
+
 ## Stands the marram that was asked for, now that the land has been read:
 ## where it grows depends on how the land lies. Each clump is thrown with
 ## dice of its own kind, whether it comes to stand or not.
