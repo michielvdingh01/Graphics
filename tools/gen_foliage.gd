@@ -10,6 +10,7 @@ extends SceneTree
 ##   grass      a tuft of marram, blades fanning up from the foot of the card
 ##   leaves     a spray of thorn scrub, narrow leaves and a few berries
 ##   net        a camouflage net: cord with scrim knotted into it; it tiles
+##   concertina a coil of barbed wire, unrolled; it tiles
 ##   chainlink  wire mesh; it tiles
 ##   treeline   the edge of a pine wood from afar; it tiles from left to right
 ##   ruts       the two ruts of a track; it tiles from top to bottom
@@ -132,23 +133,102 @@ func _leaves() -> void:
 					_blade(from + Vector2(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * size * 0.012, Vector2.RIGHT, size * 0.008, size * 0.008, Color(0.82, 0.38, 0.05).darkened(_rng.randf() * 0.3))
 
 
-## A camouflage net: a mesh of cord, with strips of scrim knotted into it in
-## three colours that leave holes between them. It tiles.
+## A camouflage net: a mesh of knotted cord, garnished with strips of scrim
+## that were threaded through it by hand, a foot or so long and every one a
+## little different. The strips lie in drifts of one colour, the way the
+## pattern was laid out, and leave holes where the garnish has thinned. Two
+## metres of net; it tiles.
 func _net() -> void:
 	var size := _image.get_width()
-	var patches := _tiling(0.012, 2)
-	var shades := _tiling(0.02, 1)
-	var holes := _tiling(0.05, 3)
-	var scrim: Array[Color] = [Color(0.3, 0.34, 0.18), Color(0.42, 0.36, 0.22), Color(0.22, 0.27, 0.15), Color(0.5, 0.46, 0.31)]
+	var unit := size / 1024.0
+	var shades := _tiling(0.006 / unit, 1)
+	var holes := _tiling(0.011 / unit, 3)
+	var sway := _tiling(0.02 / unit, 5)
+	# The cord: a square mesh, pulled a little out of true.
+	var mesh := size / 16.0
 	for y in size:
 		for x in size:
-			var cloth := patches.get_pixel(x, y).r * 0.75 + holes.get_pixel(x, y).r * 0.25
-			var cord := minf(float(x % 32), float(y % 32)) < 2.0
-			if cloth > 0.44:
-				var tone := scrim[int(shades.get_pixel(x, y).r * 3.999)]
-				_image.set_pixel(x, y, Color(tone.r, tone.g, tone.b, 1.0).darkened(holes.get_pixel(x, y).r * 0.3))
-			elif cord:
-				_image.set_pixel(x, y, Color(0.24, 0.21, 0.15, 1.0))
+			var pull := (sway.get_pixel(x, y).r - 0.5) * 9.0 * unit
+			var off := minf(absf(fposmod(x + pull + mesh * 0.5, mesh) - mesh * 0.5), absf(fposmod(y - pull + mesh * 0.5, mesh) - mesh * 0.5))
+			var cover := clampf(1.9 * unit - off, 0.0, 1.0)
+			if cover > 0.0:
+				_image.set_pixel(x, y, Color(0.2, 0.17, 0.12, cover))
+	var scrim: Array[Color] = [Color(0.08, 0.1, 0.055), Color(0.14, 0.17, 0.085), Color(0.23, 0.185, 0.115), Color(0.18, 0.2, 0.1), Color(0.33, 0.29, 0.19)]
+	for i in 1500:
+		var middle := Vector2(_rng.randf(), _rng.randf()) * size
+		var thin := holes.get_pixelv(Vector2i(middle)).r
+		if thin < 0.47 and _rng.randf() > (thin - 0.2) * 1.6:
+			continue
+		var drift := shades.get_pixelv(Vector2i(middle)).r
+		var tone := scrim[clampi(int((drift - 0.22) / 0.56 * 5.0 + _rng.randf_range(-0.7, 0.7)), 0, 4)]
+		tone = tone.darkened(_rng.randf() * 0.3).lightened(_rng.randf() * 0.08)
+		var way := Vector2.RIGHT.rotated(_rng.randf() * PI)
+		var length := _rng.randf_range(70.0, 170.0) * unit
+		var width := _rng.randf_range(16.0, 30.0) * unit
+		var bend := _rng.randf_range(-0.6, 0.6)
+		var spots: Array[Vector2] = []
+		for step in 6:
+			var t := step / 5.0
+			spots.append(middle + way.rotated(bend * (t - 0.5)) * length * (t - 0.5))
+		# Dark along its edges, where it curls, and narrow at its ends, where
+		# it is knotted in.
+		for coat: Array in [[1.0, tone.darkened(0.22)], [0.8, tone], [0.3, tone.lightened(0.06)]]:
+			for step in 5:
+				var pinch := 1.0 - 0.5 * absf((step + 0.5) / 5.0 - 0.5) * 2.0
+				_stroke_tiled(spots[step], spots[step + 1], width * pinch * (coat[0] as float), coat[1])
+
+
+## A stroke in an image that tiles both ways.
+func _stroke_tiled(from: Vector2, to: Vector2, width: float, color: Color) -> void:
+	var size := Vector2(_image.get_size())
+	var low := from.min(to) - Vector2.ONE * (width + 2.0)
+	var high := from.max(to) + Vector2.ONE * (width + 2.0)
+	for shift_y: float in [-1.0, 0.0, 1.0]:
+		for shift_x: float in [-1.0, 0.0, 1.0]:
+			var off := Vector2(shift_x, shift_y) * size
+			if high.x + off.x < 0.0 or high.y + off.y < 0.0 or low.x + off.x > size.x or low.y + off.y > size.y:
+				continue
+			_stroke(from + off, to + off, width, color)
+
+
+## Concertina wire, unrolled and laid flat: the coil cut open along its length.
+## Every turn of it is clipped to the turn before and to the turn after, at
+## places that alternate round the coil, so that pulled out it stands as a
+## lattice of diamonds. The picture is one diamond: a fifth of the way round
+## the coil from left to right, and two turns from top to bottom. Spring
+## steel, galvanised and gone dull, with a barb every hand's breadth. It
+## tiles.
+func _concertina() -> void:
+	var size := float(_image.get_width())
+	var half := size * 0.5
+	var gap := size * 0.011
+	var thick := size * 0.0085
+	var rust := _tiling(0.02, 2)
+	for turn in 2:
+		var before := Vector2.ZERO
+		var steps := 64
+		var run := 0.0
+		for step in steps + 1:
+			var x := size * step / steps
+			var rise := clampf(half * (1.0 - absf(2.0 * x / size - 1.0)), gap, half - gap)
+			var at := Vector2(x, rise if turn == 0 else size - rise)
+			if step > 0:
+				var worn := rust.get_pixelv(Vector2i(at.posmod(size))).r
+				var steel := Color(0.5, 0.5, 0.48).lerp(Color(0.3, 0.2, 0.13), smoothstep(0.5, 0.75, worn)).darkened(_rng.randf() * 0.15)
+				_stroke_tiled(before, at, thick, steel.darkened(0.35))
+				_stroke_tiled(before, at, thick * 0.5, steel.lightened(0.25))
+				var length := before.distance_to(at)
+				# A barb: two short points of wire wound round the strand.
+				if int((run + length) / (size * 0.125)) > int(run / (size * 0.125)) and absf(rise - half * 0.5) < half * 0.42:
+					var way := (at - before).normalized()
+					for lean: float in [0.9, -1.1]:
+						var point := way.rotated(lean + _rng.randf_range(-0.2, 0.2)) * size * _rng.randf_range(0.016, 0.022)
+						_stroke_tiled(at - point, at + point, thick * 0.55, steel.lightened(0.1))
+				run += length
+			before = at
+	# The clips that hold one turn to the next.
+	for clip: Vector2 in [Vector2(half, half), Vector2(0, 0)]:
+		_stroke_tiled(clip - Vector2(0, gap * 1.25), clip + Vector2(0, gap * 1.25), thick * 1.5, Color(0.27, 0.25, 0.22))
 
 
 ## Chain-link fencing: wires that run both ways on the slant. It tiles.
