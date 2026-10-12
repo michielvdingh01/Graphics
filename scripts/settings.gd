@@ -72,6 +72,10 @@ const QUALITY := [
 ## pictures at the three sizes differ no more than two pictures at one size;
 ## outside, the edge of a building's shadow on the ground moves a few pixels.
 const SUN_ATLAS := 2048
+## The same for a level under an open sky, where the shadow of the sun is all
+## the shade there is: twice the size. At 8192 a wood of pines cost nine
+## frames a second on Ultra at 3456 by 2160, see "De duinen" in PLAN.md.
+const SUN_ATLAS_OPEN := 4096
 ## What it was per quality level, for UNDO.
 const SUN_ATLAS_BEFORE: Array[int] = [2048, 4096, 4096, 8192]
 ## What a benchmark can do the way it was done before, to measure what a change
@@ -244,7 +248,12 @@ func apply() -> void:
 	# Temporal upscalers resolve edges themselves and do not combine with MSAA.
 	viewport.msaa_3d = Viewport.MSAA_DISABLED if temporal_upscaling() else preset[4]
 	var ultra := quality == QUALITY.size() - 1
-	RenderingServer.directional_shadow_atlas_set_size(SUN_ATLAS_BEFORE[quality] if undone("sun_atlas") else SUN_ATLAS, true)
+	# Under an open sky nothing of the sun is baked: its shadow falls on the
+	# whole of a level and is all the shade there is. Such a level says so on
+	# its environment and gets the larger atlas, see SUN_ATLAS_OPEN.
+	var world := viewport.find_world_3d().environment
+	var open_sky: bool = world != null and world.get_meta(&"open_sky", false)
+	RenderingServer.directional_shadow_atlas_set_size(SUN_ATLAS_BEFORE[quality] if undone("sun_atlas") else (SUN_ATLAS_OPEN if open_sky else SUN_ATLAS), true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset[5])
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset[5] if ultra and undone("lamp_filter") else preset[6])
 	if undone("glow"):

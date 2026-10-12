@@ -10407,7 +10407,7 @@ collision_mask = 2
 monitorable = false
 metadata/id = ""
 metadata/title = "Leave by the great door"
-metadata/next = ""
+metadata/next = "dunes"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Route/Exit" unique_id=1475587770]
 shape = SubResource("BoxShape3D_cxvft")

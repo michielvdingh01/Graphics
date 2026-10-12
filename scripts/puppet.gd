@@ -193,6 +193,7 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 	if not ends.is_empty():
 		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, data.flash_prongs)
 	Sfx.play_at(data.shot_sound, muzzle)
+	get_tree().call_group(&"watch", &"hears", muzzle, data.flash_size * WEAPONS.HEARD)
 
 
 ## It threw a grenade. The one shown here flies the same way and is gone when

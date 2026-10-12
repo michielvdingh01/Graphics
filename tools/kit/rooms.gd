@@ -1,5 +1,5 @@
-extends "res://tools/kit/furniture.gd"
-## Ninth and last drawer of the kit, see tools/kit.gd: a level laid out as
+extends "res://tools/kit/field.gd"
+## Eleventh and last drawer of the kit, see tools/kit.gd: a level laid out as
 ## rooms.
 ##
 ## The plan of such a level names its rooms, each a rectangle on the ground
@@ -1459,6 +1459,7 @@ func _room_screens(room_name: String) -> void:
 ## POST_DISTANCE from them; as far from that door as the room allows, and a
 ## few steps from the next robot. Called by the builder from _survey().
 func _garrison(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters3D, navmesh: NavigationMesh, walked: Dictionary) -> void:
+	super(space, ray, navmesh, walked)
 	if _fights.is_empty() or _route == null:
 		return
 	# The floor that can be walked on, polygon by polygon.

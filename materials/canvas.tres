@@ -1,0 +1,13 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/rough_linen/rough_linen_nor_gl.jpg" id="nor"]
+
+[resource]
+cull_mode = 2
+albedo_color = Color(0.2, 0.2, 0.125, 1)
+roughness = 0.95
+normal_enabled = true
+normal_texture = ExtResource("nor")
+backlight_enabled = true
+backlight = Color(0.3, 0.3, 0.17, 1)
+uv1_scale = Vector3(3.5, 3.5, 3.5)

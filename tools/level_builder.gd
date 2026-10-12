@@ -1701,11 +1701,18 @@ func route_start(at: Vector3, look: Vector3) -> void:
 	_add(node, _route_node())
 
 
-## A part of the level that robots hold. They appear when the player walks
-## into `area`, each at its own spot, and the zone is cleared when the last of
-## them is down. `title` is what the HUD calls the place, as in "Clear the
-## corridor". `enemies` lists [kind, position], with "grunt", "rusher" or
-## "heavy" for a kind.
+## A part of the level that robots hold. They stand in it from the start,
+## each at its own spot, and their fight begins when the player walks into
+## `area`; the zone is cleared when the last of them is down. `title` is what
+## the HUD calls the place, as in "Clear the corridor". `enemies` lists
+## [kind, position], with "grunt", "rusher" or "heavy" for a kind.
+##
+## An enemy can have a third thing to it: how it keeps watch, see watch() in
+## scripts/enemy.gd. {"beat": [spots]} is a round it walks there and back, or
+## round and round with "loops"; {"faces": spot} is where it looks as it
+## stands guard, up to "looks" degrees to either side of that. With one such
+## enemy the whole zone is kept by a watch: nobody in it is switched off,
+## and it is not walking in that starts their fight but being seen or heard.
 func route_zone(id: String, title: String, area: AABB, enemies: Array) -> void:
 	var node := _route_area("Zone", id, title, area, "route_zone")
 	for enemy: Array in enemies:
@@ -1715,6 +1722,20 @@ func route_zone(id: String, title: String, area: AABB, enemies: Array) -> void:
 		spawn.set_meta(&"kind", enemy[0])
 		spawn.add_to_group("enemy_spawn", true)
 		_add(spawn, node)
+		if enemy.size() < 3:
+			continue
+		node.set_meta(&"watched", true)
+		var how: Dictionary = enemy[2]
+		if how.has("beat"):
+			var beat := PackedVector3Array()
+			for spot: Vector3 in how.beat:
+				beat.append(spot - node.position)
+			spawn.set_meta(&"beat", beat)
+			spawn.set_meta(&"loops", how.get("loops", false))
+		if how.has("faces"):
+			spawn.set_meta(&"faces", (how.faces as Vector3) - node.position)
+		if how.has("looks"):
+			spawn.set_meta(&"looks", float(how.looks))
 
 
 ## A place to carry on from after a death or a restart of the game: `at`,

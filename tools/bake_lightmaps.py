@@ -119,11 +119,17 @@ def units_of(scene):
     zoned = bool(units)
     if not zoned:
         units["level"] = {"node": ".", "files": "scenes/%s" % name}
+    # A level under an open sky has no LightmapGI anywhere: it is lit by its
+    # sun and its sky as they are, and has nothing that a bake could go stale.
+    unbaked = not zoned and not any(node["kind"] == "LightmapGI" for node in list(level.nodes.values()) + list(played.nodes.values()))
     record_path = os.path.join(ROOT, "scenes/%s_bakes.json" % name)
     record = json.load(open(record_path)) if os.path.exists(record_path) else {}
     for zone, unit in units.items():
         unit["now"] = signature(level, played, unit["node"])
-        if not all(os.path.exists(os.path.join(ROOT, unit["files"] + ext)) for ext in (".lmbake", ".exr")):
+        if unbaked:
+            unit["stale"] = ""
+            unit["unbaked"] = True
+        elif not all(os.path.exists(os.path.join(ROOT, unit["files"] + ext)) for ext in (".lmbake", ".exr")):
             unit["stale"] = "has no lightmap yet"
         elif zone not in record:
             unit["stale"] = "has a lightmap, but nothing says what it was baked from"
@@ -169,6 +175,9 @@ def main():
     for zone in asked:
         if zone not in units:
             sys.exit("%s has no zone called %s. There are: %s." % (name, zone, ", ".join(units)))
+    if any(unit.get("unbaked") for unit in units.values()):
+        print("%s has no lightmap: it is lit by its sun and its sky as they are. Nothing to bake." % name)
+        return 0
     if "--mark" in flags:
         for zone in asked or units:
             record[zone] = units[zone]["now"]
