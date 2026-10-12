@@ -18,6 +18,7 @@ const LEVELS: Array[Dictionary] = [
 	{"name": "Works", "scene": "res://scenes/works.tscn", "music": &"level1and2"},
 	{"name": "Depot", "scene": "res://scenes/depot.tscn", "music": &"level1and2"},
 	{"name": "Powerhouse", "scene": "res://scenes/powerhouse.tscn", "music": &"level1and2"},
+	{"name": "Dunes", "scene": "res://scenes/dunes.tscn", "music": &"level1and2"},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it
 ## cannot hold a right click and click at once, and its scroll is not a wheel.

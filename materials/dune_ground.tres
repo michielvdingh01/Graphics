@@ -1,0 +1,36 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/dune_ground.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/dense_sand/dense_sand_diff.jpg" id="sand"]
+[ext_resource type="Texture2D" path="res://assets/textures/dense_sand/dense_sand_nor_gl.jpg" id="sand_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/forrest_ground_03/forrest_ground_03_diff.jpg" id="needles"]
+[ext_resource type="Texture2D" path="res://assets/textures/forrest_ground_03/forrest_ground_03_nor_gl.jpg" id="needles_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/forrest_ground_01/forrest_ground_01_diff.jpg" id="moss"]
+[ext_resource type="Texture2D" path="res://assets/textures/forrest_ground_01/forrest_ground_01_nor_gl.jpg" id="moss_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/dirt/dirt_diff.jpg" id="earth"]
+[ext_resource type="Texture2D" path="res://assets/textures/dirt/dirt_nor_gl.jpg" id="earth_nor"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/sand_tex = ExtResource("sand")
+shader_parameter/sand_normal = ExtResource("sand_nor")
+shader_parameter/needles_tex = ExtResource("needles")
+shader_parameter/needles_normal = ExtResource("needles_nor")
+shader_parameter/moss_tex = ExtResource("moss")
+shader_parameter/moss_normal = ExtResource("moss_nor")
+shader_parameter/earth_tex = ExtResource("earth")
+shader_parameter/earth_normal = ExtResource("earth_nor")
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/cover_rect = Vector4(0, 0, 0, 0)
+shader_parameter/sand_scale = 0.55
+shader_parameter/needles_scale = 0.5
+shader_parameter/moss_scale = 0.5
+shader_parameter/earth_scale = 0.5
+shader_parameter/sand_tint = Color(1, 1, 1, 1)
+shader_parameter/needles_tint = Color(0.78, 0.7, 0.58, 1)
+shader_parameter/moss_tint = Color(0.72, 0.8, 0.6, 1)
+shader_parameter/earth_tint = Color(1, 1, 1, 1)
+shader_parameter/shadow_from = 80.0
+shader_parameter/shadow_to = 105.0
+shader_parameter/shade_depth = 0.6

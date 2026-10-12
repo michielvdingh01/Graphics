@@ -24,6 +24,14 @@ extends "res://tools/kit.gd"
 ## steel beams and a slab on beams, with pipes, ducts and sprinklers under
 ## them. Look at those with
 ## tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-14,1.7,31,180,-3"
+##
+## West of that, on a slab of its own, what stands in the field and what
+## grows there (tools/kit/land.gd and field.gd): sandbags as a wall, a post
+## and a ring, a tent with a shelter next to it, a jeep under a net, a lorry,
+## the tank twice, wire as coils and as a fence, a barrier with its sentry
+## box, a pillbox, a watchtower, a fire, and the pines and the scrub in a row.
+## Look at those with
+## tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-50,1.7,46,0,-4"
 
 
 func _level_name() -> String:
@@ -67,6 +75,7 @@ func _describe() -> void:
 	notice_board(Vector3(9.1, 1.62, 11.8))
 	_fittings()
 	_roofs()
+	_field()
 
 
 ## What makes electricity and sends it off, see tools/kit/power.gd.
@@ -178,3 +187,31 @@ func _roofs() -> void:
 	pipe_valve(Vector3(30.0, 1.4, 27.0), Vector3.UP, Vector3.LEFT, 0.1)
 	duct_run(Vector3(9.6, 3.7, 33.0), Vector3(20.4, 3.7, 33.0), 4.0, Vector2(0.45, 0.3), 2)
 	cable_ladder(Vector3(21.6, 3.6, 34.0), Vector3(32.4, 3.6, 34.0), 4.0)
+
+
+## What an army leaves standing in the field, and what grows there, on a
+## slab of its own west of the benches. The same things stand on the ground
+## as it lies in a level with land: see tools/levels/dunes.gd.
+func _field() -> void:
+	box("concrete", Vector3(-50, -0.25, 31), Vector3(36, 0.5, 30))
+	sandbags(Vector2(-66, 19), Vector2(-61, 19))
+	sandbag_post(Vector2(-56, 20), 0.0)
+	sandbag_ring(Vector2(-48, 20.5), 2.5, 0.0)
+	watch_tower(Vector2(-40, 20), 6.0)
+	tent(Vector2(-61, 28), 0.0)
+	bivouac(Vector2(-53, 27), 30.0)
+	campfire(Vector2(-53, 31.5))
+	camo_net(Vector2(-45, 28), 0.0, Vector2(8, 5))
+	vehicle("jeep", Vector2(-45, 28), 80.0)
+	vehicle("truck", Vector2(-37, 28), 0.0)
+	vehicle("tank", Vector2(-61, 36), 90.0)
+	vehicle("tank_b", Vector2(-51, 36), 90.0)
+	barrier_pole(Vector2(-46, 34), 0.0, 5.0)
+	sentry_box(Vector2(-39.5, 33.5), 0.0)
+	sign_post(Vector2(-47.5, 34.5), 0.0, "HALT", 0.3, "paper")
+	pillbox(Vector2(-37, 39), 0.0)
+	wire_coil(Vector2(-48, 39), Vector2(-41, 39))
+	wire_fence([Vector2(-66, 41), Vector2(-56, 41)])
+	var kinds: Array[String] = ["pine_a", "pine_b", "pine_c", "pine_d", "pine_young", "scrub_a", "scrub_b"]
+	for i in kinds.size():
+		tree(kinds[i], Vector2(-66 + i * 4.6, 44))

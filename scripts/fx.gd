@@ -424,9 +424,9 @@ func tracer(from: Vector3, to: Vector3, tint := Color(1.0, 0.7, 0.35)) -> void:
 	_spawn(streak, length / TRACER_SPEED + 0.05)
 
 
-## What a ray hit is made of: "concrete", "brick", "metal", "wood" or "soft",
-## or "flesh" for somebody. The level builder marks every collider that is
-## not concrete.
+## What a ray hit is made of: "concrete", "brick", "metal", "wood", "soft" or
+## "sand", "flesh" for somebody, or "air" for a wall nobody sees at the edge
+## of open land. The level builder marks every collider that is not concrete.
 func surface_of(hit: Dictionary) -> String:
 	var body := hit.collider as CollisionObject3D
 	if body == null or body.get_shape_owners().is_empty():
@@ -450,6 +450,8 @@ func impact(hit: Dictionary, incoming: Vector3, light := false) -> void:
 ## `assets/audio/impact_water/` by itself, and that is played here from then
 ## on.
 func thud(position: Vector3, surface: String) -> void:
+	if surface == "air":
+		return
 	var sound := "concrete" if surface == "brick" else surface
 	if sound == "concrete" and in_puddle(position):
 		sound = "water" if Sfx.has(&"impact_water") else "soft"
@@ -476,8 +478,16 @@ func strike(position: Vector3, normal: Vector3, incoming: Vector3, surface := "c
 		"soft":
 			_burst(_puffs, frame, 1.3, {&"tint": Color(0.7, 0.69, 0.66, 0.45), &"speed": 1.6, &"size": Vector2(0.04, 0.26), &"life": 1.1, &"rise": -0.05, &"amount": 0.7 * share})
 			_hole("soft", frame, 0.035)
+		"sand":
+			# Sand takes a shot with a spurt of itself and keeps a dent.
+			_burst(_puffs, frame, 1.8, {&"tint": Color(0.8, 0.72, 0.56, 0.55), &"speed": randf_range(2.0, 3.2), &"size": Vector2(0.05, 0.36), &"life": 1.5, &"rise": -0.05, &"amount": share})
+			_burst(_chips, frame, 2.2, {&"floor_y": floor_y, &"tint": Color(0.78, 0.7, 0.54), &"size": 0.012, &"amount": 0.6 * share})
+			_hole("soft", frame, randf_range(0.06, 0.09)).modulate = Color(0.5, 0.43, 0.33)
 		"flesh":
 			# Somebody: what a hit does to them is theirs to show, see blood().
+			pass
+		"air":
+			# A wall nobody sees: a shot that ends on it leaves nothing.
 			pass
 		_:
 			if normal.y > FACES_UP and in_puddle(position):

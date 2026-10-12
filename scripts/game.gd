@@ -55,6 +55,12 @@ const EXIT_FADE := 0.9
 ## lamp over it has come on it starts.
 const DOOR_TIME := 3.2
 const DOOR_DELAY := 0.5
+## How near a player has to be to a zone that is kept by a watch for its
+## watch to be up and about, how much further off before it stands still
+## again, and the seconds between two looks at that.
+const WATCH_WAKES := 75.0
+const WATCH_SLEEPS := 90.0
+const WATCH_TICK := 0.4
 const PICKUP := preload("res://scripts/pickup.gd")
 const BREAKABLES := preload("res://scripts/breakables.gd")
 ## Health the player has at least after reaching a checkpoint, and after
@@ -84,6 +90,11 @@ class Zone:
 	var started := false
 	var cleared := false
 	var alive := 0
+	## Kept by a watch: its robots are up and about before their fight, and
+	## it takes more than walking in to start it.
+	var watched := false
+	## Whether that watch is up and about, or stands still far from anybody.
+	var awake := false
 	## The robots that hold it, from the moment they are posted.
 	var robots: Array[Node3D] = []
 
@@ -128,6 +139,7 @@ var _explosives: Array[NodePath] = []
 ## every machine: to tell a latecomer what is broken.
 var _breakables: Array[Node] = []
 var _robot_tick := 0.0
+var _watch_tick := 0.0
 var _wiped := false
 
 @onready var nav_region: NavigationRegion3D = $NavigationRegion3D
@@ -225,6 +237,7 @@ func _read_route() -> void:
 			zone.title = step.get_meta(&"title")
 			zone.area = step
 			zone.order = step.get_index()
+			zone.watched = step.get_meta(&"watched", false)
 			zones.append(zone)
 		elif step.is_in_group("route_checkpoint"):
 			var checkpoint := Checkpoint.new()
@@ -281,14 +294,18 @@ func post_robots() -> void:
 		var from := _approach(zone)
 		for spawn in zone.area.get_children():
 			if spawn.is_in_group("enemy_spawn"):
-				post(zone, spawn.get_meta(&"kind"), (spawn as Node3D).global_position, from)
+				post(zone, spawn.get_meta(&"kind"), (spawn as Node3D).global_position, from, spawn)
 
 
 ## Stands one robot of `kind` in a zone at `at`, facing `towards`. Where the
-## fight has begun already it joins in.
-func post(zone: Zone, kind: String, at: Vector3, towards: Vector3) -> CharacterBody3D:
+## fight has begun already it joins in. In a zone that is kept by a watch it
+## goes on watch as its `spawn` in the level says: its beat, or the way it
+## faces as it stands guard.
+func post(zone: Zone, kind: String, at: Vector3, towards: Vector3, spawn: Node = null) -> CharacterBody3D:
 	var robot: CharacterBody3D = ENEMIES[kind].instantiate()
 	robot.position = at
+	if spawn and spawn.has_meta(&"faces"):
+		towards = zone.area.global_transform * (spawn.get_meta(&"faces") as Vector3)
 	towards -= at
 	robot.rotation.y = atan2(-towards.x, -towards.z)
 	robot.died.connect(_on_enemy_died.bind(zone))
@@ -305,6 +322,13 @@ func post(zone: Zone, kind: String, at: Vector3, towards: Vector3) -> CharacterB
 		# It stays there to be shot at and walked into.
 		robot.disable_mode = CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE
 		robot.process_mode = Node.PROCESS_MODE_DISABLED
+		if zone.watched and spawn:
+			# Until somebody comes near: see _stir().
+			var beat := PackedVector3Array()
+			for spot: Vector3 in spawn.get_meta(&"beat", PackedVector3Array()):
+				beat.append(zone.area.global_transform * spot)
+			robot.watch(beat, spawn.get_meta(&"loops", false), spawn.get_meta(&"looks", 35.0))
+			zone.awake = false
 	zone.robots.append(robot)
 	zone.alive += 1
 	return robot
@@ -339,10 +363,39 @@ func _approach(zone: Zone) -> Vector3:
 
 
 func _physics_process(delta: float) -> void:
+	if _playing:
+		_stir(delta)
 	if Net.active and not Net.is_guest():
 		_tell_robots(delta)
 		_check_exit()
 		_check_wipe()
+
+
+## Has the watch of every zone that is near a player up and about, and lets
+## it stand still again once everybody is far off: a watch that nobody can
+## see walks its rounds for nobody. On every machine alike, by where the
+## players are.
+func _stir(delta: float) -> void:
+	_watch_tick -= delta
+	if _watch_tick > 0.0:
+		return
+	_watch_tick = WATCH_TICK
+	for zone in zones:
+		if not zone.watched or zone.started:
+			continue
+		var size: Vector3 = (zone.area.get_child(0) as CollisionShape3D).shape.size
+		var box := AABB(zone.area.global_position - size * 0.5, size)
+		var near := INF
+		for body: Node3D in _players():
+			if not body.dead:
+				near = minf(near, (body.global_position - body.global_position.clamp(box.position, box.end)).length())
+		var awake := near < (WATCH_SLEEPS if zone.awake else WATCH_WAKES)
+		if awake == zone.awake:
+			continue
+		zone.awake = awake
+		for robot: Variant in zone.robots:
+			if is_instance_valid(robot) and not robot.dead:
+				robot.process_mode = Node.PROCESS_MODE_INHERIT if awake else Node.PROCESS_MODE_DISABLED
 
 
 ## Begins the fight for a zone: its robots are switched on.
@@ -402,7 +455,8 @@ func _players() -> Array:
 
 
 func _on_zone_entered(body: Node3D, zone: Zone) -> void:
-	if not _players().has(body) or zone.started or body.dead or not _holds(zone.area, body):
+	# Where a watch is kept, it is the watch that starts the fight.
+	if not _players().has(body) or zone.started or zone.watched or body.dead or not _holds(zone.area, body):
 		return
 	_start(zone)
 

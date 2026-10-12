@@ -2031,3 +2031,110 @@ Eerste gebruik, geteld op de GPU in de fabriek: plons, explosie, kist die vlam v
 - De bundel bij de uitgang staat 18 m buiten de deur (verder weg streept de schaduw), dus de stralen lopen een graad of vijf uiteen. Robots en het wapen in beeld vangen het koele licht op het fabrieksterrein en in de centrale niet.
 - Alleen schoten spatten op; een granaat of een explosie boven een plas niet.
 - De nieuwe scripts en shaders zonder `.uid`-bestand krijgen er een zodra de editor het project opent.
+
+## De duinen: het vijfde level
+
+Op 12 oktober 2026 gevraagd: een volgend level volgens de standaard van nu, een stuk langer dan de andere en veel lichter: een duingebied in een bos, met vijanden die patrouilleren bij zandzakken, bij een legertent waar ze over een landkaart gebogen staan en bij jeeps en tanks, van de bosrand naar de achterdeur van een groot complex, en met schaduw om in te schuilen. Dat is `dunes` geworden (`tools/levels/dunes.gd`, `scenes/dunes.tscn`), gebouwd op de branch `duinen`. Het is het eerste level onder de open lucht bij daglicht, het eerste op een terrein met hoogteverschil, en het eerste waarin vijanden iets doen vóór hun gevecht begint. Voor alle drie moest er iets bij.
+
+**Wat er staat**
+
+- **Het level.** 340 bij 230 meter duin en dennenbos. De speler komt in het zuidwesten uit het bos en volgt het karrenspoor van de vrachtwagens in drie stukken, met telkens een lange duin ertussen: door het bos en langs de kap, over de pas met de slagboom, door de kaalgewaaide vallei en langs het depot onder zijn net; over het zadel, waar een wachtpost ligt, terug naar het westen langs het bivak met de commandotent, het wagenpark en het tankkamp; en door het gat in de laatste duin naar het prikkeldraad voor de muur, door de poort de binnenplaats op en achter het hoofdgebouw langs naar de achterdeur. Die deur is de uitgang.
+- **Veertien gevechten van 3 tot 7, samen 74 vijanden, zes checkpoints.** Het fabrieksterrein, tot nu toe het langste level, heeft 59 vijanden in elf gevechten; van het begin langs het midden van elke zone naar de uitgang is het daar 253 m en hier 852 m. Er stonden er eerst 52 in elf gevechten: evenveel gevechten als het fabrieksterrein, en dat is geen stuk langer. De vallei en de binnenplaats zijn daarom elk twee gevechten geworden, op het zadel is een wachtpost bijgekomen en de posten van het wagenpark tot de achterdeur hebben er een man bij. In de tent staan er vier om de kaarttafel; de rest staat op wacht of loopt een ronde.
+- **Het zit in het spel.** De levelkeuze is Factory, Works, Depot, Powerhouse, Dunes; de grote deur van de centrale leidt naar de duinen, en de achterdeur van het complex sluit het spel af tot het volgende level er is. `VERSION` in `scripts/net.gd` is 8.
+- **Land** (`tools/kit/land.gd`, de negende la van de bouwdoos). Een level zegt hoeveel land het heeft en vormt het van grof naar fijn: `land`, `swell`, `ridge`, `mound`, `hollow`, `bank`, `dig`, `level_off`, `track`, `soften`, `roughen`, en legt het met `lay_ground`; `shut_in` zet er de muren omheen die niemand ziet en waar niemand langs komt. Het land is een veld van hoogtes op een meter van elkaar: één botsvorm (`HeightMapShape3D`, in een eigen lichaam `Ground`) en een mesh in blokken van 32 m. Daarna zegt `ground(x, z)` overal hoe hoog de grond ligt, en alles wat erop staat vraagt dat. Een duin heeft een korte steile kant waar niemand tegenop loopt (steiler dan 45 graden: het navmesh en de speler houden daar op) en een lange rug.
+- **Wat de grond bedekt** staat op een kaart van het land, twee punten per meter: naalden, mos en aangereden aarde (`cover`). Het materiaal `dune_ground` mengt daar vier gescande texturen mee. Een boom legt zelf naalden en mos onder zich neer, een spoor zijn aarde.
+- **Geen lightmap.** Onder de open lucht is het licht de zon en de lucht zoals ze zijn; er wordt niets gebakken en er hoeft dus ook niets opnieuw gebakken. `tools/bake_lightmaps.py` zegt dat van zo'n level (`dunes has no lightmap ... Nothing to bake`), en het keurmerk telt het als bij.
+- **De schaduw is uitgerekend** (`_shade_land`). Als alles staat kijkt de bouwer van elk punt van die kaart op borsthoogte naar de zon: stuit de blik op een botsvorm of gaat hij door een kruin, dan ligt het punt in de schaduw. 17% van het land ligt zo uit de zon. Dat staat in de kaart (de grond wordt er donker van waar de schaduwkaarten van de zon ophouden, voorbij 80 tot 105 m) en gaat als bitkaart met het level mee (`scenes/levels/dunes_shade.res`, `scripts/land.gd`): daar leest het spel af of iemand in de schaduw staat.
+- **Wat er groeit.** Dennen in vijf vormen en duindoorn in twee, in code getekend (`tools/models/trees.gd`): een stam met de stompen van afgeworpen takken, zijtakken, en een kruin van kaarten met naalden. Elk is twee meshes: van dichtbij ongeveer 600 driehoeken, vanaf 60 m een stam met vijf kaarten. `wood()` plant een bos over een gebied, `thicket()` een haag van struiken waar niemand doorheen komt, `marram()` helmgras, `ferns()` varens. 393 dennen, 306 struiken en 2000 pollen helm.
+- **Wat een leger in het veld laat staan** (`tools/kit/field.gd`, de tiende la): `sandbags`, `sandbag_post`, `sandbag_ring`, `tent`, `bivouac`, `camo_net`, `wire_fence`, `wire_coil`, `barrier_pole`, `sentry_box`, `sign_post`, `pillbox`, `watch_tower`, `nissen_hut`, `campfire` en `vehicle`. De voertuigen zijn modellen uit code (`tools/models/vehicles.gd`): een jeep, een vrachtwagen met huif en een tank, die laatste ook met gedraaide koepel; 3600 tot 4900 driehoeken. Alles staat in de showroom.
+- **De landkaart is de kaart van het level zelf** (`map_sheet`, `mark_on_map`). De bouwer tekent hem uit het land zoals het ligt: hoogtelijnen, het bos groen, het spoor, en een rode cirkel om elke post en om de poort en de achterdeur. Hij ligt op de tafel in de tent en hangt groot op een bord erachter.
+- **De wacht.** Een zone kan door een wacht gehouden worden: het level zegt per vijand wat hij doet (`guard()`, `beat()` in `tools/kit/land.gd`, als derde ding in `route_zone`). Zo'n vijand staat niet uit: hij loopt zijn ronde of staat op zijn post en kijkt om zich heen. Hij ziet wat voor hem is (58 graden naar weerszijden): iemand in het licht tot op 34 m, iemand in de schaduw pas op 7,5 m, gebukt 30% minder; wie rent wordt binnen 9 m gehoord, wie tegen hem aan loopt altijd opgemerkt. Zeker weten kost tijd (1,7 s aan de rand van wat hij ziet, een vijfde daarvan van dichtbij); twijfelt hij, dan blijft hij staan en kijkt. Een schot hoort hij, verder naarmate het wapen harder is: het pistool 17 m, het geweer 34, de shotgun 42. Weet er één het, dan begint het gevecht van die zone zoals altijd. Een zone binnenlopen begint niets meer. Alle veertien de zones van de duinen worden zo gehouden; de andere levels zijn niet veranderd.
+- **Wat de speler ervan ziet.** Staat hij in de schaduw terwijl er een wacht in de buurt is, dan staat onderin `IN THE SHADE`. Om het richtkruis groeit een boogje naar elke wachter die hem begint te zien, van wit via oranje naar rood; vol is gezien.
+- **Een wacht ver van iedereen staat stil** (`_stir` in `scripts/game.gd`): binnen 75 m van een speler loopt hij, voorbij 90 m niet.
+- **Geluid.** Stappen in zand (`footstep_sand`), een inslag in zand (`impact_sand`, met een eigen stofwolk en een kuiltje) en een bed voor de open lucht van de duinen (`ambience_dunes`: wind, en het ruisen van dennen). Gesneden uit de pakken die er al waren.
+- **De zon.** Ze staat op 48 graden in het zuidzuidwesten, waar de lucht haar heeft (`kloofendal_48d_partly_cloudy_puresky`, 4k): schaduwen vallen naar het noordnoordoosten en zijn ongeveer zo lang als wat ze werpt hoog is. De noordkant van het hoofdgebouw, waar de achterdeur is, ligt daardoor helemaal in de schaduw.
+
+**Van Poly Haven opgehaald** (CC0, 69 MB, op Michiels woord): acht texturen op 1k (`dense_sand`, `sand_01`, `forrest_ground_01`, `forrest_ground_03`, `dirt`, `pine_bark`, `hessian_380`, `rough_linen`), de lucht op 4k, en tien modellen op 1k (munitiekist, legerkrat, groene jerrycan, veldradio, vuurplaats, boomstronk, dode takken, varen en twee soorten onderbegroeiing). `sand_01` en de twee onderbegroeiingen (`shrub_03`, `weed_plant_02`) zijn nog nergens gebruikt. De bomen van Poly Haven zijn te zwaar: van 0,15 miljoen driehoeken voor een kokerboom tot 17 miljoen voor de den.
+
+**Gemeten** op 12 oktober 2026, 's avonds, op de accu (72 tot 74%, geen spaarstand), load 2 tot 3, niets anders op de GPU; elk blad één keer
+
+| | |
+|---|---|
+| De duinen beschreven | 836 regels in zeven bestanden; de laden `land.gd` en `field.gd` zijn er 1061 en 473 |
+| Gebouwd | 736 botsvormen, 699 bomen en struiken, 234 losse modellen, 23 voertuigen, 21 dingen die ontploffen, 73 decals, 6 probes |
+| Bouwen | 30 s, waarvan 2 s de opmeting met de schaduw |
+| De bestanden van het level | 7,1 MB in 210 bestanden; geen lightmap |
+| Laden zonder beeld, met het navmesh | 2,0 s |
+
+Het contactblad, 23 standpunten (`benchmark/sheets/dunes_zones.jpg`):
+
+| | Tekenopdrachten | Driehoeken | Fps | Traagste standpunt |
+|---|---|---|---|---|
+| 1440p met FSR 2 op 67%, zonder vijanden | 370 tot 973 | 0,4 tot 1,4 miljoen | 83 tot 106 | een loods van dichtbij: 83; het bos: 86 |
+| 3456×2160, Ultra, MetalFX, renderschaal vanzelf: zoals er gespeeld wordt | 347 tot 948 | 0,5 tot 1,5 miljoen | 73 tot 102 | het bos: 73 |
+| Hetzelfde met de 74 vijanden op hun post | 800 tot 1935 | 0,6 tot 2,4 miljoen | 64 tot 99 | het bos: 64, met 55 voor het traagste honderdste |
+
+Het keurmerk: "Every zone has what it is held to".
+
+- **Wie op wacht staat wordt van overal getekend**, ook achter drie duinen: een level zonder zones laat niets weg, en een wacht staat er vanaf het laden. In het bos zijn dat 800 tot 950 tekenopdrachten erbij, en het ging er van 73 naar 64 fps; met 52 vijanden was dat van 72 naar 70. Elk van die cijfers is één ronde, dus hoeveel van het verschil van de 22 erbij komt is niet gemeten. Wie verder weg staat dan er te zien valt niet tekenen is het eerste om te proberen, en is niet gedaan.
+
+- **De schaduwkaart van de zon kostte in het bos 17 beelden per seconde.** Elk level kreeg een zonnekaart van 2048, omdat de zon overal gebakken is; hier is ze alles. Op Ultra, 3456×2160, vier standpunten in het bos, om en om gemeten: met de kaart van 8192 en overvloeiende schaduwlagen 55, 54, 59 en 62 fps; met 4096 en overvloeien 64, 63, 68 en 69; met 8192 zonder overvloeien 63, 62, 67 en 70; met 4096 zonder 74, 68, 79 en 73. Een level onder de open lucht (`metadata/open_sky` op zijn omgeving) krijgt daarom 4096 (`SUN_ATLAS_OPEN` in `scripts/settings.gd`), en de zon van de duinen laat haar lagen niet overvloeien. Op de beelden is geen naad te zien.
+- **Niets hapert de eerste keer.** Op een wandeling langs vijftien plekken van het level, vanaf het laden, worden er tijdens het tekenen geen pipelines meer gemaakt; het langste beeld duurde 11 ms. Dat is gemeten voor de wachtpost op het zadel erbij kwam, die niets heeft wat er niet al stond. Het land laat bij het laden van elk materiaal één mesh tekenen achter het zwart (`_rehearse` in `scripts/land.gd`).
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh` slaagt met de duinen erin, 401 controles in vijf minuten en tien seconden (de grens staat nu op 420 s): de route is te lopen en komt door elke zone, elke vijand kan de speler bereiken, de checkpoints overleven een herstart en een dood, de achterdeur gaat open en het spel eindigt erachter. Voor een zone met een wacht controleert hij dat de vijanden op wacht staan en van niets weten, dat binnenlopen niets begint en dat een schot het gevecht begint. En één keer per level, bij een wachter die stilstaat: wie voor hem in de schaduw staat wordt niet gezien, wie voor hem in het licht staat wel, en dat begint het gevecht.
+- `tools/nettest.sh` (62), `tools/test_humanoid.sh`, `tools/test_sandbox.sh` (30), `tools/test_effects.sh` (259) en `tools/test_sound.sh` (38) slagen.
+- `tools/build_check.py`: de fabriek, het fabrieksterrein, het depot, de vleugel en de modellen komen er gelijk uit. Van de centrale is één regel veranderd, in het plan en in haar scène: waar de uitgang heen leidt (`metadata/next`). Haar lightmaps zijn bij. De showroom is veranderd door wat erbij staat.
+- **Gespeeld is het niet.** Er zijn ruim honderd beelden van bekeken, twee uit het lopende spel, en een plattegrond. Of sluipen leuk is, of 34 en 7,5 m de goede afstanden zijn, of een wacht eerlijk aanvoelt en of elf gevechten boeien, weet ik niet.
+- De getallen van de wacht zijn een eerste gok. Ze zijn `@export` in `scripts/enemy.gd` (`sight_lit`, `sight_shade`, `sight_crouched`, `sight_side`, `notice_time`, `round_pace`), dus per thema en in de sandbox te zetten.
+- De drie geluiden heeft niemand gehoord.
+
+**Onderweg gevonden**
+
+- **De muren die niemand ziet hielden de zon tegen.** Om het land staan vier muren van 60 m hoog tegen weglopen, en de schaduw wordt uitgerekend met een straal naar de zon die op elke botsvorm stuit. Een strook van 30 m langs de hele zuidrand en van 20 m langs de westrand gold daardoor als schaduw: het begin, het spoor door het bos, de zuidkant van de vallei. Wie daar in de volle zon liep werd pas op 7,5 m gezien en las `IN THE SHADE`, en van ver lag er een rechte donkere baan over het zand. De test met de schaduw slaagde gewoon. Het viel pas op toen het level van boven getekend was, met de schaduwkaart erin: 33% schaduw was 17%. De muren zijn nu van de la zelf (`shut_in`), de straal gaat erdoorheen (`_stops_sun`), en een schot dat erop eindigt laat niets achter (het oppervlak `air` in `scripts/fx.gd`).
+- **De zandzakken stonden binnenstebuiten.** De zijkant van een zak was met de klok mee opgegeven waar de bouwer tegen de klok in verwacht: wat getekend werd was de binnenkant van de achterste helft. Dat zag eruit als een zak, met het licht aan de verkeerde kant: zwart naar de zon toe en licht in zijn eigen schaduw. Op de beelden van de eerste ronde is het niet opgevallen; het bleek bij de nieuwe post, van voren en van achteren bekeken.
+- **Een MultiMesh is niet te bouwen zonder beeld.** De bouwer draait zonder GPU, en een `MultiMesh` bewaart zijn plaatsen in de renderer: de 2000 pollen helm stonden na het opslaan allemaal op nul. Het gras van een blok grond is daarom één gewone mesh geworden.
+- **De kaart van de bedekking moet ná het opruimen geschreven worden.** De bouwer gooit bij het wegschrijven de bestanden van vorige keer weg; wat tijdens de opmeting al bewaard was (de schaduw) ging mee. Het wordt nu in `_finish_zones` geschreven.
+- **Een texel buiten de kaart herhaalt de rand.** Het spoor liep als een streep het zand buiten het land in tot aan de horizon. Buiten de kaart ligt nu alleen zand.
+- **Het kortste pad neemt de steile kant niet, maar wel het uiteinde van een duin, en het volgt het spoor niet.** Waar een duin uitloopt wordt zijn steile kant begaanbaar, en van het zadel naar het kampspoor loopt de test schuin over de rug van de duin en niet langs de tent. Een zone moet daarom zo breed zijn dat elk pad erdoor komt, en waar de test een zone binnenkomt is niet waar de speler dat doet: de uitkijk op zijn heuvel stond op 13,7 m van waar het pad de zone van het depot in liep, en de grens is opgeschoven.
+- `tools/gen_decals.sh` tekent alle decals opnieuw, maar steeds dezelfde: na vijftien opschriften erbij is er geen bestaand bestand veranderd.
+
+**Buiten de bestanden van het level geraakt**
+
+- `scripts/enemy.gd` (de wacht), `scripts/game.gd` (zones met een wacht, en `_stir`), `scripts/hud.gd` (de boogjes en het woord), `scripts/weapons.gd` en `scripts/puppet.gd` (een schot wordt gehoord), `scripts/player.gd` (stappen in zand), `scripts/fx.gd` (zand, en de muur die niemand ziet), `scripts/sfx.gd` (het bed van de open lucht van een level), `scripts/settings.gd` (de zonnekaart onder de open lucht), `scripts/menu.gd` (de levelkeuze), `scripts/net.gd` (`VERSION`).
+- `scripts/selftest.gd`: zones met een wacht, de proef met de schaduw, `--level=<level>` om één level alleen te spelen, en de tijdsgrens.
+- `tools/level_builder.gd`: `route_zone` neemt de wacht aan. `tools/kit/rooms.gd` breidt nu `field.gd` uit en roept in `_garrison` zijn voorganger aan.
+- `tools/bake_lightmaps.py`: een level zonder lightmap. `tools/effects/daylight.gd` en `tools/test_sound.gd`: de duinen erbij.
+- `tools/levels/powerhouse/plan.gd` en `scenes/levels/powerhouse_level.tscn`: de ene regel van de uitgang, op Michiels woord.
+- `tools/levels/showroom.gd` en zijn scène: de nieuwe stukken.
+- `CLAUDE.md`: de selftest duurt vijf minuten, en `--level`.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| De duinen bouwen | `tools/build_level.sh dunes` (een halve minuut); er valt niets te bakken |
+| Alleen dit level testen | `tools/selftest.sh --level=dunes` (50 s) |
+| Het contactblad en het keurmerk | `tools/zone_sheet.py dunes`, met `--posted` voor de vijanden erbij; op de speelinstelling met `--res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto` |
+| De bomen of de voertuigen opnieuw bouwen | `tools/build_model.sh trees` of `vehicles`, dan het level |
+| De getekende texturen opnieuw maken (naalden, helm, net, gaas, bosrand, sporen) | `tools/gen_foliage.sh [naam]` |
+| Een stuk van dichtbij bekijken | `tools/build_level.sh showroom`, dan `tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-50,1.7,46,0,-4"` |
+| De duinen spelen in een venster | `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/dunes.tscn -- --play`, of in het spel: Play, Dunes |
+| De geluiden horen | `tools/hear.py footstep_sand`, `tools/hear.py impact_sand`, `tools/hear.py ambience dunes --in=yard` |
+
+**Nog open**
+
+- **De bomen zijn getekend, niet gescand.** Van een paar meter zijn het kaarten met naalden erop. Een gescande den van bruikbare omvang is er niet onder CC0.
+- **Wie om de tafel staat, staat er alleen.** Er is geen houding voor overleggen of wijzen: ze staan in hun gewone rusthouding met het gezicht naar de kaart. In `assets/animations/ual1.glb` zit een `Idle_Talking_Loop` die daarvoor te gebruiken is.
+- **De boogjes van de wacht zijn er alleen voor wie host.** Wat een wachter ziet beslist de host; een gast krijgt het niet te horen. De wacht zelf loopt bij een gast wel.
+- **De wachttoren is leeg.** Wie boven staat kan niet naar de speler lopen, en de route eist dat van elke vijand.
+- **Zandzakken, tenten en netten kunnen niet stuk**, en een net of een tentdoek houdt een kogel niet tegen maar een blik ook niet: alleen de dichte wanden van de tent doen dat.
+- **Een robot klinkt in het zand als op beton**: alleen de speler heeft stappen in zand.
+- **Er zingt geen vogel.** Het bed is wind; iets wat nu en dan klinkt is er voor de duinen niet.
+- **De binnenplaats is groot en nog schraal**, en de muur is kaal.
+- **Een wal van zandzakken houdt op met tanden**: om en om steekt een halve zak uit. Een kopse zak aan het eind zou hem sluiten.
+- **Het navmesh meldt bij het laden vier randen die samenvallen** (`Navigation region synchronization had 4 edge error(s)`). Elke vijand komt bij de speler en de route is te lopen; waar die randen liggen is niet uitgezocht.
+- **De plattegrond die de twee fouten liet zien is een los script gebleven** en geen gereedschap: hoogte, steile kanten, schaduw, bomen, botsvormen, zones en posten van boven. Voor het volgende level met land is dat het eerste om te maken.
+- `tools/level_map.py` kan geen land tekenen: het kent alleen dozen op een vloer op nul.
+- De muziek is het stuk van de andere levels. Niemand heeft dat op het gehoor gekozen.

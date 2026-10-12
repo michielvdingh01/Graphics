@@ -70,7 +70,7 @@ func own_file(file: String) -> String:
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
-	tree.create_timer(300.0, true, true).timeout.connect(
+	tree.create_timer(420.0, true, true).timeout.connect(
 		func() -> void:
 			print("SELFTEST FAILED (timed out)")
 			tree.quit(1)
@@ -79,6 +79,27 @@ func _run() -> void:
 	# --routes leaves out everything but the levels and their routes, and
 	# lists every spawn point: for working on a level.
 	_routes_only = "--routes" in OS.get_cmdline_user_args()
+	# --level=<name> plays one level and nothing else, entered as the first
+	# is, from the menu: for working on that level. It says what --routes says.
+	for arg in OS.get_cmdline_user_args():
+		if not arg.begins_with("--level="):
+			continue
+		_routes_only = true
+		var levels := Menu.LEVELS.filter(func(level: Dictionary) -> bool: return (level.scene as String).get_file().get_basename() == arg.trim_prefix("--level="))
+		if levels.is_empty():
+			print("SELFTEST FAILED (no level called %s)" % arg.trim_prefix("--level="))
+			tree.quit(1)
+			return
+		var at := Menu.LEVELS.find(levels[0])
+		Save.clear()
+		tree.change_scene_to_file(levels[0].scene)
+		await tree.scene_changed
+		await _wait(0.5)
+		await _play_through(levels[0], Menu.LEVELS[at + 1].scene if at + 1 < Menu.LEVELS.size() else "")
+		_ran([levels[0].name])
+		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+		tree.quit(1 if _failures else 0)
+		return
 	# --fights leaves out everything but what the enemies do in a fight.
 	var fights_only := "--fights" in OS.get_cmdline_user_args()
 	if fights_only:
@@ -1598,6 +1619,8 @@ func _play_through(level: Dictionary, next: String) -> void:
 	# up afresh at every step.
 	var restarts := 0
 	var step := 0
+	# Whether the shade has been tried on a watch of this level, see _try_watch().
+	var watch_tried := false
 	while true:
 		var steps := []
 		steps.append_array(game.zones)
@@ -1612,6 +1635,26 @@ func _play_through(level: Dictionary, next: String) -> void:
 		step += 1
 		if here.area.is_in_group("route_zone"):
 			var robots: Array = here.robots.duplicate()
+			if here.watched:
+				# A watch is not switched off, and is not started by walking in.
+				_check("%s: the robots of %s keep watch and know of nothing" % [title, here.title], not here.started
+					and _kinds(robots) == _roster(game, here) and _on_watch(robots))
+				_move(player, entries.get(here.id, Vector3.ZERO))
+				await _wait(0.3)
+				_check("%s: walking in starts nothing where a watch is kept" % title, not here.started
+					and robots.all(func(robot: Node) -> bool: return robot.can_process()))
+				if not watch_tried and await _try_watch(game, here, title):
+					watch_tried = true
+				else:
+					robots[0].take_damage(1.0, robots[0].global_position + Vector3.UP, Vector3.DOWN)
+					await _wait(0.3)
+					_check("%s: a shot at one of them starts their fight" % title, here.fighting())
+				var fallen: int = game.kills
+				for robot in robots:
+					robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
+				await _wait(0.2)
+				_check("%s: and is cleared when they are down" % title, here.cleared and not game.fighting() and game.kills == fallen + robots.size())
+				continue
 			_check("%s: the robots of %s wait at their posts" % [title, here.title], not here.started
 				and _kinds(robots) == _roster(game, here) and _waiting(robots, _spawns(here)))
 			# The last zone is not walked into but shot at from outside it.
@@ -1820,12 +1863,70 @@ func _spawns(zone: RefCounted) -> Array:
 	return zone.area.get_children().filter(func(node: Node) -> bool: return node.is_in_group("enemy_spawn"))
 
 
-## True if every zone has the robots it lists standing at their posts.
+## True if every zone has the robots it lists standing at their posts, or
+## keeping watch where the level has a watch kept.
 func _all_posted(game: Node) -> bool:
 	for zone: RefCounted in game.zones:
-		if _kinds(zone.robots) != _roster(game, zone) or not _waiting(zone.robots, _spawns(zone)):
+		if _kinds(zone.robots) != _roster(game, zone):
+			return false
+		if not (_on_watch(zone.robots) if zone.watched else _waiting(zone.robots, _spawns(zone))):
 			return false
 	return not game.zones.is_empty()
+
+
+## True if those robots keep watch and none of them knows of anything. They
+## are not switched off, and one that walks a beat is not where it was posted.
+func _on_watch(robots: Array) -> bool:
+	return not robots.is_empty() and robots.all(func(robot: Node) -> bool: return robot.is_watching())
+
+
+## Tries the shade on the watch of a zone: somebody who stands in the shade
+## in front of one of its guards is not seen, and somebody who stands in the
+## light there is, which starts their fight. It takes a guard that stands
+## still with a spot of each kind in front of it; false if this zone has
+## none, and then nothing was tried.
+func _try_watch(game: Node, zone: RefCounted, title: String) -> bool:
+	var land: Node = load("res://scripts/land.gd").of(get_tree())
+	if land == null:
+		return false
+	var space: PhysicsDirectSpaceState3D = game.player.get_world_3d().direct_space_state
+	for guard: Node3D in zone.robots:
+		if not guard._round.is_empty():
+			continue
+		var ahead := Vector3(-sin(guard._guards), 0.0, -cos(guard._guards))
+		var eye: Vector3 = guard.global_position + Vector3.UP * guard.eye_height
+		var spots := {true: Vector3.INF, false: Vector3.INF}
+		for reach: float in [12.0, 14.0, 10.0, 16.0, 18.0]:
+			for turn: float in [0.0, 0.15, -0.15, 0.3, -0.3, 0.45, -0.45]:
+				var floor_ray := PhysicsRayQueryParameters3D.create(guard.global_position + ahead.rotated(Vector3.UP, turn) * reach + Vector3.UP * 20.0, guard.global_position + ahead.rotated(Vector3.UP, turn) * reach + Vector3.DOWN * 20.0, 1)
+				var floor_hit := space.intersect_ray(floor_ray)
+				if floor_hit.is_empty() or not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, floor_hit.position + Vector3.UP * 1.35, 1)).is_empty():
+					continue
+				var shade: float = land.shade_around(floor_hit.position)
+				if (shade > 0.9 or shade < 0.1) and spots[shade > 0.5] == Vector3.INF:
+					spots[shade > 0.5] = floor_hit.position
+		if spots[true] == Vector3.INF or spots[false] == Vector3.INF:
+			continue
+		# It looks straight ahead for as long as this takes, and the others of
+		# its watch stand still: this is about what one guard sees.
+		guard._looks = 0.0
+		guard._look = guard._guards
+		guard._wait = 1e6
+		var others: Array = zone.robots.filter(func(robot: Node) -> bool: return robot != guard)
+		for other: Node in others:
+			other.set_physics_process(false)
+		await _wait(0.8)
+		_move(game.player, spots[true])
+		await _wait(guard.notice_time + 1.0)
+		_check("%s: somebody who stands in the shade is not seen by the watch" % title, not zone.started and guard.awareness < 0.05)
+		_move(game.player, spots[false])
+		await _wait(guard.notice_time + 0.8)
+		_check("%s: somebody who stands in the light is, and that starts their fight" % title, zone.fighting() and guard.is_alert())
+		for other: Node in others:
+			if is_instance_valid(other):
+				other.set_physics_process(true)
+		return true
+	return false
 
 
 ## True if those robots stand where they were posted, switched off.

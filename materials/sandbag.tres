@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/hessian_380/hessian_380_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/hessian_380/hessian_380_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/hessian_380/hessian_380_arm.jpg" id="arm"]
+
+[resource]
+vertex_color_use_as_albedo = true
+albedo_color = Color(0.9, 0.82, 0.66, 1)
+albedo_texture = ExtResource("diff")
+orm_texture = ExtResource("arm")
+normal_enabled = true
+normal_texture = ExtResource("nor")
+ao_enabled = true
+uv1_scale = Vector3(3, 3, 3)

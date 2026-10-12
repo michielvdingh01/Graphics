@@ -16,6 +16,12 @@ const ARC_HOLD := 0.3
 const ARC_FADE := 0.9
 const ARC_COUNT := 4
 const ARC_SAME := deg_to_rad(20.0)
+## The ring that shows who of the watch is growing sure of the player, as a
+## share of the height of the screen, and from how far off a watch counts as
+## near enough to tell the player that he stands in the shade.
+const WATCH_RADIUS := 0.105
+const WATCH_NEAR := 70.0
+const LAND := preload("res://scripts/land.gd")
 ## Under this share of full health the red at the edges of the screen
 ## breathes: this many times a second, by this much of its strength either way.
 const PULSE_BELOW := 0.3
@@ -74,6 +80,28 @@ class HitArcs:
 				draw_polyline_colors(points, colors, thickness * band.x, true)
 
 
+class Watchers:
+	extends Control
+	## One for every enemy on watch that is growing sure of the player: on its
+	## x the angle it stands at, as for the arcs of a hit, on its y how sure it
+	## is, from 0 to 1.
+	var eyes: Array[Vector2] = []
+	var radius := 120.0
+
+	## A short arc towards each, inside the ring the hits show on: it grows
+	## from its middle as the enemy grows surer, and goes from white through
+	## amber to red. Full, the enemy knows.
+	func _draw() -> void:
+		for eye in eyes:
+			var tint := Color(1, 1, 1).lerp(Color(1, 0.8, 0.4), smoothstep(0.0, 0.5, eye.y)).lerp(Color(1, 0.3, 0.25), smoothstep(0.5, 1.0, eye.y))
+			for band: Vector2 in [Vector2(1.0, 0.35), Vector2(0.45, 0.9)]:
+				var points := PackedVector2Array()
+				for i in 13:
+					var angle := eye.x + (i / 12.0 - 0.5) * 0.5 * (0.25 + 0.75 * eye.y)
+					points.append(Vector2(sin(angle), -cos(angle)) * radius)
+				draw_polyline(points, Color(tint.r, tint.g, tint.b, band.y * (0.35 + 0.65 * eye.y)), 9.0 * band.x, true)
+
+
 class Grenades:
 	extends Control
 	var count := 0
@@ -106,6 +134,10 @@ var _banner := Label.new()
 var _crosshair := Crosshair.new()
 var _hitmarker := Hitmarker.new()
 var _hit_arcs := HitArcs.new()
+## Who is growing sure of the player, in a level where a watch is kept, and
+## the word for a player who stands where the watch does not see him.
+var _watchers := Watchers.new()
+var _shade_label := Label.new()
 ## The hits that still show where they came from. For each: `bearing`, the
 ## direction it came from in the world, level with the floor, which the arc
 ## keeps pointing at while the player turns; `age` in seconds; and `strength`,
@@ -197,6 +229,12 @@ func _ready() -> void:
 	_place(_crosshair, Control.PRESET_CENTER, 0)
 	_place(_hitmarker, Control.PRESET_CENTER, 0)
 	_place(_hit_arcs, Control.PRESET_CENTER, 0)
+	_place(_watchers, Control.PRESET_CENTER, 0)
+	_shade_label.text = "IN THE SHADE"
+	_shade_label.add_theme_font_size_override("font_size", 22)
+	_shade_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shade_label.modulate.a = 0.0
+	_place(_shade_label, Control.PRESET_CENTER_BOTTOM, 96)
 
 	_curtain.color = Color.BLACK
 	_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -238,6 +276,30 @@ func _bind() -> void:
 	_on_health_changed(_player.health, _player.MAX_HEALTH)
 	_on_objective_changed(game.objective, 0)
 	_on_kills_changed(game.kills)
+
+
+## What a player has to know of the enemies that keep watch: who of them is
+## growing sure of him, and whether he stands in the shade, where they hardly
+## see him. Nothing of it shows in a level without a watch, or once every
+## watch near by knows.
+func _watch(delta: float, half_height: float) -> void:
+	var view: Basis = _player.global_basis.inverse()
+	var near := false
+	_watchers.eyes.clear()
+	for enemy: Node3D in get_tree().get_nodes_in_group(&"watch"):
+		if not enemy.is_watching() or not enemy.can_process():
+			continue
+		var to := enemy.global_position - _player.global_position
+		near = near or to.length() < WATCH_NEAR
+		if enemy.awareness > 0.02:
+			var from: Vector3 = view * to
+			_watchers.eyes.append(Vector2(atan2(from.x, -from.z), clampf(enemy.awareness, 0.0, 1.0)))
+	_watchers.radius = half_height * 2.0 * WATCH_RADIUS
+	_watchers.visible = not _player.dead
+	_watchers.queue_redraw()
+	var land := LAND.of(get_tree())
+	var hidden: bool = near and not _player.dead and land != null and land.shade_around(_player.global_position) > 0.5
+	_shade_label.modulate.a = move_toward(_shade_label.modulate.a, 0.7 if hidden else 0.0, delta * 3.0)
 
 
 func _process(delta: float) -> void:
@@ -286,6 +348,8 @@ func _process(delta: float) -> void:
 		_hit_arcs.radius = half_height * 2.0 * ARC_RADIUS
 		_hit_arcs.thickness = half_height * 2.0 * ARC_THICKNESS
 		_hit_arcs.queue_redraw()
+
+	_watch(delta, half_height)
 
 	_hurt = maxf(_hurt - delta * 1.5, 0.0)
 	var low_health := clampf(1.0 - _health_ratio / 0.5, 0.0, 1.0) * 0.6
