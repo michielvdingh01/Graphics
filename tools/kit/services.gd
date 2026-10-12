@@ -175,9 +175,11 @@ func sign_plate(at: Vector3, inwards: Vector3, text: String, height := 0.2, mat 
 
 
 ## A bulkhead lamp on a wall: a cast housing with a cage over its glass. Its
-## light is baked into the lightmap whole, so that it costs nothing to draw
-## however many there are, and for the same reason it is no lamp to the
-## game: it cannot be shot out.
+## light is baked into the lightmap whole, and the lamp itself is there for
+## the bake alone: scripts/bake_only.gd takes it out of the game, where it
+## would cost every pixel within its range and light only what has no
+## lightmap. So it costs nothing to draw however many there are, and for the
+## same reason it is no lamp to the game: it cannot be shot out.
 func wall_lamp(at: Vector3, inwards: Vector3, on := true, reach := 7.0, energy := 4.0) -> void:
 	var small := DETAIL | NO_COLLIDE
 	var on_wall := _on_wall(at, inwards)
@@ -197,7 +199,15 @@ func wall_lamp(at: Vector3, inwards: Vector3, on := true, reach := 7.0, energy :
 	light.omni_attenuation = 1.3
 	light.shadow_enabled = false
 	light.light_bake_mode = Light3D.BAKE_STATIC
-	_add(light, _group("Lights", light.position))
+	# Outside every zone it stays with the other lamps: a level that is not
+	# cut into zones, the showroom for one, has no group of its own for it.
+	if _zone_at(light.position) == "":
+		_add(light, _group("Lights", light.position))
+		return
+	var baked := _group("Baked", light.position)
+	if baked.get_script() == null:
+		baked.set_script(load("res://scripts/bake_only.gd"))
+	_add(light, baked)
 
 
 ## A notice board with what was pinned to it when the place closed; `at` is

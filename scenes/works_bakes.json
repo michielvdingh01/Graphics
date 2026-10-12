@@ -1,9 +1,9 @@
 {
 	"archive": "8306dbc630038ed456eb3055c84720e906ee830a",
 	"assembly": "1b27d4c92cebbb97d10cf6c0eba6fa8fe79df814",
-	"boiler_house": "ba3d68b9b56f21427e6335816d9a40f3b434fc20",
+	"boiler_house": "7e84e6c04dad4c1c347c93760ce7c96696b822a8",
 	"canteen": "ef92a06e5dd9ac5c66f52c61ead198975021f88c",
-	"compressor_room": "de871f17c204a17d711c7561bf0a60899f025127",
+	"compressor_room": "528f575dd5989584c3491d2846555b05175d5227",
 	"despatch": "b7daef0adc0644a28edd362438e0be8fc18a6e95",
 	"east_corridor": "8a08e93e52798b450062076acd26ac2532b60d66",
 	"kitchen": "2504e7667107420e7b0892c0dbac79995c062be8",
@@ -16,10 +16,10 @@
 	"south_corridor_e": "e68a87a474ccd0e3a46ebdb1064d2aa8272ff2ed",
 	"south_corridor_w": "027fface94d4310707a1db91e2ef8ac3629e5750",
 	"stores": "c48d4ba435b620bf121545658aca9f52ef86ba02",
-	"switch_room": "b5359cd96a973d704236de4b241717eaf8535568",
+	"switch_room": "916ae9c98da45a8991e3f5057ba4e2e6796f7270",
 	"tool_room": "b40b239774e57f56b6305336c24431ac797bcca0",
 	"vestibule": "dacef3e25bb18519e5338a1f5a83a461c7d01858",
 	"west_corridor": "ccff89d25548cbacb609b0bda87e17cc24ad9e29",
 	"workshop": "9e03c35dbe18e8eb5b2a3d0570f1d01f985412d9",
-	"yard": "d27080775335e41a534b5869f15ca2f3b2d49ef4"
+	"yard": "10d41bbefd063482166c5fbe713e7d1a0524d4ed"
 }
