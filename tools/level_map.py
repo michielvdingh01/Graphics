@@ -50,6 +50,31 @@ def position(lines):
     return transform(lines)[3]
 
 
+def dashes(x, y, width, height, dash=8.0, gap=5.0, thick=2.0):
+    """The dashed outline of a rectangle as a filled rectangle per dash, laid
+    clockwise from the top left corner and round the corners, as
+    stroke-dasharray lays them. ImageMagick's own SVG renderer, which it falls
+    back on when rsvg-convert is not installed, leaves out every shape with
+    fill="none", stroke and all (seen with 7.1.2-29)."""
+    rects, run, period = [], 0.0, dash + gap  # run: how far round the outline the side starts
+    for side, length in enumerate((width, height, width, height)):
+        for n in range(int(run // period), int((run + length) // period) + 1):
+            # Where along this side the nth dash starts and ends.
+            a, b = max(n * period - run, 0.0), min(n * period + dash - run, length)
+            if b <= a:
+                continue
+            if side == 0:  # the top, left to right
+                rects.append((x + a, y - thick / 2, b - a, thick))
+            elif side == 1:  # the right side, downwards
+                rects.append((x + width - thick / 2, y + a, thick, b - a))
+            elif side == 2:  # the bottom, right to left
+                rects.append((x + width - b, y + height - thick / 2, b - a, thick))
+            else:  # the left side, upwards
+                rects.append((x - thick / 2, y + height - b, thick, b - a))
+        run += length
+    return rects
+
+
 def main():
     names = [a for a in sys.argv[1:] if not a.startswith("--")]
     name = names[0] if names else "factory"
@@ -138,7 +163,8 @@ def main():
         colour = "#2b2b2b" if high >= 1.7 else "#9a968a"
         out.append('<polygon points="%s" fill="%s"/>' % (" ".join(px(*c) for c in corners), colour))
     for label, x, z, w, d in zones:
-        out.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="none" stroke="#3a6ea5" stroke-width="2" stroke-dasharray="8 5"/>' % ((x - left) * SCALE, (z - top) * SCALE, w * SCALE, d * SCALE))
+        for dash in dashes((x - left) * SCALE, (z - top) * SCALE, w * SCALE, d * SCALE):
+            out.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#3a6ea5"/>' % dash)
         out.append('<text x="%.1f" y="%.1f" fill="#3a6ea5">%s</text>' % ((x - left) * SCALE + 8, (z - top) * SCALE + 20, label))
     if way_out:
         out.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#3c9a4c" fill-opacity="0.35" stroke="#3c9a4c"/>' % ((way_out[0] - left) * SCALE, (way_out[1] - top) * SCALE, way_out[2] * SCALE, way_out[3] * SCALE))

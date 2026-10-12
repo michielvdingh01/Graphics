@@ -2031,3 +2031,22 @@ Eerste gebruik, geteld op de GPU in de fabriek: plons, explosie, kist die vlam v
 - De bundel bij de uitgang staat 18 m buiten de deur (verder weg streept de schaduw), dus de stralen lopen een graad of vijf uiteen. Robots en het wapen in beeld vangen het koele licht op het fabrieksterrein en in de centrale niet.
 - Alleen schoten spatten op; een granaat of een explosie boven een plas niet.
 - De nieuwe scripts en shaders zonder `.uid`-bestand krijgen er een zodra de editor het project opent.
+
+## De zones op de kaart van een level
+
+Op 12 oktober 2026 gevraagd: `tools/level_map.py` tekende de blauwe zonegrenzen wel in de SVG, maar in de PNG ontbraken ze. Zonder `rsvg-convert` gebruikt ImageMagick (7.1.2-29) zijn eigen SVG-renderer, en die laat elke vorm met `fill="none"` weg, de lijn eromheen ook; een gevulde vorm met een lijn tekent hij wel. Gebouwd op de branch `claude/zealous-cannon-vaow32` en op Michiels woord gepusht, niet in de trunk gezet. Dat gebeurde in een sessie in de cloud: een Linux-container zonder Godot, zonder ImageMagick 7 en zonder de lightmaps uit LFS.
+
+**Wat er nu is**
+
+- Een zonegrens is een rij gevulde rechthoekjes, één per streepje, in dezelfde vorm als de lijnen van het raster: 8 px streep, 5 px open, 2 px dik, midden op de rand van de zone. Ze lopen met de klok mee vanaf de hoek linksboven en om de hoeken heen, zoals `stroke-dasharray` ze legde (`dashes()` in het script). Het script vraagt niets nieuws: geen `rsvg-convert` en geen andere ImageMagick.
+
+**Gecontroleerd**
+
+- Op de zonegrenzen na is de SVG regel voor regel dezelfde als op de trunk, voor het fabrieksterrein (23 zones, nu 2349 streepjes; de SVG gaat van 71 naar 230 kB) en voor de fabriek (5 zones, 455 streepjes). Er staat geen `fill="none"` meer in.
+- In Chromium getekend, de oude SVG tegen de nieuwe: alle pixels die verschillen liggen op de zonegrenzen. Bij het fabrieksterrein zijn het er 13, op hoeken waar een streepje omslaat; daar mist nu een hoekje van 1 bij 1 px. Bij de fabriek, waarvan de randen niet op hele pixels vallen, verschilt verder alleen de anti-aliasing langs de streepjes.
+- `dashes()` tegen het patroon van `stroke-dasharray`, langs de omtrek bemonsterd, voor 206 rechthoeken, ook kleiner dan één streepje en met gebroken maten: nergens een streepje te veel of te weinig.
+
+**Niet kunnen beoordelen**
+
+- De PNG zelf. ImageMagick in de container (6.9.12) leest helemaal geen SVG: zijn eigen renderer is er niet bij geïnstalleerd en `rsvg-convert` ook niet. Dat de streepjes in de PNG komen, volgt uit hun vorm: dezelfde `<rect ... fill="..."/>` als de rasterlijnen, die in de PNG op de Mac wel staan.
+- De selftest is niet gedraaid: er staat geen Godot in de container. Op Michiels woord toch gecommit; de wijziging raakt alleen dit script, en dat laadt Godot niet.
