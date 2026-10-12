@@ -5,21 +5,19 @@ extends StaticBody3D
 ## panes the level builder put there.
 ##
 ## A pane stops nothing. A shot goes through it and it breaks, and a blast
-## breaks every pane it gets to. The glass comes down in shards, the pane is
-## gone from the picture, and jagged teeth of it stay along the glazing bars:
-## the same teeth for the same pane every time, so that everybody who plays
-## sees the same window.
+## breaks every pane within its reach. The glass comes down in shards, the
+## pane is gone from the picture, and jagged teeth of it stay along the
+## glazing bars: the same teeth for the same pane every time, so that
+## everybody who plays sees the same window.
 ##
 ## It is in nobody's way: its panes are on a layer of their own, which no
-## shot, no look and no walker finds. Whoever fires a shot asks afterwards
-## which panes it went through, see Fx.tracer(), and a blast asks every
-## window what it gets to, see Blast.explode().
+## shot, no look and no walker finds. Every shot that is fired asks
+## afterwards which panes it went through, see Fx.tracer(), and a blast asks
+## every window what is within its reach, see Blast.explode().
 ##
 ## All the glass of a zone is one mesh, which the windows of that zone share:
 ## see Glazing.
 
-## The layer of the level itself, which stands in the way of a blast.
-const WORLD := 1
 ## What the level builder makes one pane of: a box of twelve triangles, each
 ## of its six sides with four points of its own.
 const CORNERS := 36
@@ -62,9 +60,6 @@ const SMALLEST := 0.4
 const LARGEST := 1.5
 ## The corners of a pane, going round it, from its middle.
 const AROUND: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
-## How near a pane the level may stand in the way of a blast and still let it
-## through, in metres: the leaf around the pane of a door.
-const FRAMED := 0.15
 
 
 ## The glass of one mesh of the level, which is every pane of a zone. The
@@ -389,19 +384,13 @@ func shot(shape: int, along: Vector3) -> void:
 
 
 ## A blast of `radius` metres goes off at `position`: it breaks every pane
-## within its reach that the level does not stand in front of. `ignored` is
-## what a blast looks past, as in scripts/blast.gd.
-func blast(position: Vector3, radius: float, ignored: Array[RID]) -> void:
+## within its reach. A wall in between does not save the glass.
+func blast(position: Vector3, radius: float) -> void:
 	if not (global_transform * _around).grow(radius).has_point(position):
 		return
-	var space := get_world_3d().direct_space_state
 	var broken := 0
 	for pane in _panes.size():
-		var at := middle(pane)
-		if is_shape_owner_disabled(pane) or at.distance_to(position) >= radius:
-			continue
-		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(position, at, WORLD, ignored))
-		if hit.is_empty() or (hit.position as Vector3).distance_to(at) <= FRAMED:
+		if not is_shape_owner_disabled(pane) and middle(pane).distance_to(position) < radius:
 			broken |= 1 << pane
 	if broken:
 		Net.show(self, &"_blow_out", [broken, position, radius])

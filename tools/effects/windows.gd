@@ -12,10 +12,9 @@ const LEVELS := {
 	"depot": [1, 3],
 	"powerhouse": [35, 303],
 }
+## The layer the glass is on, and the triangle corners of one pane.
 const WINDOW := 64
-## A pane is a box of twelve triangles.
 const CORNERS := 36
-const POINTS := 24
 
 var _test: SceneTree
 var _fx: Node
@@ -31,8 +30,8 @@ func run(test: SceneTree) -> void:
 	var windows: Array[Node] = _windows(game)
 	_count(game, "factory")
 
-	# A window with a pane missing already, and a pane of it that has both
-	# its neighbours in the row.
+	# A window that the builder left a pane out of, and the first of the
+	# panes it has.
 	var window: StaticBody3D = null
 	var hole := Vector3.INF
 	for one: StaticBody3D in windows:
@@ -79,12 +78,10 @@ func run(test: SceneTree) -> void:
 
 	# One shot, one pane.
 	var standing: int = _standing(windows)
-	var bursts: int = _fx._expiring.size()
 	_fx.tracer(from, to)
 	test.check(window.standing() == window.size() - 1 and window.net_state() == 1 << pane and _standing(windows) == standing - 1,
 		"a shot through a pane breaks that pane and no other")
-	test.check(space.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, WINDOW)).is_empty() or _later(space, from, to) != window,
-		"the pane is gone for the next shot")
+	test.check(_later(space, from, to) != window, "the pane is gone for the next shot")
 	var of_glass: Array = _shards()
 	test.check(of_glass.size() >= 2 and of_glass.all(func(burst: MeshInstance3D) -> bool:
 			return burst.get_instance_shader_parameter(&"area") == Vector2(window.measures(pane).x, window.measures(pane).y)),
@@ -104,8 +101,9 @@ func run(test: SceneTree) -> void:
 			return absf(local.y) < 0.001 and absf(local.x) <= half.x + 0.001 and absf(local.z) <= half.y + 0.001),
 		"the teeth stand in the opening of that pane, in the middle of where the glass was")
 
-	# Again through the hole, and through the one the builder left.
-	bursts = _fx._expiring.size()
+	# Again through the hole, and through the one the builder left: the
+	# streak of the shot is all that is added.
+	var bursts: int = _fx._expiring.size()
 	_fx.tracer(from, to)
 	test.check(_standing(windows) == standing - 1 and _fx._expiring.size() == bursts + 1, "a second shot through the hole breaks nothing")
 	bursts = _fx._expiring.size()
@@ -120,38 +118,26 @@ func run(test: SceneTree) -> void:
 	# A rifle, from the floor of the hall.
 	await _shoot(game, windows, space)
 
-	# A blast in front of another window: what is near goes, what is far stays.
+	# A blast in front of another window: what is within reach goes, what is
+	# not stays.
 	var other: StaticBody3D = null
-	var centre := Vector3.ZERO
 	for one: StaticBody3D in windows:
-		if one == window or one.size() < 12 or one.standing() < one.size():
-			continue
-		for side: float in [1.0, -1.0]:
-			centre = one.middle(0) + one.facing(0) * side
-			if space.intersect_ray(PhysicsRayQueryParameters3D.create(centre, one.middle(0), 1)).is_empty():
-				other = one
-				break
-		if other:
+		if one != window and one.size() >= 12 and one.standing() == one.size():
+			other = one
 			break
 	test.check(other != null, "there is a whole window to set off a blast in front of")
 	if other:
 		var reach := 2.5
-		var near: Array[int] = []
-		var far: Array[int] = []
+		var centre: Vector3 = other.middle(0) + other.facing(0)
+		var near := 0
 		for i: int in other.size():
-			var distance: float = other.middle(i).distance_to(centre)
-			if distance < 1.3:
-				near.append(i)
-			elif distance > reach:
-				far.append(i)
+			if other.middle(i).distance_to(centre) < reach:
+				near |= 1 << i
 		standing = _standing(windows)
-		var others: int = other.standing()
 		blast.explode(centre, reach, 150.0)
-		var state: int = other.net_state()
 		print("    a blast of %.1f m a metre from a window of %d panes broke %d" % [reach, other.size(), other.size() - other.standing()])
-		test.check(not near.is_empty() and near.all(func(i: int) -> bool: return state & (1 << i) != 0), "a blast breaks the panes that are near it")
-		test.check(not far.is_empty() and far.all(func(i: int) -> bool: return state & (1 << i) == 0), "and leaves the ones beyond its reach")
-		test.check(standing - _standing(windows) == others - other.standing(), "and those of no other window")
+		test.check(near != 0 and other.net_state() == near and other.standing() > 0, "a blast breaks the panes within its reach and leaves the ones beyond it")
+		test.check(standing - _standing(windows) == other.size() - other.standing(), "and those of no other window")
 
 	# Somebody who comes in later: a level afresh, and what the host says of it.
 	await test.frames(2)
@@ -182,7 +168,8 @@ func run(test: SceneTree) -> void:
 
 
 ## Checks the windows of a level against LEVELS: how many, how they are
-## called and how many panes they have, none of them more than fits.
+## called, that the level keeps them for whoever comes in later, and how many
+## panes they have: all the glass there is, and no window more than fits.
 func _count(game: Node, level: String) -> void:
 	var windows: Array[Node] = _windows(game)
 	var panes := 0
@@ -191,7 +178,7 @@ func _count(game: Node, level: String) -> void:
 	for i in windows.size():
 		panes += windows[i].size()
 		most = maxi(most, windows[i].size())
-		named = named and windows[i].name == "Window%d" % i and windows[i].collision_layer == WINDOW and windows[i].get_parent().name == &"Breakables"
+		named = named and windows[i].name == "Window%d" % i and windows[i].collision_layer == WINDOW and game._breakables.has(windows[i])
 	var glass := 0
 	for mesh in _glasses(game):
 		@warning_ignore("integer_division")
