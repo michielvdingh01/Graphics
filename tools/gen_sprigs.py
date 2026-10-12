@@ -130,6 +130,47 @@ def needles(sprig, feet, ways, lengths, width, colours, droop):
     sprig.add(corners.reshape(-1, 3), triangles, (colours[:, None, :] * tint).reshape(-1, 3))
 
 
+def leaves(sprig, feet, ways, lengths, width, colours):
+    """A narrow leaf from each of `feet` along `ways`: flat, widest half-way
+    and pointed at both ends."""
+    count = len(feet)
+    ref = np.where(np.abs(ways[:, 1:2]) < 0.9, np.array([[0.0, 1.0, 0.0]]), np.array([[1.0, 0.0, 0.0]]))
+    side = np.cross(ways, ref)
+    side /= np.linalg.norm(side, axis=1, keepdims=True)
+    up = np.cross(ways, side)
+    spin = sprig.rng.uniform(0.0, math.tau, count)
+    flat = side * np.cos(spin)[:, None] + up * np.sin(spin)[:, None]
+    corners = np.zeros((count, 4, 3))
+    corners[:, 0] = feet
+    corners[:, 1] = feet + ways * (lengths * 0.5)[:, None] + flat * width * 0.5
+    corners[:, 2] = feet + ways * lengths[:, None]
+    corners[:, 3] = feet + ways * (lengths * 0.5)[:, None] - flat * width * 0.5
+    one = np.array([[0, 1, 2], [0, 2, 3]])
+    triangles = (one[None, :, :] + (np.arange(count) * 4)[:, None, None]).reshape(-1, 3)
+    sprig.add(corners.reshape(-1, 3), triangles, np.repeat(colours, 4, axis=0))
+
+
+def berries(sprig, kind, start, way, length, thick):
+    """Berries packed round the wood from `start` along `way`, as sea
+    buckthorn carries them below its leaves."""
+    rng = sprig.rng
+    count = int(length / kind["berry_pitch"])
+    if count == 0:
+        return
+    side, up = across(way)
+    size = kind["berry"]
+    turn = rng.uniform(0.0, math.tau, count)
+    out = side[None, :] * np.cos(turn)[:, None] + up[None, :] * np.sin(turn)[:, None]
+    middles = start[None, :] + way[None, :] * (rng.uniform(0.0, 1.0, count) * length)[:, None] + out * (thick + size * rng.uniform(0.6, 1.4, count))[:, None]
+    points = np.array([[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], dtype=np.float64) * size
+    corners = (middles[:, None, :] + points[None, :, :]).reshape(-1, 3)
+    one = np.array([[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]])
+    triangles = (one[None, :, :] + (np.arange(count) * 6)[:, None, None]).reshape(-1, 3)
+    colours = np.array(kind["berry_colour"])[None, :] * rng.uniform(0.75, 1.2, (count, 1)) * np.array([[1.0, 1.0, 1.0]])
+    colours[:, 1] *= rng.uniform(0.8, 1.35, count)
+    sprig.add(corners, triangles, np.repeat(colours, 6, axis=0))
+
+
 def pine_shoot(sprig, kind, start, way, length, age, vigour):
     """One year's length of a pine twig from `start` along `way`, grown `age`
     years ago: its wood, and its needles if it still has them."""
@@ -138,6 +179,8 @@ def pine_shoot(sprig, kind, start, way, length, age, vigour):
     thick = kind["twig"] * (1.0 + 0.55 * age) * (0.7 + 0.3 * vigour)
     wood = np.array(kind["wood_young"]) if age == 0 else np.array(kind["wood_old"])
     tube(sprig, [start, end], [thick, thick * 0.85], wood * rng.uniform(0.85, 1.1), 5)
+    if "berry" in kind and age >= 1 and rng.uniform() < kind["berried"]:
+        berries(sprig, kind, start, way, length, thick)
     if age >= kind["keeps"]:
         return end
     # Pairs of needles round the twig, on a spiral.
@@ -163,7 +206,13 @@ def pine_shoot(sprig, kind, start, way, length, age, vigour):
         # Now and then a pair that has died and not yet dropped.
         dead = rng.uniform(0.0, 1.0, pairs) < kind["dead"] * (age + 0.2)
         colours[dead] = np.array(kind["dead_colour"]) * rng.uniform(0.8, 1.2, (int(dead.sum()), 1))
-        needles(sprig, feet, ways, lengths, kind["width"], colours, np.array([0.0, -1.0, 0.0]))
+        if kind.get("leaf"):
+            # Some show the silver of their underside.
+            turned_ = rng.uniform(0.0, 1.0, pairs) < 0.3
+            colours[turned_] = colours[turned_] * 0.6 + np.array(kind["silver"]) * 0.4
+            leaves(sprig, feet, ways, lengths, kind["width"], colours)
+        else:
+            needles(sprig, feet, ways, lengths, kind["width"], colours, np.array([0.0, -1.0, 0.0]))
     return end
 
 
@@ -250,6 +299,27 @@ KINDS["spray"].update({
 })
 
 
+# Sea buckthorn: crooked grey twigs that fork every way, narrow grey-green
+# leaves with a silver underside, and in autumn orange berries packed round
+# the wood of last year and the year before.
+KINDS["buckthorn"] = {
+    "grow": "pine", "leaf": True,
+    "year": 0.1, "last": 1.0, "twig": 0.0024, "needle": 0.05, "width": 0.0075, "pitch": 0.006,
+    "keeps": 2, "stand": [42.0, 58.0, 66.0], "candle": False,
+    "green": [[0.2, 0.27, 0.15], [0.15, 0.21, 0.13], [0.13, 0.18, 0.12]], "silver": [0.42, 0.46, 0.38],
+    "dead": 0.02, "dead_colour": [0.3, 0.24, 0.1],
+    "wood_young": [0.2, 0.17, 0.12], "wood_old": [0.13, 0.11, 0.09],
+    "bud": 0.012, "bud_colour": [0.16, 0.13, 0.1],
+    "cone": 0.0, "cone_colour": [0.0, 0.0, 0.0], "cones": 0.0,
+    "berry": 0.0042, "berry_pitch": 0.0022, "berry_colour": [0.78, 0.27, 0.025], "berried": 0.7,
+    "upturn": 0.06, "wander": 0.16, "flatten": 0.25,
+    "forks": [1, 2, 3], "fork_odds": [0.3, 0.45, 0.25], "fork_angle": (34.0, 72.0), "fork_vigour": (0.6, 0.9),
+    "dies": 0.3,
+}
+KINDS["buckthorn_spray"] = dict(KINDS["buckthorn"])
+KINDS["buckthorn_spray"].update({"fork_odds": [0.55, 0.38, 0.07], "fork_angle": (28.0, 52.0), "dies": 0.4, "flatten": 0.5})
+
+
 def grow(kind_name, seed, age, vigour):
     """One sprig of a kind: its twig begins at the origin and grows along +X,
     with +Y up. Returns its corners, triangles and colours."""
@@ -260,14 +330,14 @@ def grow(kind_name, seed, age, vigour):
     return sprig.arrays()
 
 
-def bough(seed, grown, length, forks):
+def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08)):
     """A whole bough end, for a tree that is seen from afar: bare wood that
     forks, `length` long, with the sprigs of `grown` (what grow() returned for
     each) at its ends and along the outer part of it. It begins at the origin
     and grows along +X, with +Y up, as a sprig does."""
     out = Sprig(seed)
     rng = out.rng
-    wood = np.array([0.2, 0.13, 0.08])
+    wood = np.array(wood)
 
     def limb(start, way, reach, thick):
         """Wood from `start` along `way`, sagging and then turning up; returns
@@ -475,15 +545,15 @@ def write_png(path, dots):
     bpy.data.images.remove(image)
 
 
-def bark_strip(rng, width, height):
-    """The bark of a pine from foot to top, left to right, for a trunk that
-    is seen from so far that it is drawn with its crown: grey-brown plates
-    below, orange and flaking from half-way up."""
+def bark_strip(rng, width, height, low, high):
+    """Bark from foot to top, left to right, for wood that is drawn with its
+    leaves: the trunk of a pine seen from afar, grey-brown plates below and
+    orange from half-way up, or the stems of a bush."""
     along = np.linspace(0.0, 1.0, width)[None, :]
     up = np.clip((along - 0.38) / 0.22, 0.0, 1.0)
     up = up * up * (3.0 - 2.0 * up)
-    low = np.array([0.42, 0.36, 0.31])
-    high = np.array([0.66, 0.42, 0.24])
+    low = np.array(low)
+    high = np.array(high)
     colour = low[None, None, :] * (1.0 - up[:, :, None]) + high[None, None, :] * up[:, :, None]
     # Plates and the cracks between them: streaks along the trunk.
     streaks = rng.uniform(0.0, 1.0, (height, width // 16 + 1))
@@ -511,7 +581,7 @@ def render_sheet(asset, out_dir, scratch):
     # sprig has to show the sky between its twigs.
     dress = [grow(sprig["kind"], asset["seed"] + 5000 + index * 101, sprig["age"], sprig.get("vigour", 1.0)) for index, sprig in enumerate(asset.get("bough_sprigs", []))]
     for column, spec in enumerate(boughs):
-        grown.append(bough(asset["seed"] + 977 + column * 131, dress if dress else grown[:len(sprigs)], spec["length"], spec["forks"]))
+        grown.append(bough(asset["seed"] + 977 + column * 131, dress if dress else grown[:len(sprigs)], spec["length"], spec["forks"], spec.get("wood", (0.2, 0.13, 0.08))))
     for column, (corners, triangles, colours) in enumerate(grown):
         what = "sprig" if column < len(sprigs) else "bough"
         scene = set_scene(asset.get("samples", 48))
@@ -534,7 +604,7 @@ def render_sheet(asset, out_dir, scratch):
     sheet[:, :, 3] = np.clip(sheet[:, :, 3] * asset.get("solid", 1.3), 0.0, 1.0)
     if strip:
         top = sheet.shape[0] - strip
-        sheet[top:] = bark_strip(np.random.default_rng(asset["seed"]), sheet.shape[1], strip)
+        sheet[top:] = bark_strip(np.random.default_rng(asset["seed"]), sheet.shape[1], strip, asset.get("bark_low", (0.36, 0.29, 0.22)), asset.get("bark_high", (0.41, 0.29, 0.19)))
         table.append({"view": "bark", "rect": [0, top, sheet.shape[1], strip]})
     write_png(os.path.join(out_dir, asset["id"] + ".png"), sheet)
     with open(os.path.join(out_dir, asset["id"] + ".json"), "w") as file:
