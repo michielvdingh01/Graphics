@@ -2032,9 +2032,218 @@ Eerste gebruik, geteld op de GPU in de fabriek: plons, explosie, kist die vlam v
 - Alleen schoten spatten op; een granaat of een explosie boven een plas niet.
 - De nieuwe scripts en shaders zonder `.uid`-bestand krijgen er een zodra de editor het project opent.
 
+## Wedstrijden: teams, bots en een buit (plan)
+
+Op 12 oktober 2026 gevraagd: een plan voor de klassieke spelsoorten, team deathmatch, ieder voor zich en capture the flag, zes tegen zes, met bots in het eigen team en in dat van de tegenstander zoals bij Call of Duty; een vlag die ook een voetbal of een grote banaan kan zijn; en spawnplekken die kloppen, ook op levels die er nog niet zijn. **Dit is een plan: er is niets van gebouwd.** Michiel heeft het dezelfde dag akkoord bevonden en in de trunk laten zetten. Wel is de code gelezen waar het op moet aansluiten, en is het idee voor de spawnplekken zonder GPU uitgeprobeerd op de vier levels die er staan: zie "Gemeten voor dit plan" en het blad `assets/arenas/sheets/spawnplekken.jpg`. Geschreven op de branch `wedstrijd`.
+
+**Waar het op verder bouwt, en wat ontbreekt**
+
+- **Samen spelen staat er.** Eén machine host en beslist over de wereld, elke machine over haar eigen speler, en alleen spelen is hetzelfde spel met niemand erbij (`scripts/net.gd`). Een medespeler is al een soldaat met het wapen van de speler in zijn handen, die loopt, richt, vuurt en valt (`scripts/puppet.gd`).
+- **De vijanden hebben een brein** dat dekking zoekt, voor een granaat wegrent en om brand heen loopt, en `scripts/squad.gd` weet waar in een level dekking is. De sandbox laat zien hoe iets anders dan de route een level overneemt.
+- **De wapens kloppen al.** De karabijn doodt iemand met 100 health in vier treffers, 0,29 s; de andere vier zitten tussen één schot en 0,35 s. Zo snel hoort het in dit soort spel te gaan: aan de wapens hoeft niets te veranderen.
+- **Wat ontbreekt:** spelers kunnen elkaar niet raken (een schot slaat ze over), er zijn geen teams, geen stand en geen einde, wie doodgaat staat weer bij het checkpoint, een vijand kent alleen "de speler" en schiet om de beurt een aangekondigd salvo van drie keer 7 schade, er kunnen acht spelers meedoen, en geen van de levels is als arena gebouwd.
+
+**Het ontwerp**
+
+- **Een wedstrijd is een tweede manier om een level te spelen**, naast de route. Een autoload `Match` (`scripts/match.gd`) houdt bij wat er gespeeld wordt, wie meedoet, de stand en de klok, en neemt het level over zoals de sandbox dat doet: de route staat uit, er staan geen robots en de uitgang blijft dicht. Wat beslist wordt, beslist de host, en wat te zien is loopt via `Net.show`, zoals nu. Alleen tegen bots is dus dezelfde code als met vrienden erbij.
+- **Iedereen die meedoet is een deelnemer**: een mens of een bot, met een nummer, een naam, een team en een stand. **Een bot is een pop zoals die van een medespeler**, alleen komt wat hij doet van een brein op de host in plaats van van een andere machine. Raken, doodgaan, terugkomen en tellen gaan voor mens en bot door dezelfde code, en op de machine van een gast is een bot niet van een speler te onderscheiden. Mensen houden het nummer van hun machine, bots krijgen negatieve nummers.
+- **Een spelsoort is een klein bestand met regels** (`scripts/modes/`): wie bij wie hoort, wat een punt oplevert, waar je terugkomt, wat de bots willen en wanneer het voorbij is. Een vierde spelsoort is een bestand erbij.
+- **Een arena is een level, of een stuk ervan, met wat een wedstrijd ervan moet weten**: waar de teams beginnen, waar de buit staat en waar je mag terugkomen. Dat laatste wordt niet met de hand gezet maar uitgerekend uit het navmesh, en per keer gekozen naar waar iedereen op dat moment staat.
+- **De buit is een regel in een tabel**: een model, hoe je het draagt en waar het op staat. Vlag, voetbal en banaan zijn drie regels.
+
+**De spelsoorten**
+
+| | Team deathmatch | Ieder voor zich | Capture the flag |
+|---|---|---|---|
+| Wie | twee teams van 1 tot 6 | 2 tot 12 | twee teams van 2 tot 6 |
+| Een punt | een kill | een kill | de buit van de ander op je eigen standaard zetten, terwijl je eigen buit daar staat |
+| Gewonnen bij | 50 | 25 | 3 |
+| Of na | 10 minuten: wie voor staat | 10 minuten | 12 minuten |
+| Terug na | 3 s | 2 s | 5 s |
+| Waar je terugkomt | bij je team | ver van iedereen | op de grond van je eigen basis |
+
+- **Health komt in een wedstrijd helemaal terug**, na vijf seconden zonder treffer; er vallen geen cellen. Wie terugkomt heeft waarmee een level begint, en een kill laat voor de speler een blik munitie liggen. Een bot raakt door zijn magazijn heen, niet door zijn reserve.
+- **Je eigen team raak je niet**, je eigen granaat raakt jou wel. Teamgenoten lopen door elkaar heen: niemand staat klem in een deuropening achter een bot.
+- **Wie terugkomt is anderhalve seconde onkwetsbaar**, of tot hij zelf schiet.
+- **Capture the flag.** De buit pak je door ertegenaan te lopen. Wie hem draagt laat hem vallen als hij sterft; de eigenaars brengen hem terug door hem aan te raken, en na twintig seconden gaat hij vanzelf. De drager is voor zijn eigen team altijd te zien; voor de tegenpartij zolang een van hen hem ziet, en anders elke vijf seconden even.
+- Alle getallen staan per spelsoort op één plek (`assets/match.json`), zoals de moeilijkheid in `Settings.RULES`. Het zijn eerste gokken.
+
+**Bots**
+
+- **Instellen zoals bij Call of Duty.** Op het scherm van de wedstrijd kies je de teamgrootte, hoeveel bots er in je eigen team zitten, hoeveel in het andere, en per team hoe goed ze zijn. Zeg je niets, dan vullen bots elk team aan tot de teamgrootte. Een vriend die binnenkomt neemt de plaats van een bot in; gaat hij weg, dan komt de bot terug.
+- **Een bot is een speler**: 100 health, de wapens van de speler met hun eigen schade, vuursnelheid, spreiding, magazijn en herlaadtijd, en dezelfde loopsnelheden. Elke bot draagt één hoofdwapen, verdeeld over het team (karabijn, pistoolmitrailleur, shotgun, scherpschuttersgeweer), en het pistool.
+- **Wat hij weet, heeft hij gezien of gehoord.** Zien: binnen zijn blikveld, met een vrije lijn, na zijn reactietijd. Horen: een schot zover het draagt (de duinen brengen dat mee voor de vijand die de wacht houdt, `hears`), rennen dichtbij, en vanwaar hij zelf geraakt wordt. Wat één bot weet, weet zijn team een seconde later (`scripts/team_mind.gd`): de laatste plek van elke vijand, en hoe oud dat is. Door muren kijkt niemand.
+- **Richten is een veer, geen sprong.** Zijn richtpunt loopt achter het doel aan en komt tot rust; hoe snel en met hoeveel ruis is zijn niveau. Elk schot is een echte straal langs waar zijn loop wijst, met de spreiding van het wapen. Dekking werkt dus, en een misser slaat in naast je hoofd en breekt de ruit erachter.
+- **In een gevecht** kiest hij tussen opdringen, standhouden vanuit dekking (de plekken van `Squad`), opzij stappen, en terugtrekken om te herladen of bij te komen: naar zijn health, zijn magazijn en de afstand die bij zijn wapen past. Voor een granaat rent hij weg en om brand loopt hij heen, zoals de vijanden al doen. Om de beurt schieten doet hij niet: dat is er om één speler ruimte te geven tegen vijf.
+- **Daarbuiten** volgt hij de spelsoort. Team deathmatch: in paren naar waar het team de vijand het laatst zag, en anders langs de wegen van de arena naar de overkant. Ieder voor zich: van de ene drukke plek naar de andere. Capture the flag: het team verdeelt rollen, en opnieuw bij elk nieuws. Van zes gaan er drie halen, blijven er twee thuis en zwerft er één in het midden; draagt iemand de buit, dan lopen de halers met hem mee; ligt de eigen buit ergens, dan gaat wie het dichtstbij is hem terugbrengen. Wat jij doet telt mee: blijf je thuis, dan gaat er een bot meer halen; ga je halen, dan loopt er een met je mee.
+- **Vastlopen wordt gemerkt.** Wie anderhalve seconde niet vooruitkomt zoekt een andere weg, wie het na vijf seconden nog niet lukt een ander doel, en de test telt elke keer.
+- **Wat een bot in de eerste versie niet doet:** springen, bukken en zichtbaar herladen (de pop heeft er geen houding voor), en praten.
+
+De niveaus, als eerste gok; ze staan in één tabel (`assets/bots.json`):
+
+| | Recruit | Regular | Hardened | Veteran |
+|---|---|---|---|---|
+| Van zien tot het eerste schot | 0,9 s | 0,55 s | 0,35 s | 0,22 s |
+| Hoe ver hij er bij dat schot naast zit | 3,5° | 2° | 1,2° | 0,6° |
+| Tijd waarin zijn richtpunt het doel inhaalt | 0,9 s | 0,6 s | 0,4 s | 0,25 s |
+| Blikveld | 90° | 110° | 120° | 140° |
+| Dekking nemen en omlopen | zelden | ja | ja | ja, en herladen in dekking |
+| Granaten | nee | nee | soms | ja |
+
+**Spawnplekken**
+
+Een goede plek om terug te komen is er een waar niemand je ziet aankomen, waar je team dichtbij is en de vijand niet, vanwaar je binnen een paar tellen weer meedoet, en die niet elke keer dezelfde is. Welke plek dat is hangt af van waar iedereen op dat moment staat. Vaste punten per level kunnen dat niet weten, en ze zouden voor elk nieuw level met de hand gezet moeten worden. Daarom worden de plekken uitgerekend en wordt er per keer gekozen (`scripts/arena.gd`).
+
+- **De plekken komen uit het navmesh.** Als een level geladen is: om de twee meter een plek op alle vloer waar je kunt komen, voor zover er iemand kan staan. Dat zijn er 155 in de fabriek en 592 op het fabrieksterrein, in 3 tot 9 ms. Van elke plek wordt één keer bewaard hoe open hij ligt (welk deel van de andere plekken hem ziet) en in welke richting je er het verst kijkt.
+- **Loopafstanden komen uit een net over het navmesh**: een knoop op elke hoek en midden op elke gedeelde rand van zijn polygonen, en binnen een polygoon loop je recht. Dat zit gemiddeld 2 tot 6% naast de route die het navmesh zelf geeft, op zijn slechtst 12%. Het net bouwen kost 2 tot 7 ms; de afstand van een groep mensen naar álle plekken tegelijk 3 tot 11 ms.
+- **Wat een plek uitsluit:**
+  - een vijand binnen 12 m, of een die er in minder dan 18 m naartoe loopt;
+  - een vijand die het hoofd of de borst ziet van wie daar zou staan, met de lijnen waarmee `Squad` dekking keurt;
+  - iets dat op ontploffen staat of brandt, binnen zijn bereik;
+  - een dood binnen 8 m in de laatste zes seconden;
+  - iemand die er staat, of er binnen drie seconden komt te staan.
+- **Wat een plek beter maakt:**
+  - de dichtstbijzijnde vijand op 30 tot 50 m lopen: niet erbovenop, en niet aan de andere kant van de map;
+  - een teamgenoot op 6 tot 20 m lopen die zelf niet onder vuur ligt;
+  - dichter bij je eigen mensen dan bij de vijand, in loopafstand;
+  - weinig open;
+  - niet de plek of de kamer van de vorige keer, en niet waar je net doodging.
+  Uit de beste drie wordt geloot. Je staat er met je gezicht naar het eerste stuk van de weg naar je team, of naar je doel, en nooit naar een muur.
+- **Team deathmatch: de kanten liggen niet vast.** Bij het begin staat elk team op een rij in zijn basis, gezicht naar buiten. Daarna is jouw kant waar je team staat. Dringt een team het andere terug tot in zijn basis, dan komt dat team niet voor de loop van de aanvaller terug maar elders, en wisselen de kanten zonder dat daar een regel voor is. De plekken van de laatste tien seconden tellen mee, zodat het niet bij elke stap omslaat.
+- **Ieder voor zich:** geen team en geen kant. Zo ver mogelijk van iedereen, zo weinig open mogelijk.
+- **Capture the flag:** alleen op de grond van je eigen basis: de plekken binnen 25 m lopen van je standaard, niet binnen 6 m ervan. Is daar niets veilig, dan in het achterland, de rest van je eigen helft. Nooit in de helft van de ander.
+- **Als er niets veilig is:** eerst telt zicht alleen nog binnen 30 m, dan afstand vanaf 8 m, en anders wordt het de plek die het verst van elke vijand ligt. Zo'n noodspawn wordt geteld; de anderhalve seconde onkwetsbaarheid is ervoor.
+- **Kiezen gebeurt terwijl je dood bent.** In de proef kostte één keuze 6,5 tot 39 ms, het meest op het fabrieksterrein. Dat wordt over een paar frames gedaan in de seconden voor je terugkomt, en de gekozen plek en twee reserves worden op het laatste moment nog eens nagekeken.
+- **Wat een level erbij kan zeggen**, in zijn plan, naast de route: `arena()` voor het stuk waar gespeeld wordt, `base()`, `flag_stand()`, `spawn_ground()` en `no_spawn()`. De bouwer zet ze onder `Level/Arena`, zoals de route onder `Level/Route`. Zegt een level niets, dan zijn de bases de twee plekken die in loopafstand het verst uit elkaar liggen, staat de buit op de meest beschutte plek met drie meter vrije vloer bij elke basis, en is alles daartussen arena. **Voor de vier bestaande levels hoeft dus niets herbouwd of gebakken te worden.** Wat aan die afleiding niet bevalt, kan per level worden overschreven in `assets/arenas.json`.
+
+**Het blad** `assets/arenas/sheets/spawnplekken.jpg` laat de regels zien op twee levels, elk op één moment van zes tegen zes en één moment van ieder voor zich met twaalf. Op het fabrieksterrein zijn 409 van de 592 plekken veilig als de vijand tot het midden is gekomen, en komt de speler terug in de werkplaats, één deur achter zijn team op het binnenterrein; bij ieder voor zich in het archief, het verst van iedereen. In het depot zijn 42 van de 363 plekken veilig, en bij ieder voor zich 5: het is één open terrein, en de gekozen plek is beide keren het poorthuisje in de zuidoosthoek. Wie daar staat te wachten, weet waar iedereen terugkomt.
+
+**Wat de bestaande levels als arena zijn**
+
+| | Factory | Works | Depot | Powerhouse |
+|---|---|---|---|---|
+| Vloer waar je kunt komen | 765 m² | 2 698 m² | 1 693 m² | 1 610 m² |
+| Plekken om te staan | 155 | 592 | 363 | 362 |
+| Van eind tot eind lopen, en sprintend | 71 m, 9 s | 220 m, 27 s | 74 m, 9 s | 186 m, 23 s |
+| Hemelsbreed | 64 m | 58 m | 63 m | 58 m |
+| Wegen door het midden | één ruimte, 22 m breed | één doorgang, één plek breed | vijf, tussen de containers | één ruimte |
+| Langste zichtlijn | 48 m | 50 m | 58 m | 38 m |
+| Hoe open: welk deel van de andere plekken een plek ziet (mediaan) | 0,52 | 0,07 | 0,31 | 0,11 |
+| Ieder voor zich met twaalf: veilige plekken gemiddeld, en in de slechtste van twintig keer | 5, geen | 160, 101 | 4, geen | 58, 27 |
+| Teams van zes, de vijand in zijn eigen helft: veilig in de jouwe | 44% | 94% | 36% | 84% |
+| Teams van zes, de vijand overal: veilig in jouw helft, gemiddeld en in de slechtste van twintig | 27%, geen | 50%, 98 plekken | 8%, 1 plek | 37%, 26 plekken |
+| Meeste spelers bij ieder voor zich, als er negentien van de twintig keer acht veilige plekken moeten overblijven | 5 | 16 of meer | 7 | 16 of meer |
+| Grootste team dat teruggedrongen nog zo terug kan komen | geen | 8 of meer | 3 | 8 of meer |
+
+- **Het fabrieksterrein draagt zes tegen zes**, en de centrale ook, krapper. **De fabriek en het depot zijn te klein en te open voor meer dan drie tegen drie**: in de fabriek ziet een plek de helft van alle andere, het depot is één open terrein. Ook met drie tegen drie blijven daar soms maar een paar veilige plekken over, in de fabriek een enkele keer geen; daar is de onkwetsbaarheid bij terugkomen voor. Het scherm van de wedstrijd biedt per arena niet meer spelers aan dan deze regel toelaat.
+- **Geen van de binnenlevels heeft meer dan één weg tussen zijn uiteinden.** Het fabrieksterrein is 220 m lopen bij 58 m hemelsbreed, door één doorgang in het midden: de route is één lijn, zoals hij voor de campagne bedoeld is. Voor team deathmatch en ieder voor zich is dat te spelen. Voor capture the flag is het één gang heen en dezelfde gang terug, 27 seconden sprinten per kant. Met de tabel kunnen de bases daar dichter bij elkaar gezet worden; een goede map wordt het er niet van.
+
+**Het keurmerk voor een arena** (`tools/arena_sheet.py <level>`, zonder GPU): de tabel hierboven voor één level, met een oordeel per regel, en twee kaarten. De eerste zoals het blad: de plekken naar hoe open ze liggen, de bases, de standaards en de wegen ertussen. De tweede na een wedstrijd van alleen bots, versneld nagespeeld: waar gespawnd en waar gestorven is. Uit die wedstrijd komen de cijfers waar het om gaat:
+
+- niemand die terugkomt in het zicht van een vijand, en geen noodspawns;
+- minder dan 2% sterft binnen drie seconden na terugkomen zonder zelf geschoten te hebben;
+- de helft is binnen 4 tot 10 seconden weer in gevecht;
+- over tien wedstrijden wint elke kant er vier tot zes;
+- geen bot loopt vast.
+
+Een level dat er nog niet is, wordt zo op de dag dat het gebouwd wordt gekeurd, voor er iemand in gespeeld heeft.
+
+**Wat een arena voor zes tegen zes moet hebben**, voor wie de volgende levels bouwt. De getallen komen uit de tabel hierboven en uit de sprintsnelheid van 8 m/s.
+
+- **Tussen de bases 110 tot 170 m lopen**, 14 tot 21 seconden sprinten; hemelsbreed 60 tot 100 m.
+- **Drie wegen tussen de bases**, elk ten minste 2,4 m breed en leeg, de langste hooguit anderhalf keer de kortste, met op twee plekken een dwarsverbinding. Geen doodlopende kamer verder dan één ruimte van een doorgaande weg, behalve in een basis.
+- **2 000 tot 4 000 m² vloer** waar je kunt komen, en gesloten genoeg dat een plek doorgaans niet meer dan 15% van de andere ziet. Het fabrieksterrein haalt dat ruim, het depot bij lange na niet.
+- **Elke basis:** drie uitgangen, 40 plekken (160 m²) om terug te komen buiten het zicht van het midden en van de andere basis, en de standaard 8 tot 15 m daarvandaan, vanuit het midden niet te zien.
+- **Zichtlijnen** tot 60 m, en dan op één of twee plekken.
+- **Alles is te lopen.** Bots springen niet: een trap is een helling, een tussenvloer heeft twee opgangen.
+- **Een arena mag een stuk van een groter level zijn**, als dat stuk dicht is: muren, dichte deuren of land waar je niet overheen komt. Het duinenlevel dat nu gebouwd wordt is 340 bij 230 m: met twaalf is dat ruim 6 000 m² land de man, tegen 225 m² vloer op het fabrieksterrein, en dan vindt niemand elkaar. Het complex of het kamp daarin kan wel een arena zijn.
+
+**De buit**
+
+- `assets/prizes.json` noemt per buit: het model (`scenes/models/flag.scn`, `football.scn`, `banana.scn`, in code gebouwd zoals de wapens en de cellen: `tools/models/prizes.gd`), waar het op staat (een voet met een mast, een stip op de grond, een kist), hoe een soldaat het draagt (op de rug, onder de arm, over de schouder), wat ervan de kleur van het team krijgt (het doek, de vlakken van de bal, een lint), en de woorden en geluiden erbij.
+- `scripts/prize.gd` kent drie toestanden: thuis, gedragen, op de grond. De regels zijn van de spelsoort en niet van de buit: dezelfde bal kan later één bal in het midden zijn die je bij de ander moet binnenbrengen.
+- Welke buit er gespeeld wordt kies je op het scherm van de wedstrijd. Een nieuwe buit is een model en een regel in de tabel; de test loopt ze allemaal af: pakken, dragen, laten vallen, terugbrengen, binnenbrengen.
+- De eerste versie: wat valt, blijft liggen waar het viel. Een bal die wegrolt is leuker en moet dan op elke machine op dezelfde plek uitkomen; dat komt erna.
+
+**Teams uit elkaar houden**
+
+- **Teamgenoten hebben een blauw teken en hun naam boven het hoofd**, ook door muren heen, flauwer naarmate ze verder weg zijn. Wie dat niet heeft, is van de ander. De naam van een vijand zie je alleen onder je vizier. Blauw tegen oranje, niet rood tegen groen: dat is ook voor wie kleuren slecht onderscheidt uit elkaar te houden.
+- **Een tweede uniform.** De vijf soldaten dragen hetzelfde. De hele textuur kleuren (`tint` in een thema) kleurt het gezicht mee. De schilderroute van de personages weet van elke texel waar op het lijf hij ligt (`tools/characters/looks.py`, waarmee zombies en clowns geschminkt zijn): een look erbij schildert de kleding van het tweede team anders en haalt de vlag van de mouw.
+- **Een team mag ook een andere bezetting zijn**: soldaten tegen clowns, of tegen zombies met geweren. De bezettingen staan er al; het is een keuze op het scherm van de wedstrijd.
+
+**Scherm, menu en geluid**
+
+- **"Multiplayer" op het titelscherm** opent het scherm van de wedstrijd: spelsoort, arena, teamgrootte, bots bij jou en bij de ander met hun niveau, de stand waarbij gewonnen is, de tijd, de buit, en een schakelaar om anderen op jouw adres te laten meedoen. Wat je kiest wordt onthouden. Meedoen met andermans wedstrijd blijft "Join" onder "Play together". Vanaf de opdrachtregel: `--match=<soort>:<level>:<aantal>[:<buit>]`, met het aantal per team, of bij ieder voor zich in totaal.
+- **In beeld** (`scripts/match_hud.gd`, naast de HUD die er is): bovenaan de stand en de klok; waar nu het doel van de route staat, wat er te doen is ("Bring it home"); wie wie neerhaalde; de buit met zijn afstand, thuis, onderweg of op de grond; het scorebord onder Tab; als je dood bent wie het deed, waarmee, en de tellen tot je terugkomt; aan het eind de winnaar, de tabel en opnieuw, een andere arena of stoppen.
+- **Geluid.** Signalen voor het begin, de laatste minuut, de buit gepakt, gevallen, terug en binnen (anders voor jouw team dan voor het andere), gewonnen en verloren. Gesynthetiseerd zoals de rest, elk in twee of drie varianten om op het oor te kiezen. Geen stem: daar zijn opnamen of een spraakdienst voor nodig.
+
+**Samen**
+
+- De host laat de bots lopen en zegt twintig keer per seconde waar ze zijn, zoals nu met de robots; hun schoten, treffers en dood gaan met dezelfde berichten als die van een speler.
+- Een mens die een mens raakt: de machine van de schutter beslist of het raak was, op het beeld dat zij heeft, en vraagt de host om de schade; de machine van wie geraakt wordt houdt zijn eigen health bij, zoals nu, en meldt zijn dood met wie het deed. Dat neemt elke machine op haar woord: goed onder vrienden, zoals het hele spel.
+- De host kiest de spawnplekken, houdt de stand, de klok en de buit bij, en vertelt wie later binnenkomt hoe het ervoor staat. `MAX_PLAYERS` gaat van 8 naar 12 en `VERSION` omhoog.
+
+**Wat het kost**
+
+- **Bekend.** Zestien soldaten tegelijk in gevecht, op de instellingen waarmee gespeeld wordt: het gemiddelde blijft gelijk en de 1% low zakt twee tot drie fps ("Zestig beelden op het volle scherm"). Een lopende pop poseren kost 52 microseconden per frame, voor elf bots 0,6 ms. Dekking opzoeken over een heel level in plaats van alleen de zones van de route: 67 tot 233 ms, één keer bij het laden.
+- **Niet bekend.** Elf figuren die nooit stilstaan en overal in het level lopen: elke lamp met schaduw waar er een onderdoor loopt tekent die schaduw opnieuw, en een robot hoort bij geen zone (het open punt uit "Zestig beelden"). Het denken van elf bots op de processor. Twaalf wapens tegelijk in het geluid. En wat er de eerste keer hapert: de nieuwe uiterlijken moeten mee in `Fx.rehearse()`.
+- **Stap 1 meet het**, om en om met een leeg level, op 3456×2160 met MetalFX. De maat: de vaste standpunten van de arena blijven op 60. Lukt dat niet, dan volgt een figuur de laag van de zone waarin hij staat, en denkt een bot die niet getekend wordt half zo vaak.
+
+**De stappen**
+
+Stap 1 raakt de bestanden die iedereen raakt en gaat dus eerst, alleen. De sessie die de duinen bouwt had op 12 oktober ongecommit werk in zeven van die bestanden; stap 1 begint als dat in de trunk staat. Daarna kunnen 2a tot en met 2e tegelijk, elk in eigen, nieuwe bestanden.
+
+| Stap | Wat | Wacht op | Wat je ervan bekijkt |
+|---|---|---|---|
+| 1. Een ruw potje | `Match` en de deelnemers: teams, elkaar raken, wie wie neerhaalde, de stand en de klok. Team deathmatch en ieder voor zich. Bots die naar de dichtstbijzijnde vijand lopen die ze kennen en schieten. Terugkomen op de veilige plek die het verst van de vijand ligt. De stand in beeld, starten vanaf het titelscherm en met `--match=`. De meting van wat twaalf figuren kosten | de duinen in de trunk | spelen: `GODOT_WINDOW=1 tools/godot.sh -- --play --match=tdm:works:6` |
+| 2a. Bots | het brein, het team dat kennis deelt, de niveaus (`scripts/bot.gd`, `scripts/team_mind.gd`, `assets/bots.json`) | 1 | spelen: één tegen één in de fabriek tegen elk niveau, `--match=ffa:factory:2 --bots=veteran`, dan zes tegen zes |
+| 2b. Arena en spawnplekken | de plekken, het net, het kiezen, per spelsoort; wat een level erbij kan zeggen; het keurmerk (`scripts/arena.gd`, `assets/arenas.json`, een la `tools/kit/arena.gd` in de bouwdoos, `tools/arena_sheet.py`) | 1 | het blad per level, en na een wedstrijd van bots de kaart van waar gespawnd en gestorven is |
+| 2c. Het scherm eromheen | het scherm van de wedstrijd, de stand, het scorebord, de tekens boven teamgenoten, dood en einde, de signalen (`scripts/match_hud.gd`, `scripts/match_menu.gd`) | 1 | spelen; de signalen met `tools/hear.py`, twee of drie varianten elk |
+| 2d. De buit | vlag, voetbal, banaan en waar ze op staan; dragen op de pop (`tools/models/prizes.gd`, `scripts/prize.gd`, `assets/prizes.json`) | niets voor de modellen, 1 voor het dragen | één blad: elk van de drie op zijn standaard, gedragen van voren, opzij en achter, en op de grond |
+| 2e. Twee uniformen | de look voor het tweede team, de vlag van de mouw (`tools/characters/looks.py`, vijf personages erbij) | niets | één blad: de twee teams naast elkaar op 5, 20 en 40 m, in het licht van de hal en in een donkere hoek |
+| 3. Capture the flag | de regels, de rollen van de bots, de buit in beeld en in het geluid (`scripts/modes/ctf.gd`) | 2a, 2b, 2d | spelen: `--match=ctf:works:6:banana` |
+| 4. Samen | alles over de lijn, later binnenkomen, een bot die plaatsmaakt; `tools/nettest.sh` speelt een wedstrijd | 2a, 2b, 2c, 3 | de test, en spelen met een vriend |
+| 5. De eerste arena voor zes tegen zes | een map naar "Wat een arena voor zes tegen zes moet hebben", gebouwd en gebakken door de agent van "Kit-ruimtes" | 2b, voor het keurmerk | het contactblad, het arenablad, spelen |
+| 6. Afstellen | de getallen van de bots en de spelsoorten, naar wat je er onder het spelen van zegt | wat er dan staat | |
+
+Wat stap 1 aan de gedeelde bestanden verandert, zodat de stappen erna ze met rust kunnen laten: `scripts/game.gd` roept `Match` aan zoals het de sandbox aanroept; `scripts/puppet.gd` krijgt een team, een hoofd dat geraakt kan worden en de mogelijkheid door de host bestuurd te worden; `scripts/player.gd` een team; `scripts/weapons.gd` raakt wie de wedstrijd zegt dat te raken is en zegt erbij wie schoot; `scripts/blast.gd` en `scripts/grenade.gd` zeggen wie gooide; `Settings.rules()` geeft in een wedstrijd de regels van de wedstrijd; `scripts/net.gd` twaalf spelers en de opzet van de wedstrijd in wat een gast te horen krijgt; `scripts/menu.gd` één knop; `project.godot` de autoload, twee botslagen voor de teams (9 en 10; 7 is het glas) en een toets voor het scorebord. Een test `tools/test_match.sh` speelt zonder venster een hele wedstrijd van alleen bots, en komt in de tabel van `CLAUDE.md`. Stap 2b voegt zijn functies aan de bouwer toe zonder een level te herbouwen: het eerste level dat ze gebruikt is dat van stap 5.
+
+Wat daarna kan, in geen volgorde: klassen in plaats van alle vijf de wapens; één bal in het midden; een plek om te houden; hurken en zichtbaar herladen voor de pop, wat ook een open punt van "Samen spelen" is; roepen met een stem; bots als teamgenoten op de route.
+
+**Aannames die van Michiel zijn om om te gooien**
+
+Bij zijn akkoord van 12 oktober 2026 heeft hij er niets apart over gezegd: ze gelden tot hij iets anders zegt, en de vijfde staat open.
+
+1. **Wapens.** Iedereen draagt alle vijf, zoals op de route; een bot één hoofdwapen en het pistool. Het andere is klassen zoals bij Call of Duty: één hoofdwapen kiezen voor je begint.
+2. **Uiterlijk.** Dezelfde soldaten in twee uniformen, met het blauwe teken boven teamgenoten; een andere bezetting per team als keuze erbij.
+3. **Health** komt in een wedstrijd helemaal terug, anders dan op de route.
+4. **De bestaande levels doen mee als voorlopige arena**, met de grenzen uit de tabel. Zes tegen zes dus eerst op het fabrieksterrein.
+5. **Welke map stap 5 wordt** is niet gekozen: een nieuwe uit de plattegrond met drie wegen, of een stuk van de duinen. Van buitenlevels is niet gemeten hoe open ze liggen: het enige open terrein dat er staat, het depot, valt af, maar dat heeft geen duinen en geen bos.
+
+**Gemeten voor dit plan** op 12 oktober 2026, M1 Pro op de accu, load 3,0 tot 3,6, terwijl een andere sessie testte en mat. Alles zonder GPU, met een proefscript dat via een tijdelijke haak in de selftest in het geladen spel draait; de haak is weer weg. De scripts en hun uitvoer staan in `benchmark/results/wedstrijd/proef/` van de worktree `.claude/worktrees/wedstrijd`, niet in Git.
+
+- **De tabel met de vier levels.** De vloer is het deel van het navmesh waar je vanaf de start kunt komen. "Veilig" is daar: geen vijand binnen 12 m hemelsbreed en geen vijand die hoofd of borst ziet. Per regel 150 keer de vijanden willekeurig over de plekken gezet. De twee uiteinden zijn de plekken die in loopafstand het verst uit elkaar liggen; een helft is wat dichter bij het ene uiteinde ligt dan bij het andere. In de fabriek zijn de helften scheef, 31 tegen 124 plekken, en de percentages van de kleine helft zeggen daar weinig.
+- **Het net.** Tegen 76 tot 79 routes van het navmesh zelf per level: gemiddeld 2, 3, 3 en 6% ernaast (fabrieksterrein, fabriek, centrale, depot), op zijn slechtst 4, 6, 6 en 12%. Met alleen de hoeken als knoop, in de fabriek: 5% en 12%, en drie keer zo snel. Met alleen het midden van de randen: 26 tot 38% te lang.
+- **Het blad.** Zes vijanden tussen 28 en 55% van de weg vanaf hun uiteinde, vijf teamgenoten tussen 25 en 50% vanaf het hunne, willekeurig gekozen; bij ieder voor zich elf anderen waar dan ook. De uitsluitingen en de punten zijn die van "Spawnplekken", op vier dingen na: voor de eigen kant is de vaste helft genomen, gevaar en recente doden bestonden niet, en er is niet geloot: de ster is de plek met de meeste punten.
+- **De tijden** komen elk uit één run, in GDScript; het opzoeken van dekking is de middelste van drie.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het leuk is.** Bots maken of breken dit, en van een bot bestaat nog geen regel. De getallen van de niveaus en de spelsoorten zijn gokken.
+- **De spawnregels zijn op stilstaande momenten geprobeerd**, met mensen op willekeurige plekken. In een wedstrijd staan mensen bij elkaar en bij deuren; of de regels dan net zo goed kiezen blijkt uit de wedstrijden van bots in stap 2b.
+- **Wat twaalf figuren in beweging kosten** op het volle scherm.
+- **Buiten.** De proef zegt iets over kamers en één open terrein, niets over duinen en bos.
+
+**Nog open**
+
+- De wegen door het midden zijn geteld als groepen plekken halverwege; een brede hal en drie gangen naast elkaar tellen daarin allebei als één of als drie naar hoe ze toevallig liggen. Het keurmerk moet wegen tellen die elkaar niet raken.
+- Samen spelen is nooit over een echt netwerk gespeeld, en schutter tegen schutter is gevoeliger voor vertraging dan samen tegen robots.
+- De soldaten dragen het camouflagepatroon en de vlag van het Amerikaanse leger; stap 2e haalt de vlag weg bij het tweede team, niet bij het eerste.
+- Een bot die niet bukt, neemt alleen staand dekking, zoals de personages op de route.
+
 ## De duinen: het vijfde level
 
-Op 12 oktober 2026 gevraagd: een volgend level volgens de standaard van nu, een stuk langer dan de andere en veel lichter: een duingebied in een bos, met vijanden die patrouilleren bij zandzakken, bij een legertent waar ze over een landkaart gebogen staan en bij jeeps en tanks, van de bosrand naar de achterdeur van een groot complex, en met schaduw om in te schuilen. Dat is `dunes` geworden (`tools/levels/dunes.gd`, `scenes/dunes.tscn`), gebouwd op de branch `duinen`. Het is het eerste level onder de open lucht bij daglicht, het eerste op een terrein met hoogteverschil, en het eerste waarin vijanden iets doen vóór hun gevecht begint. Voor alle drie moest er iets bij.
+Op 12 oktober 2026 gevraagd: een volgend level volgens de standaard van nu, een stuk langer dan de andere en veel lichter: een duingebied in een bos, met vijanden die patrouilleren bij zandzakken, bij een legertent waar ze over een landkaart gebogen staan en bij jeeps en tanks, van de bosrand naar de achterdeur van een groot complex, en met schaduw om in te schuilen. Dat is `dunes` geworden (`tools/levels/dunes.gd`, `scenes/dunes.tscn`), gebouwd op de branch `duinen`. Het is het eerste level onder de open lucht bij daglicht, het eerste op een terrein met hoogteverschil, en het eerste waarin vijanden iets doen vóór hun gevecht begint. Voor alle drie moest er iets bij. Dezelfde avond op Michiels woord ("merge het maar, dan ga ik het spelen") in `fase-2-vertical-slice` gevoegd, voor iemand het gespeeld had; niet gepusht.
 
 **Wat er staat**
 
