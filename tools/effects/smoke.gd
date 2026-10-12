@@ -37,7 +37,8 @@ func run(test: SceneTree) -> void:
 	fx.explosion(SUNLIT)
 	var sunny := _clouds(game, fx).filter(func(cloud: MeshInstance3D) -> bool: return not before.has(cloud))
 	test.check(sunny.size() == 4, "an explosion sets off its cloud, its fire, its column and a ring of dust (%d)" % sunny.size())
-	test.check(sunny.all(func(cloud: MeshInstance3D) -> bool: return _lit_as(cloud, bright)), "each of them is handed the light of the sun")
+	test.check(sunny.all(func(cloud: MeshInstance3D) -> bool: return _lit_as(cloud, bright)), "each of them is handed the way to the sun and the light from all around")
+	test.check(sunny.any(func(cloud: MeshInstance3D) -> bool: return cloud.get_instance_shader_parameter(&"key_light") == bright.key_light), "and the cloud all of the light of the sun")
 	fx.explosion(SHADED)
 	var shady := _clouds(game, fx).filter(func(cloud: MeshInstance3D) -> bool: return not before.has(cloud) and not sunny.has(cloud))
 	test.check(shady.size() == 4 and shady.all(func(cloud: MeshInstance3D) -> bool: return _lit_as(cloud, dim)), "an explosion in the shade is handed the light of the shade")
@@ -85,9 +86,12 @@ func _clouds(game: Node, fx: Node) -> Array:
 		return node is MeshInstance3D and not node.is_queued_for_deletion() and (node.mesh == fx._clouds or node.mesh == fx._smoke))
 
 
-## Whether a burst was handed `light` when it was set off.
+## Whether a burst was handed `light` when it was set off: the way to its key
+## light and what comes from all around. How much of the key light gets to
+## it is its own.
 func _lit_as(cloud: MeshInstance3D, light: Dictionary) -> bool:
-	return LIGHT.all(func(title: StringName) -> bool: return cloud.get_instance_shader_parameter(title) == light[title])
+	var some: Vector3 = cloud.get_instance_shader_parameter(&"key_light")
+	return cloud.get_instance_shader_parameter(&"key") == light.key and cloud.get_instance_shader_parameter(&"fill") == light.fill and some.length() > 0.0
 
 
 ## A lamp that is the key light of smoke two metres under it, if the level

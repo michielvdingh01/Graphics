@@ -440,9 +440,10 @@ func explosion(position: Vector3, size := 1.0) -> void:
 	_spawn(shell, 0.4)
 
 	# The fire is out within half a second; what it burnt hangs about as smoke.
-	_burst(_clouds, up, 3.6, {&"tint": Color(0.15, 0.143, 0.136, 0.9), &"glow": 1.0, &"fire": 0.16, &"speed": 12.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.5) * size, &"life": 3.4, &"rise": 0.9}.merged(light), reach)
+	_burst(_clouds, up, 3.6, {&"tint": Color(0.17, 0.162, 0.154, 0.9), &"glow": 1.0, &"fire": 0.16, &"speed": 12.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.5) * size, &"life": 3.4, &"rise": 0.9}.merged(light), reach)
 	_burst(_smoke, up, 0.5, {&"tint": Color(1.0, 0.6, 0.25, 1.0), &"glow": 1.6, &"fire": 1.0, &"speed": 5.0 * size, &"spread": 1.0, &"size": Vector2(0.3, 1.0) * size, &"life": 0.4, &"rise": 0.5}.merged(light), reach)
-	var column := _burst(_smoke, up, 6.0, {&"tint": Color(0.16, 0.156, 0.152, 0.7), &"speed": 2.5 * size, &"spread": 0.8, &"size": Vector2(0.4, 1.8) * size, &"life": 5.0, &"rise": 0.9}.merged(light), reach)
+	# The column stands in the cloud, which keeps part of the key light off it.
+	var column := _burst(_smoke, up, 6.0, {&"tint": Color(0.17, 0.166, 0.162, 0.7), &"key_light": (light.key_light as Vector3) * SMOKE_SHROUDED, &"speed": 2.5 * size, &"spread": 0.8, &"size": Vector2(0.4, 1.8) * size, &"life": 5.0, &"rise": 0.9}.merged(light), reach)
 	column.set_instance_shader_parameter(&"start", time + 0.25)
 	for turn in 3:
 		_burst(_sparks, up.rotated_local(Vector3.UP, turn * 2.1), 2.0, {&"floor_y": floor_y, &"speed": randf_range(11.0, 17.0) * size, &"spread": 1.0, &"life": randf_range(1.1, 1.8)}, reach * 2.0)
@@ -485,6 +486,9 @@ const SMOKE_CLEAR := 0.5
 ## How much of its colour a light loses on smoke, which scatters the blue of
 ## it best: the low sun turns soot tan, not orange.
 const SMOKE_GREY := 0.35
+## The share of the key light that gets to the column of smoke inside the
+## cloud of an explosion.
+const SMOKE_SHROUDED := 0.6
 ## How strongly a fire lights the smoke that rises off it.
 const SMOKE_EMBER := 8.0
 
@@ -853,8 +857,9 @@ func _expire(node: Node3D, seconds: float) -> void:
 	_expiring.append([node, time + seconds])
 
 
-## How much light falls on a point, for smoke that is not lit by the renderer:
-## 1 in the shade, more where the sun reaches it.
+## How much light falls on a point, as one number: 1 in the shade, more where
+## the sun reaches it. A fire keeps it for the spot it burns at; the smoke
+## itself asks smoke_light(), which says where the light comes from as well.
 func light_at(position: Vector3) -> float:
 	var sun := _sun()
 	if sun == null or not sun.visible:

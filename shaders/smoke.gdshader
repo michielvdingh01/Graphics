@@ -81,11 +81,9 @@ const float EMBER_DYING = 1.5;
 // where it is thin than where it is thick: soot at the core, grey at the rim.
 const float AGED = 0.4;
 const float WISP = 0.6;
-// The density from which smoke counts as thick.
-const float THICK = 1.0;
 // How much of the key light comes through the thin rims of a cloud that
 // hangs between it and the eye.
-const float FORWARD = 1.5;
+const float FORWARD = 0.8;
 // How much of the fine grain of the noise is left out of the billows.
 const float SOFT = 1.2;
 // How far towards the key light the smoke is read a second time, in widths
@@ -199,12 +197,13 @@ void fragment() {
 	vec2 there = texture(noise, at + shift, SOFT).rb;
 	float billow = mix(here.x, here.y, course);
 	float density = inside * inside * (0.2 + 2.4 * billow * billow);
-	float alpha = smoothstep(veil.x, veil.y, density) * veil.z;
+	// How far short of its thickest the smoke is here: 1 at the rim of it.
+	float thin = 1.0 - smoothstep(veil.x, veil.y, density);
+	float alpha = (1.0 - thin) * veil.z;
 
 	// A spot faces the way the ball does there, and is lighter the thinner the
 	// smoke gets from there towards the key light.
 	float lean = billow - mix(there.x, there.y, course);
-	float thin = 1.0 - smoothstep(0.0, THICK, density);
 	vec3 colour = (1.0 + WISP * thin) * (max(lit + tilt * vec3(p, sqrt(inside)) + relief * lean, vec3(0.0)) + shine * thin);
 	vec3 glowing = tint.rgb * glow * (1.0 - course);
 	if (fire > 0.0) {
