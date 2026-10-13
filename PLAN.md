@@ -2668,7 +2668,8 @@ Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan het vi
 
 - `tools/selftest.sh --level=dunes` slaagt op elk van de commits. De bouw zegt na afloop 17% schaduw, 14 zones en 6 checkpoints.
 - Wat ik gezien heb: tien beelden van de bosrand en het land erachter, van de grond en van boven, van vóór de nieuwe takeinden. **Niet gezien**: de nieuwe takeinden in het spel, de jonge den en de dode takken van dichtbij, de opnieuw getekende bosrand in de verte, en de zee vanaf de grond.
-- **Niet gedaan**: `tools/build_check.py factory works depot powerhouse wing`, de hele selftest, en het blad met voor en na (`benchmark/sheets/dunes_dennen_before_after.jpg`).
+- `tools/build_check.py factory works depot powerhouse wing` (13 oktober, 20:21): geen bestand van die vijf levels is veranderd. Veranderd zijn de duinen en de vijf dennen; de twee struiken kwamen er gelijk uit.
+- **Niet gedaan**: de hele selftest, en het blad met voor en na (`benchmark/sheets/dunes_dennen_before_after.jpg`).
 
 **Onderweg gevonden**
 
