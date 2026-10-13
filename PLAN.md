@@ -2626,3 +2626,86 @@ De donkere hoek is niet overal even donker. Door het raam in de zuidmuur valt ee
 - De twee teams met hun wapens: `assets/characters/sheets/uniforms_teams.jpg`.
 - De vijf in het gekozen uniform: `assets/characters/sheets/soldier_01_desert.jpg` tot en met `soldier_05_desert.jpg`, naast `soldier_01.jpg` tot en met `soldier_05.jpg`.
 - Ertegen spelen, om ze in beweging te zien: `GODOT_WINDOW=1 tools/godot.sh -- --play --enemies=soldiers_desert`. Dat commando heb ik niet kunnen proberen, want het opent een venster; `--enemies=soldiers_desert` zelf is zonder venster getest.
+
+## De duinen: het licht, het kamp en het complex
+
+Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan de duinen werken (de andere twee: de grond en het gras op `duingrond`, de dennen en de verte op `duindennen`): het licht en de lucht, en alles wat mensen er neerzetten. Gebouwd op de branch `duinkamp`, in een eigen worktree, vanaf de trunk van die middag (`bd441f1`). Niet gemerged, niet gepusht. Gebouwde bestanden (`scenes/levels/`, `scenes/models/*.scn`) zijn niet meegecommit: wie de drie samenvoegt bouwt één keer, met `tools/build_model.sh vehicles`, `tools/build_level.sh dunes` en `tools/build_level.sh showroom`.
+
+**Niet gedaan, en waarom**
+
+- **De lucht op 8k** (punt 1). Dat is een download (Poly Haven, CC0, 74,8 MB); ik heb erom gevraagd en geen antwoord gekregen, en heb niets opgehaald. Wat er klaar voor ligt: het bestand vervangt `assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr`; ingepakt kost het ongeveer 45 MB videogeheugen waar het nu 11 is. De luchten staan niet in LFS en GitHub waarschuwt boven 50 MB per bestand.
+- **Het blad met de zon op 48, 30 en 20 graden** (punt 4). Het gereedschap is geschreven, het blad is er niet: toen het aan de beurt was speelde Michiel en was de GPU niet vrij. Zie "Nog open".
+- **De soldaten aan de kaarttafel overleggen niet** (punt 5). Welke houding iemand in rust heeft, kiest `scripts/humanoid_rig.gd` uit de set van zijn thema, en wat een wachter doet leest `scripts/enemy.gd` uit wat het level hem meegeeft. Het level kan zeggen "sta hier en kijk daarheen", niet "praat". Zonder die twee bestanden gaat het niet, en die zijn van het wedstrijdwerk.
+
+**Wat er staat**
+
+- **Oogaanpassing** (`scripts/eyes.gd`, de knoop `Eyes` in `scenes/dunes.tscn`). Wie uit de schaduw de zon in stapt, ziet het beeld even te licht, en andersom even te donker. Het meet het beeld niet: het leest het licht bij het oog af van de schaduwkaart die het level al heeft (`scripts/land.gd`), over de grond een paar passen om de kijker heen en over de grond waar hij op uitkijkt, en laat het oog daar traag achteraan komen (1,8 s naar het licht, 3 s naar het donker). Het beeld is zoveel over- of onderbelicht als het oog achterloopt, tot hoogstens één stop naar het licht en 0,6 naar het donker; de gloed groeit mee. **Een oog dat bij is verandert niets**: wie stilstaat ziet het level precies zoals zonder deze knoop, en een benchmark, die op een standpunt neergezet wordt, ook. Uit met één regel: `script = ExtResource("eyes")` onder `[node name="Eyes"` in `scenes/dunes.tscn`.
+- **Een wolk voor de zon** (`scripts/cloud.gd`, de knoop `Clouds`). Om de 45 tot 110 seconden schuift er in 4 tot 8 seconden een wolk voor de zon, blijft 14 tot 34 seconden en gaat weer; een op de drie is dun. Onder een volle wolk houdt de zon 30% van haar kracht en verliest ze haar warmte, het hemellicht houdt 84%. Alleen de zon en het hemellicht van de scène; geen shader weet ervan en de schaduw van de wolk trekt niet over het land. Een benchmark heeft er geen, zodat een beeld vanaf een standpunt elke keer hetzelfde is; `--cloud=0.7` houdt er een voor de zon. Uit met één regel: `script = ExtResource("cloud")`.
+- **Wind in doek en net** (`shaders/canvas.gdshader`, `shaders/camo_net.gdshader`, `tools/kit/field.gd`). Doek zegt per hoekpunt, in UV2, hoe ver het meegeeft en hoe licht het is; de shader beweegt het met dezelfde vlagen als het gras (`wind` 0,12 en 1,0). De wanden van de tent bollen tussen hun palen, het dak ademt waar het hangt, de volant fladdert, de schuiltenten trillen, de was waait uit, en een net tilt en zakt en zijn rafels bewegen. Wat vastzit (de nok, een paal, de zoom in het zand) beweegt niet. De rook van het bivak helde tegen de wind van het gras in en gaat nu mee.
+- **Een vlag** op de binnenplaats (`shaders/flag.gdshader`, `flag()`): 2,3 bij 1,45 m, olijfgroen met de witte ster van de voertuigen, die uitwaait in een vlaag en gaat hangen als de wind wegvalt, met golven die vanaf de mast breder worden.
+- **De netten** (`_net` en `_net_relief` in `tools/gen_foliage.gd`). Opnieuw getekend: stroken met de draad van hun stof erin, rafelig aan hun einden, krullend aan hun randen, en een normal map waarin elke strook rond is en over of onder de volgende ligt. De shader laat de zon door een strook heen: van de schaduwkant is een net een patroon van doorlichte stroken en lucht.
+- **Voertuigen** (`tools/models/vehicles.gd`, `vehicle()`). Elk voertuig wordt twee keer gebouwd uit dezelfde beschrijving: zoals het was, en als model voor veraf (vanaf 34 m) waarin alles wat klein is weggelaten en alles wat rond is grof gemaakt: 780 driehoeken voor de jeep waar 5276, ongeveer 1300 voor de vrachtwagen waar 7397, 2300 voor de tank waar 8762. Elk voertuig in een level heeft een eigen nummer (een kenteken op de motorkap en de bumper van jeep en vrachtwagen, twee cijfers groot op de koepel van een tank, uit losse cijfers op het blad met stencils) en een eigen lading: kisten, vaten, zakken of een opgevouwen zeil op een vrachtwagen, een plunjezak, een deken of een kist in een jeep, een zeil, een balk of een kist op een tank.
+- **Het hoofdgebouw** (`tools/levels/dunes/depot.gd`, `shaders/window_pane.gdshader`, `shaders/depot_room.gdshaderinc`). Achter het glas liggen kamers die alleen rekenwerk zijn: een travee breed, een verdieping hoog, zeven meter diep, met een plafond met balken en armaturen, een lambrisering, een deur in de achterwand, lichter bij het raam en donkerder naar achteren, elke kamer iets anders en een op de tien met de lampen aan. Het glas is glas en geen spiegel meer: het geeft een tiende van de lucht terug en laat de kamer door. **De ruiten breken** zoals in de andere levels: 168 ramen van samen 1216 ruiten. Een ruit is nu een doos van glas, de ruiten van één opening sluiten rand aan rand en zijn samen één raam, en waar een ruit weg is toont een vlak erachter dezelfde kamer.
+- **Een schot op een raam telt**, ook al stopt het op de botsvorm van de muur, die geen opening heeft en 13 cm vóór het glas ligt. De mesh van het glas zegt hoe diep het ligt (`reveal`), en `scripts/window.gd` maakt de botsvorm van een ruit zo dik. Zonder dat getal, in elk ander level, is er niets veranderd.
+- **Beton klinkt als beton.** De platen hebben nog steeds geen botsvorm. De grond weet nu waar ze liggen (`paved` op haar botsvorm, acht rechthoeken uit `paving()`), en `Fx.surface_of()` zegt daar "concrete": een stap klinkt als op beton en laat geen afdruk na, een schot geeft de inslag en het geluid van beton.
+- **Schaduw waar dingen elkaar raken.** Twee dingen. De occlusie van de scène stond zo zwak dat ze niet te zien was (straal 1,2, sterkte 1,6) en staat nu op 2,5 en 5: aan de voet van een muur, onder een pallet en onder een vrachtwagen ligt nu schaduw. En onder een dak dat de lucht weghoudt is het licht van rondom dat van dat dak en niet van de hele hemel (`shelter()`, een reflectieprobe met een eigen omgevingslicht): in de commandotent, onder de vijf netten, in de loods langs de noordmuur en achter de achterdeur. Het zijn er acht.
+- **Wat een schets was.** De bunker is gestort in een bekisting met afgeschuinde voorhoeken onder een dik dak dat rondom oversteekt, met een schietspleet in twee trappen, een loop erin, hijsogen, en de rest van zijn net over één hoek; zijn botsvorm is het blok dat het was. Het dak van de Nissenhut is rond (twintig stroken met vloeiende normalen, in vijf banen die over elkaar liggen) en zijn golf is die van de gescande plaat: 40 driehoeken waar het er ruim achtduizend waren. Op de binnenplaats staan twee doelen van palen op het appèlveld met een bal ertussen, hangt de was tussen de hutten en loopt de stroom voor de lichtmasten bovengronds van mast tot mast.
+
+**Gemeten**
+
+- **Eén ronde, en dat is geen meting.** 13 oktober, 18:33, op de accu (59%), load 4,5, niets anders op de GPU; 3456×2160, Ultra, MetalFX, renderschaal vanzelf, soldaten op hun post, de trunk en de branch na elkaar:
+
+| Standpunt | Trunk, fps en 1% low | Branch | Verschil | Tekenopdrachten en driehoeken, trunk en branch |
+|---|---|---|---|---|
+| Het bivak, 8 | 77,0 en 73,0 | 77,1 en 72,5 | +0,1 | 993 en 1,92 miljoen, 992 en 1,80 |
+| Het wagenpark, 10 | 84,0 en 78,8 | 84,6 en 79,6 | +0,6 | 942 en 2,36, 963 en 2,15 |
+| De binnenplaats, 16 | 88,6 en 83,8 | 87,7 en 82,2 | −0,9 | 664 en 1,42, 692 en 1,38 |
+| De achterdeur, 19 | 91,8 en 86,7 | 90,9 en 85,1 | −0,9 | 621 en 1,32, 624 en 1,27 |
+| Het oostelijke duin, 21 | 69,5 en 66,0 | 70,4 en 67,4 | +0,9 | 1202 en 2,82, 1182 en 2,65 |
+
+  Elk verschil is kleiner dan wat twee runs van dezelfde stand uit elkaar liggen. Wat geen last heeft van drukte: op elk standpunt minder driehoeken (tot 0,21 miljoen), en op de binnenplaats en bij het wagenpark 20 tot 28 tekenopdrachten meer. Na die ronde zijn de doelen en de draden bij het kleine goed gezet, dat geen schaduw werpt; dat is niet opnieuw gemeten.
+- **Een reeks van drie ronden is mislukt**: ze liep van 20:15 tot 20:27 naast het spel van Michiel, die om 20:13 de fabriek startte, en ik had niet opnieuw gekeken. Alles halveerde, aan beide kanten (37 tegen 37, 40 tegen 42, 46 tegen 42, 47 tegen 46, 34 tegen 33). Niets waard, en het heeft hem tien minuten beeldsnelheid gekost.
+- **Pipelines tijdens het tekenen**: op het eerste standpunt, dat geen laadscherm heeft, 103 waar het er 97 waren; op de vier daarna geen. Een rondgang vanaf het titelscherm is niet gelopen.
+- **Niet gemeten**: drie ronden om en om, aan de lader, in beweging, in een gevecht, en wat de acht probes en de sterkere occlusie elk kosten.
+
+**Gecontroleerd, en wat niet**
+
+- **Wat staat, staat waar het stond.** Na de laatste bouw alle 780 botsvormen (vorm, maat, plek, richting, oppervlak), elk geplaatst model en voertuig, de bits van de schaduwkaart en elke area en marker naast die van de trunk gelegd: 1864 regels, geen verschil. De bouw zegt 17% schaduw, 14 zones en 6 checkpoints.
+- `tools/selftest.sh --level=dunes` slaagt (86 controles) na elke mijlpaal.
+- `tools/test_effects.sh` slaagt, 259 controles, met de gewijzigde `scripts/window.gd`: de ramen van de fabriek, het fabrieksterrein, het depot en de centrale breken als voorheen. Daarbij een nieuw deel, `tools/effects/reveal.gd`, voor de duinen: elke ruit zit in een raam, de ruiten van een opening zijn één raam, een schot vanaf de grond dat op de muur stopt breekt de ruit erachter en geen andere, en een stap op een plaat is beton en ernaast zand.
+- **Niets in beweging gezien.** De wind, de vlag, de wolk en het oog zijn beoordeeld op stilstaande beelden en op getallen. Van het oog is een wandeling uitgerekend zonder beeld: langs het spoor door het bos blijft het binnen het dode gebied (het bos is daar half licht), bij de bosrand loopt het een tiende op.
+
+**Onderweg gevonden**
+
+- **De occlusie deed niets.** Wie in de schaduw stond, stond nergens op: straal 1,2 en sterkte 1,6 zijn op deze afstanden niet te zien. Dat was de helft van "alles in de schaduw krijgt dezelfde tint".
+- **Een probe geeft het dak terug.** De tent werd eerst oranje van binnen: de probe ving het doek waar de zon doorheen schijnt, en alles wat glimt gaf dat terug. Hij geeft nu een derde daarvan terug. Of de tent van binnen goed is, weet ik niet: zie "Niet kunnen beoordelen".
+- **Een schot op een raam kwam nooit bij het glas.** De muur van het hoofdgebouw is een dichte botsvorm op het vlak van de gevel, en het glas ligt 24 cm terug. Dat stond al als open punt in "De duinen: het beeld"; één oppervlak maken van het glas alleen was niet genoeg geweest.
+- **Ruiten met een roede ertussen zijn elk een eigen raam**: een raam is wat hoek aan hoek ligt. Het glas loopt daarom door achter de roeden.
+- **`out` is een woord van de shadertaal**, en een bouw zonder beeld merkt een shader die niet compileert wel op, maar bouwt door.
+- **Het blad met stencils had vier kentekens waar geen voertuig er een van droeg.** Ze zijn vervangen door de tien cijfers en de letters waar een kenteken mee begint.
+
+**Buiten de bestanden van de opdracht geraakt**
+
+- `tools/effects/reveal.gd`, nieuw: de controle hierboven. De effectentest laadt er de duinen voor en duurt daardoor enkele seconden langer.
+- `scripts/window.gd`: alleen het getal `reveal`. `scripts/fx.gd`: alleen `surface_of()`.
+- Nieuw: `scripts/eyes.gd`, `scripts/cloud.gd`, `shaders/flag.gdshader`, `shaders/camo_net.gdshader`, `shaders/depot_room.gdshader` en `.gdshaderinc`, `materials/flag.tres`, `materials/depot_room.tres`, `assets/foliage/camo_net_n.png`. `materials/camo_net.tres` is nu een shadermateriaal.
+- De showroom verandert mee, door de veldstukken en de voertuigen die erin staan, en heeft er een vlag bij.
+
+**Niet kunnen beoordelen**
+
+- **Alles wat beweegt**: of de wand van de tent bolt of klappert, of de vlag wappert of flappert, of de was natuurlijk hangt, of een wolk te vaak komt of te donker is, en of het oog helpt of hindert. De getallen staan bovenaan `scripts/eyes.gd` en `scripts/cloud.gd`.
+- **De tent van binnen.** Ze is warmer en egaler geworden dan ze was, en het laatste beeld ervan (na het terugdraaien van wat de probe teruggeeft) heb ik niet gezien.
+- **Of de kamers achter het glas overtuigen**, van dichtbij en schuin van opzij. Van onderaf zie je vooral plafonds.
+- **Het model voor veraf op 34 m**: of de overgang te zien is als je op een voertuig af loopt.
+- **Het geluid** van een stap en een schot op de platen: getest is dat het spel "beton" zegt, niet hoe het klinkt.
+
+**Nog open**
+
+- **De lucht op 8k** en **het blad met de zonnestanden**: zie bovenaan. Het blad maakt `sun_variant.sh` uit de scratchmap van deze sessie; dat hoort als gereedschap in `tools/` als het blad er komt. Bij 30 graden zou `kloofendal_28d_misty_puresky` horen (zelfde plek, heiig), bij 20 graden `syferfontein_18d_clear_puresky` (helder); elk 55 MB op 8k, CC0, niet opgehaald.
+- **Drie ronden meten, om en om, als de GPU vrij is**, en het blad met voor en na (`benchmark/sheets/dunes_kamp_before_after.jpg`), dat er nog niet is.
+- **De wolk is niet gelijk voor wie samen speelt**: elke speler heeft zijn eigen klok.
+- **Wie aan de tafel staat, overlegt niet**: zie bovenaan.
+- **De schaduw van de wolk trekt niet over het land**; dat vraagt de shader van de grond.
+- **Een voertuig heeft zijn nummer en lading alleen in een level met land**; in de showroom staan ze er ook, in de andere levels staan geen voertuigen.
+- **De bunker steekt met zijn afgeschuinde hoeken 30 cm binnen zijn botsvorm**: een schot op die hoek slaat in de lucht in.
+- **Het midden van de binnenplaats** heeft er weinig bij gekregen: wat er staat mag geen botsvorm hebben, en iets groots waar je doorheen loopt is erger dan niets.

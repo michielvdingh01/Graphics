@@ -176,6 +176,9 @@ func _yard_life() -> void:
 	# The square the guard falls in on is where they kick a ball about when
 	# nobody is looking: two goals knocked together out of poles, and the
 	# ball where it was left.
+	# All of it is thin: it throws no shadow worth drawing, and is not drawn
+	# from across the yard.
+	_small = true
 	for end: Array in [[130.6, 1.0], [153.4, -1.0]]:
 		var x: float = end[0]
 		var lean := 0.04 * (end[1] as float)
@@ -183,7 +186,6 @@ func _yard_life() -> void:
 			beam("wood", Vector3(x, YARD_Y - 0.1, z), Vector3(x + lean, YARD_Y + 2.05, z), 0.07, SLIGHT)
 			beam("wood", Vector3(x - (end[1] as float) * 0.9, YARD_Y, z), Vector3(x + lean, YARD_Y + 1.5, z), 0.05, SLIGHT)
 		beam("wood", Vector3(x + lean, YARD_Y + 2.05, 34.8), Vector3(x + lean, YARD_Y + 2.05, 38.2), 0.07, SLIGHT)
-	_small = true
 	rounded_box("wood", Transform3D(Basis.from_euler(Vector3(0.4, 0.7, 0.2)), Vector3(143.7, YARD_Y + 0.11, 39.4)), Vector3(0.22, 0.22, 0.22), 0.108, SLIGHT)
 	# What they took off to play: a tunic over the stones, a helmet, a can.
 	helmet(Vector3(129.4, YARD_Y + 0.02, 33.6), 70.0)
@@ -200,6 +202,7 @@ func _yard_life() -> void:
 	# The current for the lamps on the wall comes along it overhead, from
 	# mast to mast, and across the yard from the mast behind the main building.
 	var high := YARD_Y + 7.7
+	_small = true
 	var south: Array[float] = [40.0, 100.0, 136.0, 168.0]
 	var north: Array[float] = [30.0, 66.0, 150.0, 180.0]
 	for i in south.size() - 1:
@@ -209,6 +212,7 @@ func _yard_life() -> void:
 	wire(Vector3(168.0, high, WALL_Z - 0.4), Vector3(180.0, high, WALL_NORTH + 0.4), 1.4, 0.008)
 	wire(Vector3(WALL_WEST + 0.4, high, 28.0), Vector3(30.0, high, WALL_NORTH + 0.4), 0.5, 0.008)
 	wire(Vector3(WALL_WEST + 0.4, high, 28.0), Vector3(40.0, high, WALL_Z - 0.4), 0.7, 0.008)
+	_small = false
 	# A line of whitewashed stones from the gate road to the flagstaff.
 	kerb(Vector2(60.0, 30.2), Vector2(65.8, 30.2), true)
 
