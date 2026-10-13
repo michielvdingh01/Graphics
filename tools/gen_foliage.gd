@@ -8,7 +8,8 @@ extends SceneTree
 ##
 ##   grass      a tuft of marram, blades fanning up from the foot of the card
 ##   net        a camouflage net: cord with scrim knotted into it; it tiles
-##   concertina a coil of barbed wire, unrolled; it tiles
+##   concertina one turn of a coil of barbed wire, and two strands of it
+##   stencils   a sheet of what an army paints on its vehicles
 ##   chainlink  wire mesh; it tiles
 ##   treeline   the dark inside a pine wood, behind the trees of its edge; it tiles from left to right
 ##   ruts       the two ruts of a track; it tiles from top to bottom
@@ -130,61 +131,47 @@ func _stroke_tiled(from: Vector2, to: Vector2, width: float, color: Color) -> vo
 			_stroke(from + off, to + off, width, color)
 
 
-## Concertina wire, unrolled and laid flat: the coil cut open along its length.
-## Every turn of it is clipped to the turn before and to the turn after, at
-## places that alternate round the coil, so that pulled out it stands as a
-## lattice of diamonds. The picture is one diamond: a fifth of the way round
-## the coil from left to right, and two turns from top to bottom. Spring
-## steel, galvanised and gone dull, with a barb every hand's breadth. It
-## tiles.
+## Concertina wire: one turn of the coil seen along it, a hoop of spring
+## steel with a barb every hand's breadth, in the left half of the picture;
+## and in the right half two strands of barbed wire, for a ribbon. Galvanised
+## and gone dull, rusting where the zinc has gone. A level stands a card of
+## the hoop for every turn of a coil: see wire_coil() in tools/kit/field.gd.
 func _concertina() -> void:
-	var size := float(_image.get_width())
-	var half := size * 0.5
-	var gap := size * 0.011
-	var thick := size * 0.0085
+	var size := float(_image.get_height())
+	var thick := size * 0.0062
 	var rust := _tiling(0.02, 2)
-	for turn in 2:
-		var before := Vector2.ZERO
-		var steps := 64
-		var run := 0.0
-		for step in steps + 1:
-			var x := size * step / steps
-			var rise := clampf(half * (1.0 - absf(2.0 * x / size - 1.0)), gap, half - gap)
-			var at := Vector2(x, rise if turn == 0 else size - rise)
-			if step > 0:
-				var worn := rust.get_pixelv(Vector2i(at.posmod(size))).r
-				var steel := Color(0.5, 0.5, 0.48).lerp(Color(0.3, 0.2, 0.13), smoothstep(0.5, 0.75, worn)).darkened(_rng.randf() * 0.15)
-				_stroke_tiled(before, at, thick, steel.darkened(0.35))
-				_stroke_tiled(before, at, thick * 0.5, steel.lightened(0.25))
-				var length := before.distance_to(at)
-				# A barb: two short points of wire wound round the strand.
-				if int((run + length) / (size * 0.125)) > int(run / (size * 0.125)) and absf(rise - half * 0.5) < half * 0.42:
-					var way := (at - before).normalized()
-					for lean: float in [0.9, -1.1]:
-						var point := way.rotated(lean + _rng.randf_range(-0.2, 0.2)) * size * _rng.randf_range(0.016, 0.022)
-						_stroke_tiled(at - point, at + point, thick * 0.55, steel.lightened(0.1))
-				run += length
-			before = at
-	# The clips that hold one turn to the next.
-	for clip: Vector2 in [Vector2(half, half), Vector2(0, 0)]:
-		_stroke_tiled(clip - Vector2(0, gap * 1.25), clip + Vector2(0, gap * 1.25), thick * 1.5, Color(0.27, 0.25, 0.22))
+	var middle := Vector2(size, size) * 0.5
+	var before := Vector2.ZERO
+	var run := 0.0
+	for step in 181:
+		var turn := TAU * step / 180.0
+		# Pulled out of the round where it was clipped to the turns beside it.
+		var at := middle + Vector2.RIGHT.rotated(turn) * size * (0.455 + 0.012 * sin(turn * 5.0) + 0.006 * sin(turn * 2.0 + 1.0))
+		if step > 0:
+			run = _wire(before, at, thick, rust, run, size * 0.09)
+		before = at
+	for strand in 2:
+		var y := size * (0.25 + 0.5 * strand)
+		run = 0.0
+		for step in 32:
+			run = _wire(Vector2(size + size * step / 32.0, y), Vector2(size + size * (step + 1) / 32.0, y), thick, rust, run, size * 0.1)
 
 
-## Chain-link fencing: wires that run both ways on the slant. It tiles.
-func _chainlink() -> void:
-	var size := _image.get_width()
-	var pitch := size / 4.0
-	for y in size:
-		for x in size:
-			var one := absf(fposmod(x + y + 0.5, pitch) - pitch * 0.5)
-			var other := absf(fposmod(x - y + 0.5, pitch) - pitch * 0.5)
-			var wire := minf(one, other)
-			var cover := clampf(2.6 - wire, 0.0, 1.0)
-			if cover > 0.0:
-				# Round wire: light along its middle. One runs over the other.
-				var round := 1.0 - wire / 2.6
-				var tone := lerpf(0.34, 0.62, round) * (1.0 if one < other else 0.82)
-				_image.set_pixel(x, y, Color(tone, tone * 1.02, tone * 1.04, cover))
+## A piece of barbed wire from `from` to `to`, `run` along the strand it is
+## part of, with a barb every `apart`: two short points wound round it.
+## Returns how far along the strand it ends.
+func _wire(from: Vector2, to: Vector2, thick: float, rust: Image, run: float, apart: float) -> float:
+	var worn := rust.get_pixelv(Vector2i(to.posmodv(Vector2(rust.get_size())))).r
+	var steel := Color(0.52, 0.52, 0.5).lerp(Color(0.3, 0.2, 0.13), smoothstep(0.5, 0.75, worn)).darkened(_rng.randf() * 0.12)
+	_stroke(from, to, thick, steel.darkened(0.3))
+	_stroke(from, to, thick * 0.5, steel.lightened(0.25))
+	var length := from.distance_to(to)
+	if int((run + length) / apart) > int(run / apart):
+		var way := (to - from).normalized()
+		for lean: float in [0.9, -1.1]:
+			var point := way.rotated(lean + _rng.randf_range(-0.2, 0.2)) * thick * _rng.randf_range(2.6, 3.4)
+			_stroke(to - point, to + point, thick * 0.6, steel.lightened(0.1))
+	return run + length
 
 
 ## The dark of a pine wood, as it is seen between the trunks of the trees at
@@ -216,30 +203,106 @@ func _treeline() -> void:
 		_cushion(at, Vector2(high * _rng.randf_range(0.1, 0.2), high * _rng.randf_range(0.04, 0.09)), gloom.lightened(_rng.randf() * 0.03))
 
 
-## The two ruts of a track that lorries use: darker, damper earth with the
-## print of the tread in it. It tiles from top to bottom.
-func _ruts() -> void:
-	var wide := _image.get_width()
-	var high := _image.get_height()
-	var grain := _tiling(0.03, 4)
-	for y in high:
-		for x in wide:
-			var u := (x + 0.5) / wide
-			var wear := grain.get_pixel(x % grain.get_width(), y % grain.get_height()).r
-			var alpha := 0.0
-			var dark := 0.0
-			for rut: float in [0.27, 0.73]:
-				var off := absf(u - rut) / 0.115
-				if off < 1.0:
-					# Chevrons of tread, pressed in.
-					var tread := fposmod((y + absf(u - rut) * wide * 1.6) / (high / 16.0), 1.0)
-					var lug := smoothstep(0.35, 0.5, tread) * (1.0 - smoothstep(0.85, 1.0, tread))
-					alpha = maxf(alpha, (1.0 - smoothstep(0.55, 1.0, off)) * (0.5 + 0.35 * lug + 0.25 * wear))
-					dark = lug
-			alpha = maxf(alpha, (1.0 - smoothstep(0.3, 0.5, absf(u - 0.5))) * 0.1 * wear)
-			if alpha > 0.0:
-				var earth := Color(0.2, 0.15, 0.1).lerp(Color(0.11, 0.08, 0.055), dark * 0.7 + wear * 0.3)
-				_image.set_pixel(x, y, Color(earth.r, earth.g, earth.b, clampf(alpha, 0.0, 0.9)))
+## What an army paints on what it drives, sixteen marks on a sheet of four by
+## four (tools/models/vehicles.gd knows which is where): in the top row a
+## white star and three bridge plates, yellow discs with the weight in tons;
+## under them two turret numbers, a tactical sign and an arrow; and in the
+## lower half eight lines of stencilled lettering, two to a square. All of it
+## was sprayed through a stencil once and has been rubbed since.
+func _stencils() -> void:
+	var cell := _image.get_width() / 4
+	var white := Color(0.82, 0.81, 0.76)
+	var yellow := Color(0.78, 0.6, 0.08)
+	var black := Color(0.04, 0.04, 0.04)
+	# The star: five points, a fifth of a turn apart.
+	var middle := Vector2(cell, cell) * 0.5
+	var star := PackedVector2Array()
+	for i in 10:
+		star.append(middle + Vector2.UP.rotated(TAU * i / 10.0) * cell * (0.46 if i % 2 == 0 else 0.176))
+	_fill_shape(star, white)
+	var tons: Array[String] = ["5", "12", "50"]
+	for i in 3:
+		var at := Vector2((i + 1.5) * cell, cell * 0.5)
+		var disc := PackedVector2Array()
+		for step in 48:
+			disc.append(at + Vector2.RIGHT.rotated(TAU * step / 48.0) * cell * 0.44)
+		_fill_shape(disc, yellow)
+		_write(tons[i], Rect2(at - Vector2(cell, cell) * 0.33, Vector2(cell, cell) * 0.66), black)
+	_write("14", Rect2(0, cell, cell, cell).grow(-cell * 0.06), white)
+	_write("23", Rect2(cell, cell, cell, cell).grow(-cell * 0.06), white)
+	# A tactical sign: a square halved from corner to corner, red over white.
+	var sign := Rect2(cell * 2, cell, cell, cell).grow(-cell * 0.12)
+	_fill_shape(PackedVector2Array([sign.position, Vector2(sign.end.x, sign.position.y), sign.end, Vector2(sign.position.x, sign.end.y)]), white)
+	_fill_shape(PackedVector2Array([sign.position, Vector2(sign.end.x, sign.position.y), Vector2(sign.position.x, sign.end.y)]), Color(0.5, 0.07, 0.05))
+	_write("3", Rect2(sign.position + sign.size * 0.5, sign.size * 0.46), black)
+	var arrow := Rect2(cell * 3, cell, cell, cell).grow(-cell * 0.15)
+	_fill_shape(PackedVector2Array([Vector2(arrow.position.x, arrow.end.y), Vector2(arrow.get_center().x, arrow.position.y), arrow.end, Vector2(arrow.get_center().x, arrow.end.y - arrow.size.y * 0.3)]), white)
+	var lines: Array[String] = ["KN-45-12", "KN-45-27", "KP-63-08", "KZ-07-31", "TP 2.1", "MAX 60 KM", "NO STEP", "BENZINE"]
+	for i in lines.size():
+		@warning_ignore("integer_division")
+		_write(lines[i], Rect2((i % 2) * cell * 2, cell * 2 + (i / 2) * cell * 0.5, cell * 2, cell * 0.5).grow(-cell * 0.04), white)
+	# Rubbed, and thin where the stencil was lifted too soon.
+	var worn := _tiling(0.012, 1)
+	var speck := _tiling(0.12, 2)
+	for y in _image.get_height():
+		for x in _image.get_width():
+			var ink := _image.get_pixel(x, y)
+			if ink.a > 0.0:
+				ink.a *= smoothstep(0.26, 0.5, worn.get_pixel(x, y).r) * (0.82 + 0.18 * speck.get_pixel(x, y).r)
+				_image.set_pixel(x, y, ink)
+
+
+## Fills a shape with `color`: any outline that does not cross itself.
+func _fill_shape(outline: PackedVector2Array, color: Color) -> void:
+	var low := outline[0]
+	var high := outline[0]
+	for corner in outline:
+		low = low.min(corner)
+		high = high.max(corner)
+	for y in range(int(low.y), int(high.y) + 1):
+		for x in range(int(low.x), int(high.x) + 1):
+			# Four looks to a dot, for an edge that is not a staircase.
+			var cover := 0.0
+			for sub: Vector2 in [Vector2(0.25, 0.25), Vector2(0.75, 0.25), Vector2(0.25, 0.75), Vector2(0.75, 0.75)]:
+				if Geometry2D.is_point_in_polygon(Vector2(x, y) + sub, outline):
+					cover += 0.25
+			_dab(x, y, color, cover)
+
+
+## Stencilled lettering that fills `area` as far as its shape lets it: the
+## letters of the engine's own font, with the bridges a stencil needs to hold
+## the middle of an O in place. See _lettering() in tools/gen_decals.gd.
+func _write(text: String, area: Rect2, color: Color) -> void:
+	var font := ThemeDB.fallback_font as FontFile
+	var height := int(area.size.y / 0.78)
+	var size := Vector2i(height, 0)
+	var glyphs: Array[int] = []
+	var width := 0.0
+	for i in text.length():
+		glyphs.append(font.get_glyph_index(height, text.unicode_at(i), 0))
+		font.render_glyph(0, size, glyphs[i])
+		width += font.get_glyph_advance(0, height, glyphs[i]).x
+	if width > area.size.x:
+		# Too long for its square at this height: smaller, then.
+		_write(text, Rect2(area.position + Vector2(0, area.size.y * (1.0 - area.size.x / width) * 0.5), Vector2(area.size.x, area.size.y * area.size.x / width)), color)
+		return
+	var pen := Vector2(area.position.x + (area.size.x - width) * 0.5, area.position.y + area.size.y * 0.5 + height * 0.355)
+	for i in glyphs.size():
+		var page := font.get_glyph_texture_idx(0, size, glyphs[i])
+		if page >= 0:
+			var rect := font.get_glyph_uv_rect(0, size, glyphs[i])
+			var atlas := font.get_texture_image(0, size, page)
+			var corner := Vector2i(pen + font.get_glyph_offset(0, size, glyphs[i]))
+			var bridge := "ABDOPQR04689".contains(text[i])
+			for y in int(rect.size.y):
+				for x in int(rect.size.x):
+					var at := corner + Vector2i(x, y)
+					if at.x < 0 or at.y < 0 or at.x >= _image.get_width() or at.y >= _image.get_height():
+						continue
+					if bridge and absf(x - rect.size.x * 0.5) < height * 0.035:
+						continue
+					_dab(at.x, at.y, color, atlas.get_pixel(int(rect.position.x) + x, int(rect.position.y) + y).a)
+		pen.x += font.get_glyph_advance(0, height, glyphs[i]).x
 
 
 # --- What it is drawn with ---------------------------------------------------------

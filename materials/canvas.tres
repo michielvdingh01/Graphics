@@ -9,12 +9,12 @@
 shader = ExtResource("shader")
 shader_parameter/color = Color(0.2, 0.196, 0.14, 1)
 shader_parameter/faded = Color(0.33, 0.315, 0.245, 1)
-shader_parameter/soil = Color(0.6, 0.52, 0.38, 1)
+shader_parameter/soil = Color(0.74, 0.69, 0.58, 1)
 shader_parameter/weave_tex = ExtResource("diff")
 shader_parameter/weave_normal = ExtResource("nor")
 shader_parameter/weave_value = 0.437
-shader_parameter/weave_scale = 2.5
-shader_parameter/weave_depth = 1.0
+shader_parameter/weave_scale = 3.0
+shader_parameter/weave_depth = 0.8
 shader_parameter/wear_mask = ExtResource("mask")
 shader_parameter/strip = 0.9
 shader_parameter/through = 1.1

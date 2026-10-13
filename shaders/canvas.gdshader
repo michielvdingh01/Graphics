@@ -16,7 +16,7 @@ render_mode cull_disabled;
 // for cloth that is rolled up or lies on something).
 uniform vec3 color : source_color = vec3(0.2, 0.196, 0.14);
 uniform vec3 faded : source_color = vec3(0.33, 0.315, 0.245);
-uniform vec3 soil : source_color = vec3(0.6, 0.52, 0.38);
+uniform vec3 soil : source_color = vec3(0.74, 0.69, 0.58);
 uniform sampler2D weave_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D weave_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 // How bright the scan of the weave is on average, so that it leaves the
@@ -34,7 +34,7 @@ void fragment() {
 	vec3 wide = texture(wear_mask, UV * 0.09).rgb;
 	vec3 fine = texture(wear_mask, UV * 0.71 + vec2(0.31, 0.57)).rgb;
 	vec3 weave = texture(weave_tex, UV * weave_scale).rgb;
-	float thread = dot(weave, vec3(0.333)) / weave_value;
+	float thread = mix(1.0, dot(weave, vec3(0.333)) / weave_value, 1.0 - smoothstep(1.0, 3.5, -VERTEX.z));
 
 	// Each length of the cloth is a little lighter or darker than the next.
 	float lane = floor(UV.x / strip);
@@ -45,8 +45,8 @@ void fragment() {
 	// Where the rain ran off it left streaks: thin lines of the noise, drawn
 	// out along the fall.
 	float streaks = texture(wear_mask, vec2(UV.x * 1.9, UV.y * 0.11)).g;
-	float run = smoothstep(0.55, 0.8, streaks) * smoothstep(0.35, 0.6, wide.r);
-	albedo *= 1.0 - 0.17 * run;
+	float run = smoothstep(0.62, 0.85, streaks) * smoothstep(0.4, 0.65, wide.r);
+	albedo *= 1.0 - 0.12 * run;
 	albedo *= mix(0.9, 1.08, fine.b) * thread;
 
 	// The seams: two thicknesses of cloth, a line of stitching either side.
@@ -65,7 +65,9 @@ void fragment() {
 	ROUGHNESS = roughness;
 	SPECULAR = 0.25;
 	NORMAL_MAP = texture(weave_normal, UV * weave_scale).rgb;
-	NORMAL_MAP_DEPTH = weave_depth;
+	// From further off the threads are finer than a dot of the screen, and
+	// what is left of them is a grid that is not there.
+	NORMAL_MAP_DEPTH = weave_depth * (1.0 - smoothstep(1.0, 3.5, -VERTEX.z));
 	// One thickness lets the sun through, warm; a seam lets less through, and
 	// so does dirt.
 	BACKLIGHT = vec3(1.0, 0.95, 0.72) * through * COLOR.a * (1.0 - 0.55 * lap) * (1.0 - 0.5 * soiled) * (1.0 - 0.3 * run);
