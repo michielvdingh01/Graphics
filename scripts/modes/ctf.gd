@@ -35,6 +35,11 @@ const JOBS: Array[int] = [FETCH, GUARD, FETCH, ROAM, FETCH, GUARD]
 const BASE := Vector2(6.0, 25.0)
 ## How far from the stand a guard keeps, in metres to walk.
 const POST := Vector2(4.0, 12.0)
+## How near somebody has to stand to a prize or a stand to touch it, in
+## metres over the floor and in height. A prize says who is in reach of it,
+## but goes on saying so for a moment of somebody who was put elsewhere: of
+## the player, who went down next to it and has just come back at their base.
+const NEAR := Vector2(1.7, 2.5)
 
 ## The prize of either side; the node is its stand.
 var prizes: Array[Node3D] = [null, null]
@@ -163,7 +168,7 @@ func status(me: RefCounted) -> String:
 func _touch(side: int, body: Node3D) -> void:
 	var who: RefCounted = host.entrants.get(host.number(body))
 	var prize := prizes[side]
-	if who == null or who.out > 0.0 or not host.playing() or prize.state == CARRIED:
+	if who == null or who.out > 0.0 or not host.playing() or prize.state == CARRIED or not _near(body, prize.where()):
 		return
 	if who.team != side:
 		host.show_mode(&"_show_prize", [side, "take", who.id])
@@ -175,7 +180,7 @@ func _touch(side: int, body: Node3D) -> void:
 ## prize scores with it, if their own stands there.
 func _reach(side: int, body: Node3D) -> void:
 	var who: RefCounted = host.entrants.get(host.number(body))
-	if who == null or who.team != side or who.out > 0.0 or not host.playing():
+	if who == null or who.team != side or who.out > 0.0 or not host.playing() or not _near(body, prizes[side].global_position):
 		return
 	var other := prizes[1 - side]
 	if other.state == CARRIED and other.carrier == body and prizes[side].state == HOME:
@@ -208,6 +213,12 @@ func _show_prize(side: int, what: String, id: int) -> void:
 				host.tally[who.team] += 1
 				host.say("%s scored with %s" % [name, prize.the()], &"checkpoint")
 			host.judge()
+
+
+## True if `body` really stands at `at`.
+func _near(body: Node3D, at: Vector3) -> bool:
+	var gap := body.global_position - at
+	return Vector2(gap.x, gap.z).length() < NEAR.x and absf(gap.y) < NEAR.y
 
 
 ## The bot of `side` that is nearest to `at` and standing.

@@ -13,7 +13,9 @@ extends Node
 ## points. It walks and runs as fast as the player. Its aim runs after the
 ## chest of its target and takes a moment to get there, and it does not fire
 ## on sight: how long that takes, how far its aim wanders and how wide it
-## looks is its level (assets/bots.json), which goes by the difficulty.
+## looks is its level (assets/bots.json), which goes by the difficulty. So is
+## how long it keeps firing before it lets up, and at a person no more bots
+## fire at a time than the match allows.
 ## Whom it sees, its side knows of as well. What it does not do yet: take
 ## cover, fall back, throw grenades, jump or crouch.
 
@@ -29,8 +31,10 @@ const AT_ITS_SHOULDER := 4.0
 const LOOK := 0.12
 ## Its level where assets/bots.json says nothing: seconds from seeing
 ## somebody to the first shot, how far off its aim wanders, in degrees, the
-## seconds its aim takes to catch up, and how wide it looks, in degrees.
-const LEVEL := {"reaction": 0.55, "wander": 2.0, "aim_time": 0.6, "fov": 110.0}
+## seconds its aim takes to catch up, how wide it looks, in degrees, and the
+## seconds it keeps firing before it lets up for somewhere between the two
+## numbers of `rest`.
+const LEVEL := {"reaction": 0.55, "wander": 2.0, "aim_time": 0.6, "fov": 110.0, "burst": 1.0, "rest": [0.4, 0.7]}
 ## How far under the eyes of its target it aims, in metres: at the chest.
 const CHEST := 0.5
 ## One that is in a hurry, with a prize on its back, still turns on an enemy
@@ -84,6 +88,11 @@ var _off := Vector3.ZERO
 var _off_left := 0.0
 var _mag := 0
 var _cooldown := 0.0
+## It fires in bursts: whether it is in one, when that ends, and until when
+## it lets up after it.
+var _bursting := false
+var _burst_ends := 0.0
+var _rest_until := 0.0
 var _reload := 0.0
 ## Where it is walking to with nobody in sight, and whether it has anywhere.
 var _goal := Vector3.ZERO
@@ -117,6 +126,8 @@ func begin() -> void:
 	_mag = _data.mag_size
 	_reload = 0.0
 	_cooldown = 0.0
+	_bursting = false
+	_rest_until = 0.0
 	_going = false
 	_look = randf() * LOOK
 	_aim = _body.global_position + Vector3.UP * EYE - _body.global_basis.z * 10.0
@@ -192,11 +203,19 @@ func _physics_process(delta: float) -> void:
 			desired = _towards(wish, WALK)
 		_sprinting = false
 		var on_target := (_aim - eye).normalized().dot((at - eye).normalized()) > cos(deg_to_rad(ON_TARGET))
+		if _bursting and _clock >= _burst_ends:
+			_bursting = false
+			var rest: Array = _level.rest
+			_rest_until = _clock + randf_range(float(rest[0]), float(rest[1]))
 		if _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
-			if _mag > 0:
-				_shoot(eye)
-			else:
+			if _mag <= 0:
 				_reload = _data.reload_time
+			elif _clock >= _rest_until and Match.may_fire(me, _target):
+				# A burst, and with a slow weapon one shot of it.
+				if not _bursting:
+					_bursting = true
+					_burst_ends = _clock + float(_level.burst)
+				_shoot(eye)
 	else:
 		_seen = 0.0
 		desired = _roam(wish)
@@ -364,7 +383,9 @@ func _shoot(eye: Vector3) -> void:
 			if target.has_method("take_damage"):
 				var falloff := remap(eye.distance_to(end), _data.falloff_start, _data.falloff_end, 1.0, _data.min_damage_scale)
 				var amount := _data.damage * clampf(falloff, _data.min_damage_scale, 1.0)
-				var head: bool = target.has_method("is_headshot") and target.is_headshot(end)
+				# A load of shot is a load of shot, wherever its pellets land:
+				# in a bot's hands it does to a head what it does to a chest.
+				var head: bool = _data.pellets == 1 and target.has_method("is_headshot") and target.is_headshot(end)
 				if head:
 					amount *= _data.headshot_multiplier
 				Match.hit(_body, target, amount, end, direction, me.weapon, head)

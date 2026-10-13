@@ -67,6 +67,9 @@ const MAX_HEALTH := 100.0
 const MENDS := 20.0
 ## Seconds a hit goes on counting as the cause of a death.
 const BLAME := 10.0
+## Seconds after its last shot at a person that a bot still counts as one of
+## those firing at them.
+const LETS_UP := 1.0
 ## Seconds the can lies there that somebody who went down leaves.
 const CAN_LIES := 30.0
 ## What the bots carry, in the order they join a side: the weapons of the
@@ -108,6 +111,9 @@ class Entrant:
 	var unhurt := 0.0
 	## Who hit it last: [number, weapon, head, the clock then].
 	var blame: Array = []
+	## The bots that are firing at it, a person: the clock at which each
+	## last did, by its number. See may_fire().
+	var fired_at := {}
 
 
 ## True while the game is a match.
@@ -121,8 +127,10 @@ var kinds := {}
 var mode: RefCounted
 ## What Settings.rules() gives while a match is open: what a match has for
 ## the difficulty that is set. Besides what the game reads of it, that is how
-## far health comes back by itself (`regen_to`), what is left of what a bot
-## does to a person (`hurts`) and how good the bots are (`bots`).
+## far health comes back by itself (`regen_to`) and after how long without a
+## hit (`regen_after`), what is left of what a bot does to a person (`hurts`),
+## how many bots fire at one person at a time (`focus`, 0 for as many as see
+## them) and how good the bots are (`bots`).
 var rules: Dictionary:
 	get:
 		return _rules[clampi(Settings.difficulty, 0, _rules.size() - 1)]
@@ -170,7 +178,7 @@ func _ready() -> void:
 	var by_difficulty: Variant = parsed.get("difficulty") if parsed is Dictionary else null
 	for i in Settings.RULES.size():
 		var one := shared.duplicate()
-		one.merge({"regen_to": 100.0, "hurts": 1.0, "bots": "regular"})
+		one.merge({"regen_to": 100.0, "hurts": 1.0, "focus": 0, "bots": "regular"})
 		if by_difficulty is Array and i < by_difficulty.size() and by_difficulty[i] is Dictionary:
 			one.merge(by_difficulty[i], true)
 		_rules.append(one)
@@ -411,6 +419,24 @@ func harm(victim: int, amount: float, at: Vector3, direction: Vector3, by := 0, 
 	return false
 
 
+## True if `bot` may fire at `whom` now. At a bot, always. At a person no
+## more of them fire at a time than the difficulty has it: the others keep
+## their weapon on that person and wait for one of those to let up. Asking
+## counts as firing.
+func may_fire(bot: Entrant, whom: Entrant) -> bool:
+	var most := int(rules.focus)
+	if whom.bot or most <= 0:
+		return true
+	for id: int in whom.fired_at.keys():
+		var other: Entrant = entrants.get(id)
+		if _clock - float(whom.fired_at[id]) > LETS_UP or other == null or other.out > 0.0:
+			whom.fired_at.erase(id)
+	if whom.fired_at.has(bot.id) or whom.fired_at.size() < most:
+		whom.fired_at[bot.id] = _clock
+		return true
+	return false
+
+
 ## A bot has seen `whom` at `at`: those on its side know as much.
 func seen(by: Entrant, whom: Entrant, at: Vector3) -> void:
 	if not mode.teams():
@@ -529,8 +555,10 @@ func _physics_process(delta: float) -> void:
 		# is read from it once the ways over it can be asked for. A level may
 		# come with a navmesh from when it was built: that is not the one.
 		# The server takes a frame or more to take a navmesh over, and may
-		# still have that of the level before.
-		if _baked and NavigationServer3D.map_get_closest_point(_game.get_world_3d().navigation_map, _corner).distance_to(_corner) < 0.5:
+		# still have that of the level before. Before its first turn it
+		# cannot be asked anything.
+		var map := _game.get_world_3d().navigation_map
+		if _baked and NavigationServer3D.map_get_iteration_id(map) > 0 and NavigationServer3D.map_get_closest_point(map, _corner).distance_to(_corner) < 0.5:
 			_begin()
 		return
 	if state != State.PLAYING:

@@ -2639,10 +2639,15 @@ Op 13 oktober 2026 speelde Michiel het ruwe potje en gaf zeven punten door. Dit 
   | Health komt vanzelf terug tot | 100 | 75 | 50 |
   | Wat er overblijft van wat een bot een mens doet | 75% | 90% | alles |
   | De bots | Recruit | Regular | Hardened |
-  | Van zien tot het eerste schot | 0,9 s | 0,55 s | 0,35 s |
-  | Hoe ver zijn richtpunt van het doel zwerft | 3,5° | 2° | 1,2° |
-  | Tijd waarin zijn richtpunt het doel inhaalt | 0,9 s | 0,6 s | 0,4 s |
+  | Van zien tot het eerste schot | 1,1 s | 0,55 s | 0,35 s |
+  | Hoe ver zijn richtpunt van het doel zwerft | 4,5° | 2° | 1,2° |
+  | Tijd waarin zijn richtpunt het doel inhaalt | 1,0 s | 0,6 s | 0,4 s |
   | Blikveld | 90° | 110° | 120° |
+  | Vuurt zo lang, en laat dan zo lang los | 0,35 s, 1,2 tot 2 s | 1 s, 0,4 tot 0,7 s | 1,6 s, 0,2 tot 0,4 s |
+  | Bots die tegelijk op één mens schieten | 1 | 2 | allemaal |
+  | Health begint terug te komen na | 3 s | 5 s | 5 s |
+
+  Zo staat het na de tweede ronde hieronder; in de eerste was de Recruit 0,9 s, 3,5° en 0,9 s, en waren er geen stoten en geen grens aan wie tegelijk schiet.
 
   De niveaus van de bots staan in `assets/bots.json`, met de vierde uit het plan (Veteran) erbij voor later. Bots komen zelf tot dezelfde grens terug als een mens.
 - **Twee schoten van een scherpschutter op easy.** Het geweer doet 70; op easy komt daarvan 52,5 aan, dus één treffer in het lijf laat je staan en de tweede niet; een schot in het hoofd (175, op easy 131) is er één. Dat gold op het lijf al, maar de bots richtten op de hals, 6 cm onder waar het hoofd begint, en hun richtpunt zwerft: een deel van hun schoten was dus een schot in het hoofd. Hoeveel is niet geteld. Ze richten nu op de borst, een halve meter onder de ogen.
@@ -2652,6 +2657,27 @@ Op 13 oktober 2026 speelde Michiel het ruwe potje en gaf zeven punten door. Dit 
 - **De duinen zijn een arena.** De twee kanten beginnen 399 m lopen uit elkaar. Wat daarvoor nodig was: een arena houdt hooguit 500 plekken (in de duinen 491, om de drie; het opzoeken van de wegen kost daar 1,3 s bij het begin, tegen 6,5 s met alle 1 145), een bot die niemand kent loopt naar de helft van de ander in plaats van zomaar ergens heen, wie een vijand ziet zegt het zijn kant, een scherpschutter ziet 180 m ver (de anderen 40 tot 70), en in een arena langer dan 300 m draagt een kant twee scherpschuttersgeweren en één shotgun minder.
 - **Een bot die geen weg kreeg bleef staan** zonder dat het als vastlopen telde: op een stuk navmesh dat nergens aan vastzit geeft de wegzoeker de plek zelf terug. Hij loopt dan recht op zijn doel af, wat hem van dat stuk af brengt.
 
+**Tweede ronde, dezelfde dag.** Michiel speelde de bijgestelde stand: "heel vet", maar easy nog veel te moeilijk, en vijf tellen wegzijn te lang.
+
+- **Terugkomen na 2 seconden**, in alle drie de spelsoorten (het was 3, 2 en 5).
+- **Easy is op vier manieren zachter gemaakt**, omdat de schade niet verder omlaag kan zonder dat een scherpschutter drie treffers nodig heeft:
+  - **Een bot vuurt in stoten.** Hij schoot door zolang hij zijn doel had: tien schoten per seconde uit een karabijn. Nu vuurt een Recruit 0,35 s en laat dan 1,2 tot 2 s los; een Regular 1 s en 0,4 tot 0,7 s; een Hardened 1,6 s en 0,2 tot 0,4 s. Met een langzaam wapen is een stoot één schot.
+  - **Op een mens schieten er niet meer tegelijk dan de moeilijkheid toelaat**: één op easy, twee op normal, op hard iedereen die hem ziet. De anderen houden hun wapen op hem en wachten tot een van de schutters een seconde niet gevuurd heeft. Bots onderling kennen die grens niet.
+  - **De Recruit is trager en wijder**: 1,1 s van zien tot schieten (was 0,9), zijn richtpunt zwerft 4,5° (was 3,5°) en haalt het doel in 1 s in (was 0,9).
+  - **Health begint op easy na 3 s terug te komen**, niet na 5.
+- **Een lading hagel uit de handen van een bot telt in het hoofd als in het lijf.** Anders kon een shotgun van dichtbij op easy in één schot doden (88 in het lijf, 131 met de hagel in het hoofd), en dat mag daar alleen het scherpschuttersgeweer.
+
+Gemeten met de speler erin, stilstaand waar hij begon, drie tegen drie in de fabriek, negentig seconden, om en om met een kloon waarin easy stond zoals het was; de speler kan in die meting niet dood. Load 21 tijdens de laatste vier runs, alles zonder GPU:
+
+| | Schade per seconde | De snelste honderd |
+|---|---|---|
+| Easy zoals het was (twee keer) | 17,9 en 95,0 | 0,2 en 0,1 s |
+| Easy nu (vier keer, vóór de regel voor hagel) | 2,9 · 10,2 · 13,7 · 24,5 | 1,2 · 1,4 · 0,3 · 1,4 s |
+| Normal nu (twee keer) | 45,5 en 61,7 | 0,2 en 0,1 s |
+| Hard nu (twee keer) | 95,4 en 87,4 | 0,0 en 0,1 s |
+
+Het loopt ver uiteen van run tot run: het hangt af van hoeveel van de drie de speler bereiken voor zijn eigen kant ze neerhaalt. De ene keer van 0,3 s op easy is een shotgun van dichtbij geweest, de aanleiding voor de regel hierboven; na die regel is niet opnieuw gemeten. Op normal en hard is de snelste honderd één lading hagel.
+
 **Getest en gemeten**, alles zonder GPU, de laptop aan de lader, load 4 tot 8.
 
 - `tools/test_match.sh`, 47 controles. Nieuw: de drie stellen regels; op easy laat één schot van het scherpschuttersgeweer in het lijf de speler staan en het tweede niet, en één in het hoofd is genoeg; health komt terug tot 50, 75 en 100; er ligt een cel tussen de uiteinden die blijft liggen; tegen zombies is de andere kant zombies met een wapen in handen en de eigen kant soldaten, ze leggen 5,5 m per seconde af en vechten (7 neergehaald, 5 verloren in 34 s); het scherm gaat langs soldaten, zombies en clowns en biedt geen robots aan; de duinen staan in de lijst.
@@ -2659,7 +2685,7 @@ Op 13 oktober 2026 speelde Michiel het ruwe potje en gaf zeven punten door. Dit 
 
 **Wat ik niet kon beoordelen**
 
-- **Of easy nu makkelijk genoeg is.** De getallen zijn gokken; ze staan in twee bestanden en zijn in een minuut anders.
+- **Of easy nu makkelijk genoeg is.** Na de tweede ronde krijgt een speler die stilstaat er gemiddeld een kwart van de schade van eerst en duurt de snelste dood een ruime seconde in plaats van een tiende; of dat genoeg is, zegt het spelen. Tussen easy en normal zit nu een factor vier tot vijf: normal en hard zijn op de stoten na niet zachter gemaakt.
 - **Of 7,2 de goede sprint is.** "Ietsje trager" is tien procent geworden.
 - **Zombies en clowns van dichtbij.** Op twee beelden van een potje in de fabriek staan drie zombies op twintig meter: ze rennen en richten als de anderen. Hoe een geweer in de handen van een zombie of een clown er van dichtbij uitziet heb ik niet gezien.
 - **De duinen op het oog.** Geen beeld van gemaakt, en niet gemeten wat twaalf figuren daar kosten.
@@ -2749,9 +2775,11 @@ Op 13 oktober 2026 zei Michiel dat capture the flag nog gebouwd moest worden. He
 
 **Getest**, zonder GPU.
 
-- `tools/test_match.sh`, 63 controles. Voor capture the flag: elke kant heeft een banaan aan haar eigen uiteinde in haar eigen kleur; je eigen buit thuis aanraken doet niets; tegen die van de ander aan lopen pakt hem; wie hem draagt laat hem vallen waar hij neergaat en die kill is geen punt; een eigen speler brengt hem terug door hem aan te raken; beide kunnen tegelijk weg zijn en dan scoort niemand; een buit die ligt gaat vanzelf naar huis, en wie daar met de andere stond te wachten scoort op dat moment; wie viel komt terug bij zijn eigen basis; het menu gaat langs de drie soorten en de drie soorten buit.
+- `tools/test_match.sh`, 75 controles na de tweede ronde (63 ervoor). Voor capture the flag: elke kant heeft een banaan aan haar eigen uiteinde in haar eigen kleur; je eigen buit thuis aanraken doet niets; tegen die van de ander aan lopen pakt hem; wie hem draagt laat hem vallen waar hij neergaat en die kill is geen punt; een eigen speler brengt hem terug door hem aan te raken; beide kunnen tegelijk weg zijn en dan scoort niemand; een buit die ligt gaat vanzelf naar huis, en wie daar met de andere stond te wachten scoort op dat moment; wie viel komt terug bij zijn eigen basis; het menu gaat langs de drie soorten en de drie soorten buit.
 - `tools/test_prize.sh` van de buit slaagt met de wedstrijd erbij.
 - **Bots onder elkaar.** In de fabriek, drie tegen drie: in vijf minuten is de buit 3 keer gepakt en één keer binnengebracht; in een andere run van tweeënhalve minuut 3 keer gepakt, 3 keer gevallen, 3 keer teruggebracht en niet gescoord; in een run van vier minuten is hij niet gepakt. Op het fabrieksterrein (zes tegen zes, vier minuten, 91 doden) en in de centrale (vier tegen vier, 69 doden) pakte geen bot de buit: de halers van beide kanten komen elkaar in het midden tegen. Het punt moet daar van de speler komen.
+
+**Een fout die Michiel bij het spelen vond: de vlag ging mee de dood in.** Wie neerging liet de buit vallen waar hij lag, maar de speler had hem weer op zijn rug op het moment dat hij bij zijn basis terugkwam. Een buit vraagt de physics wie er binnen bereik is, en dat antwoord loopt een stap achter: de speler, die dood naast de buit lag, stond er nog in terwijl hij al verplaatst was, en gold op dat moment weer als meespelend. Een bot had het niet, want die verliest zijn botslaag als hij valt. De spelsoort kijkt nu zelf of iemand werkelijk bij de buit of de standaard staat (1,7 m over de vloer). De test speelt het na en zakte op de oude stand op precies dit punt: de speler pakt de vlag, gaat halverwege neer, komt terug bij zijn basis en de vlag ligt nog waar hij viel; een teamgenoot pakt hem over; de andere kant stuurt hem naar huis door hem aan te raken.
 
 **Wat ik niet kon beoordelen**
 

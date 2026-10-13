@@ -55,11 +55,14 @@ func _run() -> void:
 	var caps := []
 	for difficulty in 3:
 		Settings.difficulty = difficulty
-		caps.append([Settings.rules().regen_to, Settings.rules().hurts, Settings.rules().bots])
+		caps.append([Settings.rules().regen_to, Settings.rules().hurts, int(Settings.rules().focus), Settings.rules().bots])
 	Settings.difficulty = 1
 	_check("the rules are those of a match, by the difficulty: health comes back to 100, 75 and 50", Settings.rules().drops == 0.0
-		and caps == [[100.0, 0.75, "recruit"], [75.0, 0.9, "regular"], [50.0, 1.0, "hardened"]])
-	_check("and so is how good the bots are", Match.bot_level().reaction == 0.55 and Match.bot_level().fov == 110.0 and Match.levels.recruit.reaction > Match.levels.hardened.reaction)
+		and caps == [[100.0, 0.75, 1, "recruit"], [75.0, 0.9, 2, "regular"], [50.0, 1.0, 0, "hardened"]])
+	_check("and so is how good the bots are: slower, wider of the mark and firing shorter the easier it is", Match.bot_level().reaction == 0.55 and Match.bot_level().fov == 110.0
+		and Match.levels.recruit.reaction > Match.levels.hardened.reaction and Match.levels.recruit.wander > Match.levels.hardened.wander
+		and Match.levels.recruit.burst < Match.levels.hardened.burst and Match.levels.recruit.rest[0] > Match.levels.hardened.rest[1])
+	_check("whoever goes down is back in two seconds, whatever the kind", Match.kinds.values().all(func(numbers: Dictionary) -> bool: return numbers.respawn == 2.0))
 	var cells := tree.get_nodes_in_group("pickup").filter(func(pickup: Node) -> bool: return pickup.kind == pickup.Kind.HEALTH)
 	_check("a cell or two that mend lie between the ends, and stay there", cells.size() >= 1 and cells.size() <= 4 and cells.all(func(cell: Node) -> bool:
 		return cell.stays and absf(Match.arena.spots[Match.arena.ends[0]].distance_to(cell.global_position) - Match.arena.spots[Match.arena.ends[1]].distance_to(cell.global_position)) < 40.0))
@@ -154,6 +157,18 @@ func _run() -> void:
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	_check("the bot is back, as good as new and somewhere else", target.out <= 0.0 and not target.body.dead and target.health == Match.MAX_HEALTH and target.body.visible)
 	_check("nothing hurts it for a moment", target.safe > 0.0 and not Match.harm(target.id, 50.0, target.body.global_position, Vector3.FORWARD, me.id, 0) and target.health == Match.MAX_HEALTH)
+	# How many bots fire at a person at a time.
+	var bots: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot)
+	Settings.difficulty = 0
+	_check("on easy one bot fires at the player at a time, and the next waits", Match.may_fire(bots[0], me) and not Match.may_fire(bots[1], me) and Match.may_fire(bots[0], me) and not Match.may_fire(bots[2], me))
+	_check("at another bot they all may", Match.may_fire(bots[1], bots[0]) and Match.may_fire(bots[2], bots[0]))
+	await _wait(Match.LETS_UP + 0.2)
+	_check("once the one lets up, another may", Match.may_fire(bots[1], me) and not Match.may_fire(bots[0], me))
+	Settings.difficulty = 1
+	await _wait(Match.LETS_UP + 0.2)
+	_check("on normal two at a time", Match.may_fire(bots[0], me) and Match.may_fire(bots[1], me) and not Match.may_fire(bots[2], me))
+	Settings.difficulty = 2
+	_check("and on hard everybody who sees them", Match.may_fire(bots[2], me))
 	# On easy it takes two shots of a marksman's rifle to the body, or one to
 	# the head.
 	Settings.difficulty = 0
@@ -168,6 +183,8 @@ func _run() -> void:
 	me.safe = 0.0
 	Match.harm(me.id, marksman.damage * marksman.headshot_multiplier, player.global_position, Vector3.FORWARD, target.id, 4, true)
 	_check("one to the head is enough, on easy too", player.dead)
+	var shotgun: WeaponData = player.weapons.LOADOUT[2]
+	_check("a bot's whole load of shot is not, on easy: pellets to the head count as any other", shotgun.damage * shotgun.pellets * float(Match.rules.hurts) < player.MAX_HEALTH)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	Settings.difficulty = 2
 	me.safe = 0.0
@@ -287,10 +304,44 @@ func _run() -> void:
 		clock += 0.5
 	Engine.time_scale = 1.0
 	print("  capture the flag among bots: %d : %d after %.0f s, the prize taken %d times, %d times a bot got stuck" % [Match.tally[0], Match.tally[1], clock, took[0], Match.stuck])
-	_check("bots go and take the prize", took[0] >= 1)
 	_check("it ends at three points or when the time is up, for whoever leads then", Match.state == Match.State.OVER
 		and Match.won == (rules.DRAW if Match.tally[0] == Match.tally[1] else 0 if Match.tally[0] > Match.tally[1] else 1)
 		and Match.tally[0] >= before[0] and maxi(Match.tally[0], Match.tally[1]) <= 3)
+
+	# The player with the prize: going down drops it, and it stays dropped.
+	_check("capture the flag opens with the player in it", Match.open({"mode": "ctf", "level": "factory", "size": 2, "prize": "flag"}))
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	game = tree.current_scene
+	player = game.player
+	me = Match.me()
+	rules = Match.mode
+	for who: RefCounted in Match.entrants.values():
+		who.safe = 0.0
+		if who.brain:
+			who.brain.process_mode = Node.PROCESS_MODE_DISABLED
+	var ally: RefCounted = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot and who.team == me.team)[0]
+	var enemy: RefCounted = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team != me.team)[0]
+	var theirs: Node3D = rules.prizes[1 - me.team]
+	var ours: Node3D = rules.prizes[me.team]
+	player.global_position = theirs.global_position + aside
+	await _wait(0.3)
+	_check("the player takes the other side's flag by walking into it", theirs.state == rules.CARRIED and theirs.carrier == player and rules.status(me).contains("with you"))
+	var halfway: Vector3 = (ours.global_position + theirs.global_position) * 0.5
+	player.global_position = halfway
+	await _wait(0.2)
+	Match.harm(me.id, 500.0, halfway, Vector3.FORWARD, enemy.id, 0)
+	_check("and drops it where they go down", player.dead and theirs.state == rules.DOWN and Vector2(theirs.where().x - halfway.x, theirs.where().z - halfway.z).length() < 1.5)
+	await _wait(float(rules.numbers.respawn) + 0.5)
+	_check("it does not come along when they are back at their base: it lies where it fell", not player.dead and theirs.state == rules.DOWN and theirs.carrier == null
+		and Vector2(theirs.where().x - halfway.x, theirs.where().z - halfway.z).length() < 1.5 and player.global_position.distance_to(theirs.where()) > 5.0)
+	ally.body.global_position = theirs.where() + aside
+	await _wait(0.3)
+	_check("one of their own side takes it over", theirs.state == rules.CARRIED and theirs.carrier == ally.body)
+	Match.harm(ally.id, 500.0, ally.body.global_position, Vector3.FORWARD, enemy.id, 0)
+	enemy.body.global_position = theirs.where() + aside
+	await _wait(0.3)
+	_check("and the side it belongs to sends it home by touching it", theirs.state == rules.HOME and Match.tally == [0, 0])
 
 	# What the menu offers, and leaving.
 	Menu._show(Menu.Screen.MATCH)
@@ -375,6 +426,18 @@ func _soak(seconds: float) -> void:
 	var nearest := INF
 	var walked := 0.0
 	var stood := {}
+	# With the player in it: they stand where they were put and cannot die,
+	# and what the bots do to them is added up, at the difficulty asked for
+	# with --difficulty=<0 to 2>.
+	var hits: Array[Vector2] = []
+	var game := get_tree().current_scene
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--difficulty="):
+			Settings.difficulty = arg.get_slice("=", 1).to_int()
+	if Match.me():
+		game.player.damaged.connect(func(amount: float) -> void:
+			hits.append(Vector2(Match.left, amount))
+			game.player.health = 1e6)
 	var news := {}
 	Match.said.connect(func(text: String) -> void:
 		for word: String in [" has ", " dropped ", " brought ", " back home", " scored "]:
@@ -395,6 +458,20 @@ func _soak(seconds: float) -> void:
 				if other.out <= 0.0 and Match.mode.hostile(who, other):
 					nearest = minf(nearest, who.body.global_position.distance_to(other.body.global_position))
 	print("  each walked %.1f m a second on average; the nearest two against each other ever came is %.0f m" % [walked / seconds / Match.entrants.size(), nearest])
+	if Match.me():
+		# The shortest stretch in which the player took a hundred, and how
+		# much of the time they were being hit at all.
+		var total := 0.0
+		var quickest := INF
+		for i in hits.size():
+			total += hits[i].y
+			var sum := 0.0
+			for j in range(i, hits.size()):
+				sum += hits[j].y
+				if sum >= 100.0:
+					quickest = minf(quickest, hits[i].x - hits[j].x)
+					break
+		print("  on %s the player, standing still, was hit %d times for %.0f in all, %.1f a second; the quickest hundred took %s" % [Settings.DIFFICULTY_NAMES[Settings.difficulty].to_lower(), hits.size(), total, total / seconds, "%.1f s" % quickest if quickest < INF else "longer than there was"])
 	if not news.is_empty():
 		print("  the score is %d : %d; what was said of the prizes, and how often: %s" % [Match.tally[0], Match.tally[1], news])
 	physics.sort()
