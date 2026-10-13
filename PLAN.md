@@ -2350,7 +2350,7 @@ Het keurmerk: "Every zone has what it is held to".
 
 ## De duinen: het beeld
 
-Op 12 oktober 2026 's avonds gevraagd: het vijfde level, de duinen, grafisch afmaken, in de nacht. Gebouwd op de branch `duinbeeld`, door vier agents elk in een eigen worktree met een eigen deel (`duinbeeld-bomen`, `duinbeeld-grond`, `duinbeeld-veld`, `duinbeeld-complex`) en een vijfde die het licht deed, mat, hun werk samenvoegde en dit schreef. Niet in de trunk gezet. Het werk lag stil van 23:45 tot 06:10, omdat de gebruikslimiet van de sessie op was, en nog eens in de ochtend tot kwart over negen door een netwerkstoring; het was om half elf klaar.
+Op 12 oktober 2026 's avonds gevraagd: het vijfde level, de duinen, grafisch afmaken, in de nacht. Gebouwd op de branch `duinbeeld`, door vier agents elk in een eigen worktree met een eigen deel (`duinbeeld-bomen`, `duinbeeld-grond`, `duinbeeld-veld`, `duinbeeld-complex`) en een vijfde die het licht deed, mat, hun werk samenvoegde en dit schreef. Op 13 oktober om elf uur op Michiels woord ("merge het maar in de trunk") in `fase-2-vertical-slice` gevoegd, nadat hij het vanuit de worktree gespeeld had; niet gepusht. Het werk lag stil van 23:45 tot 06:10, omdat de gebruikslimiet van de sessie op was, en nog eens in de ochtend tot kwart over negen door een netwerkstoring; het was om half elf klaar.
 
 Het level was die avond gebouwd en speelde, maar zag eruit als een eerste schets: kruinen van een handvol kaarten die als loofbomen lazen, één vlakke toon zand met een bruine veeg als spoor, 2000 keer dezelfde pol helm, een tent als een doos, prikkeldraadrollen als zwarte linten, een kale muur om een kaal terrein met een grijze doos als hoofdgebouw, en een zwart silhouet als bosrand.
 
@@ -2409,7 +2409,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 - `tools/build_check.py factory works depot powerhouse wing` op de eindstand: geen bestand van die vijf levels is veranderd, en `tools/bake_lightmaps.sh --list` noemt elk van hun lightmaps bij. Veranderd zijn de duinen, de showroom (door de veldstukken en de voertuigen die erin staan) en de modellen van de bomen, de struiken en de voertuigen.
 - **Wat staat, staat waar het stond.** De agents van het veld en van het complex hebben na hun laatste bouw alle 780 botsvormen van het level (vorm, maat, plek, oppervlak) naast die van het level van die avond gelegd: geen regel verschil. De agent van de grond deed hetzelfde met elke botsvorm, boom, model, wat ontploft, de punten van de route en de schaduwkaart (53.840 bits), tot en met zijn derde commit. De bouw zegt nog steeds 17% schaduw, 14 zones en 6 checkpoints. Na het samenvoegen van alle vier is die vergelijking niet nog eens gemaakt.
 - **Niets hapert de eerste keer, voor zover een benchmark dat ziet**: 92 pipelines op het eerste standpunt, dat geen laadscherm heeft, en geen enkele op de 22 daarna. Een rondgang vanaf het titelscherm, zoals in het vorige hoofdstuk, is niet gelopen.
-- **Gespeeld is het niet**, en niets is in beweging gezien: zie "Niet kunnen beoordelen".
+- **Michiel heeft het gespeeld**, op 13 oktober vanuit de worktree, op de accu, voor het de trunk in ging. Zijn woord erna: "Geweldig werk geleverd!" Over de afzonderlijke punten onder "Niet kunnen beoordelen" heeft hij niets gezegd. Zelf heb ik niets in beweging gezien.
 
 **Onderweg gevonden**
 
@@ -2442,7 +2442,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 **Niet kunnen beoordelen**
 
-- **Niets is in beweging gezien of gespeeld.** Alles is beoordeeld op stilstaande beelden. Dat geldt het meest voor: de wind in het gras en de kruinen; de overgang van een den op 21 m (de takjes aan de rand verdwijnen) en op 62 m; of naalden met een harde rand flikkeren op halve renderschaal; of het prikkeldraad flikkert bij het lopen; de stofjes, de meeuwen en de rook boven het bivak.
+- **Zelf heb ik niets in beweging gezien.** Alles is beoordeeld op stilstaande beelden; Michiel speelde het daarna en vond het goed, zonder er meer over te zeggen. Wat ik op een stilstaand beeld niet kon zien: de wind in het gras en de kruinen; de overgang van een den op 21 m (de takjes aan de rand verdwijnen) en op 62 m; of naalden met een harde rand flikkeren op halve renderschaal; of het prikkeldraad flikkert bij het lopen; de stofjes, de meeuwen en de rook boven het bivak.
 - **Of het zand de goede kleur heeft.** Het is twee keer bijgesteld op mijn oog, van te wit naar crème.
 - **Of de diepere schaduw onder de dennen het sluipen verandert.** Wat een wachter ziet is niet aangeraakt, maar een soldaat in de schaduw is op het scherm donkerder dan hij was.
 - Het geluid: de betonplaten van de binnenplaats hebben geen botsvorm, dus een stap erop klinkt als zand en een schot laat een kuiltje in zand achter.
@@ -2474,5 +2474,6 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 - **De meeuwen zijn stil**, zoals het hele level op de wind na.
 - **De lucht is 4k**: 11 beeldpunten per graad, waar het scherm er 27 toont. Bij Poly Haven staat dezelfde lucht op 8k (CC0); niet opgehaald, want niet gevraagd.
 - **De stofjes in de lucht** zijn op een stilstaand beeld bijna niet te zien. Of ze in beweging iets doen is niet beoordeeld; `scripts/air.gd` uit `scenes/dunes.tscn` halen is één knoop.
-- **De worktrees en branches van de vier delen** (`duinbeeld-bomen`, `-grond`, `-veld`, `-complex`) staan er nog; alles ervan zit in `duinbeeld`. Opruimen wacht op Michiels woord.
+- **De worktrees en branches van de vier delen** (`duinbeeld-bomen`, `-grond`, `-veld`, `-complex`) en `duinbeeld` zelf staan er nog; alles ervan zit in de trunk. Opruimen wacht op Michiels woord.
+- **Bij het afsluiten van het spel op Ultra blijven een compute-shader, een shader en een sampler achter** (`1 RID of type "Compute" was leaked`, in Michiels uitvoer). Het enige script dat een compute-shader maakt is `scripts/lens_fringe.gd`, dat hier niet is aangeraakt; het ruimt ze op bij `NOTIFICATION_PREDELETE`, en dat komt kennelijk te laat. Het proces stopt toch: onschuldig, en niet uitgezocht.
 - De open punten van "De duinen: het vijfde level" die hier niet achterhaald heten, staan nog: wie om de tafel staat overlegt niet, de boogjes zijn er alleen voor wie host, de wachttoren is leeg, een robot klinkt in het zand als op beton, het navmesh meldt vier samenvallende randen, er is geen plattegrond van een level met land, en de muziek heeft niemand gekozen.
