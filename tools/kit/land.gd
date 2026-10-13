@@ -895,15 +895,21 @@ func _commit(zone_name: String, kind: String) -> void:
 		low.visibility_range_end_margin = 6.0
 	elif kind.begins_with("beyond "):
 		# The wood beyond the land, see tree_wall(): it throws no shadow, and
-		# its front row is one mesh from close by and another from afar.
+		# its edge is one mesh from close by and another from afar.
 		var wood := _root.get_child(0) as MeshInstance3D
 		wood.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if kind.ends_with(" near"):
-			wood.visibility_range_end = BEYOND_FAR
+		var seen: Array = _beyond_seen.get(kind, [0.0, 0.0])
+		if seen[1] > 0.0:
+			wood.visibility_range_end = seen[1]
 			wood.visibility_range_end_margin = 8.0
-		elif kind.ends_with(" far"):
-			wood.visibility_range_begin = BEYOND_FAR
+		if seen[0] > 0.0:
+			wood.visibility_range_begin = seen[0]
 			wood.visibility_range_begin_margin = 8.0
+	elif kind.begins_with("vista"):
+		# The ground beyond the land and what lies on it, see
+		# tools/levels/dunes/vista.gd: too far off to throw a shadow on
+		# anything that is seen.
+		(_root.get_child(0) as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 # --- The shade ---------------------------------------------------------------------
@@ -1174,89 +1180,169 @@ func tree(kind: String, at: Vector2, size := 1.0, yaw_deg := 0.0) -> void:
 		cover("moss", at + Vector2(_prop_rng.randf_range(-1.0, 1.0), _prop_rng.randf_range(-1.0, 1.0)) * reach, reach * 0.9, 0.75, 0.6)
 
 
-## How long a stretch of the wood beyond the land is one mesh, how many rows
-## deep that wood stands, how far apart its rows and the trees of a row are,
-## and from how far off its front row is drawn as trees are from afar.
-const BEYOND_STRETCH := 52.0
-const BEYOND_ROWS := 4
-const BEYOND_ROW := 6.0
-const BEYOND_GAP := 5.6
+## The wood beyond the land. How long a stretch of it is one mesh, and from
+## how far off its edge is drawn as trees are from afar.
+const BEYOND_STRETCH := 44.0
 const BEYOND_FAR := 85.0
-## How much of the light gets to each row of it: the wood throws no shadow,
-## so the rows further in are simply darker. And how much of that its bark
-## gets, which stands under its own crown.
-const BEYOND_LIGHT: Array[float] = [1.0, 0.8, 0.62, 0.5]
+## Its edge: the rows that are seen as trees, how far before and behind the
+## line they stand and how far apart their trees are. And the rows further
+## in, which close it: always as trees are from afar.
+const BEYOND_EDGE_ROWS: Array[float] = [-5.5, 1.5]
+const BEYOND_EDGE_GAP := 5.4
+const BEYOND_INNER_ROWS: Array[float] = [9.0, 16.5, 25.0]
+const BEYOND_INNER_GAP := 6.6
+## How much of the light gets to a tree, by how deep in the wood it stands:
+## the wood throws no shadow, so what stands further in is simply darker. And
+## how much of that its bark gets, which stands under its own crown.
+const BEYOND_LIGHT_DEEP := 0.5
 const BEYOND_BARK := 0.6
-## The pines of its edge, and of the rows behind: [kind, share].
+## The pines of its edge where the stand is old, where it is young, and of
+## the rows behind: [kind, share].
 const BEYOND_EDGE := [["pine_d", 2.0], ["pine_c", 2.0], ["pine_a", 2.0], ["pine_young", 0.6]]
+const BEYOND_YOUNG := [["pine_young", 2.0], ["pine_c", 2.0], ["pine_d", 1.5]]
 const BEYOND_INNER := [["pine_a", 3.0], ["pine_b", 3.0], ["pine_c", 1.0]]
+## How tall a stand is next to the tallest, from the lowest to the highest,
+## how long a stand goes on along the wood, and how long a glade does.
+const BEYOND_STANDS := Vector2(0.52, 1.18)
+const BEYOND_STAND_LONG := 58.0
+const BEYOND_GLADE_LONG := 41.0
 ## What a tree of each kind adds to a mesh that many trees are merged into,
 ## by the part of its model and then by material: the arrays of a surface.
 var _merged := {}
-## How many stretches of wood beyond the land there are so far.
+## How many stretches of wood beyond the land there are so far, and from how
+## far off and up to how far each is drawn: [begin, end] by the kind of mesh.
 var _beyond := 0
+var _beyond_seen := {}
+## How high the ground lies beyond the land, at (x, z), if the level has any
+## there: see beyond_height().
+var _stands_beyond := Callable()
 
 
-## The wood that goes on beyond the land, where nobody comes: rows of pines
-## behind the line from `from` to `to`, the tallest about `height` high, and
-## behind them the dark of the wood. It faces whoever has `from` on his right
-## and `to` on his left. The pines are those of the land. They are in
-## nobody's way and are not instances but one mesh for every stretch of the
-## line: the front row as a tree is from the middle distance, or from afar
-## when the stretch is far off, and the rows behind it always as from afar.
+## How high the ground lies at (x, z) whether that is on the land or beyond
+## it. A level that lays ground beyond its land says how high in
+## _stands_beyond; without it the land goes on at the height of its edge.
+func beyond_height(x: float, z: float) -> float:
+	if _stands_beyond.is_valid() and not _land.has_point(Vector2(x, z)):
+		return _stands_beyond.call(x, z)
+	return ground_height(x, z)
+
+
+## The wood that goes on beyond the land, where nobody comes: a belt of pines
+## along the line from `from` to `to`, the tallest about `height` high. It
+## faces whoever has `from` on his right and `to` on his left, and it stands
+## on the ground as that lies there, see beyond_height(), not at the height
+## of the line.
+##
+## A wood is not a hedge. It is made of stands, one of old trees and the next
+## of young ones half as high, with glades between them; and its edge is not
+## a row: some of its trees have stepped forward of the line, towards the
+## land. `kept` says how much of it there is at a spot (x and z), nought to
+## one: where a level has a view to keep open.
+##
+## The pines are those of the land. They are in nobody's way and are not
+## instances but one mesh for every stretch of the line: the edge as a tree
+## is from the middle distance, or from afar when the stretch is far off, and
+## what stands further in always as from afar. Behind the last row is the
+## dark of the wood: what is seen between the trunks.
 ##
 ## The shade the game knows of does not know of this wood, and a shadow is
-## what a wood costs most: it throws none, and the rows further in are
+## what a wood costs most: it throws none, and what stands deeper in it is
 ## simply made darker.
-func tree_wall(from: Vector3, to: Vector3, height := 22.0) -> void:
+func tree_wall(from: Vector3, to: Vector3, height := 22.0, kept := Callable()) -> void:
 	var length := from.distance_to(to)
 	var along := (to - from) / length
 	var back := along.cross(Vector3.UP)
 	var dice := RandomNumberGenerator.new()
 	dice.seed = hash([from, to])
+	var stands := _noise(dice.randi() & 0xffff, BEYOND_STAND_LONG)
+	var glades := _noise(dice.randi() & 0xffff, BEYOND_GLADE_LONG)
 	var stretches := maxi(roundi(length / BEYOND_STRETCH), 1)
 	var stretch := length / stretches
+	var deepest: float = BEYOND_INNER_ROWS[BEYOND_INNER_ROWS.size() - 1]
+	var outside := _land.grow(1.2)
+	var planted := 0
 	for s in stretches:
 		var near := {}
 		var far := {}
 		var inner := {}
-		for row in BEYOND_ROWS:
-			var count := int(stretch / BEYOND_GAP)
-			var kinds: Array = BEYOND_EDGE if row == 0 else BEYOND_INNER
-			var total := 0.0
-			for kind: Array in kinds:
-				total += kind[1]
+		for row: float in BEYOND_EDGE_ROWS + BEYOND_INNER_ROWS:
+			var edge := row < BEYOND_INNER_ROWS[0]
+			var gap := BEYOND_EDGE_GAP if edge else BEYOND_INNER_GAP
+			var count := maxi(int(stretch / gap), 1)
 			for i in count:
-				var at := from + along * (s * stretch + (i + dice.randf_range(0.1, 0.9)) * stretch / count) + back * (row * BEYOND_ROW + dice.randf_range(-1.6, 1.6)) + Vector3.DOWN * dice.randf_range(0.3, 0.9)
-				# The trees further in stand higher over those in front.
-				var size := height / 19.0 * dice.randf_range(0.84, 1.12) * (0.92 if row == 0 else 1.0)
-				var xf := Transform3D(Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3.ONE * size), at)
-				var light := BEYOND_LIGHT[row] * dice.randf_range(0.82, 1.0)
-				var pick := dice.randf() * total
+				# The dice fall the same way whether a tree comes of it or not.
+				var spot := from + along * (s * stretch + (i + dice.randf_range(0.1, 0.9)) * stretch / count) + back * (row + dice.randf_range(-2.6, 2.6))
+				var sink := dice.randf_range(0.15, 0.5)
+				var vary := dice.randf_range(0.86, 1.14)
+				var turn := dice.randf() * TAU
+				var dim := dice.randf_range(0.82, 1.0)
+				var pick := dice.randf()
+				var at := Vector2(spot.x, spot.z)
+				if outside.has_point(at):
+					continue
+				# A glade reaches into the edge of a wood more often than
+				# through it.
+				var share: float = kept.call(at.x, at.y) if kept.is_valid() else 1.0
+				if glades.get_noise_2dv(at) * 0.5 + 0.5 > (0.66 if edge else 0.8) * share + 0.02:
+					continue
+				var tall := lerpf(BEYOND_STANDS.x, BEYOND_STANDS.y, smoothstep(-0.55, 0.55, stands.get_noise_2dv(at)))
+				var size := height / 19.0 * tall * vary * (0.92 if edge else 1.0)
+				var xf := Transform3D(Basis(Vector3.UP, turn).scaled(Vector3.ONE * size), Vector3(at.x, beyond_height(at.x, at.y) - sink, at.y))
+				var light := lerpf(1.0, BEYOND_LIGHT_DEEP, clampf(row / deepest, 0.0, 1.0)) * dim
+				var kinds: Array = (BEYOND_YOUNG if tall < 0.78 else BEYOND_EDGE) if edge else BEYOND_INNER
+				var total := 0.0
+				for kind: Array in kinds:
+					total += kind[1]
+				pick *= total
 				for kind: Array in kinds:
 					pick -= kind[1]
 					if pick <= 0.0:
 						var bark := light * BEYOND_BARK
-						if row == 0:
+						if edge:
 							_merge_tree(near, kind[0], "Mid", xf, light, bark)
 							_merge_tree(far, kind[0], "Far", xf, light, bark)
 						else:
 							_merge_tree(inner, kind[0], "Far", xf, light, bark)
+						planted += 1
 						break
-		for part: Array in [["near", near], ["far", far], ["inner", inner]]:
-			for mat: String in part[1]:
-				var st := SurfaceTool.new()
-				st.create_from_arrays(_merged_arrays(part[1][mat]))
-				_tools["|beyond %d %s/%s" % [_beyond, part[0], mat]] = st
-		_beyond += 1
+		for part: Array in [[near, 0.0, BEYOND_FAR], [far, BEYOND_FAR, 0.0], [inner, 0.0, 0.0]]:
+			if (part[0] as Dictionary).is_empty():
+				continue
+			var mesh := "beyond %d" % _beyond
+			_beyond_seen[mesh] = [part[1], part[2]]
+			_beyond += 1
+			for mat: String in part[0]:
+				var merged := SurfaceTool.new()
+				merged.create_from_arrays(_merged_arrays(part[0][mat]))
+				_tools["|%s/%s" % [mesh, mat]] = merged
 	# The dark of the wood, behind the last row: what is seen between the
-	# trunks, and what shuts the gaps between the crowns.
+	# trunks, and what shuts the gaps between the crowns. It stands on the
+	# ground too, and is as high as the stand before it.
 	var st := _tool_named("|detail far/tree_line")
-	var behind := back * (BEYOND_ROWS * BEYOND_ROW - 1.0) + Vector3.DOWN * 1.5
 	var faces := -back
-	var high := height * 0.86
-	var repeats := length / (high * 4.0)
-	_quad(st, [to + behind, from + behind, from + behind + Vector3.UP * high, to + behind + Vector3.UP * high], [faces, faces, faces, faces], [Vector2(0, 1), Vector2(repeats, 1), Vector2(repeats, 0), Vector2(0, 0)])
+	var steps := maxi(roundi(length / 13.0), 1)
+	var run := 0.0
+	for step in steps:
+		var a := from + along * (length * step / steps) + back * (deepest + 4.0)
+		var b := from + along * (length * (step + 1) / steps) + back * (deepest + 4.0)
+		var middle := Vector2((a.x + b.x) * 0.5, (a.z + b.z) * 0.5)
+		var share: float = kept.call(middle.x, middle.y) if kept.is_valid() else 1.0
+		var across := a.distance_to(b)
+		var high_a := _wood_high(stands, Vector2(a.x, a.z), height)
+		var high_b := _wood_high(stands, Vector2(b.x, b.z), height)
+		var repeat := across / (height * 0.86 * 4.0)
+		if share >= 0.5:
+			a.y = beyond_height(a.x, a.z) - 1.5
+			b.y = beyond_height(b.x, b.z) - 1.5
+			_quad(st, [b, a, a + Vector3.UP * high_a, b + Vector3.UP * high_b], [faces, faces, faces, faces], [Vector2(run + repeat, 1), Vector2(run, 1), Vector2(run, 0), Vector2(run + repeat, 0)])
+		run += repeat
+	print("The wood beyond, %d m of it: %d trees" % [roundi(length), planted])
+
+
+## How high the dark of a wood stands at `at`, behind a stand as tall as
+## `stands` makes it there.
+func _wood_high(stands: FastNoiseLite, at: Vector2, height: float) -> float:
+	return height * 0.86 * lerpf(BEYOND_STANDS.x, BEYOND_STANDS.y, smoothstep(-0.55, 0.55, stands.get_noise_2dv(at))) + 1.5
 
 
 ## What a tree of `kind` is made of, for merging into a larger mesh: by part

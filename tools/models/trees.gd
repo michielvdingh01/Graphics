@@ -75,10 +75,16 @@ const WOOD := Color(0.0, 0.0, 1.0, 0.5)
 ## it is thin and orange and flakes: what the scan is tinted with.
 const BARK_LOW := Color(0.56, 0.6, 0.68)
 const BARK_HIGH := Color(0.88, 0.68, 0.5)
-const BARK_DEAD := Color(0.42, 0.42, 0.44)
+## The stub of a branch that was shed, and a dead branch that still hangs:
+## weathered, and darker than the trunk it sticks out of.
+const BARK_STUB := Color(0.42, 0.42, 0.44)
+const BARK_DEAD := Color(0.3, 0.285, 0.28)
 const BARK_YOUNG := Color(0.55, 0.5, 0.44)
 
 var _dice := RandomNumberGenerator.new()
+## Dice for what was added to a tree later, so that what it had keeps the
+## shape the first dice gave it.
+var _more := RandomNumberGenerator.new()
 ## The crown that is being built, for the normals of its cards.
 var _crown_at := Vector3.ZERO
 var _crown_size := Vector3.ONE
@@ -165,6 +171,7 @@ func _pine(tree: String, seed: int, height: float, girth: float, crown_from: flo
 	model(tree)
 	_use(NEEDLES)
 	_dice.seed = seed
+	_more.seed = seed * 7919 + 13
 	# The trunk: not quite straight, and out of plumb at the top by `lean`.
 	var leans := Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU) * lean
 	var trunk: Array[Vector3] = []
@@ -217,9 +224,13 @@ func _grow_old(trunk: Array[Vector3], thick: Array[float], girth: float, crown_f
 		var reach := _dice.randf_range(0.6, 1.1) if long else _dice.randf_range(0.1, 0.32)
 		var start := girth * (0.17 if long else 0.24)
 		var crook := Vector3(_dice.randf_range(-1, 1), _dice.randf_range(-0.6, 0.2), _dice.randf_range(-1, 1)) * reach * 0.08
-		var points: Array[Vector3] = [foot, foot + way * reach * 0.5 + crook, foot + way * reach + Vector3.DOWN * reach * _dice.randf_range(0.05, 0.2)]
-		var widths: Array[float] = [start, start * 0.7, start * (0.45 if long else 0.55)]
-		_limbs.append({"points": points, "thick": widths, "tints": _all(BARK_DEAD, 3), "order": 3})
+		var sag := _dice.randf_range(0.05, 0.2)
+		if long:
+			_dead_branch(foot, way, reach * 1.5, start * 0.8)
+			continue
+		var points: Array[Vector3] = [foot, foot + way * reach * 0.5 + crook, foot + way * reach + Vector3.DOWN * reach * sag]
+		var widths: Array[float] = [start, start * 0.7, start * 0.55]
+		_limbs.append({"points": points, "thick": widths, "tints": _all(BARK_STUB, 3), "order": 3})
 	var open := Vector3(leans.x, 0, leans.z)
 	var pull := clampf(open.length() * 0.3, 0.0, 0.4)
 	for i in boughs:
@@ -258,6 +269,31 @@ func _grow_old(trunk: Array[Vector3], thick: Array[float], girth: float, crown_f
 		var out := Vector3.RIGHT.rotated(Vector3.UP, first + i * PI + _dice.randf_range(-0.4, 0.4))
 		var top: Array[Vector3] = [head - Vector3.UP * 0.5, head + out * 0.5 + Vector3.UP * 0.1]
 		_cloud(top, boughs, 1.5)
+
+
+## A branch that died and has not come down yet, from `foot` on the trunk
+## along `way`: it hangs, it has the kinks of every year it lost its tip,
+## what forked off it is still on it as a spur or two, and it ends where it
+## broke. Grey, and never straight.
+func _dead_branch(foot: Vector3, way: Vector3, reach: float, start: float) -> void:
+	var points: Array[Vector3] = [foot]
+	var widths: Array[float] = [start]
+	var at := foot
+	var runs := way
+	var side := way.cross(Vector3.UP).normalized()
+	for step in 4:
+		# Down a little further with every length, and off to one side.
+		runs = (runs + Vector3.DOWN * _more.randf_range(0.1, 0.34) + side * _more.randf_range(-0.42, 0.42) + Vector3.UP * _more.randf_range(-0.12, 0.2)).normalized()
+		at += runs * reach * 0.25 * _more.randf_range(0.75, 1.25)
+		points.append(at)
+		widths.append(start * lerpf(0.78, 0.3, step / 3.0))
+		if step < 3 and _more.randf() < 0.6:
+			var off := (runs.rotated(Vector3.UP, (1.0 if _more.randf() < 0.5 else -1.0) * _more.randf_range(0.7, 1.2)) + Vector3.UP * _more.randf_range(-0.2, 0.35)).normalized()
+			var spur := reach * _more.randf_range(0.16, 0.34)
+			var spur_points: Array[Vector3] = [at, at + off * spur * 0.55 + Vector3.DOWN * spur * 0.06, at + off * spur + Vector3.DOWN * spur * _more.randf_range(0.0, 0.25)]
+			var spur_widths: Array[float] = [start * 0.3, start * 0.2, start * 0.1]
+			_limbs.append({"points": spur_points, "thick": spur_widths, "tints": _all(BARK_DEAD, 3), "order": 3, "spur": true})
+	_limbs.append({"points": points, "thick": widths, "tints": _all(BARK_DEAD, points.size()), "order": 3})
 
 
 ## A young pine: a straight stem with a whorl of branches for every year it
@@ -398,7 +434,7 @@ func _draw(_tree: String) -> void:
 		if limb.order == 0:
 			_tube(BARK, _finer(limb.points), _finer_floats(limb.thick), sides, _finer_colours(limb.tints))
 		else:
-			_tube(BARK, limb.points, limb.thick, sides, limb.tints, false, limb.order == 3)
+			_tube(BARK, limb.points, limb.thick, 3 if limb.has("spur") else sides, limb.tints, false, limb.order == 3 and not limb.has("spur"))
 	# The mass of a plate is a picture of a whole bough end: something for a
 	# crown high up, not for a young tree somebody stands next to.
 	if not _young:
@@ -413,7 +449,7 @@ func _draw(_tree: String) -> void:
 	for limb: Dictionary in _limbs:
 		var points: Array[Vector3] = limb.points
 		# What is short is a stub, or is inside the needles it carries.
-		if limb.order >= 2 and points[0].distance_to(points[points.size() - 1]) < (0.9 if limb.order == 3 else 1.5):
+		if limb.has("spur") or (limb.order >= 2 and points[0].distance_to(points[points.size() - 1]) < (0.9 if limb.order == 3 else 1.5)):
 			continue
 		if limb.order == 0:
 			# The trunk keeps its line: its shadow is thrown by a trunk
@@ -421,8 +457,17 @@ func _draw(_tree: String) -> void:
 			_tube(BARK, points, limb.thick, 6, limb.tints)
 		else:
 			_tube(BARK, _coarser(points), _coarser_floats(limb.thick), 3, _coarser_colours(limb.tints), false, limb.order == 3)
+	# A young tree has no plates: its branches stand up, with needles all
+	# along them. What stands is what shows of it, and only its lowest
+	# whorls, which are looked down on, lie as well.
+	@warning_ignore("integer_division")
+	var low := (ends.size() / 3) / 3
 	for end: int in ends:
-		_bough_cards(ends[end], ["plan", "side" if end % 2 == 0 else "front"])
+		if _young:
+			@warning_ignore("integer_division")
+			_bough_cards(ends[end], ["plan", "side", "front"] if end / 3 <= low else ["side", "front"])
+		else:
+			_bough_cards(ends[end], ["plan", "side" if end % 2 == 0 else "front"])
 
 	# From afar a plate that lies level is seen along its plane, which is
 	# not at all: what stands is what shows.
@@ -447,7 +492,15 @@ func _draw(_tree: String) -> void:
 			thin.append(width * (SHADE_TRUNK if whole else SHADE_LIMB))
 		_tube(BARK, limb.points if whole else _coarser(limb.points), thin, 5 if whole else 3, limb.tints if whole else _coarser_colours(limb.tints))
 	for end: int in ends:
-		_bough_cards(ends[end], ["plan"])
+		# A young tree stands in its own shadow from its top down, whorl over
+		# whorl, and was a dark cone for it: its shadow is thrown by every
+		# other whorl, and by less than the whole of that.
+		if _young:
+			@warning_ignore("integer_division")
+			if (end / 3) % 2 == 0:
+				_bough_cards(ends[end], ["plan"], 0.62)
+		else:
+			_bough_cards(ends[end], ["plan"])
 	print("%s: %d limbs, %d sprigs at %d limb ends of %d boughs" % [_tree, _limbs.size(), _tufts.size(), ends.size(), boughs.size()])
 
 
@@ -615,8 +668,9 @@ func _sprig_card(tuft: Dictionary, view: String, larger: float) -> void:
 
 ## The tufts of one bough, or of one limb end, as cards with a picture of a
 ## whole bough end on them, from the sides `views` names: the mass of a
-## plate, and what a tree is made of from afar.
-func _bough_cards(tufts: Array, views: Array) -> void:
+## plate, and what a tree is made of from afar. `smaller` is how much of
+## their size the cards are, for a shadow that lets the sun past.
+func _bough_cards(tufts: Array, views: Array, smaller := 1.0) -> void:
 	var middle := Vector3.ZERO
 	for tuft: Dictionary in tufts:
 		middle += (tuft.frame as Transform3D) * (Vector3(0.25, 0.08, 0.0) * tuft.size)
@@ -624,6 +678,7 @@ func _bough_cards(tufts: Array, views: Array) -> void:
 	var reach := 0.0
 	for tuft: Dictionary in tufts:
 		reach = maxf(reach, ((tuft.frame as Transform3D) * (Vector3(0.25, 0.08, 0.0) * tuft.size)).distance_to(middle) + 0.18 * tuft.size)
+	reach *= smaller
 	# It runs the way its limbs do, or away from the trunk, or any way if it
 	# stands round it.
 	var out := Vector3.ZERO
