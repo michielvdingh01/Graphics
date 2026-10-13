@@ -30,8 +30,11 @@ extends "res://tools/kit.gd"
 ## and a ring, a tent with a shelter next to it, a jeep under a net, a lorry,
 ## the tank twice, wire as coils and as a fence, a barrier with its sentry
 ## box, a pillbox, a watchtower, a fire, and the pines and the scrub in a row.
-## Look at those with
+## South of those a hut of sheet, and what says that men live in a camp: a
+## sheet with a man's kit on it, a telephone, a crate under a tarpaulin,
+## duckboards, cases of brass and a line of washing. Look at those with
 ## tools/benchmark.sh --quick --scene=res://scenes/showroom.tscn --at="-50,1.7,46,0,-4"
+## and, turned round, --at="-50,1.7,45,180,-6"
 
 
 func _level_name() -> String:
@@ -193,7 +196,7 @@ func _roofs() -> void:
 ## slab of its own west of the benches. The same things stand on the ground
 ## as it lies in a level with land: see tools/levels/dunes.gd.
 func _field() -> void:
-	box("concrete", Vector3(-50, -0.25, 31), Vector3(36, 0.5, 30))
+	box("concrete", Vector3(-50, -0.25, 35), Vector3(36, 0.5, 38))
 	sandbags(Vector2(-66, 19), Vector2(-61, 19))
 	sandbag_post(Vector2(-56, 20), 0.0)
 	sandbag_ring(Vector2(-48, 20.5), 2.5, 0.0)
@@ -212,6 +215,19 @@ func _field() -> void:
 	pillbox(Vector2(-37, 39), 0.0)
 	wire_coil(Vector2(-48, 39), Vector2(-41, 39))
 	wire_fence([Vector2(-66, 41), Vector2(-56, 41)])
+	# South of the trees: a hut, and what says that men live in a camp.
+	nissen_hut(Vector2(-58.5, 50.0), 0.0, 11.0)
+	ground_sheet(Vector2(-47.5, 49.5), 10.0, Vector2(2.4, 1.6))
+	kit(Vector2(-47.8, 49.4), 20.0)
+	helmet(ground(-46.9, 49.9, 0.03), 60.0)
+	field_telephone(ground(-47.0, 49.2, 0.03), 15.0, Vector2(-44.0, 52.5))
+	place("old_military_crate", ground(-43.5, 49.5), 10)
+	tarpaulin(ground(-43.5, 49.5), 10.0, Vector3(1.12, 0.4, 0.86))
+	duckboards(Vector2(-41.5, 48.0), Vector2(-41.5, 51.0))
+	shell_cases(Vector2(-39.0, 49.5), 6)
+	_pole(ground(-38.0, 51.5), ground(-38.0, 51.5, 1.85), 0.03, 0.025)
+	_pole(ground(-33.6, 51.0), ground(-33.6, 51.0, 1.8), 0.03, 0.025)
+	washing_line(ground(-38.0, 51.5, 1.8), ground(-33.6, 51.0, 1.75))
 	var kinds: Array[String] = ["pine_a", "pine_b", "pine_c", "pine_d", "pine_young", "scrub_a", "scrub_b"]
 	for i in kinds.size():
 		tree(kinds[i], Vector2(-66 + i * 4.6, 44))

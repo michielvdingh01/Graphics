@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://degaa6c4misoi"
-path.bptc="res://.godot/imported/thorn_scrub.png-14dedd9d41b58f318cd6c89f17c43720.bptc.ctex"
+uid="uid://daa03flhargmb"
+path.bptc="res://.godot/imported/pine_sprigs.png-d9ef5a2350ede791ec0e03f053b1be09.bptc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/foliage/thorn_scrub.png"
-dest_files=["res://.godot/imported/thorn_scrub.png-14dedd9d41b58f318cd6c89f17c43720.bptc.ctex"]
+source_file="res://assets/foliage/pine_sprigs.png"
+dest_files=["res://.godot/imported/pine_sprigs.png-d9ef5a2350ede791ec0e03f053b1be09.bptc.ctex"]
 
 [params]
 

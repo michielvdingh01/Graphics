@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c2rd4lsrvxilc"
-path.bptc="res://.godot/imported/pine_needles.png-2305e8e663351f2fbc17cd77db899a4f.bptc.ctex"
+uid="uid://dowqri03dfonl"
+path.bptc="res://.godot/imported/thorn_sprigs.png-2f7d504f23652a16b7f8043cf390e433.bptc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/foliage/pine_needles.png"
-dest_files=["res://.godot/imported/pine_needles.png-2305e8e663351f2fbc17cd77db899a4f.bptc.ctex"]
+source_file="res://assets/foliage/thorn_sprigs.png"
+dest_files=["res://.godot/imported/thorn_sprigs.png-2f7d504f23652a16b7f8043cf390e433.bptc.ctex"]
 
 [params]
 

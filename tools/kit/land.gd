@@ -715,7 +715,7 @@ func _read_land() -> void:
 		for column in across:
 			var i := row * across + column
 			var low := clampf((mean - 1.0 - _heights[i]) / 2.5, 0.0, 1.0)
-			var high := clampf(0.5 + (_heights[i] - around[i]) / 3.0 - low * 0.3, 0.0, 1.0)
+			var high := clampf(0.5 + (_heights[i] - around[i]) / 3.0 - low * 0.22, 0.0, 1.0)
 			var loose := 1.0 - firm[i]
 			# The crust takes where the sand lies still: by a wood, on a
 			# back that looks north, and not on a crest, on a face that
@@ -727,23 +727,57 @@ func _read_land() -> void:
 			_looks[i] = Color(high, loose, crust, 0.0)
 
 	_by_track.resize(count)
-	_by_track.fill(Vector2(TRACK_FAR, 0.0))
+	_by_track.fill(Vector2(TRACK_FAR, -TRACK_FAR * 10.0))
 	var run := 0.0
 	for cut: Dictionary in _tracks:
+		# A track is measured a little beyond both its ends, as if it ran
+		# straight on: there the way along it counts down from nought, and
+		# the material lets the ruts run out.
 		var way: PackedVector2Array = cut.path
-		for i in way.size() - 1:
-			var along := way[i + 1] - way[i]
+		var before := way[0] + (way[0] - way[1]).normalized() * TRACK_FAR
+		var after := way[way.size() - 1] + (way[way.size() - 1] - way[way.size() - 2]).normalized() * TRACK_FAR
+		for i in range(-1, way.size()):
+			var from := before if i < 0 else way[i]
+			var to := after if i == way.size() - 1 else way[i + 1]
+			var along := to - from
 			var length := along.length()
-			var box := _spots_in(Rect2(way[i], Vector2.ZERO).expand(way[i + 1]).grow(TRACK_FAR))
+			var box := _spots_in(Rect2(from, Vector2.ZERO).expand(to).grow(TRACK_FAR))
 			for row in range(box[1], box[3] + 1):
 				for column in range(box[0], box[2] + 1):
 					var at := _spot(column, row)
-					var share := clampf((at - way[i]).dot(along) / maxf(length * length, 0.0001), 0.0, 1.0)
-					var gap := at.distance_to(way[i] + along * share)
+					var share := clampf((at - from).dot(along) / maxf(length * length, 0.0001), 0.0, 1.0)
+					var gap := at.distance_to(from + along * share)
 					var spot := row * across + column
 					if gap < absf(_by_track[spot].x):
-						_by_track[spot] = Vector2(gap if along.cross(at - way[i]) >= 0.0 else -gap, run + length * share)
-			run += length
+						var gone := run + length * share
+						if i < 0:
+							gone = -length * (1.0 - share)
+						elif i == way.size() - 1:
+							gone = -length * share
+						_by_track[spot] = Vector2(gap if along.cross(at - from) >= 0.0 else -gap, gone)
+			if i >= 0 and i < way.size() - 1:
+				run += length
+	# A spot with no track near has none on the side its neighbours have
+	# theirs: between a spot on the left of a track and one that was simply
+	# far from it, the mesh would otherwise pass through the middle of a
+	# track that is not there.
+	var reached := PackedInt32Array()
+	var sided := PackedByteArray()
+	sided.resize(count)
+	for spot in count:
+		if absf(_by_track[spot].x) < TRACK_FAR:
+			reached.append(spot)
+			sided[spot] = 1
+	var next := 0
+	while next < reached.size():
+		var spot := reached[next]
+		next += 1
+		var side := -TRACK_FAR if _by_track[spot].x < 0.0 else TRACK_FAR
+		for beside: int in [spot - 1, spot + 1, spot - across, spot + across]:
+			if beside >= 0 and beside < count and absi(beside % across - spot % across) <= 1 and sided[beside] == 0:
+				_by_track[beside] = Vector2(side, -TRACK_FAR * 10.0)
+				sided[beside] = 1
+				reached.append(beside)
 
 
 ## `values`, one for every spot of the land, each evened out with what lies
@@ -845,6 +879,19 @@ func _commit(zone_name: String, kind: String) -> void:
 		tufts.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		tufts.visibility_range_end = 85.0
 		tufts.visibility_range_end_margin = 6.0
+	elif kind.begins_with("beyond "):
+		# The wood beyond the land, see tree_wall(): it throws a shadow only
+		# where that falls away from the land, and its front row is one mesh
+		# from close by and another from afar.
+		var wood := _root.get_child(0) as MeshInstance3D
+		if not _beyond_shadows.get(kind.get_slice(" ", 1).to_int(), false):
+			wood.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if kind.ends_with(" near"):
+			wood.visibility_range_end = BEYOND_FAR
+			wood.visibility_range_end_margin = 8.0
+		elif kind.ends_with(" far"):
+			wood.visibility_range_begin = BEYOND_FAR
+			wood.visibility_range_begin_margin = 8.0
 
 
 # --- The shade ---------------------------------------------------------------------
@@ -1120,14 +1167,161 @@ func tree(kind: String, at: Vector2, size := 1.0, yaw_deg := 0.0) -> void:
 		cover("moss", at + Vector2(_prop_rng.randf_range(-1.0, 1.0), _prop_rng.randf_range(-1.0, 1.0)) * reach, reach * 0.9, 0.75, 0.6)
 
 
-## The edge of a wood from afar, as a wall of it from `from` to `to` and
-## `height` high: what stands beyond the land, where nobody comes. It faces
-## whoever has `from` on his right and `to` on his left.
+## How long a stretch of the wood beyond the land is one mesh, how many rows
+## deep that wood stands, how far apart its rows and the trees of a row are,
+## and from how far off its front row is drawn as trees are from afar.
+const BEYOND_STRETCH := 52.0
+const BEYOND_ROWS := 4
+const BEYOND_ROW := 6.0
+const BEYOND_GAP := 5.6
+const BEYOND_FAR := 105.0
+## How much of the light gets to each row of it where the wood throws no
+## shadow, and the rows further in are simply darker; and how much of that
+## its bark gets, which stands under its own crown.
+const BEYOND_LIGHT: Array[float] = [1.0, 0.8, 0.62, 0.5]
+const BEYOND_BARK := 0.6
+## The pines of its edge, and of the rows behind: [kind, share].
+const BEYOND_EDGE := [["pine_d", 2.0], ["pine_c", 2.0], ["pine_a", 2.0], ["pine_young", 0.6]]
+const BEYOND_INNER := [["pine_a", 3.0], ["pine_b", 3.0], ["pine_c", 1.0]]
+## What a tree of each kind adds to a mesh that many trees are merged into,
+## by the part of its model and then by material: the arrays of a surface.
+var _merged := {}
+## How many stretches of wood beyond the land there are so far, and which
+## of them throw a shadow.
+var _beyond := 0
+var _beyond_shadows := {}
+
+
+## The wood that goes on beyond the land, where nobody comes: rows of pines
+## behind the line from `from` to `to`, the tallest about `height` high, and
+## behind them the dark of the wood. It faces whoever has `from` on his right
+## and `to` on his left. The pines are those of the land. They are in
+## nobody's way and are not instances but one mesh for every stretch of the
+## line: the front row as a tree is from the middle distance, or from afar
+## when the stretch is far off, and the rows behind it always as from afar.
+##
+## The shade the game knows of does not know of this wood. Where its shadow
+## would fall on the land it therefore throws none, and the rows further in
+## are simply made darker; where the sun stands on the side of the land, so
+## that its shadow falls away from it, it throws one, on itself.
 func tree_wall(from: Vector3, to: Vector3, height := 22.0) -> void:
+	var length := from.distance_to(to)
+	var along := (to - from) / length
+	var back := along.cross(Vector3.UP)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = hash([from, to])
+	var shadows := back.dot(-Vector3(_sunward.x, 0, _sunward.z).normalized()) > 0.3
+	var stretches := maxi(roundi(length / BEYOND_STRETCH), 1)
+	var stretch := length / stretches
+	for s in stretches:
+		var near := {}
+		var far := {}
+		var inner := {}
+		for row in BEYOND_ROWS:
+			var count := int(stretch / BEYOND_GAP)
+			var kinds: Array = BEYOND_EDGE if row == 0 else BEYOND_INNER
+			var total := 0.0
+			for kind: Array in kinds:
+				total += kind[1]
+			for i in count:
+				var at := from + along * (s * stretch + (i + dice.randf_range(0.1, 0.9)) * stretch / count) + back * (row * BEYOND_ROW + dice.randf_range(-1.6, 1.6)) + Vector3.DOWN * dice.randf_range(0.3, 0.9)
+				# The trees further in stand higher over those in front.
+				var size := height / 19.0 * dice.randf_range(0.84, 1.12) * (0.92 if row == 0 else 1.0)
+				var xf := Transform3D(Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3.ONE * size), at)
+				var light := (1.0 if shadows else BEYOND_LIGHT[row]) * dice.randf_range(0.82, 1.0)
+				var pick := dice.randf() * total
+				for kind: Array in kinds:
+					pick -= kind[1]
+					if pick <= 0.0:
+						var bark := light * (1.0 if shadows else BEYOND_BARK)
+						if row == 0:
+							_merge_tree(near, kind[0], "Mid", xf, light, bark)
+							_merge_tree(far, kind[0], "Far", xf, light, bark)
+						else:
+							_merge_tree(inner, kind[0], "Far", xf, light, bark)
+						break
+		for part: Array in [["near", near], ["far", far], ["inner", inner]]:
+			for mat: String in part[1]:
+				var st := SurfaceTool.new()
+				st.create_from_arrays(_merged_arrays(part[1][mat]))
+				_tools["|beyond %d %s/%s" % [_beyond, part[0], mat]] = st
+		_beyond_shadows[_beyond] = shadows
+		_beyond += 1
+	# The dark of the wood, behind the last row: what is seen between the
+	# trunks, and what shuts the gaps between the crowns.
 	var st := _tool_named("|detail far/tree_line")
-	var faces := (Vector3.UP.cross(to - from).normalized() + Vector3.UP * 0.5).normalized()
-	var repeats := from.distance_to(to) / (height * 3.4)
-	_quad(st, [from, to, to + Vector3.UP * height, from + Vector3.UP * height], [faces, faces, faces, faces], [Vector2(0, 1), Vector2(repeats, 1), Vector2(repeats, 0), Vector2(0, 0)])
+	var behind := back * (BEYOND_ROWS * BEYOND_ROW - 1.0) + Vector3.DOWN * 1.5
+	var faces := -back
+	var high := height * 0.86
+	var repeats := length / (high * 4.0)
+	_quad(st, [to + behind, from + behind, from + behind + Vector3.UP * high, to + behind + Vector3.UP * high], [faces, faces, faces, faces], [Vector2(0, 1), Vector2(repeats, 1), Vector2(repeats, 0), Vector2(0, 0)])
+
+
+## What a tree of `kind` is made of, for merging into a larger mesh: by part
+## ("Mid", "Far") and by material the arrays of that surface.
+func _tree_surfaces(kind: String) -> Dictionary:
+	if not _merged.has(kind):
+		var one := (_tree_kind(kind).scene as PackedScene).instantiate()
+		var parts := {}
+		for part: MeshInstance3D in one.find_children("*", "MeshInstance3D", true, false):
+			var surfaces := {}
+			for i in part.mesh.get_surface_count():
+				surfaces[part.mesh.surface_get_material(i).resource_path.get_file().get_basename()] = part.mesh.surface_get_arrays(i)
+			parts[String(part.name)] = surfaces
+		one.free()
+		_merged[kind] = parts
+	return _merged[kind]
+
+
+## Adds the part `part` of a tree of `kind`, standing at `xf`, to the meshes
+## gathered in `into`, one for each material: {points, normals, colours, uvs,
+## corners}. `light` is how much of the light gets to its needles, 0 to 1,
+## and `bark_light` how much to its wood.
+func _merge_tree(into: Dictionary, kind: String, part: String, xf: Transform3D, light: float, bark_light: float) -> void:
+	var surfaces: Dictionary = _tree_surfaces(kind)[part]
+	var turn := Transform3D(xf.basis.orthonormalized(), Vector3.ZERO)
+	for mat: String in surfaces:
+		var arrays: Array = surfaces[mat]
+		if not into.has(mat):
+			into[mat] = {"points": PackedVector3Array(), "normals": PackedVector3Array(), "colours": PackedColorArray(), "uvs": PackedVector2Array(), "corners": PackedInt32Array()}
+		var mesh: Dictionary = into[mat]
+		var points: PackedVector3Array = mesh.points
+		var normals: PackedVector3Array = mesh.normals
+		var colours: PackedColorArray = mesh.colours
+		var uvs: PackedVector2Array = mesh.uvs
+		var corners: PackedInt32Array = mesh.corners
+		var first := points.size()
+		points.append_array(xf * (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array))
+		normals.append_array(turn * (arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array))
+		uvs.append_array(arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array)
+		# Bark is tinted by its vertex colour; needles keep in its blue how
+		# much light gets to them, and wood that is drawn with the needles
+		# says so in its alpha: see shaders/crown.gdshader.
+		var bark := mat == "pine_trunk"
+		for colour: Color in (arrays[Mesh.ARRAY_COLOR] as PackedColorArray):
+			if bark:
+				colours.append(Color(colour.r * bark_light, colour.g * bark_light, colour.b * bark_light, colour.a))
+			else:
+				colours.append(Color(colour.r, colour.g, colour.b * (bark_light if absf(colour.a - 0.5) < 0.1 else light), colour.a))
+		for corner: int in (arrays[Mesh.ARRAY_INDEX] as PackedInt32Array):
+			corners.append(corner + first)
+		mesh.points = points
+		mesh.normals = normals
+		mesh.colours = colours
+		mesh.uvs = uvs
+		mesh.corners = corners
+
+
+## The arrays of a mesh as _merge_tree() gathers it, for a surface.
+func _merged_arrays(mesh: Dictionary) -> Array:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = mesh.points
+	arrays[Mesh.ARRAY_NORMAL] = mesh.normals
+	arrays[Mesh.ARRAY_COLOR] = mesh.colours
+	arrays[Mesh.ARRAY_TEX_UV] = mesh.uvs
+	arrays[Mesh.ARRAY_INDEX] = mesh.corners
+	return arrays
 
 
 ## Keeps `area` (x and z) clear of the trees of a wood: a camp, a yard, a view.
@@ -1259,20 +1453,27 @@ func _stand_marram() -> void:
 				var at := area.position + (Vector2(column, row) + Vector2(_strew_rng.randf(), _strew_rng.randf())) * step
 				var chance := _strew_rng.randf()
 				var size := _strew_rng.randf()
-				var seed := _strew_rng.randi()
+				var seed := int(_strew_rng.randi())
 				if not _land.grow(-1.0).has_point(at) or firm_at(at) > 0.15 or cover_at("needles", at) > 0.4 or cover_at("earth", at) > 0.15:
 					continue
 				if absf(_by_track[_spot_at(at)].x) < 3.0:
 					continue
 				var look := look_at_ground(at)
-				# How thick it stands here, 0 to 1.
-				var thick := 0.5 + drifts.get_noise_2dv(at) * 0.55 + knots.get_noise_2dv(at) * 0.2 + (look.r - 0.5) * 0.9 - (asked.gaps as float) * 0.5
-				thick = smoothstep(0.45, 0.78, thick)
-				if chance > thick * thick * 0.85 + 0.012:
+				# How thick it stands here, 0 to 1: nothing outside a drift,
+				# and the heart of a drift is thick with it.
+				var thick := 0.5 + drifts.get_noise_2dv(at) * 0.6 + (look.r - 0.5) * 0.9 - (asked.gaps as float) * 0.5
+				thick = smoothstep(0.47, 0.72, thick)
+				# Within a drift it stands in knots: large clumps together,
+				# and little between one knot and the next.
+				var knot := smoothstep(-0.25, 0.45, knots.get_noise_2dv(at))
+				if chance > thick * (0.14 + 0.8 * knot * thick):
 					continue
-				# Large clumps stand in the thick of a drift, with small
-				# ones between them and around its edge.
-				_clumps.append({"at": at, "size": lerpf(0.35, 1.05, pow(size, 1.6)) * lerpf(0.7, 1.2, thick), "seed": seed})
+				var large := lerpf(0.45, 1.1, pow(size, 1.3)) * lerpf(0.62, 1.22, thick * knot)
+				_clumps.append({"at": at, "size": large, "seed": seed})
+				# A large clump has young ones around its foot.
+				for i in (seed % 4 if large > 0.75 else 0):
+					var beside := at + Vector2.RIGHT.rotated((seed >> 4) * 0.37 + i * 2.1) * (0.55 + 0.2 * i) * large
+					_clumps.append({"at": beside, "size": 0.22 + 0.06 * ((seed >> (8 + i)) % 4), "seed": seed + i + 1})
 	for clump: Dictionary in _clumps:
 		_clump("marram", clump.at, clump.size, clump.seed)
 	# How much grass stands around each spot, for the ground to show when
@@ -1379,7 +1580,7 @@ func _clump(mat: String, at: Vector2, size: float, seed: int) -> void:
 func _mound(at: Vector2, size: float, points: PackedVector3Array, facing: PackedVector3Array, uvs: PackedVector2Array, tracks: PackedVector2Array, looks: PackedColorArray, corners: PackedInt32Array) -> void:
 	const SIDES := 7
 	var first := points.size()
-	var reach := 0.5 * size + 0.25
+	var reach := 0.42 * size + 0.14
 	var shadow := -Vector2(_sunward.x, _sunward.z).normalized()
 	var lie := ground_normal(at.x, at.y, 0.6)
 	points.append(ground(at.x, at.y, MOUND_HIGH * size))
@@ -1391,7 +1592,7 @@ func _mound(at: Vector2, size: float, points: PackedVector3Array, facing: Packed
 		var share := 0.5 if ring == 0 else 1.0
 		for i in SIDES:
 			var out := Vector2.RIGHT.rotated(TAU * (i + ring * 0.5) / SIDES)
-			var far := reach * (1.0 + 0.6 * maxf(out.dot(shadow), 0.0) + 0.3 * maxf(out.y, 0.0))
+			var far := reach * (1.0 + 0.5 * maxf(out.dot(shadow), 0.0) + 0.25 * maxf(out.y, 0.0))
 			var spot := at + out * far * share
 			points.append(ground(spot.x, spot.y, MOUND_HIGH * size * 0.5 if ring == 0 else -0.035))
 			facing.append((lie + Vector3(out.x, 0.0, out.y) * (0.3 if ring == 0 else 0.1)).normalized())

@@ -54,9 +54,9 @@ uniform vec3 damp_tint : source_color = vec3(0.7);
 // The scan of sand is of a river bank: how much of its colour is bleached
 // out of it, how much lighter it is made, and how much lighter again on a
 // crest.
-uniform float sand_bleach : hint_range(0.0, 1.0) = 0.5;
-uniform float sand_light = 1.2;
-uniform float crest_light = 1.12;
+uniform float sand_bleach : hint_range(0.0, 1.0) = 0.2;
+uniform float sand_light = 1.17;
+uniform float crest_light = 1.1;
 uniform vec3 needles_tint : source_color = vec3(1.0);
 uniform vec3 litter_tint : source_color = vec3(0.6);
 uniform vec3 moss_tint : source_color = vec3(1.0);
@@ -68,12 +68,12 @@ uniform vec3 grass_tint : source_color = vec3(0.6, 0.62, 0.4);
 // What the straw a clump has dropped makes of the sand at its foot, and how
 // much of the light the clump keeps off it.
 uniform vec3 straw_tint : source_color = vec3(0.85, 0.78, 0.6);
-uniform float foot_depth : hint_range(0.0, 1.0) = 0.5;
+uniform float foot_depth : hint_range(0.0, 1.0) = 0.38;
 // The way the wind blows over the land (x and z), how far apart its ripples
 // lie in metres, and how steep they are.
 uniform vec2 wind = vec2(0.12, 1.0);
-uniform float ripple_length = 0.11;
-uniform float ripple_steep : hint_range(0.0, 1.0) = 0.22;
+uniform float ripple_length = 0.13;
+uniform float ripple_steep : hint_range(0.0, 1.0) = 0.2;
 // Half the gauge of what drives on a track, half the width of a rut and how
 // deep it is, in metres; and how far apart the lugs of a tyre are.
 uniform float rut_gauge = 0.93;
@@ -152,7 +152,11 @@ void fragment() {
 	// that nothing drives on, and what the wheels threw to either side.
 	float across = UV2.x;
 	float along = UV2.y;
-	float driven = (1.0 - smoothstep(2.1, 2.9, abs(across) + (ragged.b - 0.5) * 0.8)) * inside;
+	float along_wide = fwidth(along);
+	vec2 across_wide = vec2(dFdx(across), dFdy(across));
+	// Beyond its end a track is measured from nought downwards: there it
+	// runs out.
+	float driven = (1.0 - smoothstep(2.1, 2.9, abs(across) + (ragged.b - 0.5) * 0.8)) * (1.0 - smoothstep(0.0, 7.0, -along)) * inside;
 	float rut = 0.0;
 	float worn = 0.0;
 	float print = 0.0;
@@ -163,7 +167,7 @@ void fragment() {
 		// Which way the track runs here, from how its measure changes over
 		// the ground.
 		float turn = dx.x * dy.y - dx.y * dy.x;
-		vec2 aside = vec2(dFdx(across) * dy.y - dFdy(across) * dx.y, dFdy(across) * dx.x - dFdx(across) * dy.x) / turn;
+		vec2 aside = vec2(across_wide.x * dy.y - across_wide.y * dx.y, across_wide.y * dx.x - across_wide.x * dy.x) / turn;
 		aside = normalize(aside + vec2(1e-5, 0.0));
 		vec2 ahead = vec2(-aside.y, aside.x);
 		float weave = 0.17 * sin(along * 0.071) + 0.09 * sin(along * 0.19 + 1.7);
@@ -171,13 +175,13 @@ void fragment() {
 		float into = (abs(off) - rut_gauge) / rut_width;
 		if (abs(into) < 1.0) {
 			// A rut has a flat bed and short sides.
-			rut = 1.0 - smoothstep(0.55, 1.0, abs(into));
+			rut = (1.0 - smoothstep(0.55, 1.0, abs(into))) * (1.0 - smoothstep(0.0, 7.0, -along));
 			float side = smoothstep(0.55, 0.78, abs(into)) * (1.0 - smoothstep(0.78, 1.0, abs(into)));
 			rises += aside * sign(off) * sign(into) * side * rut_depth * 4.0 / rut_width;
 			// The print of the tread, chevrons that point the way it was
 			// driven, where no later wheel has smeared it.
 			float lugs = (along + abs(into) * rut_width * 0.9) / lug_pitch;
-			float sharp = 1.0 - smoothstep(0.15, 0.45, fwidth(lugs));
+			float sharp = 1.0 - smoothstep(0.15, 0.45, along_wide / lug_pitch);
 			float fresh = smoothstep(0.25, 0.5, ragged.g) * sharp * rut;
 			print = smoothstep(-0.3, 0.3, sin(lugs * 6.2832)) * fresh;
 			rises += ahead * cos(lugs * 6.2832) * fresh * 0.3;
@@ -199,7 +203,7 @@ void fragment() {
 	// where no sun comes anyway, with the straw it has dropped.
 	float foot = 0.0;
 	if (across > 10.5) {
-		foot = 1.0 - smoothstep(0.08, 0.86, length(UV2 - vec2(12.0, 0.0)));
+		foot = 1.0 - smoothstep(0.0, 0.84, length(UV2 - vec2(12.0, 0.0)));
 	}
 
 	// --- What lies where -----------------------------------------------------
@@ -237,7 +241,8 @@ void fragment() {
 		crust = 0.0;
 	}
 	// Earth is what is left where wheels and boots have been: it lies on top.
-	float earth = smoothstep(0.35, 0.65, lies.b + (ragged.b - 0.5) * 0.45);
+	// It lies in patches, with sand blown over it in between.
+	float earth = smoothstep(0.35, 0.65, lies.b + (ragged.b - 0.5) * 0.45 + (patchy.r - 0.55) * 0.55);
 
 	// --- Sand --------------------------------------------------------------
 	float bare = (1.0 - needles) * (1.0 - moss) * (1.0 - crust) * (1.0 - earth * 0.92);
@@ -249,7 +254,7 @@ void fragment() {
 		vec3 sand = scan(sand_tex, TURN_SAND, sand_scale, UV, dx, dy, far);
 		sand = mix(sand, vec3(dot(sand, vec3(0.3, 0.6, 0.1))), sand_bleach) * sand_tint * sand_light;
 		// Low and damp, or high and dry; and streaks the wind has sorted.
-		float high = spot.r + (patchy.r - 0.5) * 0.16;
+		float high = spot.r + (patchy.r - 0.5) * 0.3 + (ragged.r - 0.5) * 0.08;
 		float dry = smoothstep(0.16, 0.46, high);
 		sand *= mix(damp_tint, vec3(1.0), dry);
 		sand *= mix(1.0, crest_light, smoothstep(0.56, 0.85, high));
@@ -260,36 +265,45 @@ void fragment() {
 
 		// Where the sand is loose and bare the wind shapes it: none of it
 		// on a face steep enough to slide, less in the lee and where it
-		// is damp.
+		// is wet.
 		float windward = -dot(lie.xz, downwind);
-		float shaped = loose * bare * smoothstep(0.8, 0.9, lie.y) * mix(0.4, 1.0, smoothstep(-0.25, 0.1, windward)) * dry;
+		float shaped = loose * bare * smoothstep(0.8, 0.9, lie.y) * mix(0.6, 1.0, smoothstep(-0.25, 0.1, windward)) * smoothstep(0.1, 0.34, high);
 		if (shaped > 0.01) {
-			// Waves a stride long, that come and go.
-			float swell = dot(UV, downwind) * 4.3 + (ragged.b - 0.5) * 7.0 + (patchy.r - 0.5) * 60.0;
-			float heaved = smoothstep(0.35, 0.7, patchy.g) * (1.0 - smoothstep(0.5, 1.5, fwidth(swell)));
-			rises += downwind * cos(swell + 0.5 * sin(swell)) * 0.07 * heaved * shaped;
-			// And ripples a hand apart: across the wind, bent a little to
-			// either side by the slope.
-			float rippled = shaped * mix(0.55, 1.0, smoothstep(0.3, 0.6, patchy.g));
-			float wave = 6.2832 / ripple_length;
-			float bend = (ragged.r - 0.5) * 9.0 + (patchy.g - 0.5) * 40.0;
+			// Ripples lie across the wind, bent a little to either side by
+			// the slope: two sets of them, and by the side the slope
+			// falls to and by chance it is the one or the other.
 			vec2 one = normalize(downwind + crosswind * 0.36);
 			vec2 other = normalize(downwind - crosswind * 0.42);
-			float first = dot(UV, one) * wave + bend;
-			float second = dot(UV, other) * wave * 1.13 - bend * 0.7;
-			// Which of the two it is: by the side the slope falls to, and
-			// by chance.
 			float pick = smoothstep(0.35, 0.65, ragged.g + (lie.x * downwind.y - lie.z * downwind.x) * 1.5);
-			// Too far off to tell one ripple from the next, there are none.
-			float seen = 1.0 - smoothstep(0.7, 1.7, mix(fwidth(first), fwidth(second), pick));
-			if (seen > 0.0) {
+			float bend = (ragged.r - 0.5) * 9.0 + (patchy.g - 0.5) * 40.0;
+			float wave = 6.2832 / ripple_length;
+			// They come in three sizes, a hand, a stride and a body
+			// apart. Each shows as far as one of it can be told from the
+			// next, and where a finer one shows, the coarser lies low.
+			vec2 falls = vec2(0.0);
+			float trough = 0.0;
+			float hidden = 0.0;
+			// How far a dot of the picture reaches over the ground, along
+			// the one set and along the other.
+			float dot_wide = mix(abs(dot(dx, one)) + abs(dot(dy, one)), (abs(dot(dx, other)) + abs(dot(dy, other))) * 1.13, pick);
+			for (int size = 0; size < 3; size++) {
+				float first = dot(UV, one) * wave + bend;
+				float second = dot(UV, other) * wave * 1.13 - bend * 0.7;
+				float seen = 1.0 - smoothstep(0.6, 1.9, dot_wide * wave);
+				float much = seen * mix(1.0, 0.28, hidden);
 				// A ripple has a long back and a short face.
 				float a = first + 0.4 * sin(first);
 				float b = second + 0.4 * sin(second);
-				rises += mix(one * cos(a) * (1.0 + 0.4 * cos(first)), other * cos(b) * (1.0 + 0.4 * cos(second)), pick) * ripple_steep * rippled * seen;
-				// Coarse dark grains gather in the troughs.
-				sand *= 1.0 - 0.05 * rippled * seen * (0.5 - 0.5 * mix(sin(a), sin(b), pick));
+				falls += mix(one * cos(a) * (1.0 + 0.4 * cos(first)), other * cos(b) * (1.0 + 0.4 * cos(second)), pick) * much;
+				trough += (0.5 - 0.5 * mix(sin(a), sin(b), pick)) * much;
+				hidden = max(hidden, seen);
+				wave *= 0.31;
+				bend = bend * 0.45 + 1.7;
 			}
+			float rippled = shaped * mix(0.6, 1.0, smoothstep(0.3, 0.6, patchy.g));
+			rises += falls * ripple_steep * rippled;
+			// Coarse dark grains gather in the troughs.
+			sand *= 1.0 - 0.05 * rippled * trough;
 		}
 		// What wheels have packed is darker, and what they churn up is not
 		// as clean as what the wind has sifted.
@@ -315,7 +329,7 @@ void fragment() {
 		rough = mix(rough, 0.95, moss);
 	}
 	if (earth > 0.004) {
-		vec3 packed = scan(earth_tex, TURN_EARTH, earth_scale, UV, dx, dy, far) * earth_tint * mix(0.85, 1.12, patchy.r);
+		vec3 packed = scan(earth_tex, TURN_EARTH, earth_scale, UV, dx, dy, far) * earth_tint * mix(0.8, 1.15, patchy.g) * mix(0.82, 1.1, ragged.r);
 		packed *= 1.0 - (rut * 0.25 + print * 0.14);
 		ground = mix(ground, packed, earth * 0.92);
 		tilt = mix(tilt, slant(earth_normal, TURN_EARTH, earth_scale, UV, dx, dy), earth);
