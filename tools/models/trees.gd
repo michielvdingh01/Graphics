@@ -13,7 +13,8 @@ extends "res://tools/model_builder.gd"
 ##   Body   from close by: every limb, the plate at the end of a limb as two
 ##          cards, and sprigs round its rim
 ##   Mid    from NEAR metres: the limbs with fewer sides, and the plates
-##   Far    from FAR metres: a trunk, and all a bough carries as one card
+##   Far    from FAR metres: one card that turns to whoever looks, with a
+##          picture of the whole tree on it, see _far_card()
 ##
 ## None of the three throws a shadow. That is done by a fourth, Shade, which
 ## is never seen: a thin trunk, thin boughs, and one card that lies level for
@@ -45,6 +46,11 @@ const LEAVES := "thorn_scrub"
 ## The pictures of sprigs and boughs each of those is drawn with, and where
 ## on their sheet each picture is.
 const SHEETS := {NEEDLES: "res://assets/foliage/pine_sprigs.json", LEAVES: "res://assets/foliage/thorn_sprigs.json"}
+## The material a pine is drawn with from afar, as one card, and what
+## tools/gen_tree_cards.sh wrote of the pictures on it. Without that file a
+## tree is drawn from afar as it was before there were pictures.
+const FAR_PICTURE := "pine_far"
+const FAR_SHEET := "res://assets/foliage/pine_far.json"
 ## From how far off a tree is its Mid and its Far, how much further it has to
 ## go before it changes back, and how far its Far carries. A bush, which is
 ## small, is itself up to FAR. SHADE_END is how far off a tree still throws
@@ -99,6 +105,11 @@ var _leaf := NEEDLES
 var _pictures := {}
 var _sheet := Vector2.ONE
 var _bark_strip := Rect2()
+## The pictures of the trees from afar, by tree, and how many there are of a
+## tree side by side and how many trees one under the other.
+var _far := {}
+var _far_sides := 8.0
+var _far_rows := 1.0
 ## The tree that has been grown and is being drawn. Its limbs: {points, thick,
 ## tints, order}, order 0 for the trunk, 1 for a bough, 2 for what forks off
 ## a bough and 3 for what is dead. Its tufts, a sprig each: {frame, size,
@@ -118,6 +129,11 @@ var _bark_cast := Color.WHITE
 func _describe() -> void:
 	for mat: String in SHEETS:
 		_read_sheet(mat)
+	if FileAccess.file_exists(FAR_SHEET):
+		var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FAR_SHEET))
+		_far = sheet.trees
+		_far_sides = float(sheet.sides)
+		_far_rows = float(sheet.rows)
 	# name, seed, height, girth, where the crown begins, how far it reaches,
 	# how many boughs, how far the top stands out of plumb.
 	_pine("pine_a", 11, 14.0, 0.26, 0.58, 3.4, 11, 0.5)
@@ -473,11 +489,17 @@ func _draw(_tree: String) -> void:
 	# not at all: what stands is what shows.
 	part("Far")
 	_seen(FAR, FAR_END, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
-	var trunk: Dictionary = _limbs[0]
-	var none: Array[Color] = []
-	_tube(_leaf, _coarser(trunk.points), _coarser_floats(trunk.thick), 5, none, true)
-	for bough: int in boughs:
-		_bough_cards(boughs[bough], ["side", "front"] if _young or bough % 3 == 0 else ["side"])
+	if _far.has(_tree):
+		# One card with a picture of the whole tree on it, see _far_card().
+		_far_card(_far[_tree])
+	else:
+		# Until the trees have been pictured: a trunk, and a card or two for
+		# all a bough carries.
+		var trunk: Dictionary = _limbs[0]
+		var none: Array[Color] = []
+		_tube(_leaf, _coarser(trunk.points), _coarser_floats(trunk.thick), 5, none, true)
+		for bough: int in boughs:
+			_bough_cards(boughs[bough], ["side", "front"] if _young or bough % 3 == 0 else ["side"])
 
 	part("Shade")
 	_seen(0.0, SHADE_END, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
@@ -502,6 +524,36 @@ func _draw(_tree: String) -> void:
 		else:
 			_bough_cards(ends[end], ["plan"])
 	print("%s: %d limbs, %d sprigs at %d limb ends of %d boughs" % [_tree, _limbs.size(), _tufts.size(), ends.size(), boughs.size()])
+
+
+## The whole tree as one card, for from afar: it turns to whoever looks and
+## shows the picture of the tree that tools/gen_tree_cards.sh took from
+## nearest to where he stands, see shaders/tree_far.gdshader. `picture` is
+## what the json says of this tree: the row of the sheet it is on, how many
+## metres one of its pictures is across, where on that its foot stands and
+## the part of it there is something on.
+func _far_card(picture: Dictionary) -> void:
+	var st := _tool(FAR_PICTURE, 0, Vector3.ZERO)
+	var size := Vector2(picture.size[0], picture.size[1])
+	var foot := Vector2(picture.foot[0], picture.foot[1])
+	var box: Array = picture.box
+	var points: Array[Vector3] = []
+	var uvs: Array[Vector2] = []
+	for corner: Vector2 in [Vector2(box[0], box[3]), Vector2(box[2], box[3]), Vector2(box[2], box[1]), Vector2(box[0], box[1])]:
+		points.append(Vector3((corner.x - foot.x) * size.x, (foot.y - corner.y) * size.y, 0.0))
+		uvs.append(Vector2(corner.x / _far_sides, (float(picture.row) + corner.y) / _far_rows))
+	# Each corner says how far to the side of the stem it is: the card is
+	# stood up again around the stem for whoever looks. And its colour says
+	# that the tree is not turned and gets all of the light.
+	for i: int in [0, 2, 1, 0, 3, 2]:
+		st.set_color(Color(0.0, 1.0, 0.0, 1.0))
+		st.set_normal(Vector3.BACK)
+		st.set_uv(uvs[i])
+		st.set_uv2(Vector2(points[i].x, 0.0))
+		st.add_vertex(points[i])
+	# What is drawn reaches as far before and behind the stem as the card
+	# does to its sides, which the mesh does not say.
+	(_parts[_current].node as MeshInstance3D).extra_cull_margin = size.x * 0.5
 
 
 ## The tufts of the tree by what they have in common: the bough they are on

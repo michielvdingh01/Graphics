@@ -909,7 +909,16 @@ func _commit(zone_name: String, kind: String) -> void:
 		# The ground beyond the land and what lies on it, see
 		# tools/levels/dunes/vista.gd: too far off to throw a shadow on
 		# anything that is seen.
-		(_root.get_child(0) as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var beyond := _root.get_child(0) as MeshInstance3D
+		beyond.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if _beyond_look and beyond.mesh.surface_get_material(0).resource_path.get_file() == "beyond_ground.tres":
+			# Written now and not when it was made: the builder has cleared out
+			# the files of last time since.
+			if _beyond_look.resource_path == "":
+				var path := "%s%s_beyond.res" % [OUT_DIR, _level_name()]
+				ResourceSaver.save(_beyond_look, path, ResourceSaver.FLAG_COMPRESS)
+				_beyond_look.take_over_path(path)
+			beyond.material_override = _beyond_look
 
 
 # --- The shade ---------------------------------------------------------------------
@@ -1214,8 +1223,10 @@ var _merged := {}
 var _beyond := 0
 var _beyond_seen := {}
 ## How high the ground lies beyond the land, at (x, z), if the level has any
-## there: see beyond_height().
+## there: see beyond_height(). And the material of that ground with the map
+## of this level on it, for the meshes of the kind "vista".
 var _stands_beyond := Callable()
+var _beyond_look: ShaderMaterial
 
 
 ## How high the ground lies at (x, z) whether that is on the land or beyond
@@ -1363,7 +1374,7 @@ func _tree_surfaces(kind: String) -> Dictionary:
 
 ## Adds the part `part` of a tree of `kind`, standing at `xf`, to the meshes
 ## gathered in `into`, one for each material: {points, normals, colours, uvs,
-## corners}. `light` is how much of the light gets to its needles, 0 to 1,
+## sides, corners}. `light` is how much of the light gets to its needles, 0 to 1,
 ## and `bark_light` how much to its wood.
 func _merge_tree(into: Dictionary, kind: String, part: String, xf: Transform3D, light: float, bark_light: float) -> void:
 	var surfaces: Dictionary = _tree_surfaces(kind)[part]
@@ -1371,7 +1382,7 @@ func _merge_tree(into: Dictionary, kind: String, part: String, xf: Transform3D, 
 	for mat: String in surfaces:
 		var arrays: Array = surfaces[mat]
 		if not into.has(mat):
-			into[mat] = {"points": PackedVector3Array(), "normals": PackedVector3Array(), "colours": PackedColorArray(), "uvs": PackedVector2Array(), "corners": PackedInt32Array()}
+			into[mat] = {"points": PackedVector3Array(), "normals": PackedVector3Array(), "colours": PackedColorArray(), "uvs": PackedVector2Array(), "sides": PackedVector2Array(), "corners": PackedInt32Array()}
 		var mesh: Dictionary = into[mat]
 		var points: PackedVector3Array = mesh.points
 		var normals: PackedVector3Array = mesh.normals
@@ -1386,8 +1397,23 @@ func _merge_tree(into: Dictionary, kind: String, part: String, xf: Transform3D, 
 		# much light gets to them, and wood that is drawn with the needles
 		# says so in its alpha: see shaders/crown.gdshader.
 		var bark := mat == "pine_trunk"
+		# A tree that is one card from afar, see shaders/tree_far.gdshader:
+		# its corners say how far to the side of the stem they are, and their
+		# colour how the tree is turned, how much light gets to it and what
+		# tells it from the next.
+		var card := mat == "pine_far"
+		if arrays[Mesh.ARRAY_TEX_UV2] != null:
+			var sides: PackedVector2Array = mesh.sides
+			var larger := xf.basis.get_scale().x
+			for side: Vector2 in (arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array):
+				sides.append(side * larger)
+			mesh.sides = sides
+		var turned := xf.basis.get_euler().y / TAU
+		var own := fposmod(sin(xf.origin.x * 12.9898 + xf.origin.z * 78.233) * 43758.5453, 1.0)
 		for colour: Color in (arrays[Mesh.ARRAY_COLOR] as PackedColorArray):
-			if bark:
+			if card:
+				colours.append(Color(fposmod(colour.r + turned, 1.0), colour.g * light, own, 1.0))
+			elif bark:
 				colours.append(Color(colour.r * bark_light, colour.g * bark_light, colour.b * bark_light, colour.a))
 			else:
 				colours.append(Color(colour.r, colour.g, colour.b * (bark_light if absf(colour.a - 0.5) < 0.1 else light), colour.a))
@@ -1408,6 +1434,8 @@ func _merged_arrays(mesh: Dictionary) -> Array:
 	arrays[Mesh.ARRAY_NORMAL] = mesh.normals
 	arrays[Mesh.ARRAY_COLOR] = mesh.colours
 	arrays[Mesh.ARRAY_TEX_UV] = mesh.uvs
+	if not (mesh.sides as PackedVector2Array).is_empty():
+		arrays[Mesh.ARRAY_TEX_UV2] = mesh.sides
 	arrays[Mesh.ARRAY_INDEX] = mesh.corners
 	return arrays
 

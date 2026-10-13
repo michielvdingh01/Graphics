@@ -19,7 +19,8 @@ extends "res://tools/levels/dunes/plan.gd"
 ##
 ## The ground is three rings of squares round the land, each four times as
 ## coarse as the one inside it, and meets the land at the height of its edge.
-## Nothing of it throws a shadow or is in anybody's way.
+## What it looks like is not in its corners but in two maps the material lays
+## over it. Nothing of it throws a shadow or is in anybody's way.
 
 ## How far beyond the land its edge has become the ground that lies there.
 const EDGE_REACH := 70.0
@@ -44,11 +45,12 @@ const COAST_ENDS := Vector2(200.0, 340.0)
 ## the west, and north of it the coast is open.
 const WOOD_FROM_Z := Vector2(138.0, 160.0)
 ## The colours of what lies there: bare sand, sand that is wet, the grey
-## dune with its moss and low grass, and the floor of a wood.
+## dune with its moss and low grass, the floor of a wood, and its crowns.
 const SAND := Color(0.37, 0.295, 0.2)
 const WET := Color(0.2, 0.17, 0.13)
 const GREY_DUNE := Color(0.2, 0.2, 0.125)
 const WOOD_FLOOR := Color(0.085, 0.075, 0.058)
+const CROWNS := Color(0.013, 0.021, 0.013)
 ## Where the woods far off stand as a line of trees: how far beyond the land.
 const WOOD_LINES: Array[float] = [58.0, 82.0, 112.0, 150.0, 200.0, 265.0, 350.0, 460.0, 600.0, 780.0, 1000.0]
 
@@ -71,6 +73,7 @@ func _describe() -> void:
 	_woods = _noise(4241, 300.0)
 	_patches = _noise(4253, 70.0)
 	_stands_beyond = _height_beyond
+	_map_ground()
 	_lay()
 	_sea()
 	_far_woods()
@@ -148,17 +151,61 @@ func _wood_at(x: float, z: float) -> float:
 	return clampf(maxf(belt, patch) * (1.0 - open), 0.0, 1.0)
 
 
-## What the ground looks like at (x, z), `high` up and facing `faces`.
-func _look(x: float, z: float, high: float, faces: Vector3) -> Color:
+## What the ground looks like at (x, z), facing `faces`: the colour it has
+## from far off, which is all anybody sees of it.
+func _look(x: float, z: float, faces: Vector3) -> Color:
 	var at := Vector2(x, z)
 	var w := _from_water(x, z)
+	var out := _out(x, z)
 	# Bare sand on what is steep and on the beach, the grey dune elsewhere.
 	var bare := maxf(smoothstep(0.93, 0.8, faces.y), 1.0 - smoothstep(BEACH, FOREDUNE + 30.0, w))
 	bare = maxf(bare, smoothstep(0.1, 0.5, _patches.get_noise_2dv(at)) * 0.8)
 	var look := GREY_DUNE.lerp(SAND, bare)
-	look = look.lerp(WOOD_FLOOR, _wood_at(x, z))
+	# Under a wood near by its floor is seen between the trunks; of a wood
+	# far off, its crowns.
+	var wood := _wood_at(x, z)
+	look = look.lerp(WOOD_FLOOR.lerp(CROWNS, smoothstep(90.0, 200.0, out)), wood)
 	look = look.lerp(WET, 1.0 - smoothstep(4.0, 34.0, w))
-	return look * (0.92 + 0.16 * _humps.get_noise_2d(z * 1.7, x * 1.7)) * (1.0 + 0.012 * clampf(high - 5.0, -5.0, 14.0))
+	return look * (0.92 + 0.16 * _humps.get_noise_2d(z * 1.7, x * 1.7))
+
+
+## A map of what the ground looks like over `area`, a dot for every `dot`
+## metres: the material lays it over the ground by where a spot lies, so
+## that a square of a hundred and sixty metres is not one colour.
+func _look_map(area: Rect2, dot: float) -> ImageTexture:
+	var wide := roundi(area.size.x / dot)
+	var high := roundi(area.size.y / dot)
+	# How high the ground lies at the middle of every dot, and one beyond.
+	var heights := PackedFloat32Array()
+	heights.resize((wide + 2) * (high + 2))
+	for row in high + 2:
+		for column in wide + 2:
+			heights[row * (wide + 2) + column] = beyond_height(area.position.x + (column - 0.5) * dot, area.position.y + (row - 0.5) * dot)
+	var map := Image.create(wide, high, true, Image.FORMAT_RGB8)
+	for row in high:
+		for column in wide:
+			var i := (row + 1) * (wide + 2) + column + 1
+			var faces := Vector3(heights[i - 1] - heights[i + 1], 2.0 * dot, heights[i - wide - 2] - heights[i + wide + 2]).normalized()
+			map.set_pixel(column, row, _look(area.position.x + (column + 0.5) * dot, area.position.y + (row + 0.5) * dot, faces).linear_to_srgb())
+	map.generate_mipmaps()
+	return ImageTexture.create_from_image(map)
+
+
+## The material of the ground beyond with its maps on it: one of what lies
+## near the land and a coarser one of all of it.
+func _map_ground() -> void:
+	var near := _ring_area(1)
+	var far := _ring_area(RINGS.size() - 1)
+	_beyond_look = (load("res://materials/beyond_ground.tres") as ShaderMaterial).duplicate()
+	_beyond_look.set_shader_parameter("look_near", _look_map(near, 4.0))
+	_beyond_look.set_shader_parameter("near_rect", Vector4(near.position.x, near.position.y, 1.0 / near.size.x, 1.0 / near.size.y))
+	_beyond_look.set_shader_parameter("look_far", _look_map(far, 16.0))
+	_beyond_look.set_shader_parameter("far_rect", Vector4(far.position.x, far.position.y, 1.0 / far.size.x, 1.0 / far.size.y))
+
+
+## How far ring `ring` of the ground reaches, x and z.
+func _ring_area(ring: int) -> Rect2:
+	return Rect2(LAND.position - (RINGS[ring][1] as Vector2), LAND.size + (RINGS[ring][1] as Vector2) + (RINGS[ring][2] as Vector2))
 
 
 ## The height of a corner of a ring of squares `cell` wide that reaches from
@@ -190,14 +237,13 @@ func _lay() -> void:
 	var inner := LAND
 	for ring in RINGS.size():
 		var cell: float = RINGS[ring][0]
-		var outer := Rect2(LAND.position - (RINGS[ring][1] as Vector2), LAND.size + (RINGS[ring][1] as Vector2) + (RINGS[ring][2] as Vector2))
+		var outer := _ring_area(ring)
 		var coarser: float = RINGS[ring + 1][0] if ring + 1 < RINGS.size() else 0.0
 		var columns := roundi(outer.size.x / cell)
 		var rows := roundi(outer.size.y / cell)
 		var points := PackedVector3Array()
 		var facing := PackedVector3Array()
 		var uvs := PackedVector2Array()
-		var looks := PackedColorArray()
 		var corners := PackedInt32Array()
 		var index := {}
 		for row in rows:
@@ -218,7 +264,6 @@ func _lay() -> void:
 						points.append(Vector3(x, high, z))
 						facing.append(faces)
 						uvs.append(Vector2(x, z))
-						looks.append(_look(x, z, high, faces))
 					own.append(index[key])
 				corners.append_array([own[0], own[2], own[3], own[0], own[1], own[2]])
 		var arrays := []
@@ -226,7 +271,6 @@ func _lay() -> void:
 		arrays[Mesh.ARRAY_VERTEX] = points
 		arrays[Mesh.ARRAY_NORMAL] = facing
 		arrays[Mesh.ARRAY_TEX_UV] = uvs
-		arrays[Mesh.ARRAY_COLOR] = looks
 		arrays[Mesh.ARRAY_INDEX] = corners
 		var st := SurfaceTool.new()
 		st.create_from_arrays(arrays)

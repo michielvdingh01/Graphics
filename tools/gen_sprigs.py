@@ -299,6 +299,21 @@ KINDS["spray"].update({
 })
 
 
+# The same pine for a whole bough end, which is pictured small: three
+# millimetres to the dot, where a needle is two across. Dense brushes of thin
+# needles close up into balls there, and a ball with a ragged edge is a leaf.
+# So its tufts are open: fewer needles and thicker ones, which a dot can
+# hold, on the wood of the last two years only, with the bare twig showing
+# behind them and the tips of the needles standing out of the tuft one by one.
+KINDS["tuft"] = dict(KINDS["scots"])
+KINDS["tuft"].update({
+    "year": 0.105, "needle": 0.074, "width": 0.0046, "pitch": 0.0062, "keeps": 2,
+    "stand": [34.0, 60.0, 72.0], "fork_odds": [0.3, 0.48, 0.22], "fork_angle": (30.0, 54.0), "fork_vigour": (0.66, 0.92),
+    "upturn": 0.09, "flatten": 0.78, "dies": 0.38, "cones": 0.1,
+    "green": [[0.115, 0.225, 0.1], [0.07, 0.155, 0.088], [0.05, 0.115, 0.075]],
+})
+
+
 # Sea buckthorn: crooked grey twigs that fork every way, narrow grey-green
 # leaves with a silver underside, and in autumn orange berries packed round
 # the wood of last year and the year before.
@@ -330,11 +345,12 @@ def grow(kind_name, seed, age, vigour):
     return sprig.arrays()
 
 
-def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08)):
+def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
     """A whole bough end, for a tree that is seen from afar: bare wood that
     forks, `length` long, with the sprigs of `grown` (what grow() returned for
     each) at its ends and along the outer part of it. It begins at the origin
-    and grows along +X, with +Y up, as a sprig does."""
+    and grows along +X, with +Y up, as a sprig does. `apart` is how far from
+    each other the sprigs stand along a limb."""
     out = Sprig(seed)
     rng = out.rng
     wood = np.array(wood)
@@ -368,7 +384,7 @@ def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08)):
         one to either side by turns, and now and then one on top."""
         heading = unit(points[-1] - points[-2])
         put(points[-1], heading + np.array([0.0, 0.25, 0.0]), rng.uniform(0.95, 1.2))
-        steps = max(int(reach * 0.66 / 0.22), 1)
+        steps = max(int(reach * 0.66 / apart), 1)
         for step in range(steps):
             t = 0.32 + 0.64 * (step + rng.uniform(0.2, 0.8)) / steps
             at = points[0] + (points[-1] - points[0]) * t
@@ -581,7 +597,7 @@ def render_sheet(asset, out_dir, scratch):
     # sprig has to show the sky between its twigs.
     dress = [grow(sprig["kind"], asset["seed"] + 5000 + index * 101, sprig["age"], sprig.get("vigour", 1.0)) for index, sprig in enumerate(asset.get("bough_sprigs", []))]
     for column, spec in enumerate(boughs):
-        grown.append(bough(asset["seed"] + 977 + column * 131, dress if dress else grown[:len(sprigs)], spec["length"], spec["forks"], spec.get("wood", (0.2, 0.13, 0.08))))
+        grown.append(bough(asset["seed"] + 977 + column * 131, dress if dress else grown[:len(sprigs)], spec["length"], spec["forks"], spec.get("wood", (0.2, 0.13, 0.08)), spec.get("apart", 0.22)))
     for column, (corners, triangles, colours) in enumerate(grown):
         what = "sprig" if column < len(sprigs) else "bough"
         scene = set_scene(asset.get("samples", 48))
