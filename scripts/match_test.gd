@@ -52,7 +52,17 @@ func _run() -> void:
 	_check("the route is off: no robots, no checkpoints, no way out", game.exit == null and game.checkpoints.is_empty()
 		and game.zones.all(func(zone: RefCounted) -> bool: return zone.cleared and zone.robots.is_empty())
 		and tree.get_nodes_in_group("enemy").is_empty())
-	_check("the rules are those of a match", Settings.rules().regen_to == 100.0 and Settings.rules().drops == 0.0)
+	var caps := []
+	for difficulty in 3:
+		Settings.difficulty = difficulty
+		caps.append([Settings.rules().regen_to, Settings.rules().hurts, Settings.rules().bots])
+	Settings.difficulty = 1
+	_check("the rules are those of a match, by the difficulty: health comes back to 100, 75 and 50", Settings.rules().drops == 0.0
+		and caps == [[100.0, 0.75, "recruit"], [75.0, 0.9, "regular"], [50.0, 1.0, "hardened"]])
+	_check("and so is how good the bots are", Match.bot_level().reaction == 0.55 and Match.bot_level().fov == 110.0 and Match.levels.recruit.reaction > Match.levels.hardened.reaction)
+	var cells := tree.get_nodes_in_group("pickup").filter(func(pickup: Node) -> bool: return pickup.kind == pickup.Kind.HEALTH)
+	_check("a cell or two that mend lie between the ends, and stay there", cells.size() >= 1 and cells.size() <= 4 and cells.all(func(cell: Node) -> bool:
+		return cell.stays and absf(Match.arena.spots[Match.arena.ends[0]].distance_to(cell.global_position) - Match.arena.spots[Match.arena.ends[1]].distance_to(cell.global_position)) < 40.0))
 	var all: Array = Match.entrants.values()
 	var sides := [all.filter(func(who: RefCounted) -> bool: return who.team == 0), all.filter(func(who: RefCounted) -> bool: return who.team == 1)]
 	_check("six bots, three a side, and the player looks on", all.size() == 6 and sides[0].size() == 3 and sides[1].size() == 3
@@ -140,19 +150,71 @@ func _run() -> void:
 	var target: RefCounted = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot)[0]
 	_check("a shot of the player's that kills counts for the player", Match.hit(player, target.body, 500.0, target.body.global_position + Vector3.UP, Vector3.FORWARD, 0, true)
 		and me.kills == 1 and target.deaths == 1 and target.out > 0.0 and target.body.dead and game.kills == 1)
-	_check("and leaves a can of ammunition", tree.get_nodes_in_group("pickup").size() == 1)
+	_check("and leaves a can of ammunition", tree.get_nodes_in_group("pickup").filter(func(pickup: Node) -> bool: return pickup.kind == pickup.Kind.AMMO).size() == 1)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	_check("the bot is back, as good as new and somewhere else", target.out <= 0.0 and not target.body.dead and target.health == Match.MAX_HEALTH and target.body.visible)
 	_check("nothing hurts it for a moment", target.safe > 0.0 and not Match.harm(target.id, 50.0, target.body.global_position, Vector3.FORWARD, me.id, 0) and target.health == Match.MAX_HEALTH)
-	Match.harm(me.id, 40.0, player.global_position, Vector3.FORWARD, target.id, 0)
-	_check("a bot's shot hurts the player", player.health == 60.0 and not player.dead)
-	Match.harm(me.id, 500.0, player.global_position, Vector3.FORWARD, target.id, 2, true)
-	_check("and can bring the player down, which counts for the bot", player.dead and me.deaths == 1 and target.kills == 1 and me.out > 0.0)
+	# On easy it takes two shots of a marksman's rifle to the body, or one to
+	# the head.
+	Settings.difficulty = 0
+	var marksman: WeaponData = player.weapons.LOADOUT[4]
+	me.safe = 0.0
+	Match.harm(me.id, marksman.damage, player.global_position, Vector3.FORWARD, target.id, 4)
+	_check("on easy one shot of a marksman's rifle to the body leaves the player standing", not player.dead and player.health > 40.0 and player.health < 60.0)
+	Match.harm(me.id, marksman.damage, player.global_position, Vector3.FORWARD, target.id, 4)
+	_check("and the second brings them down, which counts for the bot", player.dead and me.deaths == 1 and target.kills == 1 and me.out > 0.0)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	_check("the player is back in the same level, on their feet", tree.current_scene == game and not player.dead and player.health == player.MAX_HEALTH and me.out <= 0.0)
-	player.take_damage(30.0)
-	await _wait(float(Match.rules.regen_after) + 2.0)
-	_check("health comes back all the way", player.health == player.MAX_HEALTH)
+	me.safe = 0.0
+	Match.harm(me.id, marksman.damage * marksman.headshot_multiplier, player.global_position, Vector3.FORWARD, target.id, 4, true)
+	_check("one to the head is enough, on easy too", player.dead)
+	await _wait(float(Match.mode.numbers.respawn) + 0.3)
+	Settings.difficulty = 2
+	me.safe = 0.0
+	Match.harm(me.id, 40.0, player.global_position, Vector3.FORWARD, target.id, 0)
+	_check("on hard a bot's shot does all it does", player.health == 60.0)
+	# How far health comes back by itself.
+	Engine.time_scale = 4.0
+	var came_to := []
+	for difficulty in [2, 1, 0]:
+		Settings.difficulty = difficulty
+		player.health = 20.0
+		player.take_damage(1.0)
+		await _wait(float(Match.rules.regen_after) + 5.0)
+		came_to.append(player.health)
+	Engine.time_scale = 1.0
+	_check("health comes back to half on hard, three quarters on normal and all the way on easy", came_to == [50.0, 75.0, 100.0])
+	Settings.difficulty = 1
+
+	# Against whoever the enemies were chosen to be.
+	var theme: String = Settings.enemy_theme
+	Settings.enemy_theme = "zombies"
+	_check("a match against zombies opens", Match.open({"mode": "tdm", "level": "factory", "size": 3}))
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	game = tree.current_scene
+	player = game.player
+	me = Match.me()
+	var others: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team != me.team)
+	var own: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team == me.team and who.bot)
+	_check("the other side is zombies, with a weapon of the loadout in their hands, and the player's side soldiers", others.size() == 3
+		and others.all(func(who: RefCounted) -> bool: return who.body._rig._figure.scene_file_path.contains("zombie") and who.body._rig._weapon != null)
+		and own.all(func(who: RefCounted) -> bool: return who.body._rig._figure.scene_file_path.contains("soldier")))
+	player.invulnerable = true
+	var from: Array = others.map(func(who: RefCounted) -> Vector3: return who.body.global_position)
+	Engine.time_scale = 4.0
+	await _wait(4.0)
+	var fastest := 0.0
+	for i in others.size():
+		fastest = maxf(fastest, others[i].body.global_position.distance_to(from[i]) / 4.0)
+	await _wait(30.0)
+	Engine.time_scale = 1.0
+	var zombie_kills := 0
+	for who: RefCounted in others:
+		zombie_kills += who.kills
+	print("  zombies: the fastest covered %.1f m a second on its way; in 34 s they brought down %d and lost %d" % [fastest, zombie_kills, Match.tally[me.team]])
+	_check("they run as fast as anybody, and fight", fastest > player.WALK_SPEED and others[0].brain.SPRINT == player.SPRINT_SPEED and zombie_kills + Match.tally[me.team] > 0)
+	Settings.enemy_theme = theme
 
 	# What the menu offers, and leaving.
 	Menu._show(Menu.Screen.MATCH)
@@ -165,6 +227,26 @@ func _run() -> void:
 	_check("on which a button goes through the kinds", kind.text != was and kind.text.begins_with("Kind"))
 	kind.pressed.emit()
 	_check("and back to the first", kind.text == was)
+	var against: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Against"))[0]
+	var seen := [against.text]
+	for i in 8:
+		against.pressed.emit()
+		if not seen.has(against.text):
+			seen.append(against.text)
+	_check("another goes through who to play against: soldiers, zombies and clowns among them, robots not", seen.has("Against  ·  Soldiers") and seen.has("Against  ·  Zombies") and seen.has("Against  ·  Clowns")
+		and not seen.any(func(text: String) -> bool: return text.contains("Robots") or text.contains("Desert")))
+	Settings.enemy_theme = theme
+	var level: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Difficulty"))[0]
+	level.pressed.emit()
+	_check("and another through the difficulty", level.text == "Difficulty  ·  Hard" and Settings.difficulty == 2)
+	Settings.difficulty = 1
+	var arenas: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Arena"))[0]
+	var places := [arenas.text]
+	for i in 4:
+		arenas.pressed.emit()
+		places.append(arenas.text)
+	arenas.pressed.emit()
+	_check("the dunes are among the arenas", places.has("Arena  ·  Dunes") and arenas.text == places[0])
 	(buttons.filter(func(button: Button) -> bool: return button.text == "Start")[0] as Button).pressed.emit()
 	await tree.scene_changed
 	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)
@@ -188,7 +270,7 @@ func _run() -> void:
 ## so long, however many points are made, and prints what it came to and what
 ## it cost the processor. With --only-bots that is all bots.
 func _soak(seconds: float) -> void:
-	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 60.0)
 	if Match.state != Match.State.PLAYING:
 		print("MATCH SOAK FAILED: no match is being played; give one with --match=")
 		return
@@ -196,7 +278,7 @@ func _soak(seconds: float) -> void:
 	Match.mode.numbers.limit = 100000
 	Match.left = seconds + 60.0
 	var arena: RefCounted = Match.arena
-	print("  %d spots; the ends are %.0f m apart to walk and %.0f m as the crow flies" % [arena.spots.size(), arena.walks[0][arena.ends[1]], arena.spots[arena.ends[0]].distance_to(arena.spots[arena.ends[1]])])
+	print("  %d spots, found in %.2f s; the ends are %.0f m apart to walk and %.0f m as the crow flies" % [arena.spots.size(), arena.took, arena.length(), arena.spots[arena.ends[0]].distance_to(arena.spots[arena.ends[1]])])
 	for who: RefCounted in Match.entrants.values():
 		print("  %s side %d at %s, %.0f m from end 0 and %.0f m from end 1" % [who.title, who.team, who.body.global_position.snappedf(0.1), who.body.global_position.distance_to(arena.spots[arena.ends[0]]), who.body.global_position.distance_to(arena.spots[arena.ends[1]])])
 	Match.felled.connect(func(by: int, fallen: int, _weapon: int, _head: bool) -> void:
@@ -205,10 +287,24 @@ func _soak(seconds: float) -> void:
 	var physics := PackedFloat32Array()
 	var began := Time.get_ticks_msec()
 	var waited := 0.0
+	var nearest := INF
+	var walked := 0.0
+	var stood := {}
 	while waited < seconds:
 		await _wait(0.5)
 		waited += 0.5
 		physics.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
+		for who: RefCounted in Match.entrants.values():
+			if who.out > 0.0:
+				stood.erase(who.id)
+				continue
+			if stood.has(who.id):
+				walked += who.body.global_position.distance_to(stood[who.id])
+			stood[who.id] = who.body.global_position
+			for other: RefCounted in Match.entrants.values():
+				if other.out <= 0.0 and Match.mode.hostile(who, other):
+					nearest = minf(nearest, who.body.global_position.distance_to(other.body.global_position))
+	print("  each walked %.1f m a second on average; the nearest two against each other ever came is %.0f m" % [walked / seconds / Match.entrants.size(), nearest])
 	physics.sort()
 	var mean := 0.0
 	for sample in physics:

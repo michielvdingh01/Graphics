@@ -28,8 +28,9 @@ const SEEN_FROM := 60.0
 ## enemy first: seeing costs two rays for every enemy.
 const LOOKS := 24
 ## The most spots that are kept. A level with more floor than that has them
-## further apart: the way to every spot is looked up three times.
-const MOST := 1200
+## further apart: the way to every spot is looked up three times, and over
+## the land of the dunes each of those takes two thousandths of a second.
+const MOST := 500
 const NO_WAY := 1e9
 ## How far along the way to somewhere somebody faces who is put down, in metres.
 const LOOKS_AHEAD := 4.0
@@ -42,6 +43,8 @@ var ends: Array[int] = [0, 0]
 var walks: Array[PackedFloat32Array] = [PackedFloat32Array(), PackedFloat32Array()]
 ## How often nothing was safe and the least bad spot had to do.
 var emergencies := 0
+## The seconds it took to take the level apart.
+var took := 0.0
 
 var _space: PhysicsDirectSpaceState3D
 var _map: RID
@@ -49,6 +52,7 @@ var _map: RID
 
 ## Takes the level apart. False if there is no floor to play on.
 func survey(game: Node3D) -> bool:
+	var began := Time.get_ticks_usec()
 	_space = game.get_world_3d().direct_space_state
 	_map = game.get_world_3d().navigation_map
 	var region: NavigationRegion3D = game.nav_region
@@ -136,7 +140,13 @@ func survey(game: Node3D) -> bool:
 	walks[0] = _walks_from(spots[ends[0]])
 	ends[1] = _furthest(walks[0])
 	walks[1] = _walks_from(spots[ends[1]])
+	took = (Time.get_ticks_usec() - began) / 1e6
 	return true
+
+
+## How far it is to walk from one end to the other.
+func length() -> float:
+	return walks[0][ends[1]]
 
 
 ## Where `count` of a side stand as a match begins: the spots nearest to
@@ -205,6 +215,41 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array) -> Transform3D:
 ## A spot to walk to for want of anything better.
 func anywhere() -> Vector3:
 	return spots[randi() % spots.size()]
+
+
+## A spot in the half of the arena that is nearer to the end of `side`: where
+## that side is to be looked for.
+func somewhere(side: int) -> Vector3:
+	for i in 12:
+		var spot := randi() % spots.size()
+		if walks[side][spot] < walks[1 - side][spot]:
+			return spots[spot]
+	return anywhere()
+
+
+## `count` spots between the two ends, about as far to walk from either, and
+## as far from each other as that leaves room for: where something lies that
+## is there for both sides.
+func caches(count: int) -> PackedVector3Array:
+	var order := range(spots.size()).filter(func(spot: int) -> bool: return walks[0][spot] < NO_WAY and walks[1][spot] < NO_WAY)
+	order.sort_custom(func(a: int, b: int) -> bool: return absf(walks[0][a] - walks[1][a]) < absf(walks[0][b] - walks[1][b]))
+	@warning_ignore("integer_division")
+	var middle: Array = order.slice(0, maxi(order.size() / 5, count))
+	var chosen := PackedVector3Array()
+	while chosen.size() < count and not middle.is_empty():
+		var best := 0
+		var furthest := -1.0
+		for i in middle.size():
+			var gap := INF
+			for other in chosen:
+				gap = minf(gap, spots[middle[i]].distance_to(other))
+			if chosen.is_empty():
+				gap = float(-i)
+			if gap > furthest:
+				furthest = gap
+				best = i
+		chosen.append(spots[middle.pop_at(best)])
+	return chosen
 
 
 ## True if somebody standing at `from` sees the head or the chest of somebody

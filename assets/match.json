@@ -1,6 +1,5 @@
 {
 	"rules": {
-		"regen_to": 100.0,
 		"regen_after": 5.0,
 		"safe": 1.5,
 		"drops": 0.0,
@@ -8,6 +7,12 @@
 		"warning": 1.0,
 		"damage": 1.0
 	},
+	"difficulty": [
+		{"regen_to": 100.0, "hurts": 0.75, "bots": "recruit"},
+		{"regen_to": 75.0, "hurts": 0.9, "bots": "regular"},
+		{"regen_to": 50.0, "hurts": 1.0, "bots": "hardened"}
+	],
+	"cells": {"spots_for_one": 250, "most": 4, "back": 45.0},
 	"modes": {
 		"tdm": {"title": "Team deathmatch", "limit": 50, "minutes": 10, "respawn": 3.0, "least": 1, "most": 6, "size": 6},
 		"ffa": {"title": "Free for all", "limit": 25, "minutes": 10, "respawn": 2.0, "least": 2, "most": 12, "size": 8}

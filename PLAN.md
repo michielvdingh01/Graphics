@@ -2626,3 +2626,47 @@ De donkere hoek is niet overal even donker. Door het raam in de zuidmuur valt ee
 - De twee teams met hun wapens: `assets/characters/sheets/uniforms_teams.jpg`.
 - De vijf in het gekozen uniform: `assets/characters/sheets/soldier_01_desert.jpg` tot en met `soldier_05_desert.jpg`, naast `soldier_01.jpg` tot en met `soldier_05.jpg`.
 - Ertegen spelen, om ze in beweging te zien: `GODOT_WINDOW=1 tools/godot.sh -- --play --enemies=soldiers_desert`. Dat commando heb ik niet kunnen proberen, want het opent een venster; `--enemies=soldiers_desert` zelf is zonder venster getest.
+
+## Het potje bijgesteld: wat Michiel er na het spelen van zei
+
+Op 13 oktober 2026 speelde Michiel het ruwe potje en gaf zeven punten door. Dit is wat er per punt gedaan is, op de branch `potje`. Capture the flag staat in de sectie hierna.
+
+**Wat er veranderd is**
+
+- **De moeilijkheid telt nu in een wedstrijd.** Dat deed ze niet: een wedstrijd had één stel regels, wat er ook was ingesteld. `assets/match.json` heeft er nu drie, en `Settings.rules()` geeft in een wedstrijd die van de ingestelde moeilijkheid:
+
+  | | Easy | Normal | Hard |
+  |---|---|---|---|
+  | Health komt vanzelf terug tot | 100 | 75 | 50 |
+  | Wat er overblijft van wat een bot een mens doet | 75% | 90% | alles |
+  | De bots | Recruit | Regular | Hardened |
+  | Van zien tot het eerste schot | 0,9 s | 0,55 s | 0,35 s |
+  | Hoe ver zijn richtpunt van het doel zwerft | 3,5° | 2° | 1,2° |
+  | Tijd waarin zijn richtpunt het doel inhaalt | 0,9 s | 0,6 s | 0,4 s |
+  | Blikveld | 90° | 110° | 120° |
+
+  De niveaus van de bots staan in `assets/bots.json`, met de vierde uit het plan (Veteran) erbij voor later. Bots komen zelf tot dezelfde grens terug als een mens.
+- **Twee schoten van een scherpschutter op easy.** Het geweer doet 70; op easy komt daarvan 52,5 aan, dus één treffer in het lijf laat je staan en de tweede niet; een schot in het hoofd (175, op easy 131) is er één. Dat gold op het lijf al, maar de bots richtten op de hals, 6 cm onder waar het hoofd begint, en hun richtpunt zwerft: een deel van hun schoten was dus een schot in het hoofd. Hoeveel is niet geteld. Ze richten nu op de borst, een halve meter onder de ogen.
+- **Tegen wie je speelt** is de instelling "Enemies" die er al was, en die deed in een wedstrijd niets: de ander was altijd een soldaat. Nu is de andere kant (bij ieder voor zich: iedereen behalve jij) wie daar gekozen is: soldaten in het woestijnuniform, zombies, clowns, de blokkige zombies of de paspoppen. Ze dragen een wapen van de speler en lopen en rennen zoals iedereen: een zombie is hier een bot met het lijf en de stem van een zombie, niet de trage van de route. Robots kunnen niet dragen wat een speler draagt; staat de instelling daarop, dan zijn het soldaten. De keuze staat ook op het scherm "Multiplayer", als "Against", naast "Difficulty": het zijn dezelfde twee instellingen als onder Settings.
+- **Sprinten gaat van 8,0 naar 7,2 m/s**, voor de speler overal in het spel, en voor de bots, die de snelheden van de speler nu uit `scripts/player.gd` lezen in plaats van ze over te schrijven. Lopen blijft 5,0.
+- **Cellen die 25 health geven liggen in de arena**, zuinig: één per 250 plekken, ten minste één en hooguit vier (fabriek 1, fabrieksterrein 1, centrale 1, duinen 2), halverwege de twee uiteinden en zo ver mogelijk uit elkaar. Een cel blijft liggen tot iemand hem pakt en ligt er 45 seconden later weer. Boven de grens waartot health vanzelf terugkomt is dit de enige manier om erbij te krijgen. Alleen de speler raapt op; een bot niet.
+- **De duinen zijn een arena.** De twee kanten beginnen 399 m lopen uit elkaar. Wat daarvoor nodig was: een arena houdt hooguit 500 plekken (in de duinen 491, om de drie; het opzoeken van de wegen kost daar 1,3 s bij het begin, tegen 6,5 s met alle 1 145), een bot die niemand kent loopt naar de helft van de ander in plaats van zomaar ergens heen, wie een vijand ziet zegt het zijn kant, een scherpschutter ziet 180 m ver (de anderen 40 tot 70), en in een arena langer dan 300 m draagt een kant twee scherpschuttersgeweren en één shotgun minder.
+- **Een bot die geen weg kreeg bleef staan** zonder dat het als vastlopen telde: op een stuk navmesh dat nergens aan vastzit geeft de wegzoeker de plek zelf terug. Hij loopt dan recht op zijn doel af, wat hem van dat stuk af brengt.
+
+**Getest en gemeten**, alles zonder GPU, de laptop aan de lader, load 4 tot 8.
+
+- `tools/test_match.sh`, 47 controles. Nieuw: de drie stellen regels; op easy laat één schot van het scherpschuttersgeweer in het lijf de speler staan en het tweede niet, en één in het hoofd is genoeg; health komt terug tot 50, 75 en 100; er ligt een cel tussen de uiteinden die blijft liggen; tegen zombies is de andere kant zombies met een wapen in handen en de eigen kant soldaten, ze leggen 5,5 m per seconde af en vechten (7 neergehaald, 5 verloren in 34 s); het scherm gaat langs soldaten, zombies en clowns en biedt geen robots aan; de duinen staan in de lijst.
+- **Twaalf bots twee minuten in de duinen**, twee keer: 15 en 21 doden, geen noodspawn. Ze liepen 83 en 99 keer ergens tegenaan, zeven keer per bot: op het land klopt het navmesh niet overal met wat er staat. Ze komen er elke keer na anderhalve seconde uit, maar een tiende van hun tijd staan ze dus stil. Op het fabrieksterrein in twee minuten 38 doden en één keer vast.
+
+**Wat ik niet kon beoordelen**
+
+- **Of easy nu makkelijk genoeg is.** De getallen zijn gokken; ze staan in twee bestanden en zijn in een minuut anders.
+- **Of 7,2 de goede sprint is.** "Ietsje trager" is tien procent geworden.
+- **Zombies en clowns van dichtbij.** Op twee beelden van een potje in de fabriek staan drie zombies op twintig meter: ze rennen en richten als de anderen. Hoe een geweer in de handen van een zombie of een clown er van dichtbij uitziet heb ik niet gezien.
+- **De duinen op het oog.** Geen beeld van gemaakt, en niet gemeten wat twaalf figuren daar kosten.
+
+**Nog open**
+
+- De regel voor health geldt in een wedstrijd. Op de route komt health terug tot 50, 35 en 25: dat is niet aangeraakt.
+- Een bot ziet in de duinen door struiken en bomen heen.
+- Een clown die op de route in paniek raakt doet dat hier niet, en de zware van een bezetting is hier even groot en even sterk als de rest.

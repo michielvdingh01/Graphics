@@ -48,7 +48,7 @@ func _ready() -> void:
 	_feed.add_theme_constant_override("outline_size", 5)
 	_feed.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	# Under where the HUD of the game counts the player's kills.
-	_feed.position.y += 44
+	_feed.position.y += 80
 	add_child(_feed)
 	_centre.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	_centre.grow_horizontal = Control.GROW_DIRECTION_BOTH

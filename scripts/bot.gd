@@ -5,37 +5,44 @@ extends Node
 ##
 ## This is the first cut of it. It goes for the nearest enemy it knows of and
 ## shoots when it sees one, and otherwise walks to where it last knew of one,
-## or just somewhere. What it knows it has seen, in front of it and with a
-## clear line; or heard, a shot that carried as far as where it stands; or
-## felt, by being hit. It carries one weapon of the loadout, which does in its
-## hands what it does in the player's: the same damage, rate of fire and
-## magazine, and every shot is a ray along where it points. Its aim runs after
-## its target and takes a moment to get there, and it does not fire on sight.
-## What it does not do yet: take cover, fall back, share what it knows with
-## its side, throw grenades, jump or crouch.
+## or to where the other side is to be found. What it knows it has seen, in
+## front of it and with a clear line; or heard, a shot that carried as far as
+## where it stands; or felt, by being hit. It carries one weapon of the
+## loadout, which does in its hands what it does in the player's: the same
+## damage, rate of fire and magazine, and every shot is a ray along where it
+## points. It walks and runs as fast as the player. Its aim runs after the
+## chest of its target and takes a moment to get there, and it does not fire
+## on sight: how long that takes, how far its aim wanders and how wide it
+## looks is its level (assets/bots.json), which goes by the difficulty.
+## Whom it sees, its side knows of as well. What it does not do yet: take
+## cover, fall back, throw grenades, jump or crouch.
 
 const WEAPONS := preload("res://scripts/weapons.gd")
+const PLAYER := preload("res://scripts/player.gd")
 const WORLD := 1
-## How far it sees, in metres, how far to either side of its nose, as a
-## cosine, and from how near it notices somebody whichever way it looks.
-const SIGHT := 70.0
-const SIDEWAYS := 0.57
+## How far it sees with each weapon of the loadout in its hands, in metres:
+## through a telescopic sight a long way. And from how near it notices
+## somebody whichever way it looks.
+const SIGHTS: Array[float] = [70.0, 50.0, 40.0, 50.0, 180.0]
 const AT_ITS_SHOULDER := 4.0
 ## Seconds between two looks around.
 const LOOK := 0.12
-## Seconds from seeing somebody to the first shot, the seconds its aim takes
-## to catch up with them, and how far off it wanders, in degrees.
-const REACTION := 0.55
-const AIM_TIME := 0.5
-const WANDER := 2.0
+## Its level where assets/bots.json says nothing: seconds from seeing
+## somebody to the first shot, how far off its aim wanders, in degrees, the
+## seconds its aim takes to catch up, and how wide it looks, in degrees.
+const LEVEL := {"reaction": 0.55, "wander": 2.0, "aim_time": 0.6, "fov": 110.0}
+## How far under the eyes of its target it aims, in metres: at the chest.
+const CHEST := 0.5
 ## It fires while its aim is no further off its target than this, in degrees.
 const ON_TARGET := 3.5
 ## What its spread is on top of that of its weapon over the sights, in degrees.
 const UNSTEADY := 0.6
-## Seconds it goes on knowing where somebody was.
+## Seconds it goes on knowing where somebody was, and the seconds between
+## two times it tells its side where somebody it sees is.
 const MEMORY := 8.0
-const WALK := 5.0
-const SPRINT := 8.0
+const TELLS := 1.5
+const WALK := PLAYER.WALK_SPEED
+const SPRINT := PLAYER.SPRINT_SPEED
 const ACCEL := 40.0
 const TURN := 9.0
 ## The distance each weapon of the loadout is fought at, in metres: nearer it
@@ -77,6 +84,7 @@ var _strafe_left := 0.0
 var _stood := Vector3.ZERO
 var _stood_for := 0.0
 var _sprinting := false
+var _level := LEVEL
 var _path_at := 0.0
 
 
@@ -145,6 +153,7 @@ func _physics_process(delta: float) -> void:
 	_look -= delta
 	if _look <= 0.0:
 		_look = LOOK
+		_level = LEVEL.merged(Match.bot_level(), true)
 		_look_around()
 
 	var eye: Vector3 = _body.head.global_position
@@ -152,19 +161,19 @@ func _physics_process(delta: float) -> void:
 	var facing := Vector3.ZERO
 	if _target:
 		_seen += delta
-		var at: Vector3 = _target.body.head.global_position - Vector3.UP * 0.3
+		var at: Vector3 = _target.body.head.global_position - Vector3.UP * CHEST
 		var distance := eye.distance_to(at)
 		# Its aim wanders about its target, and takes a moment to follow.
 		_off_left -= delta
 		if _off_left <= 0.0:
 			_off_left = randf_range(0.25, 0.6)
-			_off = Vector3(randf_range(-1, 1), randf_range(-0.6, 0.6), randf_range(-1, 1)) * distance * tan(deg_to_rad(WANDER))
-		_aim = _aim.lerp(at + _off, 1.0 - exp(-delta * 3.0 / AIM_TIME))
+			_off = Vector3(randf_range(-1, 1), randf_range(-0.6, 0.6), randf_range(-1, 1)) * distance * tan(deg_to_rad(float(_level.wander)))
+		_aim = _aim.lerp(at + _off, 1.0 - exp(-delta * 3.0 / float(_level.aim_time)))
 		facing = _aim - eye
 		desired = _fight(delta, distance)
 		_sprinting = false
 		var on_target := (_aim - eye).normalized().dot((at - eye).normalized()) > cos(deg_to_rad(ON_TARGET))
-		if _seen >= REACTION and on_target and _cooldown <= 0.0 and _reload <= 0.0:
+		if _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
 			if _mag > 0:
 				_shoot(eye)
 			else:
@@ -197,6 +206,8 @@ func _look_around() -> void:
 	var space := _body.get_world_3d().direct_space_state
 	var eye: Vector3 = _body.head.global_position
 	var ahead := -_body.global_basis.z
+	var sight: float = SIGHTS[me.weapon]
+	var sideways := cos(deg_to_rad(float(_level.fov) * 0.5))
 	var nearest := INF
 	var found: RefCounted = null
 	for other: RefCounted in Match.entrants.values():
@@ -205,7 +216,7 @@ func _look_around() -> void:
 		var head: Vector3 = other.body.head.global_position
 		var to := head - eye
 		var distance := to.length()
-		if distance > SIGHT or (distance > AT_ITS_SHOULDER and to.normalized().dot(ahead) < SIDEWAYS):
+		if distance > sight or (distance > AT_ITS_SHOULDER and to.normalized().dot(ahead) < sideways):
 			continue
 		# The head or the chest, with nothing of the level in between.
 		var seen := false
@@ -215,6 +226,9 @@ func _look_around() -> void:
 				break
 		if not seen:
 			continue
+		if not _known.has(other.id) or _clock - float(_known[other.id][1]) > TELLS:
+			# News: its side hears of it.
+			Match.seen(me, other, other.body.global_position)
 		_known[other.id] = [other.body.global_position, _clock]
 		# The one it is on already stays that, unless another is clearly nearer.
 		var counted := distance * (0.75 if other == _target else 1.0)
@@ -222,7 +236,7 @@ func _look_around() -> void:
 			nearest = counted
 			found = other
 	if found != _target:
-		_seen = 0.0 if found == null else minf(_seen, REACTION * 0.5)
+		_seen = 0.0 if found == null else minf(_seen, float(_level.reaction) * 0.5)
 		_target = found
 
 
@@ -240,7 +254,8 @@ func _fight(delta: float, distance: float) -> Vector3:
 
 
 ## With nobody in sight: to where it last knew of somebody, the nearest
-## first, and otherwise somewhere.
+## first, and otherwise to the half of the arena where the other side is to
+## be found, or just somewhere if there are no sides.
 func _roam() -> Vector3:
 	var nearest := INF
 	var lead := Vector3.ZERO
@@ -260,21 +275,29 @@ func _roam() -> Vector3:
 		_going = false
 		return _towards(lead, SPRINT)
 	if not _going or _body.global_position.distance_to(_goal) < 2.0:
-		_goal = Match.arena.anywhere()
+		_goal = Match.arena.somewhere(1 - me.team) if Match.mode.teams() else Match.arena.anywhere()
 		_going = true
 	return _towards(_goal, SPRINT)
 
 
-## The velocity that takes it to `goal` over the navmesh.
+## The velocity that takes it to `goal` over the navmesh. Where the navmesh
+## has no way for it, on a patch that hangs together with nothing, it makes
+## straight for the goal: that takes it off the patch.
 func _towards(goal: Vector3, pace: float) -> Vector3:
 	if _clock >= _path_at and _agent.target_position.distance_to(goal) > 0.5:
 		_agent.target_position = goal
 		_path_at = _clock + REPATH
-	if _agent.is_navigation_finished():
+	var straight := goal - _body.global_position
+	straight.y = 0.0
+	if straight.length() < 1.0:
 		return Vector3.ZERO
-	var step := _agent.get_next_path_position() - _body.global_position
-	step.y = 0.0
-	return step.normalized() * pace if step.length_squared() > 0.0001 else Vector3.ZERO
+	var step := straight
+	if not _agent.is_navigation_finished():
+		step = _agent.get_next_path_position() - _body.global_position
+		step.y = 0.0
+		if step.length_squared() < 0.01:
+			step = straight
+	return step.normalized() * pace
 
 
 ## One that means to walk and gets nowhere thinks of somewhere else to go.

@@ -16,7 +16,7 @@ signal revived
 const SPRING := preload("res://scripts/spring.gd")
 
 const WALK_SPEED := 5.0
-const SPRINT_SPEED := 8.0
+const SPRINT_SPEED := 7.2
 const CROUCH_SPEED := 2.8
 ## A jump is short and snappy: 0.9 m high and back on the floor in two thirds
 ## of a second. The player falls faster than the world's gravity for that.
