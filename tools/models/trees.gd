@@ -35,8 +35,10 @@ extends "res://tools/model_builder.gd"
 
 const BARK := "pine_trunk"
 const NEEDLES := "pine_needles"
-## The pictures of sprigs and boughs, and where on their sheet each is.
-const SHEET := "res://assets/foliage/pine_sprigs.json"
+const LEAVES := "thorn_scrub"
+## The pictures of sprigs and boughs each of those is drawn with, and where
+## on their sheet each picture is.
+const SHEETS := {NEEDLES: "res://assets/foliage/pine_sprigs.json", LEAVES: "res://assets/foliage/thorn_sprigs.json"}
 ## From how far off a tree is its Mid and its Far, how much further it has to
 ## go before it changes back, and how far its Far carries.
 const NEAR := 26.0
@@ -65,9 +67,14 @@ var _dice := RandomNumberGenerator.new()
 ## The crown that is being built, for the normals of its cards.
 var _crown_at := Vector3.ZERO
 var _crown_size := Vector3.ONE
-## The pictures on the sheet, by what they show and from where ("sprig plan"):
-## a list of {rect, size, anchor, depth, box} each. And the size of the sheet
-## in dots, and where on it the strip of bark is, 0 to 1.
+## What is on each sheet, by material: {pictures, size, bark}. The pictures
+## by what they show and from where ("sprig plan"), a list of {rect, size,
+## anchor, depth, box} each; the size of the sheet in dots; and where on it
+## the strip of bark is, 0 to 1.
+var _sheets := {}
+## The material the foliage of the plant that is being built is drawn with,
+## and what is on its sheet.
+var _leaf := NEEDLES
 var _pictures := {}
 var _sheet := Vector2.ONE
 var _bark_strip := Rect2()
@@ -86,7 +93,8 @@ var _young := false
 
 
 func _describe() -> void:
-	_read_sheet()
+	for mat: String in SHEETS:
+		_read_sheet(mat)
 	# name, seed, height, girth, where the crown begins, how far it reaches,
 	# how many boughs, how far the top stands out of plumb.
 	_pine("pine_a", 11, 14.0, 0.26, 0.58, 3.4, 11, 0.5)
@@ -98,19 +106,21 @@ func _describe() -> void:
 	_scrub("scrub_b", 67, 1.5, 2.0)
 
 
-## Reads what tools/gen_sprigs.py wrote next to its sheet.
-func _read_sheet() -> void:
-	var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SHEET))
-	_sheet = Vector2(sheet.size[0], sheet.size[1])
+## Reads what tools/gen_sprigs.py wrote next to the sheet of a material.
+func _read_sheet(mat: String) -> void:
+	var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SHEETS[mat]))
+	var size := Vector2(sheet.size[0], sheet.size[1])
+	var pictures := {}
+	var bark := Rect2()
 	for picture: Dictionary in sheet.pictures:
 		var rect := Rect2(picture.rect[0], picture.rect[1], picture.rect[2], picture.rect[3])
 		if picture.view == "bark":
-			_bark_strip = Rect2(rect.position / _sheet, rect.size / _sheet)
+			bark = Rect2(rect.position / size, rect.size / size)
 			continue
 		var key := "%s %s" % [picture.what, picture.view]
-		if not _pictures.has(key):
-			_pictures[key] = []
-		(_pictures[key] as Array).append({
+		if not pictures.has(key):
+			pictures[key] = []
+		(pictures[key] as Array).append({
 			"view": picture.view,
 			"rect": rect,
 			"size": Vector2(picture.size[0], picture.size[1]),
@@ -118,6 +128,16 @@ func _read_sheet() -> void:
 			"depth": float(picture.depth),
 			"box": Rect2(picture.box[0], picture.box[1], picture.box[2] - picture.box[0], picture.box[3] - picture.box[1]),
 		})
+	_sheets[mat] = {"pictures": pictures, "size": size, "bark": bark}
+
+
+## Says which material the foliage of what is built from here on is drawn
+## with.
+func _use(mat: String) -> void:
+	_leaf = mat
+	_pictures = _sheets[mat].pictures
+	_sheet = _sheets[mat].size
+	_bark_strip = _sheets[mat].bark
 
 
 ## One pine: a bare trunk with the stubs of dead branches on it, and from
@@ -126,6 +146,7 @@ func _read_sheet() -> void:
 ## branches for every year.
 func _pine(tree: String, seed: int, height: float, girth: float, crown_from: float, spread: float, boughs: int, lean: float) -> void:
 	model(tree)
+	_use(NEEDLES)
 	_dice.seed = seed
 	# The trunk: not quite straight, and out of plumb at the top by `lean`.
 	var leans := Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU) * lean
@@ -345,11 +366,11 @@ func _tuft(at: Vector3, way: Vector3, size: float, views: String, bough: int, en
 func _draw(_tree: String) -> void:
 	_seen(0.0, NEAR, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	for limb: Dictionary in _limbs:
-		var sides: int = [8, 5, 4, 4][limb.order]
+		var sides: int = [8, 5, 4, 5][limb.order]
 		if limb.order == 0:
 			_tube(BARK, _finer(limb.points), _finer_floats(limb.thick), sides, _finer_colours(limb.tints))
 		else:
-			_tube(BARK, limb.points, limb.thick, sides, limb.tints)
+			_tube(BARK, limb.points, limb.thick, sides, limb.tints, false, limb.order == 3)
 	var ends := _grouped("end")
 	var boughs := _grouped("bough")
 	# The mass of a plate is a picture of a whole bough end: something for a
@@ -370,14 +391,14 @@ func _draw(_tree: String) -> void:
 			var points: Array[Vector3] = limb.points
 			if limb.order == 3 and points[0].distance_to(points[points.size() - 1]) < 0.9:
 				continue
-			_tube(BARK, _coarser(points), _coarser_floats(limb.thick), 6 if limb.order == 0 else 3, _coarser_colours(limb.tints))
+			_tube(BARK, _coarser(points), _coarser_floats(limb.thick), 6 if limb.order == 0 else 3, _coarser_colours(limb.tints), false, limb.order == 3)
 		for end: int in ends:
 			_bough_cards(ends[end])
 	part("Far")
 	_seen(FAR, FAR_END, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	var trunk: Dictionary = _limbs[0]
 	var none: Array[Color] = []
-	_tube(NEEDLES, _coarser(trunk.points), _coarser_floats(trunk.thick), 4, none, true)
+	_tube(_leaf, _coarser(trunk.points), _coarser_floats(trunk.thick), 4, none, true)
 	for bough: int in boughs:
 		_bough_cards(boughs[bough])
 	print("%s: %d limbs, %d sprigs at %d limb ends of %d boughs" % [_tree, _limbs.size(), _tufts.size(), ends.size(), boughs.size()])
@@ -485,8 +506,8 @@ func _coarser_colours(values: Array[Color]) -> Array[Color]:
 ## ground, in the trunk or in the needles. The bark goes round it a whole
 ## number of times, so that it meets itself. With `strip` it is wood that is
 ## drawn with the needles: it takes the strip of bark on their sheet, from
-## foot to top.
-func _tube(mat: String, points: Array[Vector3], thick: Array[float], sides: int, tints: Array[Color], strip := false) -> void:
+## foot to top. With `capped` it does have an end, where it broke off.
+func _tube(mat: String, points: Array[Vector3], thick: Array[float], sides: int, tints: Array[Color], strip := false, capped := false) -> void:
 	var st := _tool(mat, 0, points[0])
 	var heading := (points[1] - points[0]).normalized()
 	var side := _up_along(heading).x
@@ -513,7 +534,9 @@ func _tube(mat: String, points: Array[Vector3], thick: Array[float], sides: int,
 					var high := _bark_strip.position + Vector2((run + length) / total, 0.2 + 0.6 * (s + 1) / sides) * _bark_strip.size
 					uvs = [low, Vector2(low.x, high.y), high, Vector2(high.x, low.y)]
 				else:
-					uvs = [Vector2(turns * s / sides, -run), Vector2(turns * (s + 1) / sides, -run), Vector2(turns * (s + 1) / sides, -run - length), Vector2(turns * s / sides, -run - length)]
+					# The plates of the bark are longer than they are wide, but not
+					# as long as the scan stretched over a trunk would make them.
+					uvs = [Vector2(turns * s / sides, -run * 1.4), Vector2(turns * (s + 1) / sides, -run * 1.4), Vector2(turns * (s + 1) / sides, (-run - length) * 1.4), Vector2(turns * s / sides, (-run - length) * 1.4)]
 				_quad(
 					st,
 					[points[i - 1] + before[s] * thick[i - 1], points[i - 1] + before[s + 1] * thick[i - 1], points[i] + around[s + 1] * thick[i], points[i] + around[s] * thick[i]],
@@ -523,6 +546,13 @@ func _tube(mat: String, points: Array[Vector3], thick: Array[float], sides: int,
 				)
 			run += length
 		before = around
+	if capped:
+		# The wood inside, paler than the bark.
+		var last := points.size() - 1
+		var end := points[last]
+		var pale := tints[last].lerp(Color(0.8, 0.74, 0.62), 0.6)
+		for s in sides:
+			_tri(st, [end, end + before[s + 1] * thick[last], end + before[s] * thick[last]], [heading, heading, heading], [Vector2(0.5, 0.5), Vector2(0.6, 0.5), Vector2(0.5, 0.6)], [pale, pale, pale])
 
 
 ## One picture of a sprig as a card: the side `view` of the sprig `tuft`,
@@ -579,7 +609,7 @@ func _bough_cards(tufts: Array) -> void:
 ## at. `middle` and `reach` are the tuft it is part of, for its normals, and
 ## `phase` where in its sway it is next to the others.
 func _card(picture: Dictionary, frame: Transform3D, size: float, middle: Vector3, reach: float, phase: float) -> void:
-	var st := _tool(NEEDLES, 0, frame.origin)
+	var st := _tool(_leaf, 0, frame.origin)
 	var axes: Array = VIEWS[picture.view]
 	var right: Vector3 = axes[0]
 	var up: Vector3 = axes[1]
@@ -621,60 +651,88 @@ func _crown_light(point: Vector3) -> float:
 # --- Thorn scrub -------------------------------------------------------------------
 
 
-## Thorn scrub, a man high and wider than that: a few stems out of one foot
-## under a dome of leaves.
+## Thorn scrub, sea buckthorn: a man high and wider than that. Stems out of
+## one foot that arch outwards, a tangle of branches between them that
+## nobody sees through, and sprays of narrow leaves and berries all over
+## the outside of it. From afar it is the tangle alone.
 func _scrub(bush: String, seed: int, height: float, spread: float) -> void:
 	model(bush)
+	_use(LEAVES)
 	_dice.seed = seed
 	_crown_size = Vector3(spread, height * 0.6, spread)
 	_crown_at = Vector3(0, height * 0.5, 0)
 	tag("crowns", [[_crown_at, _crown_size * 0.9]])
 	tag("girth", 0.0)
 	tag("height", height)
-	_seen(0.0, FAR, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
-	for i in 7:
-		var turn := i * TAU / 7.0 + _dice.randf_range(-0.3, 0.3)
+	_limbs = []
+	_tufts = []
+	_ends = 0
+	_young = false
+	var stems := 8
+	var none: Array[Color] = []
+	for i in stems:
+		var turn := i * TAU / stems + _dice.randf_range(-0.3, 0.3)
 		var out := Vector3(cos(turn), 0, sin(turn))
-		var reach := spread * _dice.randf_range(0.55, 0.95)
-		var top := out * reach + Vector3.UP * height * _dice.randf_range(0.5, 0.85)
-		var stem: Array[Vector3] = [out * 0.1, out * reach * 0.4 + Vector3.UP * height * 0.35, top]
-		var widths: Array[float] = [0.035, 0.025, 0.01]
-		_tube(BARK, stem, widths, 3, _all(BARK_DEAD, 3))
-		_pad("thorn_scrub", top, (out + Vector3.UP * 0.8).normalized(), spread * _dice.randf_range(0.9, 1.2))
-		_pad("thorn_scrub", out * reach * 0.6 + Vector3.UP * height * 0.3, out, spread * _dice.randf_range(0.8, 1.0))
-	_pad("thorn_scrub", Vector3.UP * height * 0.9, Vector3.UP, spread * 1.3)
+		var reach := spread * _dice.randf_range(0.5, 0.9)
+		var top := out * reach + Vector3.UP * height * _dice.randf_range(0.55, 0.9)
+		var crook := Vector3(_dice.randf_range(-1, 1), 0, _dice.randf_range(-1, 1)) * 0.12
+		var stem: Array[Vector3] = [out * 0.1, out * reach * 0.35 + Vector3.UP * height * 0.38 + crook, top]
+		var widths: Array[float] = [0.032, 0.022, 0.008]
+		_limbs.append({"points": stem, "thick": widths, "tints": none, "order": 2})
+		# What it carries: a spray up and out of its end, one to either side
+		# of that, and one half-way up it, facing out.
+		var size := spread * _dice.randf_range(0.95, 1.2)
+		_tuft(top - out * 0.15, (out + Vector3.UP * _dice.randf_range(0.4, 0.9)).normalized(), size, "plan side", 0, 0, Vector3.ZERO)
+		for hand: float in [-1.0, 1.0]:
+			_tuft(top - out * 0.2 + Vector3.DOWN * 0.1, (out.rotated(Vector3.UP, hand * _dice.randf_range(0.7, 1.2)) + Vector3.UP * _dice.randf_range(0.1, 0.5)).normalized(), size * 0.9, "plan front" if hand < 0.0 else "side front", 0, 0, Vector3.ZERO)
+		_tuft(_spot_on(stem, 0.6) + out * 0.1, (out + Vector3.UP * _dice.randf_range(-0.1, 0.3)).normalized(), size * 0.95, "side front", 0, 0, Vector3.ZERO)
+	# Its top: what stands up out of the middle.
+	for i in 3:
+		var out := Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU) * spread * _dice.randf_range(0.0, 0.35)
+		_tuft(out + Vector3.UP * height * _dice.randf_range(0.7, 0.85), (Vector3.UP + out.normalized() * 0.5).normalized(), spread * 1.1, "plan side front", 0, 0, Vector3.ZERO)
+
+	_seen(0.0, FAR, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+	for limb: Dictionary in _limbs:
+		_tube(_leaf, limb.points, limb.thick, 3, none, true)
+	_tangle(height, spread)
+	for tuft: Dictionary in _tufts:
+		for view: String in (tuft.views as String).split(" "):
+			_sprig_card(tuft, view, 1.0)
 	part("Far")
 	_seen(FAR, FAR_END * 0.5, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
-	_flat("thorn_scrub", _crown_at + Vector3.UP * height * 0.2, Vector3.UP, spread * 2.2, 0.3, 0.3)
-	for stand in 2:
-		_flat("thorn_scrub", _crown_at, Vector3.RIGHT.rotated(Vector3.UP, stand * PI * 0.5 + 0.3), spread * 2.1, 0.0, 0.3, height / (spread * 2.1))
+	_tangle(height, spread)
+	print("%s: %d stems, %d sprays" % [bush, _limbs.size(), _tufts.size()])
 
 
-## The leaves at one spot of a bush: a card that lies there, tilted the way
-## its stem runs, and one that stands in it.
-func _pad(mat: String, at: Vector3, way: Vector3, size: float) -> void:
-	var out := Vector3(way.x, 0, way.z).normalized() if Vector2(way.x, way.z).length() > 0.05 else Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU)
-	var lies := (Vector3.UP + out * _dice.randf_range(0.1, 0.45) + Vector3(_dice.randf_range(-0.2, 0.2), 0, _dice.randf_range(-0.2, 0.2))).normalized()
-	var sway := clampf(Vector2(at.x - _crown_at.x, at.z - _crown_at.z).length() / _crown_size.x, 0.25, 1.0)
-	_flat(mat, at, lies, size, _dice.randf() * TAU, sway, 1.0, 1.0)
-	var stands := (out.rotated(Vector3.UP, _dice.randf_range(-0.6, 0.6)) + Vector3.UP * 0.35).normalized()
-	_flat(mat, at - Vector3.UP * size * 0.12, stands, size * 0.85, _dice.randf_range(-0.4, 0.4), sway)
+## The inside of a bush: whole branches as cards that stand through each
+## other and one that lies over them, large enough to fill it.
+func _tangle(height: float, spread: float) -> void:
+	var stands: Array = _pictures["bough side"]
+	var lies: Array = _pictures["bough plan"]
+	for i in 3:
+		var picture: Dictionary = stands[i % stands.size()]
+		var out := Vector3.RIGHT.rotated(Vector3.UP, i * PI / 3.0 + 0.3)
+		_whole_card(picture, Vector3(0, height * 0.46, 0), out, Vector3.UP, spread * 1.9, height * 0.92, 0.3 + i * 0.3)
+	var over: Dictionary = lies[0]
+	_whole_card(over, Vector3(0, height * 0.62, 0), Vector3.RIGHT.rotated(Vector3.UP, 0.8), Vector3.FORWARD.rotated(Vector3.UP, 0.8), spread * 1.8, spread * 1.8, 0.1)
 
 
-## One card with the whole of a texture on it: `size` wide around `middle`,
-## facing `faces` and turned `turn` in its own plane; `tall` times as high as
-## it is wide. Its corners get the normal of the crown and say how they sway.
-func _flat(mat: String, middle: Vector3, faces: Vector3, size: float, turn: float, sway: float, tall := 1.0, lies := 0.0) -> void:
-	var st := _tool(mat, 0, middle)
-	var normal := faces.normalized()
-	var side := (Vector3.UP if absf(normal.y) < 0.9 else Vector3.RIGHT).cross(normal).normalized().rotated(normal, turn)
-	var up := normal.cross(side)
-	var half := size * 0.5
-	var corners := [middle - side * half - up * half * tall, middle + side * half - up * half * tall, middle + side * half + up * half * tall, middle - side * half + up * half * tall]
+## A card with the whole of what `picture` shows on it, `wide` by `high`
+## about `middle`: `right` and `up` are where the right and the top of the
+## picture go.
+func _whole_card(picture: Dictionary, middle: Vector3, right: Vector3, up: Vector3, wide: float, high: float, phase: float) -> void:
+	var st := _tool(_leaf, 0, middle)
+	var box: Rect2 = picture.box
+	var rect: Rect2 = picture.rect
+	var corners: Array[Vector3] = [middle - right * wide * 0.5 - up * high * 0.5, middle + right * wide * 0.5 - up * high * 0.5, middle + right * wide * 0.5 + up * high * 0.5, middle - right * wide * 0.5 + up * high * 0.5]
+	var at: Array[Vector2] = [Vector2(box.position.x, box.end.y), Vector2(box.end.x, box.end.y), Vector2(box.end.x, box.position.y), Vector2(box.position.x, box.position.y)]
 	var normals: Array[Vector3] = []
+	var uvs: Array[Vector2] = []
 	var colours: Array[Color] = []
-	var phase := _dice.randf()
-	for corner: Vector3 in corners:
-		normals.append(_crown_normal(corner))
-		colours.append(Color(sway, phase, _crown_light(corner), lies))
-	_quad(st, corners, normals, [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)], colours)
+	var lies := 1.0 if absf(up.y) < 0.5 else 0.0
+	for i in 4:
+		normals.append(_crown_normal(corners[i]))
+		uvs.append((rect.position + at[i] * rect.size) / _sheet)
+		var sway := clampf(corners[i].y / (_crown_size.y * 2.0), 0.0, 1.0)
+		colours.append(Color(sway, phase, _crown_light(corners[i]), lies))
+	_quad(st, corners, normals, uvs, colours)

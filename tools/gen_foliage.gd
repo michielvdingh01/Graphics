@@ -6,17 +6,16 @@ extends SceneTree
 ##
 ## An entry names a kind, a size and a seed:
 ##
-##   needles    the twigs at the end of a pine's branch, seen from above
 ##   grass      a tuft of marram, blades fanning up from the foot of the card
-##   leaves     a spray of thorn scrub, narrow leaves and a few berries
 ##   net        a camouflage net: cord with scrim knotted into it; it tiles
 ##   concertina a coil of barbed wire, unrolled; it tiles
 ##   chainlink  wire mesh; it tiles
-##   treeline   the edge of a pine wood from afar; it tiles from left to right
+##   treeline   the dark inside a pine wood, behind the trees of its edge; it tiles from left to right
 ##   ruts       the two ruts of a track; it tiles from top to bottom
 ##
 ## Nothing here is scanned: where a card is seen from close by it shows. The
-## cards are for crowns ten metres up and for what stands a stone's throw off.
+## needles of the pines and the leaves of the scrub are not drawn here any
+## more but grown and rendered: tools/gen_sprigs.py.
 
 const OUT_DIR := "res://assets/foliage/"
 ## What the importer is told of every texture here: compressed for the video
@@ -51,38 +50,6 @@ func _init() -> void:
 # --- What is drawn -----------------------------------------------------------------
 
 
-## The twigs at the end of a branch of a pine: each a short shoot with needles
-## standing off it all the way along, darker ones underneath and lighter on
-## top, thick enough in the middle to stay a mass from far off.
-func _needles() -> void:
-	var size := float(_image.get_width())
-	var middle := Vector2.ONE * size * 0.5
-	var twigs := 340
-	for i in twigs:
-		var depth := float(i) / twigs
-		var out := Vector2.RIGHT.rotated(_rng.randf() * TAU)
-		var foot := middle + out * size * 0.4 * sqrt(_rng.randf())
-		var way := out.rotated(_rng.randf_range(-1.0, 1.0))
-		var length := size * _rng.randf_range(0.06, 0.1)
-		var tip := foot + way * length
-		if tip.distance_to(middle) > size * 0.47:
-			continue
-		var dark := Color(0.028, 0.07, 0.034).lerp(Color(0.06, 0.13, 0.05), depth)
-		var light := Color(0.075, 0.15, 0.06).lerp(Color(0.17, 0.28, 0.11), depth)
-		_stroke(foot, tip, size * 0.005, Color(0.15, 0.1, 0.06).lerp(Color(0.22, 0.16, 0.09), depth))
-		var count := int(length / (size * 0.0042))
-		for n in count:
-			var along := float(n) / count
-			var from := foot.lerp(tip, along)
-			for side: float in [-1.0, 1.0]:
-				var lean := _rng.randf_range(0.45, 1.0) * side * (1.0 - along * 0.5)
-				var reach := size * _rng.randf_range(0.028, 0.045) * (0.75 + 0.25 * along)
-				_stroke(from, from + way.rotated(lean) * reach, size * 0.003, dark.lerp(light, _rng.randf()))
-		# The bud the shoot ends in, with the needles that stand round it.
-		for n in 7:
-			_stroke(tip, tip + way.rotated(_rng.randf_range(-0.7, 0.7)) * size * _rng.randf_range(0.025, 0.04), size * 0.003, light.lerp(Color(0.27, 0.37, 0.15), _rng.randf() * 0.5))
-
-
 ## A tuft of marram: stiff pale blades that rise from one foot and bend over
 ## at the top, the outer ones lying almost flat.
 func _grass() -> void:
@@ -103,34 +70,6 @@ func _grass() -> void:
 			var at := foot.lerp(knee, t).lerp(knee.lerp(tip, t), t)
 			_stroke(before, at, wide * lerpf(0.016, 0.006, t), straw.lightened(t * 0.25))
 			before = at
-
-
-## A spray of thorn scrub: thin grey twigs with narrow leaves two by two, and
-## here and there a cluster of orange berries against the twig.
-func _leaves() -> void:
-	var size := float(_image.get_width())
-	var middle := Vector2.ONE * size * 0.5
-	for i in 46:
-		var depth := i / 46.0
-		var out := Vector2.RIGHT.rotated(_rng.randf() * TAU)
-		var foot := middle + out * size * 0.2 * sqrt(_rng.randf())
-		var way := out.rotated(_rng.randf_range(-0.7, 0.7))
-		var length := size * _rng.randf_range(0.16, 0.26)
-		if (foot + way * length).distance_to(middle) > size * 0.46:
-			continue
-		_stroke(foot, foot + way * length, size * 0.005, Color(0.2, 0.18, 0.14))
-		var berries := _rng.randf() < 0.3
-		var count := int(length / (size * 0.019))
-		for n in count:
-			var along := (n + 0.5) / count
-			var from := foot + way * length * along
-			for side: float in [-1.0, 1.0]:
-				var turn := way.rotated(side * _rng.randf_range(0.5, 1.1))
-				var leaf := Color(0.13, 0.19, 0.1).lerp(Color(0.33, 0.4, 0.27), depth * 0.6 + _rng.randf() * 0.4)
-				_blade(from + turn * size * 0.03, turn, size * _rng.randf_range(0.024, 0.034), size * 0.0075, leaf)
-			if berries and n % 2 == 0:
-				for b in 3:
-					_blade(from + Vector2(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * size * 0.012, Vector2.RIGHT, size * 0.008, size * 0.008, Color(0.82, 0.38, 0.05).darkened(_rng.randf() * 0.3))
 
 
 ## A camouflage net: a mesh of knotted cord, garnished with strips of scrim
@@ -248,33 +187,33 @@ func _chainlink() -> void:
 				_image.set_pixel(x, y, Color(tone, tone * 1.02, tone * 1.04, cover))
 
 
-## The edge of a pine wood from afar: three rows of bare trunks under flat
-## crowns, the further the paler, on a band of undergrowth that shuts the
-## bottom of the card. It tiles from left to right.
+## The dark of a pine wood, as it is seen between the trunks of the trees at
+## its edge and behind their crowns: gloom under the canopy, the trunks that
+## stand further in as paler stripes in it, and a little light on its floor.
+## Its top is ragged and stays below the crowns that stand in front of it.
+## It tiles from left to right.
 func _treeline() -> void:
 	var wide := _image.get_width()
 	var high := float(_image.get_height())
-	var tones: Array[Color] = [Color(0.15, 0.2, 0.19), Color(0.09, 0.15, 0.1), Color(0.05, 0.095, 0.05)]
-	# Between the trunks it is dark: more wood, further in.
-	for y in range(int(high * 0.3), int(high)):
+	var gloom := Color(0.03, 0.045, 0.036)
+	var floor_light := Color(0.1, 0.085, 0.06)
+	for y in range(int(high * 0.12), int(high)):
+		var down := (y / high - 0.12) / 0.88
 		for x in wide:
-			_image.set_pixel(x, y, Color(0.045, 0.07, 0.05).lerp(Color(0.025, 0.04, 0.028), (y / high - 0.3) / 0.7))
+			_image.set_pixel(x, y, gloom.lerp(floor_light, pow(down, 5.0) * 0.8))
+	# The trunks further in: the deeper, the thinner and the nearer the gloom.
 	for row in 3:
-		var tone := tones[row]
-		var trees := 26 - row * 4
+		var trees := 40 + row * 22
 		for i in trees:
 			var x := (i + _rng.randf_range(0.1, 0.9)) * wide / trees
-			var top := high * _rng.randf_range(0.06, 0.26) + row * high * 0.05
-			var girth := high * _rng.randf_range(0.012, 0.02)
-			_stroke_round(Vector2(x, high), Vector2(x + _rng.randf_range(-12, 12), top + high * 0.12), girth, tone.darkened(0.35))
-			# The crown: a handful of flat cushions about the top of the trunk.
-			for c in _rng.randi_range(6, 10):
-				var at := Vector2(x + _rng.randf_range(-1, 1) * high * 0.14, top + _rng.randf() * high * 0.2)
-				_cushion(at, Vector2(high * _rng.randf_range(0.07, 0.13), high * _rng.randf_range(0.03, 0.055)), tone.lightened(_rng.randf() * 0.12))
-		# What grows under them.
-		for i in 120:
-			var at := Vector2(_rng.randf() * wide, high * (0.86 + row * 0.04 + _rng.randf() * 0.1))
-			_cushion(at, Vector2(high * _rng.randf_range(0.05, 0.12), high * _rng.randf_range(0.03, 0.07)), tone.darkened(0.15))
+			var top := high * _rng.randf_range(0.3, 0.5)
+			var girth := high * _rng.randf_range(0.008, 0.013) * (1.0 - row * 0.25)
+			var bark := gloom.lerp(Color(0.14, 0.11, 0.085), (0.6 - row * 0.18) * _rng.randf_range(0.6, 1.0))
+			_stroke_round(Vector2(x, high), Vector2(x + _rng.randf_range(-10, 10), top), girth, bark)
+	# The undersides of the crowns close it off at the top.
+	for i in 150:
+		var at := Vector2(_rng.randf() * wide, high * _rng.randf_range(0.1, 0.32))
+		_cushion(at, Vector2(high * _rng.randf_range(0.1, 0.2), high * _rng.randf_range(0.04, 0.09)), gloom.lightened(_rng.randf() * 0.03))
 
 
 ## The two ruts of a track that lorries use: darker, damper earth with the
@@ -335,17 +274,6 @@ func _stroke_round(from: Vector2, to: Vector2, width: float, color: Color) -> vo
 	for shift: float in [-1.0, 0.0, 1.0]:
 		var off := Vector2(shift * _image.get_width(), 0)
 		_stroke(from + off, to + off, width, color)
-
-
-## A leaf: an oval `length` long and `width` wide, lying along `way`.
-func _blade(middle: Vector2, way: Vector2, length: float, width: float, color: Color) -> void:
-	var reach := maxf(length, width) + 1.0
-	for y in range(maxi(int(middle.y - reach), 0), mini(int(middle.y + reach) + 1, _image.get_height())):
-		for x in range(maxi(int(middle.x - reach), 0), mini(int(middle.x + reach) + 1, _image.get_width())):
-			var off := Vector2(x + 0.5, y + 0.5) - middle
-			var share := Vector2(off.dot(way) / length, off.dot(way.orthogonal()) / width).length()
-			# Lighter along the rib.
-			_dab(x, y, color.lightened(0.18 * (1.0 - clampf(absf(off.dot(way.orthogonal())) / width, 0.0, 1.0))), clampf((1.0 - share) * minf(length, width), 0.0, 1.0))
 
 
 ## A flat cushion of foliage, in an image that tiles from left to right: an
