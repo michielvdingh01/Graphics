@@ -204,6 +204,28 @@ def dilate(image: np.ndarray, covered: np.ndarray, steps: int) -> np.ndarray:
     return image
 
 
+def flood(image: np.ndarray, covered: np.ndarray) -> np.ndarray:
+    """Fills every texel nothing covers with the mean of the covered ones
+    nearest to it, however far that is: coarser the further away. dilate()
+    looks after the few texels next to an island that a lookup at full size
+    reaches; this is for the small mip levels a character is drawn with from
+    far off, in which one texel is the mean of a block of sixteen or more."""
+    side = image.shape[0]
+    if image.shape[1] != side or side & (side - 1):
+        return image
+    levels = [(image * covered[:, :, None], covered.astype(np.float32))]
+    while levels[-1][1].shape[0] > 1:
+        colour, weight = levels[-1]
+        half = weight.shape[0] // 2
+        levels.append((colour.reshape(half, 2, half, 2, -1).sum(axis=(1, 3)), weight.reshape(half, 2, half, 2).sum(axis=(1, 3))))
+    filled = levels[-1][0] / np.maximum(levels[-1][1], 1e-6)[:, :, None]
+    for colour, weight in reversed(levels[:-1]):
+        filled = np.repeat(np.repeat(filled, 2, axis=0), 2, axis=1)
+        known = weight > 0
+        filled[known] = colour[known] / weight[known][:, None]
+    return filled.astype(image.dtype)
+
+
 class Atlas:
     """The texture set of one character and how its mesh maps onto it."""
 
