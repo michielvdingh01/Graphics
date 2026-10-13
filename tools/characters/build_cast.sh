@@ -7,6 +7,11 @@
 # Rocketbox civilian painted up by --look and is marked as a placeholder, with
 # what should replace it; one clown is generated from a description. This
 # file is the recipe: change a line and run it for that id.
+#
+# The soldiers in their second uniform (soldier_01_desert and so on) are not
+# built here but repainted from the soldiers as this leaves them:
+# tools/characters/build_uniforms.sh <uniform>, to run again after a soldier
+# has been built again.
 BLENDER="${BLENDER:-blender}"
 cd "$(dirname "$0")/../.." || exit 1
 SOURCE=assets/characters/.source

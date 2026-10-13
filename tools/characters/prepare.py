@@ -6,7 +6,9 @@ Godot's humanoid profile, one 1K texture set, no animations, no weapon).
     blender -b --python tools/characters/prepare.py -- <file> <out.glb> [options]
 
 A model that has a skeleton keeps it; a statue without one, such as a scan,
-goes through scan.py, which cleans it up, fits a skeleton and skins it.
+goes through scan.py, which cleans it up, fits a skeleton and skins it. A
+character that has been through here before can be given another look and
+nothing else with --route=repaint, see repaint.py.
 """
 
 import argparse
@@ -45,8 +47,8 @@ def options() -> argparse.Namespace:
     parser.add_argument("--drop", default="", help="regex of objects and materials to leave out, besides weapons")
     parser.add_argument("--keep-weapons", action="store_true")
     parser.add_argument("--bones", default="", help="JSON file mapping profile bone names to source bone names")
-    parser.add_argument("--route", choices=("auto", "rigged", "scan", "parts"), default="auto")
-    parser.add_argument("--look", default="", help="zombie or clown: paint the character up as one")
+    parser.add_argument("--route", choices=("auto", "rigged", "scan", "parts", "repaint"), default="auto")
+    parser.add_argument("--look", default="", help="zombie, clown or a uniform: paint the character up as one")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--no-delight", action="store_true", help="scan: leave the light that is baked into the texture")
     parser.add_argument("--baggy", action="store_true", help="scan: the legs are in one garment down to the knees, such as a clown's suit")
@@ -328,8 +330,18 @@ def share_textures(path: str) -> None:
     pathlib.Path(path).write_bytes(header + struct.pack("<I4s", len(text), b"JSON") + text + rest)
 
 
+def tell(args: argparse.Namespace, report: dict) -> None:
+    if args.report:
+        pathlib.Path(args.report).write_text(json.dumps(report, indent="\t") + "\n")
+    print("import_character: " + json.dumps(report))
+
+
 def main() -> None:
     args = options()
+    if args.route == "repaint":
+        import repaint
+        tell(args, repaint.run(args))
+        return
     load(args.source)
     body, armature, report = gather(args)
     if args.look == "clown":
@@ -386,9 +398,7 @@ def main() -> None:
     report["blender"] = bpy.app.version_string
     if args.keep:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(folder, (args.id or "character") + ".blend"))
-    if args.report:
-        pathlib.Path(args.report).write_text(json.dumps(report, indent="\t") + "\n")
-    print("import_character: " + json.dumps(report))
+    tell(args, report)
 
 
 if __name__ == "__main__":

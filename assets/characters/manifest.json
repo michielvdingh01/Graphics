@@ -1,5 +1,5 @@
 {
-	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing (one that fights hand to hand strikes with it if it is a thing to strike with, such as 'pipe', 'axe' or 'cleaver', and with its hands otherwise), moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]). Every role says whether it fights hand to hand, because the scene of a role has a default of its own; where the eyes are and where the head begins is left to the rig, which measures the figure as it stands. A theme can instead be 'like' another one, with a 'tuning' that goes on top of that of each of its roles: the clowns who panic are the clowns. 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again; assets/characters/sheets/<id>.jpg shows each.",
+	"_doc": "Who the humanoid rig can field. 'themes' gives each theme a grunt, a rusher and a heavy: one of 'characters' is picked at random for each enemy, it carries the model scenes/models/<weapon> or nothing (one that fights hand to hand strikes with it if it is a thing to strike with, such as 'pipe', 'axe' or 'cleaver', and with its hands otherwise), moves with the 'default' or the 'zombie' set, and 'tuning' is written over the exported variables of scripts/enemy.gd (a pair such as cooldown is [shortest, longest]). Every role says whether it fights hand to hand, because the scene of a role has a default of its own; where the eyes are and where the head begins is left to the rig, which measures the figure as it stands. A theme can instead be 'like' another one, with a 'tuning' that goes on top of that of each of its roles: the clowns who panic are the clowns. 'characters' has a line per character, written by tools/import_character.sh: where it came from and under what licence, and for a placeholder why it is one and what should replace it ('wanted' is a prompt for that). tools/characters/build_cast.sh builds them all again, but for the soldiers in a second uniform, such as soldier_01_desert: those are the soldiers repainted, for telling two teams apart, and tools/characters/build_uniforms.sh makes them and the theme that fields them, soldiers_desert. assets/characters/sheets/<id>.jpg shows each.",
 	"themes": {
 		"soldiers": {
 			"grunt": {
@@ -41,6 +41,67 @@
 			"heavy": {
 				"characters": [
 					"soldier_05"
+				],
+				"weapon": "rifle",
+				"moves": "default",
+				"tuning": {
+					"melee": false,
+					"max_health": 320.0,
+					"speed": 2.6,
+					"preferred_range": 14.0,
+					"attack_range": 30.0,
+					"damage": 5.0,
+					"burst_shots": 8,
+					"spread_deg": 4.0,
+					"telegraph_time": 0.7,
+					"cooldown": [
+						2.0,
+						3.0
+					],
+					"flash_size": 0.34
+				}
+			}
+		},
+		"soldiers_desert": {
+			"grunt": {
+				"characters": [
+					"soldier_01_desert",
+					"soldier_02_desert",
+					"soldier_03_desert"
+				],
+				"weapon": "rifle",
+				"moves": "default",
+				"tuning": {
+					"melee": false
+				}
+			},
+			"rusher": {
+				"characters": [
+					"soldier_04_desert"
+				],
+				"weapon": "smg",
+				"moves": "default",
+				"tuning": {
+					"melee": false,
+					"max_health": 60.0,
+					"speed": 6.0,
+					"preferred_range": 5.0,
+					"attack_range": 14.0,
+					"damage": 5.0,
+					"burst_shots": 5,
+					"shot_interval": 0.08,
+					"spread_deg": 5.0,
+					"telegraph_time": 0.3,
+					"cooldown": [
+						0.6,
+						1.0
+					],
+					"flash_size": 0.2
+				}
+			},
+			"heavy": {
+				"characters": [
+					"soldier_05_desert"
 				],
 				"weapon": "rifle",
 				"moves": "default",
@@ -508,6 +569,32 @@
 			"imported": "2026-10-09",
 			"tools": "Blender 5.2.2 LTS"
 		},
+		"soldier_01_desert": {
+			"source": "Microsoft Rocketbox, Military_Male_01, as imported for soldier_01",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"note": "soldier_01 in another uniform, for the second team of a match: the look desert of tools/characters/looks.py dyed what it wears and carries and took the flag and the badges off its sleeves",
+			"file": "assets/characters/soldier_01/soldier_01.glb",
+			"options": "--route=repaint --look=desert",
+			"route": "repaint",
+			"look": "desert",
+			"triangles": 14723,
+			"source_triangles": 14723,
+			"height": 1.844,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 2.42,
+			"textures": {
+				"color": "the source's, painted over",
+				"normal": "the source's",
+				"roughness": "the source's",
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-12",
+			"tools": "Blender 5.2.2 LTS"
+		},
 		"soldier_02": {
 			"source": "Microsoft Rocketbox, Military_Male_04",
 			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
@@ -534,6 +621,32 @@
 				"cutout": false
 			},
 			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_02_desert": {
+			"source": "Microsoft Rocketbox, Military_Male_04, as imported for soldier_02",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"note": "soldier_02 in another uniform, for the second team of a match: the look desert of tools/characters/looks.py dyed what it wears and carries and took the flag and the badges off its sleeves",
+			"file": "assets/characters/soldier_02/soldier_02.glb",
+			"options": "--route=repaint --look=desert",
+			"route": "repaint",
+			"look": "desert",
+			"triangles": 14907,
+			"source_triangles": 14907,
+			"height": 1.848,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 2.14,
+			"textures": {
+				"color": "the source's, painted over",
+				"normal": "the source's",
+				"roughness": "the source's",
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-12",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_03": {
@@ -564,6 +677,32 @@
 			"imported": "2026-10-09",
 			"tools": "Blender 5.2.2 LTS"
 		},
+		"soldier_03_desert": {
+			"source": "Microsoft Rocketbox, Military_Female_01, as imported for soldier_03",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"note": "soldier_03 in another uniform, for the second team of a match: the look desert of tools/characters/looks.py dyed what it wears and carries and took the flag and the badges off its sleeves",
+			"file": "assets/characters/soldier_03/soldier_03.glb",
+			"options": "--route=repaint --look=desert",
+			"route": "repaint",
+			"look": "desert",
+			"triangles": 13015,
+			"source_triangles": 13015,
+			"height": 1.777,
+			"eye_height": 1.64,
+			"head_start": 1.54,
+			"megabytes": 2.03,
+			"textures": {
+				"color": "the source's, painted over",
+				"normal": "the source's",
+				"roughness": "the source's",
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-12",
+			"tools": "Blender 5.2.2 LTS"
+		},
 		"soldier_04": {
 			"source": "Microsoft Rocketbox, Military_Male_02",
 			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
@@ -589,6 +728,32 @@
 				"cutout": false
 			},
 			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_04_desert": {
+			"source": "Microsoft Rocketbox, Military_Male_02, as imported for soldier_04",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"note": "soldier_04 in another uniform, for the second team of a match: the look desert of tools/characters/looks.py dyed what it wears and carries and took the flag and the badges off its sleeves",
+			"file": "assets/characters/soldier_04/soldier_04.glb",
+			"options": "--route=repaint --look=desert",
+			"route": "repaint",
+			"look": "desert",
+			"triangles": 8231,
+			"source_triangles": 8231,
+			"height": 1.811,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 1.6,
+			"textures": {
+				"color": "the source's, painted over",
+				"normal": "the source's",
+				"roughness": "the source's",
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-12",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_05": {
@@ -618,6 +783,32 @@
 				"cutout": false
 			},
 			"imported": "2026-10-09",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"soldier_05_desert": {
+			"source": "Microsoft Rocketbox, Military_Male_03, as imported for soldier_05",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"note": "soldier_05 in another uniform, for the second team of a match: the look desert of tools/characters/looks.py dyed what it wears and carries and took the flag and the badges off its sleeves",
+			"file": "assets/characters/soldier_05/soldier_05.glb",
+			"options": "--route=repaint --look=desert",
+			"route": "repaint",
+			"look": "desert",
+			"triangles": 14636,
+			"source_triangles": 14636,
+			"height": 1.998,
+			"eye_height": 1.85,
+			"head_start": 1.72,
+			"megabytes": 2.33,
+			"textures": {
+				"color": "the source's, painted over",
+				"normal": "the source's",
+				"roughness": "the source's",
+				"size": 1024,
+				"cutout": false
+			},
+			"imported": "2026-10-12",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"zombie_01": {
