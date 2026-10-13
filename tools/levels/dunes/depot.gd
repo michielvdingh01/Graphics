@@ -168,7 +168,9 @@ func square_box(mat: String, xf: Transform3D, centre: Vector3, size: Vector3, fl
 
 
 ## A patch of paint of `colour`: it lies in the XY of `xf`, `size` across, and
-## is seen from its +Z. `mat` is the paint, and `part` the part of its stencil
+## is seen from its +Z. The alpha of the colour is how much of the wear of
+## paint on a road it has had: one for a line that is driven over, less for
+## the enamel of a board. `mat` is the paint, and `part` the part of its stencil
 ## that this patch shows, if it has one.
 func painted(xf: Transform3D, size: Vector2, colour: Color, mat := PAINT, part := Rect2(0, 0, 1, 1)) -> void:
 	var st := _tool(mat, DETAIL | NO_COLLIDE, xf.origin)
@@ -414,7 +416,7 @@ func gate_leaf(leaf: Transform3D, size: Vector2, outer: float) -> void:
 	refine(MID)
 	var disc := leaf * Transform3D(Basis(Vector3.RIGHT, outer * PI * 0.5), Vector3(0, rail + (half.y - rail) * 0.5, outer * 0.02))
 	_cylinder("enamel_red", disc, 0.36, 0.012, SLIGHT, -1.0, 20)
-	_local_box("paper", leaf, Vector3(0, rail + (half.y - rail) * 0.5, outer * 0.034), Vector3(0.5, 0.11, 0.004), SLIGHT)
+	painted(leaf * Transform3D(Basis(Vector3.UP, 0.0 if outer > 0.0 else PI), Vector3(0, rail + (half.y - rail) * 0.5, outer * 0.034)), Vector2(0.5, 0.11), Color(WHITEWASH, 0.2))
 	coarse()
 
 
@@ -434,7 +436,7 @@ func gate_post(hinge: Vector3, out: Vector3) -> void:
 		var face := Transform3D(Basis(Vector3.UP.cross(side), Vector3.UP, side), hinge + side * 0.455 + Vector3.UP * 1.05)
 		painted(face, Vector2(0.9, 0.9), WHITEWASH)
 		painted(face * Transform3D(Basis(), Vector3(0, 0.62, 0.001)), Vector2(0.9, 0.34), STENCIL_BLACK)
-	wall_lamp(hinge + out * 0.45 + Vector3.UP * 4.5, out, false)
+	bulkhead(hinge + out * 0.45 + Vector3.UP * 4.5, out)
 	coarse()
 
 
@@ -445,10 +447,10 @@ func gate_post(hinge: Vector3, out: Vector3) -> void:
 func sign_board(xf: Transform3D, size: Vector2, lines: Array) -> void:
 	fine(MID)
 	_local_box("dark_steel", xf, Vector3(0, 0, 0.012), Vector3(size.x, size.y, 0.024), SLIGHT)
-	painted(xf * Transform3D(Basis(), Vector3(0, 0, 0.0245)), size - Vector2(0.01, 0.01), WHITEWASH)
+	painted(xf * Transform3D(Basis(), Vector3(0, 0, 0.0245)), size - Vector2(0.01, 0.01), Color(WHITEWASH, 0.25))
 	for edge: float in [-1.0, 1.0]:
-		painted(xf * Transform3D(Basis(), Vector3(0, edge * (size.y * 0.5 - 0.03), 0.0255)), Vector2(size.x, 0.06), SIGNAL_RED)
-		painted(xf * Transform3D(Basis(), Vector3(edge * (size.x * 0.5 - 0.03), 0, 0.0255)), Vector2(0.06, size.y), SIGNAL_RED)
+		painted(xf * Transform3D(Basis(), Vector3(0, edge * (size.y * 0.5 - 0.03), 0.0255)), Vector2(size.x, 0.06), Color(SIGNAL_RED, 0.25))
+		painted(xf * Transform3D(Basis(), Vector3(edge * (size.x * 0.5 - 0.03), 0, 0.0255)), Vector2(0.06, size.y), Color(SIGNAL_RED, 0.25))
 	var total := 0.0
 	for line: Array in lines:
 		total += (line[1] as float) * 1.5
@@ -482,7 +484,6 @@ func flood_mast(at: Vector2, inwards: Vector3, height := 8.2, aims := Vector3.ZE
 		_box("galvanised", lamp, Vector3(0.42, 0.34, 0.2), SLIGHT)
 		_box("galvanised", lamp * Transform3D(Basis(), Vector3(0, 0, 0.102)), Vector3(0.36, 0.28, 0.01), SLIGHT)
 		_box("galvanised", lamp * Transform3D(Basis(), Vector3(0, 0.19, 0.06)), Vector3(0.46, 0.02, 0.34), SLIGHT)
-	refine(NEAR)
 	# The conduit down the mast to its switch.
 	rod("galvanised", foot + inwards * 0.085 + Vector3.UP * 1.3, head + inwards * 0.06, 0.012, SLIGHT, 5)
 	rounded_box("galvanised", Transform3D(Basis(), foot + inwards * 0.12 + Vector3.UP * 1.3), Vector3(0.16, 0.24, 0.1), 0.01, SLIGHT)
@@ -756,7 +757,7 @@ func guardroom(centre: Vector2, size: Vector3) -> void:
 	square_box(CONCRETE, west, Vector3(door_x, 0.0, 0.3), Vector3(1.5, 0.16, 0.6))
 	square_box(CONCRETE, west, Vector3(door_x, 2.17, -0.1), Vector3(doorway.size.x + 0.3, 0.18, 0.3))
 	fine(MID)
-	wall_lamp(west * Vector3(door_x, 2.55, 0), Vector3.LEFT, false)
+	bulkhead(west * Vector3(door_x, 2.55, 0), Vector3.LEFT)
 	sign_plate(west * Vector3(door_x, 2.32, 0.012), Vector3.LEFT, "GUARDROOM", 0.14, "enamel_red")
 	downpipe(face_of(foot, size, Vector3.RIGHT) * Vector3(0.4, 0, 0), Vector3.RIGHT, size.y)
 	coarse()
@@ -769,7 +770,7 @@ func guardroom(centre: Vector2, size: Vector3) -> void:
 func fire_point(xf: Transform3D) -> void:
 	fine(NEAR)
 	_local_box("dark_steel", xf, Vector3(0, 1.35, 0.012), Vector3(1.1, 0.9, 0.024), SLIGHT)
-	painted(xf * Transform3D(Basis(), Vector3(0, 1.35, 0.0245)), Vector2(1.09, 0.89), SIGNAL_RED)
+	painted(xf * Transform3D(Basis(), Vector3(0, 1.35, 0.0245)), Vector2(1.09, 0.89), Color(SIGNAL_RED, 0.3))
 	for x: float in [-0.28, 0.28]:
 		_local_box("dark_steel", xf, Vector3(x, 1.62, 0.07), Vector3(0.02, 0.02, 0.1), SLIGHT)
 		rod("dark_steel", xf * Vector3(x - 0.13, 1.5, 0.13), xf * Vector3(x, 1.63, 0.11), 0.005, SLIGHT, 4)
@@ -889,7 +890,7 @@ func yard_cover(area: Rect2, ways: Array, seed := 5, walled := Vector4(1, 1, 1, 
 	for y in range(maxi(int(from.y), 0), mini(int(to.y), _cover.get_height())):
 		for x in range(maxi(int(from.x), 0), mini(int(to.x), _cover.get_width())):
 			var at := _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE
-			var earth := 0.5 + 0.6 * (blotch.get_noise_2dv(at) * 0.7 + speck.get_noise_2dv(at) * 0.3)
+			var earth := 0.6 + 0.6 * (blotch.get_noise_2dv(at) * 0.7 + speck.get_noise_2dv(at) * 0.3)
 			# How near the nearest wall is: `walled` says which sides of the
 			# area are walls, west, north, east and south.
 			var edge := INF
@@ -1078,3 +1079,124 @@ func dish(xf: Transform3D, radius: float, foot: Vector3) -> void:
 	beam("dark_steel", hub - across * 0.9, hub + across * 0.9, 0.16, SLIGHT)
 	_part = NO_COLLIDE
 	coarse()
+
+
+# --- What hangs on a wall and stands against it ----------------------------------------
+
+
+## A bulkhead lamp on a wall, off: a cast housing with a cage over its
+## glass. `at` is the middle of its back on the face of the wall, which
+## looks along `out`. It is a fitting and no lamp: nothing is lit by it.
+func bulkhead(at: Vector3, out: Vector3) -> void:
+	var on_wall := Transform3D(Basis(Vector3.UP.cross(out), Vector3.UP, out), at)
+	rounded_box("dark_steel", on_wall * Transform3D(Basis(), Vector3(0, 0, 0.04)), Vector3(0.36, 0.22, 0.08), 0.02, SLIGHT)
+	painted(on_wall * Transform3D(Basis(), Vector3(0, 0, 0.082)), Vector2(0.27, 0.14), Color(0.62, 0.6, 0.5, 0.3))
+	for bar: float in [-0.09, 0.0, 0.09]:
+		_local_box("dark_steel", on_wall, Vector3(bar, 0, 0.1), Vector3(0.012, 0.17, 0.03), SLIGHT)
+	_local_box("dark_steel", on_wall, Vector3(0, 0, 0.1), Vector3(0.3, 0.012, 0.03), SLIGHT)
+
+
+## A ladder up a wall with hoops round it from above a man's reach: `foot`
+## is where its lowest rung is, on the face of the wall, which looks along
+## `out`, and it is `height` high.
+func cage_ladder(foot: Vector3, out: Vector3, height: float) -> void:
+	var on_wall := Transform3D(Basis(Vector3.UP.cross(out), Vector3.UP, out), foot)
+	fine(MID)
+	for side: float in [-1.0, 1.0]:
+		_local_box("dark_steel", on_wall, Vector3(side * 0.24, height * 0.5 + 0.5, 0.2), Vector3(0.05, height + 1.0, 0.012), SLIGHT)
+	for rung in int(height / 0.3) + 1:
+		rod("dark_steel", on_wall * Vector3(-0.24, rung * 0.3, 0.2), on_wall * Vector3(0.24, rung * 0.3, 0.2), 0.011, SLIGHT, 5)
+	for stay in int(height / 2.4) + 1:
+		for side: float in [-1.0, 1.0]:
+			_local_box("dark_steel", on_wall, Vector3(side * 0.24, 0.4 + stay * 2.4, 0.1), Vector3(0.04, 0.008, 0.2), SLIGHT)
+	# The hoops, and the three straps that tie them.
+	var around := 7
+	for hoop in int((height - 2.2) / 0.9) + 1:
+		var y := 2.2 + hoop * 0.9
+		for s in around:
+			var a0 := PI * s / around
+			var a1 := PI * (s + 1) / around
+			beam("dark_steel", on_wall * Vector3(cos(a0) * 0.36, y, 0.2 + sin(a0) * 0.62), on_wall * Vector3(cos(a1) * 0.36, y, 0.2 + sin(a1) * 0.62), 0.04, SLIGHT, 0.006)
+	for strap: float in [0.25, 0.5, 0.75]:
+		var angle := PI * strap
+		_local_box("dark_steel", on_wall, Vector3(cos(angle) * 0.36, (2.2 + height + 0.9) * 0.5, 0.2 + sin(angle) * 0.62), Vector3(0.03, height - 1.3, 0.006), SLIGHT)
+	coarse()
+
+
+## A duct of galvanised sheet up a wall, from a louvre a man's height up to
+## over the edge of the roof: `foot` is where it begins on the face of the
+## wall, which looks along `out`; `height` is how high the edge of the roof
+## is above that.
+func duct_riser(foot: Vector3, out: Vector3, height: float, size := Vector2(0.7, 0.45)) -> void:
+	var on_wall := Transform3D(Basis(Vector3.UP.cross(out), Vector3.UP, out), foot)
+	fine(FAR)
+	_local_box("galvanised", on_wall, Vector3(0, height * 0.5, size.y * 0.5 + 0.08), Vector3(size.x, height, size.y), SLIGHT)
+	_local_box("galvanised", on_wall, Vector3(0, height + size.y * 0.5, -0.4 + (size.y + 0.08 + 0.4) * 0.5), Vector3(size.x, size.y, size.y + 0.08 + 0.8), SLIGHT)
+	# Where it begins: a box on the wall with a louvre in its face.
+	_local_box("galvanised", on_wall, Vector3(0, -0.5, size.y * 0.5 + 0.12), Vector3(size.x + 0.3, 1.1, size.y + 0.08), SLIGHT)
+	refine(MID)
+	for joint in int(height / 1.5) + 1:
+		_local_box("galvanised", on_wall, Vector3(0, joint * 1.5, size.y * 0.5 + 0.08), Vector3(size.x + 0.07, 0.035, size.y + 0.07), SLIGHT)
+		if joint % 2 == 1:
+			_local_box("dark_steel", on_wall, Vector3(0, joint * 1.5 + 0.3, 0.04), Vector3(size.x + 0.24, 0.05, 0.08), SLIGHT)
+	for slat in 8:
+		_box("dark_steel", on_wall * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(35.0)), Vector3(0, -0.92 + slat * 0.105, size.y + 0.17)), Vector3(size.x + 0.14, 0.006, 0.09), SLIGHT)
+	coarse()
+
+
+## A tarpaulin thrown over what stands in `boxes`, each the [middle, size]
+## of a box in the frame `xf`: it lies on their tops, hangs taut between one
+## high place and the next and falls from the edge of the first of them,
+## the widest, to `hem` over the ground. It takes the place of nothing: what
+## is under it is in the way as it was.
+func tarpaulin(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
+	var under: Vector3 = boxes[0][0]
+	var spread: Vector3 = boxes[0][1] + Vector3(0.16, 0, 0.16)
+	var across := maxi(2, ceili(spread.x / 0.3))
+	var down := maxi(2, ceili(spread.z / 0.3))
+	var creases := _noise(_depot_rng.randi() % 1000, 0.9)
+	# How high the cloth lies at a spot of the frame.
+	var lies := func(x: float, z: float) -> float:
+		var high := -INF
+		for part: Array in boxes:
+			var middle: Vector3 = part[0]
+			var size: Vector3 = part[1]
+			var beyond := Vector2(maxf(absf(x - middle.x) - size.x * 0.5, 0.0), maxf(absf(z - middle.z) - size.z * 0.5, 0.0)).length()
+			high = maxf(high, middle.y + size.y * 0.5 + 0.04 - beyond * 0.85)
+		return high + creases.get_noise_2d(x, z) * 0.035
+	var st := _tool(CANVAS, SLIGHT, xf * under)
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	for j in down + 1:
+		for i in across + 1:
+			var x := under.x + spread.x * (float(i) / across - 0.5)
+			var z := under.z + spread.z * (float(j) / down - 0.5)
+			spots.append(xf * Vector3(x, lies.call(x, z), z))
+			uvs.append(Vector2(x, z))
+			tones.append(Color(0.12, 0.5 + creases.get_noise_2d(z, x) * 0.3, 0.85, 0.0))
+	_cloth(st, spots, across, uvs, tones, xf.basis.y)
+	# The four sides, each hanging from the edge of the top to the hem, a
+	# little out at the foot, and never straight along it.
+	var corners: Array[Vector2] = [Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)]
+	for side in 4:
+		var from := corners[side]
+		var to := corners[(side + 1) % 4]
+		var out := Vector2((from + to).x, (from + to).y).normalized()
+		var steps := maxi(2, ceili((to - from).length() * (spread.x if from.y == to.y else spread.z) / 0.3))
+		spots = PackedVector3Array()
+		uvs = PackedVector2Array()
+		tones = PackedColorArray()
+		for row in 4:
+			var drop := row / 3.0
+			for i in steps + 1:
+				var along := from.lerp(to, float(i) / steps)
+				var x := under.x + spread.x * along.x
+				var z := under.z + spread.z * along.y
+				var top: float = lies.call(x, z)
+				var flare := drop * (0.07 + 0.06 * creases.get_noise_2d(x * 3.0 + drop, z * 3.0)) + sin(drop * PI) * 0.03
+				var low := hem + 0.08 * creases.get_noise_2d(x * 2.0, z * 2.0 + 7.0)
+				spots.append(xf * Vector3(x + out.x * flare, lerpf(top, low, drop), z + out.y * flare))
+				uvs.append(Vector2((x if from.y == to.y else z), spread.z * 0.5 + drop * (top - low)))
+				tones.append(Color(0.12 + 0.5 * drop * drop, 0.5, 0.9, 0.0))
+		_cloth(st, spots, steps, uvs, tones, xf.basis * Vector3(out.x, 0, out.y))
