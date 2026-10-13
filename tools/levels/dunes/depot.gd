@@ -1149,7 +1149,7 @@ func duct_riser(foot: Vector3, out: Vector3, height: float, size := Vector2(0.7,
 ## high place and the next and falls from the edge of the first of them,
 ## the widest, to `hem` over the ground. It takes the place of nothing: what
 ## is under it is in the way as it was.
-func tarpaulin(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
+func sheeted(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
 	var under: Vector3 = boxes[0][0]
 	var spread: Vector3 = boxes[0][1] + Vector3(0.16, 0, 0.16)
 	var across := maxi(2, ceili(spread.x / 0.3))

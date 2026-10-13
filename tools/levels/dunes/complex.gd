@@ -130,7 +130,7 @@ func _inner_yard() -> void:
 	vehicle("tank", Vector2(120.0, 15.4), 0.0)
 	# The tank in the shed is laid up under a tarpaulin: over its hull and
 	# its turret, with the gun out in front.
-	tarpaulin(resting(120.0, 15.4, 180.0, 2.4), [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)]])
+	sheeted(resting(120.0, 15.4, 180.0, 2.4), [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)]])
 	_shed_fittings(roof_y)
 	_fuel_point()
 	vehicle("tank_b", Vector2(104.0, 41.0), -90.0)
