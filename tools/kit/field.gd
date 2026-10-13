@@ -24,7 +24,7 @@ const CLOTH := Color(0.0, 0.5, 1.0, 1.0)
 ## What is left of the light of the sky in a tent and under a net: its
 ## colour by the time it has come through canvas or been thrown up by the
 ## sand, and how strong.
-const TENT_LIGHT := Color(0.6, 0.57, 0.46, 0.32)
+const TENT_LIGHT := Color(0.62, 0.6, 0.52, 0.4)
 const NET_LIGHT := Color(0.82, 0.83, 0.8, 0.6)
 ## What moves in the wind: cloth that says in UV2 how far each of its
 ## corners gives, in metres, and how light it is: 0 for a wall of canvas that
@@ -749,7 +749,7 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 	# dim against a wall as in the middle; out of the open front it goes
 	# over where the light comes in.
 	var over_into := 0.8
-	shelter(xf * Transform3D(Basis(), Vector3(0, (size.y - over_into) * 0.5, 0.2)), Vector3(size.x + over_into * 2.0, size.y + over_into, size.z + over_into * 2.0 + 0.4), TENT_LIGHT, over_into, 0.35)
+	shelter(xf * Transform3D(Basis(), Vector3(0, (size.y - over_into) * 0.5, 0.2)), Vector3(size.x + over_into * 2.0, size.y + over_into, size.z + over_into * 2.0 + 0.4), TENT_LIGHT, over_into, 0.18)
 	return xf
 
 
