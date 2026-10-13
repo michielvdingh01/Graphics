@@ -49,6 +49,20 @@ class Sprig:
         self.triangles = []
         self.colours = []
         self.count = 0
+        # The cards with a scanned twig on them: four corners each, where on
+        # the scan each corner is, a tint, and which scan it is.
+        self.cards = {"corners": [], "uvs": [], "tints": [], "sheets": []}
+
+    def card(self, corners, uvs, tint, sheet):
+        self.cards["corners"].append(np.asarray(corners, dtype=np.float64).reshape(4, 3))
+        self.cards["uvs"].append(np.asarray(uvs, dtype=np.float64).reshape(4, 2))
+        self.cards["tints"].append(np.asarray(tint, dtype=np.float64))
+        self.cards["sheets"].append(sheet)
+
+    def all(self):
+        """What arrays() gives, and the cards."""
+        cards = {key: np.array(value) for key, value in self.cards.items()}
+        return self.arrays() + (cards,)
 
     def add(self, corners, triangles, colours):
         corners = np.asarray(corners, dtype=np.float64).reshape(-1, 3)
@@ -171,6 +185,156 @@ def berries(sprig, kind, start, way, length, thick):
     sprig.add(corners, triangles, np.repeat(colours, 6, axis=0))
 
 
+# --- Scanned twigs ---------------------------------------------------------------------
+
+SCANS = os.path.join(HERE, "..", "assets", "scans")
+# The twigs that were cut out on each scan, see cutouts(), and for each scan
+# the part of the sheet that belongs to one of them, rows from the top: a
+# card is cut square out of the sheet and would show what lies next to its
+# twig as well.
+_cutouts = {}
+_kept = {}
+
+
+def scan_map(sheet, what, size=1024):
+    """One map of a scanned sheet of twigs, brought down to `size` dots a side:
+    rows from the top, values 0 to 1."""
+    folder = os.path.join(SCANS, sheet)
+    found = [name for name in sorted(os.listdir(folder)) if name.startswith("%s_twig_%s_" % (sheet, what))] if os.path.isdir(folder) else []
+    if not found:
+        raise SystemExit("The scan %s is not there: fetch it with tools/fetch_scans.py --go" % sheet)
+    image = bpy.data.images.load(os.path.join(folder, found[0]))
+    image.scale(size, size)
+    dots = np.empty(size * size * 4, dtype=np.float32)
+    image.pixels.foreach_get(dots)
+    bpy.data.images.remove(image)
+    return dots.reshape(size, size, 4)[::-1, :, 0].copy()
+
+
+def cutouts(sheet):
+    """The twigs that were cut out on a scanned sheet, each with needles to
+    either side of a stem. The sheet has a mask that is white around such a
+    twig and black on its stem, and an alpha that is white on what is there.
+    For each twig: where on the sheet its stem begins (u and v, from the left
+    and from the top), which way it runs, how long it is with its needles,
+    how far those reach to either side, and how far the bare stem sticks out
+    behind where it begins."""
+    if sheet in _cutouts:
+        return _cutouts[sheet]
+    size = 512
+    there = scan_map(sheet, "alpha", size) > 0.5
+    around = scan_map(sheet, "mask", size) > 0.9
+    # The islands of the mask: flooded one by one.
+    label = np.zeros((size, size), dtype=np.int32)
+    kept = np.zeros((size, size), dtype=bool)
+    found = []
+    for y0, x0 in zip(*np.nonzero(around)):
+        if label[y0, x0]:
+            continue
+        index = len(found) + 1
+        stack = [(y0, x0)]
+        label[y0, x0] = index
+        dots = []
+        while stack:
+            y, x = stack.pop()
+            dots.append((y, x))
+            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= ny < size and 0 <= nx < size and around[ny, nx] and not label[ny, nx]:
+                    label[ny, nx] = index
+                    stack.append((ny, nx))
+        found.append(np.array(dots))
+    twigs = []
+    for dots in found:
+        if len(dots) < size * size * 0.004:
+            continue
+        low = dots.min(axis=0)
+        high = dots.max(axis=0)
+        box = (slice(low[0], high[0] + 1), slice(low[1], high[1] + 1))
+        # Needles: what is there on the island. The stem: what is there in
+        # its box and not on the island, since the mask is black on it.
+        on_island = np.zeros((size, size), dtype=bool)
+        on_island[dots[:, 0], dots[:, 1]] = True
+        # What the island encloses, row by row: the stem lies inside it.
+        within = np.zeros((size, size), dtype=bool)
+        for row in range(low[0], high[0] + 1):
+            across_row = np.nonzero(on_island[row])[0]
+            if len(across_row):
+                within[row, across_row.min():across_row.max() + 1] = True
+        needle = np.argwhere(there[box] & on_island[box]) + low
+        stem = np.argwhere(there[box] & within[box] & ~on_island[box]) + low
+        if len(needle) < 50 or len(stem) < 20:
+            continue
+        # The stem runs along the longest way through the needles.
+        middle = needle.mean(axis=0)
+        _, _, axes = np.linalg.svd(needle - middle, full_matrices=False)
+        along = axes[0]
+        across = np.array([-along[1], along[0]])
+        needle_along = (needle - middle) @ along
+        needle_across = (needle - middle) @ across
+        stem = stem[np.abs((stem - middle) @ across) < np.abs(needle_across).max() * 0.35]
+        if len(stem) < 20:
+            continue
+        kept |= within
+        stem_along = (stem - middle) @ along
+        # It begins at the end where its stem sticks out of the needles, or
+        # where they overshoot it least: at its tip the needles go on past it.
+        if stem_along.min() - needle_along.min() > needle_along.max() - stem_along.max():
+            along = -along
+            needle_along = -needle_along
+            stem_along = -stem_along
+        begin = middle + along * needle_along.min()
+        bare = max(needle_along.min() - stem_along.min(), 0.0)
+        twigs.append({
+            "sheet": sheet,
+            "begin": (begin[1] / size, begin[0] / size),
+            "along": (along[1], along[0]),
+            "long": float(needle_along.max() - needle_along.min()) / size,
+            "wide": float(np.abs(needle_across).max()) / size,
+            "bare": float(bare) / size,
+        })
+    if not twigs:
+        raise SystemExit("No twig was found on the scan %s" % sheet)
+    print("%s: %d twigs cut out, %s" % (sheet, len(twigs), ", ".join("%.2f long and %.2f wide" % (twig["long"], twig["wide"]) for twig in twigs)))
+    _cutouts[sheet] = twigs
+    _kept[sheet] = kept
+    return twigs
+
+
+def scanned_shoot(sprig, kind, start, way, length, age):
+    """A year's length of twig with its needles as cards with a scanned twig
+    on them: a few cards through the twig, each turned further about it, so
+    that there is something to see of it from any side."""
+    rng = sprig.rng
+    twigs = [twig for sheet in kind["scan"] for twig in cutouts(sheet)]
+    twig = twigs[rng.integers(len(twigs))]
+    # As large as makes its needles as long as those of this kind.
+    metre = kind["needle"] * 0.8 / twig["wide"]
+    long = twig["long"] * metre * rng.uniform(0.9, 1.1)
+    wide = twig["wide"] * metre * 1.06
+    side, up = across(way)
+    roll = rng.uniform(0.0, math.tau)
+    # Older needles are darker, and now and then a twig has yellowed.
+    tint = np.array(kind["scan_tint"][min(age, len(kind["scan_tint"]) - 1)]) * rng.uniform(0.85, 1.15)
+    if rng.uniform() < kind["dead"] * 6.0:
+        tint = tint * np.array([1.25, 1.0, 0.6])
+    u0, v0 = twig["begin"]
+    au, av = twig["along"]
+    for fan in range(kind["fans"]):
+        angle = roll + fan * math.pi / kind["fans"]
+        out = side * math.cos(angle) + up * math.sin(angle)
+        back = twig["bare"] * metre
+        corners = [start - way * back - out * wide, start - way * back + out * wide, start + way * long + out * wide, start + way * long - out * wide]
+        # On the sheet: along the twig, and across it. A row further down the
+        # sheet is lower in Blender's own count, which runs from the bottom.
+        uvs = []
+        for a, b in ((-twig["bare"], -1.0), (-twig["bare"], 1.0), (twig["long"], 1.0), (twig["long"], -1.0)):
+            u = u0 + au * a - av * b * twig["wide"] * 1.06
+            v = v0 + av * a + au * b * twig["wide"] * 1.06
+            uvs.append((u, 1.0 - v))
+        sprig.card(corners, uvs, tint, twig["sheet"])
+    return start + way * length
+
+
 def pine_shoot(sprig, kind, start, way, length, age, vigour):
     """One year's length of a pine twig from `start` along `way`, grown `age`
     years ago: its wood, and its needles if it still has them."""
@@ -182,6 +346,9 @@ def pine_shoot(sprig, kind, start, way, length, age, vigour):
     if "berry" in kind and age >= 1 and rng.uniform() < kind["berried"]:
         berries(sprig, kind, start, way, length, thick)
     if age >= kind["keeps"]:
+        return end
+    if "scan" in kind:
+        scanned_shoot(sprig, kind, start, way, length, age)
         return end
     # Pairs of needles round the twig, on a spiral.
     pitch = kind["pitch"] * (1.0 + 0.45 * age)
@@ -314,6 +481,19 @@ KINDS["tuft"].update({
 })
 
 
+# The pine with the needles of a scanned one: the twigs of the scan stand on
+# the wood that was grown here, as cards, in place of the needles that were
+# grown one by one. The scan is of a pine with needles in pairs, some of
+# them yellowed: tools/fetch_scans.py fetches it.
+for scanned, grown_as in (("scan_spray", "spray"), ("scan_tuft", "tuft")):
+    KINDS[scanned] = dict(KINDS[grown_as])
+    KINDS[scanned].update({"scan": ["pine_tree_01"], "fans": 3, "scan_tint": [[1.3, 1.45, 1.2], [1.05, 1.2, 1.02]]})
+# A scanned twig is the growth of two years: it stands on this year's wood
+# only. And a bough end has fewer of them than it had tufts, each being more.
+KINDS["scan_tuft"].update({"needle": 0.06, "keeps": 1, "fans": 2, "fork_odds": [0.4, 0.45, 0.15], "dies": 0.42, "cones": 0.0})
+KINDS["scan_spray"].update({"keeps": 1, "cones": 0.0})
+
+
 # Sea buckthorn: crooked grey twigs that fork every way, narrow grey-green
 # leaves with a silver underside, and in autumn orange berries packed round
 # the wood of last year and the year before.
@@ -342,7 +522,7 @@ def grow(kind_name, seed, age, vigour):
     sprig = Sprig(seed)
     if kind["grow"] == "pine":
         pine_axis(sprig, kind, np.zeros(3), np.array([1.0, 0.12, 0.0]), age, vigour, np.array([0.0, 1.0, 0.0]))
-    return sprig.arrays()
+    return sprig.all()
 
 
 def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
@@ -370,14 +550,19 @@ def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
 
     def put(at, way, scale):
         """One of the sprigs with its twig at `at`, growing along `way`."""
-        corners, triangles, colours = grown[rng.integers(len(grown))]
+        corners, triangles, colours, cards = grown[rng.integers(len(grown))]
         way = unit(way)
         z = unit(np.cross(way, np.array([0.0, 1.0, 0.0])))
         y = np.cross(z, way)
         roll = rng.normal(0.0, 0.35)
         y, z = y * math.cos(roll) + z * math.sin(roll), z * math.cos(roll) - y * math.sin(roll)
         turned_ = corners[:, 0:1] * way[None, :] + corners[:, 1:2] * y[None, :] + corners[:, 2:3] * z[None, :]
-        out.add(at[None, :] + turned_ * scale, triangles, colours * rng.uniform(0.9, 1.1))
+        shade = rng.uniform(0.9, 1.1)
+        out.add(at[None, :] + turned_ * scale, triangles, colours * shade)
+        for i in range(len(cards["sheets"])):
+            own = cards["corners"][i]
+            stood = own[:, 0:1] * way[None, :] + own[:, 1:2] * y[None, :] + own[:, 2:3] * z[None, :]
+            out.card(at[None, :] + stood * scale, cards["uvs"][i], cards["tints"][i] * shade, cards["sheets"][i])
 
     def dress(points, reach):
         """Sprigs on a limb: one at its end, and from a third of the way out
@@ -414,7 +599,7 @@ def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
         way = unit(along * math.cos(lean) + side * hand * math.sin(lean) + np.array([0.0, rng.uniform(0.0, 0.2), 0.0]))
         reach = length * (1.0 - t) * rng.uniform(0.75, 1.0) + 0.25
         dress(limb(at, way, reach, 0.012), reach)
-    return out.arrays()
+    return out.all()
 
 
 # --- Picturing it ------------------------------------------------------------------
@@ -437,6 +622,10 @@ def set_scene(samples):
     scene.cycles.use_denoising = False
     scene.cycles.max_bounces = 3
     scene.cycles.diffuse_bounces = 2
+    # A look goes through the holes of many cards before it meets a needle:
+    # with the eight Cycles allows by itself, the heart of a tuft comes out
+    # black.
+    scene.cycles.transparent_max_bounces = 96
     scene.render.threads_mode = "FIXED"
     scene.render.threads = 4
     scene.render.film_transparent = True
@@ -484,6 +673,76 @@ def as_object(name, corners, triangles, colours):
     thing = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(thing)
     return thing
+
+
+def cards_as_objects(cards):
+    """The cards of a sprig, one object for every scan they show: each with
+    the scan as its colour, its holes and the way its surface faces."""
+    for sheet in sorted(set(cards["sheets"].tolist())):
+        which = np.nonzero(cards["sheets"] == sheet)[0]
+        corners = cards["corners"][which].reshape(-1, 3)
+        count = len(which)
+        mesh = bpy.data.meshes.new("cards " + sheet)
+        mesh.vertices.add(count * 4)
+        mesh.vertices.foreach_set("co", corners.astype(np.float32).ravel())
+        mesh.loops.add(count * 4)
+        mesh.loops.foreach_set("vertex_index", np.arange(count * 4, dtype=np.int32))
+        mesh.polygons.add(count)
+        mesh.polygons.foreach_set("loop_start", np.arange(0, count * 4, 4, dtype=np.int32))
+        try:
+            mesh.polygons.foreach_set("loop_total", np.full(count, 4, dtype=np.int32))
+        except (AttributeError, TypeError, RuntimeError):
+            pass
+        mesh.update(calc_edges=True)
+        layer = mesh.uv_layers.new(name="UVMap")
+        layer.data.foreach_set("uv", cards["uvs"][which].reshape(-1, 2).astype(np.float32).ravel())
+        paint = mesh.color_attributes.new("paint", "FLOAT_COLOR", "POINT")
+        tints = np.repeat(cards["tints"][which], 4, axis=0)
+        paint.data.foreach_set("color", np.concatenate([tints, np.ones((len(tints), 1))], axis=1).astype(np.float32).ravel())
+        material = bpy.data.materials.new("scan " + sheet)
+        if material.node_tree is None:
+            material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+        shader = next(node for node in nodes if node.type == "BSDF_PRINCIPLED")
+        shader.inputs["Roughness"].default_value = 0.6
+        shader.inputs["Specular IOR Level"].default_value = 0.2
+        folder = os.path.join(SCANS, sheet)
+
+        def scan(what, plain):
+            name = next(name for name in sorted(os.listdir(folder)) if name.startswith("%s_twig_%s_" % (sheet, what)))
+            node = nodes.new("ShaderNodeTexImage")
+            node.image = bpy.data.images.load(os.path.join(folder, name))
+            node.extension = "CLIP"
+            if plain:
+                node.image.colorspace_settings.name = "Non-Color"
+            return node
+
+        tint = nodes.new("ShaderNodeAttribute")
+        tint.attribute_name = "paint"
+        mix = nodes.new("ShaderNodeVectorMath")
+        mix.operation = "MULTIPLY"
+        links.new(scan("diff", False).outputs["Color"], mix.inputs[0])
+        links.new(tint.outputs["Color"], mix.inputs[1])
+        links.new(mix.outputs["Vector"], shader.inputs["Base Color"])
+        # Its holes: those of the scan, and all that is not one of its twigs.
+        kept = _kept[sheet]
+        keep = bpy.data.images.new("kept " + sheet, kept.shape[1], kept.shape[0], alpha=False, is_data=True)
+        keep.pixels.foreach_set(np.repeat(kept[::-1].astype(np.float32).ravel(), 4))
+        keep_node = nodes.new("ShaderNodeTexImage")
+        keep_node.image = keep
+        keep_node.extension = "CLIP"
+        holes = nodes.new("ShaderNodeMath")
+        holes.operation = "MULTIPLY"
+        links.new(scan("alpha", True).outputs["Color"], holes.inputs[0])
+        links.new(keep_node.outputs["Color"], holes.inputs[1])
+        links.new(holes.outputs["Value"], shader.inputs["Alpha"])
+        bump = nodes.new("ShaderNodeNormalMap")
+        links.new(scan("nor_gl", True).outputs["Color"], bump.inputs["Color"])
+        links.new(bump.outputs["Normal"], shader.inputs["Normal"])
+        mesh.materials.append(material)
+        thing = bpy.data.objects.new("cards " + sheet, mesh)
+        bpy.context.scene.collection.objects.link(thing)
 
 
 def picture(scene, corners, view, width, height, path, margin=0.09):
@@ -598,10 +857,14 @@ def render_sheet(asset, out_dir, scratch):
     dress = [grow(sprig["kind"], asset["seed"] + 5000 + index * 101, sprig["age"], sprig.get("vigour", 1.0)) for index, sprig in enumerate(asset.get("bough_sprigs", []))]
     for column, spec in enumerate(boughs):
         grown.append(bough(asset["seed"] + 977 + column * 131, dress if dress else grown[:len(sprigs)], spec["length"], spec["forks"], spec.get("wood", (0.2, 0.13, 0.08)), spec.get("apart", 0.22)))
-    for column, (corners, triangles, colours) in enumerate(grown):
+    for column, (corners, triangles, colours, cards) in enumerate(grown):
         what = "sprig" if column < len(sprigs) else "bough"
         scene = set_scene(asset.get("samples", 48))
         as_object(what, corners, triangles, colours)
+        if len(cards["sheets"]):
+            cards_as_objects(cards)
+            # The picture is as large as fits the cards too.
+            corners = np.concatenate([corners, cards["corners"].reshape(-1, 3)])
         top = 0
         for view, high in rows:
             path = os.path.join(scratch, "%s_%d_%s.png" % (asset["id"], column, view))
@@ -614,7 +877,7 @@ def render_sheet(asset, out_dir, scratch):
             shows["rect"] = [column * cell, top, cell, high]
             table.append(shows)
             top += high
-        print("%s, %s %d: %d triangles, %.2f m long, %.2f m wide, %.2f m high" % (asset["id"], what, column, len(triangles), corners[:, 0].max(), np.ptp(corners[:, 2]), np.ptp(corners[:, 1])))
+        print("%s, %s %d: %d triangles and %d cards, %.2f m long, %.2f m wide, %.2f m high" % (asset["id"], what, column, len(triangles), len(cards["sheets"]), corners[:, 0].max(), np.ptp(corners[:, 2]), np.ptp(corners[:, 1])))
     # What is half there is there: thin needles would otherwise fall away
     # where the card is cut to its texture.
     sheet[:, :, 3] = np.clip(sheet[:, :, 3] * asset.get("solid", 1.3), 0.0, 1.0)

@@ -1,0 +1,4 @@
+# The scans tools/gen_sprigs.py renders from are fetched, not kept: tools/fetch_scans.py --go
+*
+!.gitignore
+!.gdignore

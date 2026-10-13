@@ -58,14 +58,14 @@ void vertex() {
 }
 
 void fragment() {
-	vec4 dot = texture(far_tex, UV);
-	ALPHA = dot.a;
+	vec4 seen = texture(far_tex, UV);
+	ALPHA = seen.a;
 	ALPHA_SCISSOR_THRESHOLD = cut;
 	vec4 faces = texture(far_facing, UV);
 	vec3 way = faces.rgb * 2.0 - 1.0;
 	NORMAL = normalize(TANGENT * way.x + BINORMAL * way.y + NORMAL * way.z);
 	// Only needles differ from tree to tree: bark is bark.
-	ALBEDO = dot.rgb * mix(vec3(dot(own, vec3(0.333))), own, faces.a);
+	ALBEDO = seen.rgb * mix(vec3(dot(own, vec3(0.333))), own, faces.a);
 	ROUGHNESS = roughness;
 	SPECULAR = 0.1;
 	lets = through * faces.a;
