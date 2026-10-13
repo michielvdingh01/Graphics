@@ -1,0 +1,82 @@
+extends "res://tools/kit/street.gd"
+## Twelfth drawer of the kit, see tools/kit.gd: the water of a town of
+## canals. A canal between its quay walls, the steps down to it, and the
+## bridges over it. A greybox, as tools/kit/street.gd says of all three
+## drawers of the town.
+
+## How far the water lies under the quays, and the bed of a canal: as deep as
+## somebody wades through to the knee, since nobody swims in this game.
+const WATER_BELOW := 1.1
+const CANAL_BED := 1.7
+## How far under the quay the landing of a set of steps lies: more than
+## anyone on a navmesh climbs, and less than the player jumps. Whoever falls
+## in gets out by the steps; nobody is sent in after him.
+const LANDING_BELOW := 0.6
+
+
+## The water of a canal over `area`, x and z, its bed under it and a quay
+## wall along every side but those named in `open`: "n", "s", "w" and "e" for
+## a side where the water runs on, into another canal or out of the level.
+func canal(area: Rect2, open := "") -> void:
+	var middle := area.get_center()
+	box("concrete", Vector3(middle.x, -CANAL_BED - 0.25, middle.y), Vector3(area.size.x, 0.5, area.size.y), Vector3.ZERO, DETAIL)
+	box("canal_water", Vector3(middle.x, -WATER_BELOW - 0.02, middle.y), Vector3(area.size.x, 0.04, area.size.y), Vector3.ZERO, DETAIL | NO_COLLIDE)
+	if not open.contains("n"):
+		quay_wall(area.position, Vector2(area.end.x, area.position.y))
+	if not open.contains("s"):
+		quay_wall(area.end, Vector2(area.position.x, area.end.y))
+	if not open.contains("w"):
+		quay_wall(Vector2(area.position.x, area.end.y), area.position)
+	if not open.contains("e"):
+		quay_wall(Vector2(area.end.x, area.position.y), area.end)
+
+
+## The wall a quay stands on, along the edge of the water from `from` to
+## `to`, x and z, as somebody sees it who is on the water: `from` on his left
+## and `to` on his right. It is seen from the water alone, down to the bed.
+func quay_wall(from: Vector2, to: Vector2, mat := "brick") -> void:
+	var right := (to - from).normalized()
+	var out := Vector2(-right.y, right.x)
+	var length := from.distance_to(to)
+	var middle := (from + to) * 0.5
+	var frame := Transform3D(Basis(Vector3(right.x, 0, right.y), Vector3.UP, Vector3(out.x, 0, out.y)), Vector3(middle.x, 0, middle.y))
+	# Its top lies a finger under the paving, not in it.
+	var high := CANAL_BED - 0.02
+	wall_face(mat, frame * Transform3D(Basis(), Vector3(0, -0.02 - high * 0.5, 0)), Vector2(length, high))
+	_collide_box(frame * Transform3D(Basis(), Vector3(0, -CANAL_BED * 0.5 - 0.25, -0.3)), Vector3(length, CANAL_BED + 0.5, 0.6), _surface(mat))
+
+
+## Steps down to the water at `at` on the edge of a quay, the water lying the
+## way `yaw_deg` looks from there (0 looks along +Z): a landing just under
+## the quay and a ramp from it to the bed, along the wall.
+func water_steps(at: Vector3, yaw_deg: float) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	var run := (CANAL_BED - LANDING_BELOW) / tan(deg_to_rad(28.0))
+	_local_box("concrete", frame, Vector3(0, -LANDING_BELOW - 0.15, 0.7), Vector3(2.2, 0.3, 1.4))
+	var slope := Transform3D(Basis(Vector3.BACK, deg_to_rad(-28.0)), Vector3(1.1 + run * 0.5, -(CANAL_BED + LANDING_BELOW) * 0.5 - 0.13, 0.7))
+	_box("concrete", frame * slope, Vector3(run / cos(deg_to_rad(28.0)), 0.3, 1.4), 0)
+
+
+## A bridge over a canal from `from` to `to`, the middles of its two ends
+## where they meet the quays, `width` wide. Its deck rises to `rise` over the
+## quays at the crown, and it has a parapet along either side.
+func bridge(from: Vector3, to: Vector3, width: float, rise := 0.9, mat := "brick") -> void:
+	var along := (to - from).normalized()
+	var across := along.cross(Vector3.UP)
+	var span := from.distance_to(to)
+	var parts := 8
+	for i in parts:
+		var t0 := float(i) / parts
+		var t1 := float(i + 1) / parts
+		# A flat arch: nought at either end, `rise` in the middle.
+		var a := from + along * span * t0 + Vector3.UP * rise * (1.0 - pow(2.0 * t0 - 1.0, 2.0))
+		var b := from + along * span * t1 + Vector3.UP * rise * (1.0 - pow(2.0 * t1 - 1.0, 2.0))
+		var lie := Basis.looking_at(b - a, Vector3.UP)
+		var middle := (a + b) * 0.5
+		_box("floor", Transform3D(lie, middle + lie.y * -0.3), Vector3(width, 0.6, a.distance_to(b) + 0.06), 0)
+		for side: float in [-1.0, 1.0]:
+			_box(mat, Transform3D(lie, middle + across * side * (width * 0.5 - 0.2) + lie.y * 0.45), Vector3(0.4, 0.9, a.distance_to(b) + 0.06), 0)
+	# What carries it: a pier a third of the way in from either end.
+	for t: float in [0.3, 0.7]:
+		var foot := from + along * span * t
+		box(mat, Vector3(foot.x, -CANAL_BED * 0.5, foot.z), Vector3(absf(across.x) * width + absf(along.x) * 1.2, CANAL_BED + 1.0, absf(across.z) * width + absf(along.z) * 1.2), Vector3.ZERO, NO_COLLIDE)

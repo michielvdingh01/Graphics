@@ -1,5 +1,5 @@
-extends "res://tools/kit/field.gd"
-## Eleventh and last drawer of the kit, see tools/kit.gd: a level laid out as
+extends "res://tools/kit/houses.gd"
+## Fourteenth and last drawer of the kit, see tools/kit.gd: a level laid out as
 ## rooms.
 ##
 ## The plan of such a level names its rooms, each a rectangle on the ground

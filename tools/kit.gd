@@ -24,6 +24,10 @@ extends "res://tools/kit/rooms.gd"
 ##                            shelving(), kitchen_range(), screens(),
 ##                            plate_rack(), cable_drum(), cases(),
 ##                            spray_booth()
+##   tools/kit/street.gd      the streets of a town by night: street_paving(),
+##                            lantern(), and what stands at the kerb
+##   tools/kit/water.gd       its water: canal(), quay_wall(), bridge()
+##   tools/kit/houses.gd      its houses: terrace() for a row of them
 ##   tools/kit/rooms.gd       a level laid out as rooms: room(), door(),
 ##                            window(), fight(), build_rooms()
 ##
