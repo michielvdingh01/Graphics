@@ -136,6 +136,16 @@ var _files := {}
 ## lightmaps with them. A level sets this only to come out as it did before
 ## files had dice of their own.
 var _shared_dice := false
+## How long a line of sight from one zone into another can be for the two to
+## be drawn together, in metres. Without end, unless a level says otherwise:
+## a town by night, whose streets run straight for half a kilometre, shows
+## nothing that far off but its lights. The level carries the number as
+## `sight_reach`, for whatever looks for the same lines in the running game
+## to look as far and no farther; scripts/selftest.gd does not read it yet.
+var _sight_reach := INF
+## The size of a texel of the lightmaps of this level, in metres: TEXEL
+## unless a level says otherwise.
+var _texel := TEXEL
 
 
 func _init() -> void:
@@ -637,6 +647,8 @@ func _find_sightlines(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryPara
 						if seen or (eye - (side.at as Vector3)).dot(side.normal) <= 0.0:
 							continue
 						for point: Vector3 in side.points:
+							if eye.distance_to(point) > _sight_reach:
+								continue
 							ray.to = point
 							looked += 1
 							if space.intersect_ray(ray).is_empty():
@@ -870,6 +882,8 @@ func _finish_zones() -> void:
 			ResourceSaver.save(LightmapGIData.new(), path)
 		lightmap.light_data = load(path)
 		_add(lightmap, node)
+	if _sight_reach < INF:
+		_root.set_meta(&"sight_reach", _sight_reach)
 	_root.set_script(load("res://scripts/zones.gd"))
 
 
@@ -2493,7 +2507,7 @@ func _commit(zone_name: String, kind: String) -> void:
 		triangles += mesh.surface_get_array_index_len(mesh.get_surface_count() - 1) / 3
 	var mover: AnimatableBody3D = _movers.find_key([zone_name, kind])
 	if kind == "static" or mover:
-		var err := mesh.lightmap_unwrap(Transform3D(), TEXEL)
+		var err := mesh.lightmap_unwrap(Transform3D(), _texel)
 		print("Lightmap unwrap: ", error_string(err), ", size hint ", mesh.lightmap_size_hint)
 	var stem := kind.replace(" ", "_")
 	var path := "%s%s_%s.res" % [OUT_DIR, _level_name(), stem if zone_name == "" else zone_name + "_" + stem]
