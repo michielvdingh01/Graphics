@@ -1,0 +1,458 @@
+{
+	"characters": [
+		"soldier_01",
+		"soldier_01_desert",
+		"soldier_01_woodland",
+		"soldier_01_night"
+	],
+	"screen": [
+		3456,
+		2160
+	],
+	"pictures": [
+		{
+			"place": "in the light of the hall",
+			"metres": 5.0,
+			"figures": {
+				"soldier_01": {
+					"pixels": 37529,
+					"colour": [
+						104.4,
+						90.0,
+						76.9
+					],
+					"behind": [
+						65.3,
+						38.7,
+						23.8
+					],
+					"lightness": 39.3,
+					"lightness_behind": 18.5,
+					"from_behind": 22.6,
+					"from_first": 0.0
+				},
+				"soldier_01_desert": {
+					"pixels": 37095,
+					"colour": [
+						155.7,
+						113.5,
+						71.2
+					],
+					"behind": [
+						80.3,
+						43.9,
+						23.9
+					],
+					"lightness": 51.2,
+					"lightness_behind": 22.2,
+					"from_behind": 30.7,
+					"from_first": 24.7
+				},
+				"soldier_01_woodland": {
+					"pixels": 37821,
+					"colour": [
+						76.4,
+						53.3,
+						33.0
+					],
+					"behind": [
+						84.3,
+						46.4,
+						24.5
+					],
+					"lightness": 24.4,
+					"lightness_behind": 23.5,
+					"from_behind": 8.8,
+					"from_first": 16.9
+				},
+				"soldier_01_night": {
+					"pixels": 40044,
+					"colour": [
+						59.9,
+						45.2,
+						36.7
+					],
+					"behind": [
+						86.2,
+						47.3,
+						24.6
+					],
+					"lightness": 20.0,
+					"lightness_behind": 24.0,
+					"from_behind": 17.6,
+					"from_first": 19.4
+				}
+			}
+		},
+		{
+			"place": "in the light of the hall",
+			"metres": 20.0,
+			"figures": {
+				"soldier_01": {
+					"pixels": 2640,
+					"colour": [
+						122.2,
+						99.3,
+						81.9
+					],
+					"behind": [
+						100.4,
+						65.0,
+						43.6
+					],
+					"lightness": 43.9,
+					"lightness_behind": 31.1,
+					"from_behind": 15.4,
+					"from_first": 0.0
+				},
+				"soldier_01_desert": {
+					"pixels": 2640,
+					"colour": [
+						160.7,
+						117.6,
+						76.4
+					],
+					"behind": [
+						104.6,
+						66.3,
+						43.6
+					],
+					"lightness": 52.9,
+					"lightness_behind": 32.0,
+					"from_behind": 22.7,
+					"from_first": 19.0
+				},
+				"soldier_01_woodland": {
+					"pixels": 2640,
+					"colour": [
+						99.6,
+						70.1,
+						47.2
+					],
+					"behind": [
+						105.3,
+						66.7,
+						43.4
+					],
+					"lightness": 32.4,
+					"lightness_behind": 32.2,
+					"from_behind": 4.9,
+					"from_first": 13.0
+				},
+				"soldier_01_night": {
+					"pixels": 2658,
+					"colour": [
+						88.3,
+						63.6,
+						48.2
+					],
+					"behind": [
+						103.9,
+						65.2,
+						42.1
+					],
+					"lightness": 29.2,
+					"lightness_behind": 31.6,
+					"from_behind": 9.5,
+					"from_first": 14.8
+				}
+			}
+		},
+		{
+			"place": "in the light of the hall",
+			"metres": 39.5,
+			"figures": {
+				"soldier_01": {
+					"pixels": 677,
+					"colour": [
+						123.4,
+						99.2,
+						81.3
+					],
+					"behind": [
+						106.8,
+						74.5,
+						55.0
+					],
+					"lightness": 43.9,
+					"lightness_behind": 34.7,
+					"from_behind": 10.6,
+					"from_first": 0.0
+				},
+				"soldier_01_desert": {
+					"pixels": 691,
+					"colour": [
+						156.9,
+						116.3,
+						79.5
+					],
+					"behind": [
+						109.6,
+						75.5,
+						55.2
+					],
+					"lightness": 52.2,
+					"lightness_behind": 35.3,
+					"from_behind": 19.0,
+					"from_first": 15.7
+				},
+				"soldier_01_woodland": {
+					"pixels": 691,
+					"colour": [
+						106.8,
+						78.5,
+						57.7
+					],
+					"behind": [
+						111.1,
+						76.3,
+						55.5
+					],
+					"lightness": 35.9,
+					"lightness_behind": 35.7,
+					"from_behind": 3.3,
+					"from_first": 8.9
+				},
+				"soldier_01_night": {
+					"pixels": 691,
+					"colour": [
+						99.1,
+						73.9,
+						58.1
+					],
+					"behind": [
+						110.1,
+						75.2,
+						54.6
+					],
+					"lightness": 33.7,
+					"lightness_behind": 35.3,
+					"from_behind": 6.2,
+					"from_first": 10.4
+				}
+			}
+		},
+		{
+			"place": "in a dark corner",
+			"metres": 5.0,
+			"figures": {
+				"soldier_01": {
+					"pixels": 45297,
+					"colour": [
+						52.9,
+						64.8,
+						72.0
+					],
+					"behind": [
+						13.5,
+						11.3,
+						11.7
+					],
+					"lightness": 26.7,
+					"lightness_behind": 3.3,
+					"from_behind": 24.4,
+					"from_first": 0.0
+				},
+				"soldier_01_desert": {
+					"pixels": 41205,
+					"colour": [
+						88.6,
+						79.3,
+						59.3
+					],
+					"behind": [
+						12.5,
+						11.1,
+						11.9
+					],
+					"lightness": 34.1,
+					"lightness_behind": 3.2,
+					"from_behind": 33.7,
+					"from_first": 20.9
+				},
+				"soldier_01_woodland": {
+					"pixels": 38770,
+					"colour": [
+						30.3,
+						30.6,
+						27.0
+					],
+					"behind": [
+						11.7,
+						10.7,
+						11.8
+					],
+					"lightness": 11.4,
+					"lightness_behind": 3.0,
+					"from_behind": 9.0,
+					"from_first": 17.5
+				},
+				"soldier_01_night": {
+					"pixels": 37950,
+					"colour": [
+						21.6,
+						24.7,
+						28.3
+					],
+					"behind": [
+						11.6,
+						11.1,
+						12.6
+					],
+					"lightness": 8.4,
+					"lightness_behind": 3.1,
+					"from_behind": 5.9,
+					"from_first": 18.7
+				}
+			}
+		},
+		{
+			"place": "in a dark corner",
+			"metres": 20.0,
+			"figures": {
+				"soldier_01": {
+					"pixels": 2831,
+					"colour": [
+						71.3,
+						70.5,
+						71.9
+					],
+					"behind": [
+						51.0,
+						38.8,
+						33.7
+					],
+					"lightness": 30.1,
+					"lightness_behind": 16.8,
+					"from_behind": 15.3,
+					"from_first": 0.0
+				},
+				"soldier_01_desert": {
+					"pixels": 2789,
+					"colour": [
+						97.2,
+						83.3,
+						64.3
+					],
+					"behind": [
+						50.7,
+						38.9,
+						34.0
+					],
+					"lightness": 36.3,
+					"lightness_behind": 16.8,
+					"from_behind": 21.2,
+					"from_first": 15.4
+				},
+				"soldier_01_woodland": {
+					"pixels": 2785,
+					"colour": [
+						58.4,
+						48.8,
+						41.8
+					],
+					"behind": [
+						50.1,
+						38.7,
+						33.9
+					],
+					"lightness": 21.0,
+					"lightness_behind": 16.6,
+					"from_behind": 4.7,
+					"from_first": 11.5
+				},
+				"soldier_01_night": {
+					"pixels": 2769,
+					"colour": [
+						53.4,
+						45.0,
+						42.6
+					],
+					"behind": [
+						49.3,
+						38.2,
+						33.7
+					],
+					"lightness": 19.3,
+					"lightness_behind": 16.4,
+					"from_behind": 3.6,
+					"from_first": 11.7
+				}
+			}
+		},
+		{
+			"place": "in a dark corner",
+			"metres": 39.9,
+			"figures": {
+				"soldier_01": {
+					"pixels": 729,
+					"colour": [
+						88.6,
+						79.3,
+						75.8
+					],
+					"behind": [
+						75.5,
+						58.3,
+						49.7
+					],
+					"lightness": 34.5,
+					"lightness_behind": 26.2,
+					"from_behind": 10.1,
+					"from_first": 0.0
+				},
+				"soldier_01_desert": {
+					"pixels": 707,
+					"colour": [
+						106.2,
+						88.8,
+						70.4
+					],
+					"behind": [
+						75.6,
+						58.6,
+						50.0
+					],
+					"lightness": 39.0,
+					"lightness_behind": 26.3,
+					"from_behind": 13.8,
+					"from_first": 10.9
+				},
+				"soldier_01_woodland": {
+					"pixels": 707,
+					"colour": [
+						80.5,
+						64.7,
+						54.7
+					],
+					"behind": [
+						75.8,
+						58.7,
+						50.0
+					],
+					"lightness": 28.8,
+					"lightness_behind": 26.3,
+					"from_behind": 2.6,
+					"from_first": 8.0
+				},
+				"soldier_01_night": {
+					"pixels": 707,
+					"colour": [
+						77.9,
+						62.7,
+						55.3
+					],
+					"behind": [
+						75.7,
+						58.5,
+						49.7
+					],
+					"lightness": 27.9,
+					"lightness_behind": 26.2,
+					"from_behind": 2.3,
+					"from_first": 7.8
+				}
+			}
+		}
+	]
+}

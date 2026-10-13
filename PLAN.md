@@ -2240,3 +2240,98 @@ Bij zijn akkoord van 12 oktober 2026 heeft hij er niets apart over gezegd: ze ge
 - Samen spelen is nooit over een echt netwerk gespeeld, en schutter tegen schutter is gevoeliger voor vertraging dan samen tegen robots.
 - De soldaten dragen het camouflagepatroon en de vlag van het Amerikaanse leger; stap 2e haalt de vlag weg bij het tweede team, niet bij het eerste.
 - Een bot die niet bukt, neemt alleen staand dekking, zoals de personages op de route.
+
+## Twee uniformen: het tweede team in woestijnkleuren
+
+Op 12 oktober 2026 gebouwd op de branch `uniformen`: stap 2e van "Wedstrijden". De vijf soldaten bestaan nu ook in een tweede uniform, zodat twee teams van dezelfde soldaten uit elkaar te houden zijn. Er is geen script van het spel voor aangeraakt, geen level herbouwd en niets gedownload: alles zit in `tools/characters/` en `assets/characters/`.
+
+**Wat er staat**
+
+- **Vijf personages erbij**: `soldier_01_desert` tot en met `soldier_05_desert`, de vijf soldaten in zand en kaki, samen 10,5 MB. Het thema `soldiers_desert` zet ze in zoals `soldiers` de gewone vijf inzet: dezelfde rollen, wapens en afstelling. Het staat tussen de andere thema's in het instellingenscherm, als "Soldiers Desert". De tabel onder "Personages" noemt ze nog niet.
+- **Een look voor een uniform** (`tools/characters/looks.py`). `UNIFORMS` is een tabel met per uniform twee kleuren voor de stof en één voor de laarzen; een uniform erbij is een regel erbij. Er staan er drie in: `desert`, `woodland` en `night`. De look verft wat een soldaat draagt en bij zich heeft: uniform, vest en tassen, helmhoes, handschoenen en laarzen. Patroon en plooien blijven, als licht en donker: elke toon van de stof wordt de nieuwe kleur, zoveel lichter of donkerder. De twee kleuren liggen in vlekken van een hand groot over het lijf, in de ruimte uitgezet, zodat ze doorlopen over een naad en van de jas op het vest. Een donkere kleur krijgt zijn tonen verder uit elkaar, anders valt het patroon erin weg.
+- **Wat niet geverfd wordt:** het gezicht met haar, ogen en mond, het glas van de stofbril, en blote handen en onderarmen. Op het hoofd gaat dat per eiland van de textuur: het gezicht is met zijn haar één eiland en is fel van kleur waar helm en bril grijs zijn, en glas is donker en glad. Elders gaat het op kleur: huid is fel en warm, en een plek is huid als wat eromheen ligt dat ook is. De huidtoon uit de wangen, waar `zombie` en `clown` mee werken, is hier niet gebruikt: bij `soldier_02` valt het meetpunt naast zijn wang en telt zijn uitrusting als huid, en bij `soldier_01` dekt die toon maar de helft van het gezicht.
+- **De vlag is van de mouw**, en ook wat eronder en op de andere mouw genaaid zit: rang, naam en het embleem van de eenheid. De vlag wordt gevonden aan zijn rood en blauw op de bovenarm. Over het zakje waar hij op zit (van 5 cm boven het midden van de vlag tot 19 cm eronder en 7,5 cm naar weerszijden, op beide armen) komt stof van elders op dezelfde mouw, een vaste stap verderop in de textuur, zodat de korrel van het gedrukte patroon heel blijft. Bij opgerolde mouwen (`soldier_05`) houdt het op waar het patroon ophoudt. Per soldaat zijn dat 10 tot 15 duizend texels. Een andere landsaanduiding heb ik op geen van de vijf gevonden. Rang en naam zijn er nog, meegeverfd: het rangteken op de borst, en bij `soldier_04` zijn naam achter op de pet.
+- **Alleen de verf verschilt.** `--route=repaint` (`tools/characters/repaint.py`) neemt een personage dat al door de route is geweest, laat Blender het alleen lezen, zodat de look weet waar elke texel op het lijf ligt, en zet de nieuwe kleurtextuur in een kopie van het bestand. Mesh, skelet, huid, UV-indeling, normal map en ruwheid zijn byte voor byte die van het origineel; dat is voor alle vijf nagegaan. Buiten de eilanden wordt de textuur helemaal met de nieuwe kleuren opgevuld (`atlas.flood`), zodat er van ver, in de kleine mipmaps, niets van de oude doorheen mengt.
+- **Het vergelijkingsblad** `assets/characters/sheets/uniforms.jpg` met de getallen in `uniforms.json` ernaast, en het gereedschap dat het maakt (`tools/characters/uniform_sheet.py`).
+- **De twee teams met hun wapens**, `assets/characters/sheets/uniforms_teams.jpg`: grunt, rusher en heavy van `soldiers` en van `soldiers_desert`, zoals het spel ze als vijand neerzet, richtend.
+
+**Waarom niet opnieuw door de hele route**
+
+De bronbestanden van Rocketbox staan niet op deze machine, dus het uniform moest uit de geïmporteerde `.glb` komen. `soldier_01.glb` nog eens door `tools/import_character.sh` sturen laat driehoeken en botten heel, maar pakt de UV-indeling opnieuw in en bemonstert daarbij alle drie de texturen opnieuw:
+
+| | Origineel | Opnieuw door de route | `--route=repaint` |
+|---|---|---|---|
+| Driehoeken, botten | 14 723, 56 | gelijk, dezelfde namen en rusthouding | gelijk |
+| Hoekpunten | 11 667 | 11 753 | 11 667 |
+| Scherpte van de kleur (spreiding van de Laplace) | 9,9 | 7,3 | nieuwe verf op dezelfde texels |
+| Scherpte van de normal map | 6,5 | 4,6 | dezelfde bytes |
+| Scherpte van de ruwheid | 0,99 | 0,68 | dezelfde bytes |
+
+Een kwart van de scherpte kwijt voor een andere kleur is geen ruil; vandaar de smalle route. Beide kosten twaalf seconden per soldaat, zonder het contactblad.
+
+**Drie kandidaten, één gekozen: woestijn**
+
+`soldier_01` is in alle drie de uniformen geprobeerd en naast het origineel in de fabriekshal gezet, op 5, 20 en 40 m, één keer onder de lamp aan het westeinde en één keer in de schaduw tegen de oostmuur. De beelden zijn genomen zoals er gespeeld wordt: 3456×2160, MetalFX, Ultra, `--scale=auto` (dat werd 50%). Elk beeld is twee keer genomen, met en zonder de figuren, zodat van elke figuur precies bekend is wat erachter staat. Gemeten is de gemiddelde kleur van een figuur op het scherm, van de laarzen tot onder de schouders, en de afstand daarvan in CIELAB tot het origineel en tot de muur erachter: 2 is naast elkaar net te zien, 10 is in één oogopslag duidelijk.
+
+| | Woestijn | Bos | Nacht |
+|---|---|---|---|
+| Verschil met het origineel in het licht, op 5, 20 en 39,5 m | 25, 19, 16 | 17, 13, 9 | 19, 15, 10 |
+| Verschil met het origineel in de donkere hoek, op 5, 20 en 39,9 m | 21, 16, 11 | 18, 12, 8 | 19, 12, 8 |
+| Verschil met de muur erachter op 40 m, licht en donker (het origineel: 11 en 10) | 19 en 14 | 3,3 en 2,6 | 6,2 en 2,3 |
+| Helderheid op 40 m, licht en donker (het origineel: 44 en 34, de muur: 35 en 26) | 52 en 39 | 36 en 29 | 34 en 28 |
+
+- **Woestijn is op elke afstand en in beide lichten het verst van het origineel**, en het enige van de drie dat niet verdwijnt. Op 40 m in de donkere hoek zitten bos en nacht op 2,6 en 2,3 van de muur: op de grens van wat te zien is. Op het blad staan daar twee figuren en twee vage vlekken.
+- **Bos en nacht verschillen van het origineel vooral doordat ze donker zijn**, en donker is in deze hal ook de achtergrond. Een team dat je niet ziet staan is geen eerlijk tweede team.
+- **De nevel telt mee.** Tussen de camera en 40 m verderop hangt het stof van de hal in het zonlicht: de donkere muur gaat van helderheid 3 op 5 m naar 26 op 40 m, en in die sluier verdwijnen de donkere uniformen het eerst.
+- **Woestijn valt meer op dan het origineel**: 19 tegen 11 van de muur in het licht, 14 tegen 10 in het donker. Het tweede team is dus iets makkelijker te zien dan het eerste. Een donkerder kaki trekt dat gelijk en kost verschil tussen de twee; het is één regel in de tabel.
+- **Nacht was eerst marineblauw.** Blauw is in beeld de kleur van je eigen kant, dus een blauw uniform zou "mijn team" zeggen wie het ook draagt. Het is nu houtskoolgrijs, een fractie warm, omdat koel licht het anders weer blauw trekt.
+
+Elke kandidaat is eerst op een eigen contactblad bekeken: gezicht onaangeroerd, vlag weg, patroon nog als camouflage te lezen, geen naden of spikkels waar de verf aan huid, riemen of bril raakt. Wat daarbij is bijgesteld: de eerste versie zette alleen de drie tonen van het patroon om en gaf drie keer hetzelfde uniform in een andere tint, vandaar de vlekken in twee kleuren; die waren eerst 30 cm groot en lazen als verfspatten, nu 13 cm; woestijn is een slag dieper van kleur gemaakt, wat het verschil met het origineel op 40 m in het donker van 8 naar 11 bracht; en bij `soldier_03` en `soldier_04` bleef eerst op één mouw staan wat eraf moest, omdat er op die mouw geen ruimte was om alles met één stap te bedekken. De proefpersonages van bos en nacht en hun contactbladen zijn daarna weer weggehaald; hun regels staan nog in de tabel, en het vergelijkingsblad trekt ze zelf even aan.
+
+**De plekken van het blad**
+
+In deze hal zijn vier mensen naast elkaar bijna nergens van 40 m helemaal te zien. Zonder GPU is elke halve meter van de hal geprobeerd, in elke richting, met stralen naar knie, heup en hoofd tegen de 315 botsvormen van het level: vijftien plekken, twaalf rond de lamp aan het westeinde en drie tegen de oostmuur. Daar staan de rijen, 70 cm uit elkaar, en de camera's kijken door de enige openingen die er zijn: in het licht tussen een stapel kisten en een poot van het bordes door (39,5 m), in het donker langs de pers en een kist (39,9 m).
+
+De donkere hoek is niet overal even donker. Door het raam in de zuidmuur valt een streep zon op de oostmuur, die bij de eerste figuur van de rij over hoofd en schouders gaat (boven 1,45 m) en bij de tweede over de helm; de derde en vierde staan er helemaal onder. Verder naar het zuiden staat een kist ervoor. De donkerste twee plekken zijn daarom aan de kandidaten gegeven die kunnen verdwijnen, en gemeten is alleen wat bij alle vier in de schaduw staat: tot 1,3 m.
+
+**Gemeten en getest** op 12 oktober 2026, M1 Pro. Tot een uur of tien op de accu (70%), daarna aan de lader; de beelden van het blad zijn aan de lader genomen. Er zijn alleen beelden gemaakt, geen beeldsnelheden gemeten: een soldaat in woestijnkleuren is dezelfde mesh met dezelfde soort materiaal en even grote texturen als het origineel. Load 2,8 tot 7; andere sessies testten en maten de hele avond, en de laatste GPU-runs hebben tot tien minuten op hun beurt gewacht.
+
+- `tools/characters/check.gd`: alle vijf zonder aanmerkingen, met de driehoeken, lengte en ooghoogte van het origineel.
+- `tools/test_humanoid.sh --enemies=soldiers_desert`: geslaagd, 52 controles.
+- `tools/selftest.sh`: geslaagd, 315 controles in 4 minuten 26.
+
+**Niet kunnen beoordelen**
+
+- **Alles is stilstaand en in één hal bekeken.** Niet in beweging, niet in een gevecht en niet in een wedstrijd. Op het vergelijkingsblad staan ze zonder wapen, de armen langs het lijf; met wapen zijn ze alleen van dichtbij bekeken.
+- **De andere levels.** Het depot ligt buiten, de centrale is donkerder, en in de duinen is de grond zand: daar kan juist het woestijnuniform wegvallen. Het blad zegt alleen iets over de fabriekshal.
+- **Kleurenblindheid.** Het verschil tussen de teams is licht tegen iets donkerder en blauwgrijs tegen geelbruin, niet rood tegen groen, maar het is niet met een simulatie bekeken.
+- **Of het patroon bevalt.** De vlekken zijn mijn keuze; het zijn dezelfde vlekken op alle vijf.
+- **Wat er de eerste keer hapert.** De nieuwe personages gebruiken hetzelfde soort materiaal als de oude, dus nieuwe pipelines verwacht ik niet, maar geteld is het niet.
+
+**Nog open**
+
+- **De wedstrijd moet het thema nog kiezen**: wie in het tweede team zit, wordt uit `soldiers_desert` gecast. Dat hoort bij stap 1 en bij de pop van een medespeler (`scripts/puppet.gd`), niet bij deze stap.
+- **Het eerste team houdt de vlag en het patroon van het Amerikaanse leger.** `tools/characters/build_uniforms.sh` kan het ook een eigen uniform geven, maar de gewone soldaten zelf zijn niet aangeraakt.
+- **De twee uniformen delen niets.** Normal map en ruwheid van een soldaat staan in beide bestanden en worden twee keer geladen als beide teams op het veld staan. Delen kan als de texturen buiten de `.glb` komen te staan.
+- **Wie een soldaat opnieuw bouwt** met `build_cast.sh`, bouwt daarna zijn uniformen opnieuw.
+- Blauwe lenzen op een helm (de nachtkijker van `soldier_02`) worden meegeverfd; een rood lichtstaafje op een vest blijft rood.
+- `woodland` en `night` staan in de tabel maar zijn niet gebouwd. Een uniform dat niet meer nodig is, gaat met de hand weg: vijf mappen, hun bladen, hun regels in het manifest en het thema.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| De vijf soldaten in een uniform bouwen, met hun bladen, hun regels in het manifest en het thema `soldiers_<uniform>` | `tools/characters/build_uniforms.sh desert` (of `woodland`, `night`, of een regel die je in `UNIFORMS` zet) |
+| Eén soldaat opnieuw | `tools/characters/build_uniforms.sh desert soldier_03` |
+| Een personage anders schilderen zonder de rest aan te raken | `tools/import_character.sh assets/characters/<id>/<id>.glb <nieuw id> --route=repaint --look=<look>` |
+| Het vergelijkingsblad opnieuw maken (twee runs op de GPU; wat niet gebouwd is wordt even aangetrokken en weer uitgedaan) | `tools/characters/uniform_sheet.py` |
+| Andere personages naast elkaar zetten op dezelfde plekken | `tools/characters/uniform_sheet.py soldier_03 soldier_03_desert --name=soldier_03` |
+| Het tweede team als vijand in de hal zien, richtend (zo is het blad met de twee teams gemaakt, één keer met `soldiers` en één keer met `soldiers_desert`, met de hand naast elkaar gezet) | `tools/benchmark.sh --quick --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --enemies=soldiers_desert --spawn="res://scenes/enemy.tscn@-19,0,-3,-90,1,1;res://scenes/enemy_rusher.tscn@-19,0,-4.1,-90,1,1;res://scenes/enemy_heavy.tscn@-19,0,-5.2,-90,1,1" --at="-14.6,1.6,-4.2,90,-5"` |
+| Testen dat ze de speler vinden, raken en sterven | `tools/test_humanoid.sh --enemies=soldiers_desert` |
+
+**Voor Michiel om te bekijken**
+
+- Het blad: `assets/characters/sheets/uniforms.jpg`. Zes beelden, het origineel links en de drie kandidaten ernaast, met onder elk uitvergroot beeld hetzelfde op de grootte van het scherm.
+- De twee teams met hun wapens: `assets/characters/sheets/uniforms_teams.jpg`.
+- De vijf in het gekozen uniform: `assets/characters/sheets/soldier_01_desert.jpg` tot en met `soldier_05_desert.jpg`, naast `soldier_01.jpg` tot en met `soldier_05.jpg`.
+- Ertegen spelen, om ze in beweging te zien: `GODOT_WINDOW=1 tools/godot.sh -- --play --enemies=soldiers_desert`. Dat commando heb ik niet kunnen proberen, want het opent een venster; `--enemies=soldiers_desert` zelf is zonder venster getest.
