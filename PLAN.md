@@ -2634,8 +2634,17 @@ Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan de dui
 **Niet gedaan, en waarom**
 
 - **De lucht op 8k** (punt 1). Dat is een download (Poly Haven, CC0, 74,8 MB); ik heb erom gevraagd en geen antwoord gekregen, en heb niets opgehaald. Wat er klaar voor ligt: het bestand vervangt `assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr`; ingepakt kost het ongeveer 45 MB videogeheugen waar het nu 11 is. De luchten staan niet in LFS en GitHub waarschuwt boven 50 MB per bestand.
-- **Het blad met de zon op 48, 30 en 20 graden** (punt 4). Het gereedschap is geschreven, het blad is er niet: toen het aan de beurt was speelde Michiel en was de GPU niet vrij. Zie "Nog open".
 - **De soldaten aan de kaarttafel overleggen niet** (punt 5). Welke houding iemand in rust heeft, kiest `scripts/humanoid_rig.gd` uit de set van zijn thema, en wat een wachter doet leest `scripts/enemy.gd` uit wat het level hem meegeeft. Het level kan zeggen "sta hier en kijk daarheen", niet "praat". Zonder die twee bestanden gaat het niet, en die zijn van het wedstrijdwerk.
+
+**Het voorstel voor de zon** (punt 4, niet ingebouwd): `benchmark/sheets/dunes_sun_proposal.jpg`. De zon op 48 graden (nu), 30 en 20, elk vanaf het bos, de vallei, het bivak en de binnenplaats, het level telkens opnieuw gebouwd met de zon op die hoogte:
+
+| Zon | Land in de schaduw, volgens de bouwer | Lucht die erbij zou horen (Poly Haven, CC0) |
+|---|---|---|
+| 48 graden, nu | 17% | `kloofendal_48d_partly_cloudy_puresky`, die er is |
+| 30 graden | 24% | `kloofendal_28d_misty_puresky`: dezelfde plek, heiig; 56 MB op 8k |
+| 20 graden | 33% | `syferfontein_18d_clear_puresky`: helder; 55 MB op 8k |
+
+  Op het blad staat in alle drie de rijen de lucht van 48 graden: de andere twee zijn niet opgehaald (gevraagd, geen antwoord), dus de wolken en de plek van de zon in de lucht kloppen daar niet met de schaduwen. De kleur en de kracht van de zon zijn voor 30 en 20 graden met de hand warmer en zwakker gezet (1, 0,9, 0,74 op 3,5 en 1, 0,84, 0,64 op 3,0). Wat een lagere zon doet: langere schaduwen, meer reliëf in het zand en de ribbels, een donkerder bos, en twee keer zoveel plek om ongezien te staan. Dat laatste raakt het sluipen: een wachter ziet iemand in de schaduw pas op 7,5 m. Michiel kiest.
 
 **Wat er staat**
 
@@ -2667,6 +2676,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 - **Het budget is op drie van de vijf gehaald en op twee net niet.** De twee traagste standpunten, het oostelijke duin en het bivak, zijn gelijk of beter; het wagenpark, waar het model voor veraf voor bedoeld was, wint 0,6 en tekent een kwart miljoen driehoeken minder. De binnenplaats en de achterdeur, de twee snelste, verliezen 0,7 en 0,5: daar staat wat er het meest bij kwam (het glas met zijn kamers, de vlag, de was, de doelen, de sterkere occlusie). Wat daarvan hoeveel kost is niet uitgezocht.
 - **Een ronde eerder die middag** (18:33, op de accu, 59%, load 4,5) gaf hetzelfde beeld: +0,1, +0,6, −0,9, −0,9 en +0,9. Daarna zijn de doelen en de draden bij het kleine goed gezet, dat geen schaduw werpt.
+- **Mijn eigen tijdslimiet hield de GPU bezet.** Elke run die ik onder het GPU-slot startte had een bewaker ernaast (`( sleep 240; kill $pid ) &`). Die bewaker erft het slot, en zijn `sleep` leeft door als de run klaar is: na elke run van mij bleef het slot tot vier minuten dicht (na een meetrun zeven), en één keer negentien minuten, voor iedereen. De andere sessies gebruiken dezelfde regel. Zo'n bewaker moet het slot loslaten: `( sleep 240; kill $pid ) 9>&- &`. Gevonden met `lsof` op het slotbestand toen vier runs stonden te wachten op niemand.
 - **Een reeks van drie ronden daartussen is mislukt**: ze liep van 20:15 tot 20:27 naast het spel van Michiel, die om 20:13 de fabriek startte. Ik had met `ps` gekeken voor ik de reeks in de rij voor de GPU zette, en niet meer toen ze twee uur later begon. Alles halveerde, aan beide kanten (37 tegen 37, 40 tegen 42, 46 tegen 42, 47 tegen 46, 34 tegen 33). Niets waard, en het heeft hem tien minuten beeldsnelheid gekost.
 - **Pipelines tijdens het tekenen**: op het eerste standpunt, dat geen laadscherm heeft, 103 waar het er 97 waren; op de vier daarna geen. Een rondgang vanaf het titelscherm is niet gelopen.
 - **Niet gemeten**: aan de eigen lader en op een stille laptop, in beweging, in een gevecht, en wat de acht probes, het glas en de sterkere occlusie elk kosten.
@@ -2704,8 +2714,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 **Nog open**
 
-- **De lucht op 8k** en **het blad met de zonnestanden**: zie bovenaan. Het blad maakt `sun_variant.sh` uit de scratchmap van deze sessie; dat hoort als gereedschap in `tools/` als het blad er komt. Bij 30 graden zou `kloofendal_28d_misty_puresky` horen (zelfde plek, heiig), bij 20 graden `syferfontein_18d_clear_puresky` (helder); elk 55 MB op 8k, CC0, niet opgehaald.
-- **Drie ronden meten, om en om, als de GPU vrij is**, en het blad met voor en na (`benchmark/sheets/dunes_kamp_before_after.jpg`), dat er nog niet is.
+- **De lucht op 8k**: zie bovenaan. En als Michiel een lagere zon kiest: de lucht die erbij hoort, `SUN_RISE` in `tools/levels/dunes/plan.gd`, de stand en de kleur van de zon in `scenes/dunes.tscn`, en `sunward` in `materials/depot_concrete.tres`. Het blad is gemaakt met twee losse scripts in de scratchmap van deze sessie (een kopie van de worktree per zonnestand, gebouwd en gefotografeerd); dat is geen gereedschap geworden.
 - **De wolk is niet gelijk voor wie samen speelt**: elke speler heeft zijn eigen klok.
 - **Wie aan de tafel staat, overlegt niet**: zie bovenaan.
 - **De schaduw van de wolk trekt niet over het land**; dat vraagt de shader van de grond.
