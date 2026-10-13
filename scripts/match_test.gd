@@ -59,6 +59,8 @@ func _run() -> void:
 		and all.all(func(who: RefCounted) -> bool: return who.bot and who.id < 0 and who.brain != null) and Match.me() == null)
 	_check("each on the layer of its side, with the other side to walk into", all.all(func(who: RefCounted) -> bool:
 		return who.body.collision_layer == (2 | Match.SIDES[who.team]) and who.body.collision_mask == (1 | Match.SIDES[1 - who.team])))
+	_check("the second side wears the other uniform, the first the usual one", sides[1].all(func(who: RefCounted) -> bool: return who.body._rig._figure.scene_file_path.contains("_desert"))
+		and sides[0].all(func(who: RefCounted) -> bool: return not who.body._rig._figure.scene_file_path.contains("_desert")))
 	var middles: Array[Vector3] = []
 	for side: Array in sides:
 		var middle := Vector3.ZERO
