@@ -51,6 +51,13 @@ const WET := Color(0.2, 0.17, 0.13)
 const GREY_DUNE := Color(0.2, 0.2, 0.125)
 const WOOD_FLOOR := Color(0.085, 0.075, 0.058)
 const CROWNS := Color(0.013, 0.021, 0.013)
+## What the land itself looks like at its edge, as its own material shows it:
+## its sand, its litter of needles and its moss. And how far beyond the edge
+## the ground has stopped looking like that.
+const LAND_SAND := Color(0.4, 0.33, 0.235)
+const LAND_NEEDLES := Color(0.2, 0.135, 0.09)
+const LAND_MOSS := Color(0.14, 0.15, 0.08)
+const SEAM := 34.0
 ## Where the woods far off stand as a line of trees: how far beyond the land.
 const WOOD_LINES: Array[float] = [58.0, 82.0, 112.0, 150.0, 200.0, 265.0, 350.0, 460.0, 600.0, 780.0, 1000.0]
 
@@ -166,7 +173,30 @@ func _look(x: float, z: float, faces: Vector3) -> Color:
 	var wood := _wood_at(x, z)
 	look = look.lerp(WOOD_FLOOR.lerp(CROWNS, smoothstep(90.0, 200.0, out)), wood)
 	look = look.lerp(WET, 1.0 - smoothstep(4.0, 34.0, w))
-	return look * (0.92 + 0.16 * _humps.get_noise_2d(z * 1.7, x * 1.7))
+	look *= 0.92 + 0.16 * _humps.get_noise_2d(z * 1.7, x * 1.7)
+	# Where it leaves the land it is what the land is at its edge, needles
+	# and moss or sand, so that nobody sees where the one ends.
+	if out < SEAM:
+		var edge := Vector2(clampf(x, LAND.position.x + 0.5, LAND.end.x - 0.5), clampf(z, LAND.position.y + 0.5, LAND.end.y - 0.5))
+		var lies := LAND_SAND.lerp(LAND_NEEDLES, maxf(cover_at("needles", edge), _litter_at(edge))).lerp(LAND_MOSS, cover_at("moss", edge) * 0.6)
+		look = lies.lerp(look, smoothstep(3.0, SEAM, out))
+	return look
+
+
+## How much of the ground at `at` on the land lies under the litter of the
+## pines around it, nought to one. The land's own material lays needles
+## wherever pines stand close, whatever the map of its cover says there, and
+## works that out after this file is done: this is the same from the crowns
+## that stand by now.
+func _litter_at(at: Vector2) -> float:
+	var litter := 0.0
+	for crown: Array in _crowns:
+		var middle: Vector3 = crown[0]
+		var reach: float = (crown[1] as Vector3).x
+		if reach < 1.2:
+			continue
+		litter = maxf(litter, 1.0 - smoothstep(reach * 1.3, reach * 2.6, Vector2(middle.x, middle.z).distance_to(at)))
+	return litter
 
 
 ## A map of what the ground looks like over `area`, a dot for every `dot`
@@ -314,8 +344,10 @@ func _far_woods() -> void:
 				var across := before.distance_to(here)
 				var repeat := across / (high * 4.0)
 				if _wood_at(half.x, half.z) >= 0.5:
-					var tall_a := high * (0.8 + 0.3 * _humps.get_noise_2d(before.x * 0.6, before.z * 0.6))
-					var tall_b := high * (0.8 + 0.3 * _humps.get_noise_2d(here.x * 0.6, here.z * 0.6))
+					# A wood does not end like a wall: it gets lower where it
+					# thins out.
+					var tall_a := high * (0.8 + 0.3 * _humps.get_noise_2d(before.x * 0.6, before.z * 0.6)) * smoothstep(0.3, 0.75, _wood_at(before.x, before.z))
+					var tall_b := high * (0.8 + 0.3 * _humps.get_noise_2d(here.x * 0.6, here.z * 0.6)) * smoothstep(0.3, 0.75, _wood_at(here.x, here.z))
 					var faces := (Vector3(middle.x, half.y, middle.y) - half).normalized()
 					# Seen from the land, the spot before lies to the left.
 					_quad(st, [before, here, here + Vector3.UP * tall_b, before + Vector3.UP * tall_a], [faces, faces, faces, faces], [Vector2(run, 1), Vector2(run + repeat, 1), Vector2(run + repeat, 0), Vector2(run, 0)])

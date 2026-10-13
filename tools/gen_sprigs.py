@@ -484,10 +484,12 @@ KINDS["tuft"].update({
 # The pine with the needles of a scanned one: the twigs of the scan stand on
 # the wood that was grown here, as cards, in place of the needles that were
 # grown one by one. The scan is of a pine with needles in pairs, some of
-# them yellowed: tools/fetch_scans.py fetches it.
+# them yellowed: tools/fetch_scans.py fetches it. Its needles are the olive
+# of a twig that was cut and laid down; the tint brings them back to the
+# blue-green of a crown in the sun, and leaves them their differences.
 for scanned, grown_as in (("scan_spray", "spray"), ("scan_tuft", "tuft")):
     KINDS[scanned] = dict(KINDS[grown_as])
-    KINDS[scanned].update({"scan": ["pine_tree_01"], "fans": 3, "scan_tint": [[1.3, 1.45, 1.2], [1.05, 1.2, 1.02]]})
+    KINDS[scanned].update({"scan": ["pine_tree_01"], "fans": 3, "scan_tint": [[1.05, 1.75, 1.7], [0.9, 1.5, 1.5]]})
 # A scanned twig is the growth of two years: it stands on this year's wood
 # only. And a bough end has fewer of them than it had tufts, each being more.
 KINDS["scan_tuft"].update({"needle": 0.06, "keeps": 1, "fans": 2, "fork_odds": [0.4, 0.45, 0.15], "dies": 0.42, "cones": 0.0})
