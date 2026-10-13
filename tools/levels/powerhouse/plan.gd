@@ -168,5 +168,5 @@ func _plan() -> void:
 	fight("control_room", "the control room", {"control_room": ["grunt", "grunt", "rusher"]}, "passage", false)
 	checkpoint_in("control_room", "Control room")
 	fight("turbine_hall", "the turbine hall", {"turbine_hall": ["grunt", "grunt", "grunt", "rusher", "heavy", "heavy"]}, "control_room", false)
-	# Out by the great door at the far end of the hall: the last of the levels.
-	exit_through("turbine_hall", EAST, 12.0, "Leave by the great door", "", 5.0, 4.0)
+	# Out by the great door at the far end of the hall, and on to the dunes.
+	exit_through("turbine_hall", EAST, 12.0, "Leave by the great door", "dunes", 5.0, 4.0)

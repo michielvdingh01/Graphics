@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/foliage/tree_line.png" id="wood"]
+
+[resource]
+transparency = 2
+alpha_scissor_threshold = 0.5
+cull_mode = 2
+albedo_texture = ExtResource("wood")
+roughness = 1.0
+metallic_specular = 0.1

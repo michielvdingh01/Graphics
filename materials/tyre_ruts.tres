@@ -1,0 +1,9 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/foliage/tyre_ruts.png" id="ruts"]
+
+[resource]
+transparency = 1
+albedo_texture = ExtResource("ruts")
+roughness = 0.92
+metallic_specular = 0.2

@@ -114,6 +114,10 @@ func _run() -> void:
 	camera.global_position = Vector3(26.4, 1.7, 17.0)
 	here = _sfx._probe(camera)
 	_check("and in its gatehouse a room (room_size %.2f)" % here.tuning[0], here.bed == &"room" and here.tuning[4] == 0.0 and here.tuning[0] < 0.6)
+	await _load("dunes")
+	camera.global_position = Vector3(60.0, 9.0, 200.0)
+	here = _sfx._probe(camera)
+	_check("the dunes have no zones either, and their open air has a bed of its own", _sfx._rooms.is_empty() and here.bed == &"dunes" and here.tuning == _sfx.SPACES[&"yard"])
 
 	print("Every level")
 	for level in LEVELS:

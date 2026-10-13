@@ -8,12 +8,15 @@ const DAYLIGHT := preload("res://scripts/daylight.gd")
 ## What lies beyond the door of every level: the evening sun shines into
 ## that of the factory, those of the works and the powerhouse face away from
 ## it, and that of the depot leads from the dock into the warehouse, where a
-## tube hangs.
+## tube hangs. The back door of the complex in the dunes is that the other
+## way round: the daylight is on the player's side of it, and beyond it a
+## tube hangs in the way in.
 const LEVELS := {
 	"factory": DAYLIGHT.Source.SUN,
 	"works": DAYLIGHT.Source.SKY,
 	"powerhouse": DAYLIGHT.Source.SKY,
 	"depot": DAYLIGHT.Source.LAMP,
+	"dunes": DAYLIGHT.Source.LAMP,
 }
 const WORLD := 1
 
