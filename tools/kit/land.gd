@@ -893,6 +893,19 @@ func _commit(zone_name: String, kind: String) -> void:
 		low.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		low.visibility_range_end = STREWN_REACH[kind.get_slice(" ", 0)]
 		low.visibility_range_end_margin = 6.0
+	elif kind.begins_with("beyond "):
+		# The wood beyond the land, see tree_wall(): it throws a shadow only
+		# where that falls away from the land, and its front row is one mesh
+		# from close by and another from afar.
+		var wood := _root.get_child(0) as MeshInstance3D
+		if not _beyond_shadows.get(kind.get_slice(" ", 1).to_int(), false):
+			wood.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if kind.ends_with(" near"):
+			wood.visibility_range_end = BEYOND_FAR
+			wood.visibility_range_end_margin = 8.0
+		elif kind.ends_with(" far"):
+			wood.visibility_range_begin = BEYOND_FAR
+			wood.visibility_range_begin_margin = 8.0
 
 
 # --- The shade ---------------------------------------------------------------------
@@ -1163,14 +1176,161 @@ func tree(kind: String, at: Vector2, size := 1.0, yaw_deg := 0.0) -> void:
 		cover("moss", at + Vector2(_prop_rng.randf_range(-1.0, 1.0), _prop_rng.randf_range(-1.0, 1.0)) * reach, reach * 0.9, 0.75, 0.6)
 
 
-## The edge of a wood from afar, as a wall of it from `from` to `to` and
-## `height` high: what stands beyond the land, where nobody comes. It faces
-## whoever has `from` on his right and `to` on his left.
+## How long a stretch of the wood beyond the land is one mesh, how many rows
+## deep that wood stands, how far apart its rows and the trees of a row are,
+## and from how far off its front row is drawn as trees are from afar.
+const BEYOND_STRETCH := 52.0
+const BEYOND_ROWS := 4
+const BEYOND_ROW := 6.0
+const BEYOND_GAP := 5.6
+const BEYOND_FAR := 105.0
+## How much of the light gets to each row of it where the wood throws no
+## shadow, and the rows further in are simply darker; and how much of that
+## its bark gets, which stands under its own crown.
+const BEYOND_LIGHT: Array[float] = [1.0, 0.8, 0.62, 0.5]
+const BEYOND_BARK := 0.6
+## The pines of its edge, and of the rows behind: [kind, share].
+const BEYOND_EDGE := [["pine_d", 2.0], ["pine_c", 2.0], ["pine_a", 2.0], ["pine_young", 0.6]]
+const BEYOND_INNER := [["pine_a", 3.0], ["pine_b", 3.0], ["pine_c", 1.0]]
+## What a tree of each kind adds to a mesh that many trees are merged into,
+## by the part of its model and then by material: the arrays of a surface.
+var _merged := {}
+## How many stretches of wood beyond the land there are so far, and which
+## of them throw a shadow.
+var _beyond := 0
+var _beyond_shadows := {}
+
+
+## The wood that goes on beyond the land, where nobody comes: rows of pines
+## behind the line from `from` to `to`, the tallest about `height` high, and
+## behind them the dark of the wood. It faces whoever has `from` on his right
+## and `to` on his left. The pines are those of the land. They are in
+## nobody's way and are not instances but one mesh for every stretch of the
+## line: the front row as a tree is from the middle distance, or from afar
+## when the stretch is far off, and the rows behind it always as from afar.
+##
+## The shade the game knows of does not know of this wood. Where its shadow
+## would fall on the land it therefore throws none, and the rows further in
+## are simply made darker; where the sun stands on the side of the land, so
+## that its shadow falls away from it, it throws one, on itself.
 func tree_wall(from: Vector3, to: Vector3, height := 22.0) -> void:
+	var length := from.distance_to(to)
+	var along := (to - from) / length
+	var back := along.cross(Vector3.UP)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = hash([from, to])
+	var shadows := back.dot(-Vector3(_sunward.x, 0, _sunward.z).normalized()) > 0.3
+	var stretches := maxi(roundi(length / BEYOND_STRETCH), 1)
+	var stretch := length / stretches
+	for s in stretches:
+		var near := {}
+		var far := {}
+		var inner := {}
+		for row in BEYOND_ROWS:
+			var count := int(stretch / BEYOND_GAP)
+			var kinds: Array = BEYOND_EDGE if row == 0 else BEYOND_INNER
+			var total := 0.0
+			for kind: Array in kinds:
+				total += kind[1]
+			for i in count:
+				var at := from + along * (s * stretch + (i + dice.randf_range(0.1, 0.9)) * stretch / count) + back * (row * BEYOND_ROW + dice.randf_range(-1.6, 1.6)) + Vector3.DOWN * dice.randf_range(0.3, 0.9)
+				# The trees further in stand higher over those in front.
+				var size := height / 19.0 * dice.randf_range(0.84, 1.12) * (0.92 if row == 0 else 1.0)
+				var xf := Transform3D(Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3.ONE * size), at)
+				var light := (1.0 if shadows else BEYOND_LIGHT[row]) * dice.randf_range(0.82, 1.0)
+				var pick := dice.randf() * total
+				for kind: Array in kinds:
+					pick -= kind[1]
+					if pick <= 0.0:
+						var bark := light * (1.0 if shadows else BEYOND_BARK)
+						if row == 0:
+							_merge_tree(near, kind[0], "Mid", xf, light, bark)
+							_merge_tree(far, kind[0], "Far", xf, light, bark)
+						else:
+							_merge_tree(inner, kind[0], "Far", xf, light, bark)
+						break
+		for part: Array in [["near", near], ["far", far], ["inner", inner]]:
+			for mat: String in part[1]:
+				var st := SurfaceTool.new()
+				st.create_from_arrays(_merged_arrays(part[1][mat]))
+				_tools["|beyond %d %s/%s" % [_beyond, part[0], mat]] = st
+		_beyond_shadows[_beyond] = shadows
+		_beyond += 1
+	# The dark of the wood, behind the last row: what is seen between the
+	# trunks, and what shuts the gaps between the crowns.
 	var st := _tool_named("|detail far/tree_line")
-	var faces := (Vector3.UP.cross(to - from).normalized() + Vector3.UP * 0.5).normalized()
-	var repeats := from.distance_to(to) / (height * 3.4)
-	_quad(st, [from, to, to + Vector3.UP * height, from + Vector3.UP * height], [faces, faces, faces, faces], [Vector2(0, 1), Vector2(repeats, 1), Vector2(repeats, 0), Vector2(0, 0)])
+	var behind := back * (BEYOND_ROWS * BEYOND_ROW - 1.0) + Vector3.DOWN * 1.5
+	var faces := -back
+	var high := height * 0.86
+	var repeats := length / (high * 4.0)
+	_quad(st, [to + behind, from + behind, from + behind + Vector3.UP * high, to + behind + Vector3.UP * high], [faces, faces, faces, faces], [Vector2(0, 1), Vector2(repeats, 1), Vector2(repeats, 0), Vector2(0, 0)])
+
+
+## What a tree of `kind` is made of, for merging into a larger mesh: by part
+## ("Mid", "Far") and by material the arrays of that surface.
+func _tree_surfaces(kind: String) -> Dictionary:
+	if not _merged.has(kind):
+		var one := (_tree_kind(kind).scene as PackedScene).instantiate()
+		var parts := {}
+		for part: MeshInstance3D in one.find_children("*", "MeshInstance3D", true, false):
+			var surfaces := {}
+			for i in part.mesh.get_surface_count():
+				surfaces[part.mesh.surface_get_material(i).resource_path.get_file().get_basename()] = part.mesh.surface_get_arrays(i)
+			parts[String(part.name)] = surfaces
+		one.free()
+		_merged[kind] = parts
+	return _merged[kind]
+
+
+## Adds the part `part` of a tree of `kind`, standing at `xf`, to the meshes
+## gathered in `into`, one for each material: {points, normals, colours, uvs,
+## corners}. `light` is how much of the light gets to its needles, 0 to 1,
+## and `bark_light` how much to its wood.
+func _merge_tree(into: Dictionary, kind: String, part: String, xf: Transform3D, light: float, bark_light: float) -> void:
+	var surfaces: Dictionary = _tree_surfaces(kind)[part]
+	var turn := Transform3D(xf.basis.orthonormalized(), Vector3.ZERO)
+	for mat: String in surfaces:
+		var arrays: Array = surfaces[mat]
+		if not into.has(mat):
+			into[mat] = {"points": PackedVector3Array(), "normals": PackedVector3Array(), "colours": PackedColorArray(), "uvs": PackedVector2Array(), "corners": PackedInt32Array()}
+		var mesh: Dictionary = into[mat]
+		var points: PackedVector3Array = mesh.points
+		var normals: PackedVector3Array = mesh.normals
+		var colours: PackedColorArray = mesh.colours
+		var uvs: PackedVector2Array = mesh.uvs
+		var corners: PackedInt32Array = mesh.corners
+		var first := points.size()
+		points.append_array(xf * (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array))
+		normals.append_array(turn * (arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array))
+		uvs.append_array(arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array)
+		# Bark is tinted by its vertex colour; needles keep in its blue how
+		# much light gets to them, and wood that is drawn with the needles
+		# says so in its alpha: see shaders/crown.gdshader.
+		var bark := mat == "pine_trunk"
+		for colour: Color in (arrays[Mesh.ARRAY_COLOR] as PackedColorArray):
+			if bark:
+				colours.append(Color(colour.r * bark_light, colour.g * bark_light, colour.b * bark_light, colour.a))
+			else:
+				colours.append(Color(colour.r, colour.g, colour.b * (bark_light if absf(colour.a - 0.5) < 0.1 else light), colour.a))
+		for corner: int in (arrays[Mesh.ARRAY_INDEX] as PackedInt32Array):
+			corners.append(corner + first)
+		mesh.points = points
+		mesh.normals = normals
+		mesh.colours = colours
+		mesh.uvs = uvs
+		mesh.corners = corners
+
+
+## The arrays of a mesh as _merge_tree() gathers it, for a surface.
+func _merged_arrays(mesh: Dictionary) -> Array:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = mesh.points
+	arrays[Mesh.ARRAY_NORMAL] = mesh.normals
+	arrays[Mesh.ARRAY_COLOR] = mesh.colours
+	arrays[Mesh.ARRAY_TEX_UV] = mesh.uvs
+	arrays[Mesh.ARRAY_INDEX] = mesh.corners
+	return arrays
 
 
 ## Keeps `area` (x and z) clear of the trees of a wood: a camp, a yard, a view.
@@ -1607,6 +1767,13 @@ func _pine_root(at: Vector2, girth: float, heading: float, dice: RandomNumberGen
 ## The clumps are stood when the ground is dressed, see _stand_marram().
 func marram(area: Rect2, spacing: float, gaps := 0.0) -> void:
 	_marram.append({"area": area, "spacing": spacing, "gaps": gaps})
+
+
+## One clump of marram by itself at `at`, `size` times a clump that stands a
+## metre high: at the foot of a wall, beside a post. `seed` makes it this
+## clump and no other. It is stood with the rest, see _stand_marram().
+func marram_clump(at: Vector2, size: float, seed: int) -> void:
+	_clumps.append({"at": at, "size": size, "seed": seed})
 
 
 ## Stands the marram that was asked for, now that the land has been read:

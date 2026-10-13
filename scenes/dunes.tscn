@@ -9,6 +9,7 @@
 [ext_resource type="Shader" path="res://shaders/dune_sky.gdshader" id="sky_shader"]
 [ext_resource type="Script" path="res://scripts/hidden.gd" id="hidden"]
 [ext_resource type="Script" path="res://scripts/air.gd" id="air"]
+[ext_resource type="Script" path="res://scripts/gulls.gd" id="gulls"]
 
 [sub_resource type="NavigationMesh" id="navmesh"]
 geometry_parsed_geometry_type = 1
@@ -81,6 +82,9 @@ script = ExtResource("hidden")
 
 [node name="Air" type="GPUParticles3D" parent="."]
 script = ExtResource("air")
+
+[node name="Gulls" type="MultiMeshInstance3D" parent="."]
+script = ExtResource("gulls")
 
 [node name="Post" type="CanvasLayer" parent="."]
 layer = 0

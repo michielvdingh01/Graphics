@@ -9,6 +9,8 @@ extends Node
 ## --profile also switches each effect off in turn and reports what it costs;
 ## --off=ssil,glow leaves those effects off for the whole run, to compare
 ## screenshots with and without them. _profile_targets() lists the names.
+## Every view also says how many pipelines the renderer made while it was
+## drawn: what was seen for the first time there, see Fx.rehearse().
 ## --at=x,y,z,yaw,pitch looks from that point instead of the fixed views, to
 ## inspect one corner of a level; several poses are separated by semicolons.
 ## A y that begins with a plus is that far above the ground at x and z, for
@@ -38,6 +40,8 @@ extends Node
 ## view, six degrees wide, to show what the effects cost while they are all
 ## going off. --barrage=1 does the same with an explosion and its fire that
 ## many times a second, nine metres ahead of every view.
+## In a level on land --profile also takes away the trees, the ground and
+## what is strewn on it (grass, cones) in turn.
 ## --only=zones,dust limits --profile to those effects, to measure one thing
 ## several times over instead of everything once.
 ## --warmup=0 starts measuring a view that many frames after the camera got
@@ -320,10 +324,12 @@ func _run() -> void:
 			if not _weapon.is_empty():
 				player.weapons.smoke(1.0)
 			Fx.advance(_shoot[0])
+		var compiled := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW)
 		for i in _warmup_frames:
 			await tree.process_frame
 
 		var frame_ms: PackedFloat64Array = await _measure(_measure_frames, view.name)
+		compiled = RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW) - compiled
 
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(out_dir.path_join(view.name + ".png"))
@@ -347,6 +353,9 @@ func _run() -> void:
 			"primitives": RenderingServer.get_rendering_info(
 				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
 			),
+			# Pipelines the renderer had to make while it drew this view:
+			# each is something seen for the first time, and may be a hitch.
+			"pipelines": compiled,
 		}
 		print("%-12s %7.1f fps avg  %7.1f fps 1%% low  %6.1f ms worst frame" % [view.name, result.avg_fps, result.low_1pct_fps, result.worst_ms])
 		if _profile:
@@ -497,6 +506,18 @@ func _profile_targets() -> Dictionary:
 	# In a level that is cut into zones, every zone has such parts of its own,
 	# and "zones" is drawing only the zones in sight: off draws all of them.
 	var level := scene.get_node_or_null("Level")
+	# A level on land: what grows on it, what lies on it and the land itself,
+	# which the builder names by what they are.
+	if level and level.has_node("Ground"):
+		for part: String in ["trees", "ground", "strewn"]:
+			targets[part] = []
+		if level.has_node("Trees"):
+			targets["trees"].append([level.get_node("Trees"), "visible"])
+		for mesh in level.get_children():
+			if mesh is MeshInstance3D:
+				var kind := String(mesh.name).rstrip("0123456789")
+				if kind in ["Ground", "Strewn"]:
+					targets[kind.to_lower()].append([mesh, "visible"])
 	if level and "culling" in level:
 		targets["zones"] = [[level, "culling"]]
 		for part: String in ["Props", "Decals", "Glass", "Dust"]:

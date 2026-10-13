@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/window_pane.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/mirror = Color(0.34, 0.38, 0.42, 1)
+shader_parameter/film = Color(0.3, 0.29, 0.25, 1)
+shader_parameter/painted = Color(0.36, 0.4, 0.36, 1)
+shader_parameter/lean = 0.07
+shader_parameter/dirt = 0.6

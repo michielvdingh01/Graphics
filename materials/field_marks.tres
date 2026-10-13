@@ -1,0 +1,10 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/foliage/field_marks.png" id="marks"]
+
+[resource]
+transparency = 1
+albedo_texture = ExtResource("marks")
+roughness = 0.8
+metallic_specular = 0.2
+texture_filter = 5
