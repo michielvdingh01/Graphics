@@ -44,6 +44,10 @@ uniform sampler2D cover : hint_default_transparent, filter_linear_mipmap, repeat
 // and its depth.
 uniform vec4 cover_rect = vec4(0.0);
 uniform sampler2D wear_mask : hint_default_black, filter_linear_mipmap, repeat_enable;
+// How far the edge of a cover wanders from where the map has it, in metres:
+// this far from one side to the other from stride to stride, and twice as
+// far over the length of a lorry.
+uniform float edge_wander = 2.6;
 // How many times a scan fits into a metre.
 uniform float sand_scale = 0.55;
 uniform float needles_scale = 0.5;
@@ -134,7 +138,6 @@ void fragment() {
 	vec2 at = (UV - cover_rect.xy) * cover_rect.zw;
 	// Beyond the map there is sand and nothing else.
 	float inside = float(at == clamp(at, 0.0, 1.0));
-	vec4 lies = texture(cover, at) * inside;
 	vec4 spot = mix(vec4(0.5, 0.0, 0.0, 0.0), COLOR, inside);
 	vec2 dx = dFdx(UV);
 	vec2 dy = dFdy(UV);
@@ -148,6 +151,10 @@ void fragment() {
 	// stride across.
 	vec3 patchy = texture(wear_mask, vec2(dot(UV, crosswind), dot(UV, downwind)) * vec2(0.021, 0.0075)).rgb;
 	vec3 ragged = texture(wear_mask, UV * 0.23).rgb;
+	// What was painted on the map with a ruler, the floor of a camp, does
+	// not lie on the land with one: its edge wanders, by a stride here and
+	// by a few there.
+	vec4 lies = texture(cover, at + ((ragged.rg - 0.5) + (patchy.gb - 0.5) * 2.0) * edge_wander * cover_rect.zw) * inside;
 
 	// --- The track ---------------------------------------------------------
 	// Two ruts, which weave a little along the way, a strip between them

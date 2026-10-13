@@ -1458,7 +1458,7 @@ func sprig(model: String, part: String, xf: Transform3D) -> void:
 
 
 ## The material each scanned plant is strewn in.
-const SPRIGS := {"fern_02": "fern", "shrub_03": "dune_weed", "weed_plant_02": "ground_weed"}
+const SPRIGS := {"fern_02": "fern", "shrub_03": "dune_weed"}
 const FERNS: Array[String] = ["fern_02_a", "fern_02_b", "fern_02_c", "fern_02_d"]
 const WEEDS: Array[String] = ["shrub_03_a", "shrub_03_b", "shrub_03_c", "shrub_03_d"]
 const BOUGHS: Array[String] = ["dry_branches_medium_01_a", "dry_branches_medium_01_b", "dry_branches_medium_01_c"]
@@ -1657,8 +1657,10 @@ func _stain_standings() -> void:
 	for standing: Node3D in parked.get_children():
 		var nose := -standing.transform.basis.z
 		for drip: float in [0.55, -0.35]:
-			var at := standing.position + nose * (drip * 2.4 + dice.randf_range(-0.3, 0.3)) + standing.transform.basis.x * dice.randf_range(-0.35, 0.35)
-			var wide := dice.randf_range(0.9, 1.7)
+			# Not all of it under the middle: it has stood here before, a
+			# little to one side.
+			var at := standing.position + nose * (drip * 2.4 + dice.randf_range(-0.4, 0.4)) + standing.transform.basis.x * dice.randf_range(0.5, 1.5) * (1.0 if dice.randf() < 0.5 else -1.0)
+			var wide := dice.randf_range(1.4, 2.6)
 			var stain := Decal.new()
 			stain.name = "Drip"
 			stain.texture_albedo = load("res://assets/decals/stain_%d.png" % dice.randi_range(1, 2))
@@ -1666,7 +1668,7 @@ func _stain_standings() -> void:
 			# ground that is not level.
 			stain.transform = resting(at.x, at.z, dice.randf() * 360.0, 0.8)
 			stain.size = Vector3(wide, 0.7, wide * dice.randf_range(0.7, 1.2))
-			stain.modulate = Color(0.5, 0.42, 0.34, dice.randf_range(0.55, 0.8))
+			stain.modulate = Color(0.5, 0.42, 0.34, dice.randf_range(0.75, 1.0))
 			stain.upper_fade = 0.05
 			stain.lower_fade = 0.05
 			stain.distance_fade_enabled = true
