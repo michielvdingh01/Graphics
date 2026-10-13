@@ -42,6 +42,13 @@ const SCORCH_VARIANTS := 2
 const BLOOD_VARIANTS := 2
 ## Splashes and pools of blood that stay; the oldest makes way.
 const MAX_STAINS := 24
+## How many prints of boots lie in the sand before the oldest blows over.
+const MAX_PRINTS := 60
+## How long and wide the texture of a print lies on the ground, in metres:
+## the boot in it is 30 cm long.
+const PRINT_ACROSS := 0.36
+## How much of its own colour a print gives the sand it is pressed in.
+const PRINT_STAIN := 0.4
 const DECALS := "res://assets/decals/"
 
 ## Seconds the effects have been running. Bursts are timed against this.
@@ -75,6 +82,9 @@ var _pool_texture: Texture2D
 var _wet: ImageTexture
 var _stains: Array[Decal] = []
 var _holes: Array[Decal] = []
+## The print of a boot in sand, and its dent.
+var _print_textures: Array[Texture2D] = []
+var _prints: Array[Decal] = []
 ## What is freed once `time` passes a moment: [node, moment].
 var _expiring: Array[Array] = []
 ## Lights that die down: [light, start, seconds, energy].
@@ -329,6 +339,7 @@ func _ready() -> void:
 			var glow: Texture2D = load(stem + "_e.png") if surface == "metal" else null
 			variants.append([load(stem + ".png"), load(stem + "_n.png"), load(stem + "_orm.png"), glow])
 		_hole_textures[surface] = variants
+	_print_textures = [load(DECALS + "boot_print.png"), load(DECALS + "boot_print_n.png")]
 	for i in SCORCH_VARIANTS:
 		_scorch_textures.append(load("%sscorch_%d.png" % [DECALS, i + 1]))
 	for i in BLOOD_VARIANTS:
@@ -1403,6 +1414,29 @@ func _hole(surface: String, frame: Transform3D, across: float) -> Decal:
 	while _holes.size() > MAX_HOLES:
 		_holes.pop_front().queue_free()
 	return decal
+
+
+## The print a boot leaves in sand at `at`, a point on the ground that faces
+## `up`, by somebody walking towards `heading`. The oldest print makes way
+## once there are MAX_PRINTS: the wind has had it.
+func footprint(at: Vector3, up: Vector3, heading: Vector3) -> void:
+	var ahead := heading.slide(up)
+	if ahead.length_squared() < 0.0001:
+		return
+	var decal := Decal.new()
+	decal.texture_albedo = _print_textures[0]
+	decal.texture_normal = _print_textures[1]
+	# A dent more than a stain: the sand keeps most of its own colour.
+	decal.albedo_mix = PRINT_STAIN
+	decal.size = Vector3(PRINT_ACROSS, 0.2, PRINT_ACROSS)
+	# A decal lies in its own X and Z and the top of its texture is its -Z:
+	# the toe of the print.
+	decal.transform = Transform3D(Basis.looking_at(ahead.normalized(), up), at)
+	_keep(decal)
+	_prints.append(decal)
+	_prints = _prints.filter(is_instance_valid)
+	while _prints.size() > MAX_PRINTS:
+		_prints.pop_front().queue_free()
 
 
 ## A mark of blood `across` metres wide on the surface `frame` stands on,

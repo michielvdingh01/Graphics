@@ -1,7 +1,11 @@
-[gd_resource type="StandardMaterial3D" format=3]
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/wire.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/foliage/concertina.png" id="wire"]
 
 [resource]
-cull_mode = 2
-albedo_color = Color(0.2, 0.19, 0.18, 1)
-metallic = 0.8
-roughness = 0.55
+shader = ExtResource("shader")
+shader_parameter/wire_tex = ExtResource("wire")
+shader_parameter/cut_near = 0.45
+shader_parameter/cut_far = 0.07
+shader_parameter/roughness = 0.46

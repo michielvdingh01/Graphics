@@ -6,6 +6,10 @@
 [ext_resource type="PackedScene" path="res://scenes/levels/dunes_level.tscn" id="level"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
 [ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
+[ext_resource type="Shader" path="res://shaders/dune_sky.gdshader" id="sky_shader"]
+[ext_resource type="Script" path="res://scripts/hidden.gd" id="hidden"]
+[ext_resource type="Script" path="res://scripts/air.gd" id="air"]
+[ext_resource type="Script" path="res://scripts/gulls.gd" id="gulls"]
 
 [sub_resource type="NavigationMesh" id="navmesh"]
 geometry_parsed_geometry_type = 1
@@ -13,8 +17,11 @@ geometry_collision_mask = 1
 geometry_source_geometry_mode = 1
 geometry_source_group_name = &"navigation_source"
 
-[sub_resource type="PanoramaSkyMaterial" id="sky_mat"]
-panorama = ExtResource("hdri")
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("sky_shader")
+shader_parameter/panorama = ExtResource("hdri")
+shader_parameter/ground = Color(0.62, 0.52, 0.38, 1)
+shader_parameter/ground_energy = 0.8
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
@@ -22,9 +29,10 @@ sky_material = SubResource("sky_mat")
 [sub_resource type="Environment" id="env"]
 background_mode = 2
 sky = SubResource("sky")
-ambient_light_energy = 1.0
+ambient_light_energy = 0.88
 tonemap_mode = 4
-tonemap_exposure = 1.0
+tonemap_exposure = 0.95
+tonemap_agx_contrast = 1.3
 ssao_enabled = true
 ssao_radius = 1.2
 ssao_intensity = 1.6
@@ -33,13 +41,13 @@ glow_intensity = 0.5
 glow_bloom = 0.03
 glow_hdr_threshold = 1.3
 fog_enabled = true
-fog_light_color = Color(0.72, 0.8, 0.9, 1)
-fog_density = 0.0016
-fog_aerial_perspective = 0.5
-fog_sun_scatter = 0.12
+fog_light_color = Color(0.8, 0.84, 0.9, 1)
+fog_density = 0.0009
+fog_aerial_perspective = 0.6
+fog_sun_scatter = 0.3
 adjustment_enabled = true
-adjustment_contrast = 1.05
-adjustment_saturation = 1.06
+adjustment_contrast = 1.04
+adjustment_saturation = 1.1
 metadata/open_sky = true
 
 [sub_resource type="ShaderMaterial" id="post_mat"]
@@ -58,16 +66,24 @@ environment = SubResource("env")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.8280603, 0.416636, -0.3751407, 0, 0.6691306, 0.7431448, 0.560639, -0.6153688, 0.5540805, 0, 0, 0)
-light_color = Color(1, 0.95, 0.86, 1)
-light_energy = 3.2
-light_angular_distance = 0.6
+light_color = Color(1, 0.94, 0.83, 1)
+light_energy = 3.9
 light_bake_mode = 0
 shadow_enabled = true
-shadow_blur = 1.2
+shadow_blur = 1.5
 directional_shadow_blend_splits = false
 directional_shadow_max_distance = 110.0
 
 [node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
+
+[node name="Hidden" type="Node3D" parent="."]
+script = ExtResource("hidden")
+
+[node name="Air" type="GPUParticles3D" parent="."]
+script = ExtResource("air")
+
+[node name="Gulls" type="MultiMeshInstance3D" parent="."]
+script = ExtResource("gulls")
 
 [node name="Post" type="CanvasLayer" parent="."]
 layer = 0

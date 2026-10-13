@@ -30,6 +30,12 @@ func _describe() -> void:
 	drop("dry_branches_medium_01", ground(99.5, 181.5, 0.02), 200)
 	bivouac(Vector2(118.5, 172.5), 70.0)
 	cover("earth", Vector2(107, 177), 9.0, 0.8)
+	# What the felling party left lying when it stopped for the day.
+	strew("sledgehammer_01", ground(108.4, 176.2, 0.05), 20, Basis(Vector3.RIGHT, PI * 0.5))
+	strew("crowbar_01", ground(104.6, 174.3, 0.03), 80, Basis(Vector3.RIGHT, PI * 0.5))
+	strew("metal_jerrycan_green", ground(109.6, 178.4), 40)
+	kit(Vector2(116.9, 174.2), 30.0)
+	helmet(ground(101.0, 169.5, 0.42), 20.0)
 
 
 ## A stack of felled trunks on the ground at `at`, lying along the X of the

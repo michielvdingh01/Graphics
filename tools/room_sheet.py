@@ -6,15 +6,21 @@ level before and after a change to how its rooms are built.
     tools/room_sheet.py works --before=/path/to/other/checkout
     tools/room_sheet.py works                    this checkout alone
     tools/room_sheet.py works --views=2          the first two views of every room
+    tools/room_sheet.py dunes --views=23 --columns=2 --quality=3
+
 
 The views are the first that the level builder wrote on each zone of the
 level in this checkout, which for a level laid out as rooms is the one from
 its door (see _own_views() in tools/kit/rooms.gd). The other checkout is
-looked at from the same spots, whatever views its own level has. The sheet
+looked at from the same spots, whatever views its own level has. A level
+that is not cut into zones, land under an open sky, has its views on the
+level itself, and is looked at from those. The sheet
 lands in benchmark/sheets/<level>_before_after.jpg, or <level>_rooms.jpg
 without a before, with under every picture how dark it is: the share of it
 that is nearly black (darker than 6% grey) and its mean brightness from 0 to
-1. The same is printed as a table, darkest view first.
+1. The same is printed as a table, darkest view first. --columns says how
+many pictures stand side by side, four unless said otherwise; any other
+option goes to the benchmark, as --res=1280x720 does unless said otherwise.
 
 It needs the GPU, which each checkout takes its slot for, and ImageMagick.
 """
@@ -32,7 +38,8 @@ NEARLY_BLACK = 6
 
 def shoot(checkout, level, poses, extra):
     """Has the benchmark of a checkout look from those poses: the pictures, in order."""
-    command = [os.path.join(checkout, "tools/benchmark.sh"), "--quick", "--scene=res://scenes/%s.tscn" % level, "--at=" + ";".join(poses), "--res=1280x720"] + extra
+    command = [os.path.join(checkout, "tools/benchmark.sh"), "--quick", "--scene=res://scenes/%s.tscn" % level, "--at=" + ";".join(poses)]
+    command += extra if any(option.startswith("--res=") for option in extra) else ["--res=1280x720"] + extra
     done = subprocess.run(command, capture_output=True, text=True)
     saved = re.search(r"Saved to (.+)", done.stdout)
     if done.returncode != 0 or not saved:
@@ -60,6 +67,7 @@ def main():
     level = args[0]
     before = options.pop("before", None)
     each = int(options.pop("views", 1))
+    columns = int(options.pop("columns", 4))
     extra = ["--%s=%s" % (key, value) if value else "--" + key for key, value in options.items()]
     path = os.path.join(ROOT, "scenes/levels/%s_level.tscn" % level)
     if not os.path.exists(path):
@@ -68,11 +76,12 @@ def main():
     for node in open(path).read().split("\n[node ")[1:]:
         zone = re.search(r'metadata/zone = "([^"]*)"', node)
         views = re.search(r"metadata/views = PackedFloat32Array\((.*)\)", node)
-        if not zone or not views or not views.group(1).strip():
+        if not views or not views.group(1).strip():
             continue
+        name = zone.group(1) if zone else level
         numbers = [float(n) for n in views.group(1).split(",")]
         for i in range(0, min(len(numbers), each * 5), 5):
-            shots.append({"zone": zone.group(1) + (" %d" % (i // 5 + 1) if each > 1 else ""), "pose": ",".join("%g" % n for n in numbers[i:i + 5])})
+            shots.append({"zone": name + (" %d" % (i // 5 + 1) if each > 1 else ""), "pose": ",".join("%g" % n for n in numbers[i:i + 5])})
     if not shots:
         sys.exit("The level has no views written on it: build it again with tools/build_level.sh %s." % level)
     poses = [shot["pose"] for shot in shots]
@@ -87,7 +96,6 @@ def main():
     folder = os.path.join(ROOT, "benchmark/sheets")
     os.makedirs(folder, exist_ok=True)
     sheet = os.path.join(folder, "%s_%s.jpg" % (level, "before_after" if before else "rooms"))
-    columns = 4
     width = 1920 // columns - 8
     montage = ["magick", "montage", "-font", FONT, "-background", "#1c1c1c", "-fill", "#dddddd", "-pointsize", "15"]
     for shot in shots:

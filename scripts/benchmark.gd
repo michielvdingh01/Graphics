@@ -9,8 +9,12 @@ extends Node
 ## --profile also switches each effect off in turn and reports what it costs;
 ## --off=ssil,glow leaves those effects off for the whole run, to compare
 ## screenshots with and without them. _profile_targets() lists the names.
+## Every view also says how many pipelines the renderer made while it was
+## drawn: what was seen for the first time there, see Fx.rehearse().
 ## --at=x,y,z,yaw,pitch looks from that point instead of the fixed views, to
 ## inspect one corner of a level; several poses are separated by semicolons.
+## A y that begins with a plus is that far above the ground at x and z, for
+## a level on land: --at="120,+1.6,187,-88,-2".
 ## --weapon=3 puts that weapon of the loadout in view as the player holds it,
 ## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
@@ -36,6 +40,9 @@ extends Node
 ## view, six degrees wide, to show what the effects cost while they are all
 ## going off. --barrage=1 does the same with an explosion and its fire that
 ## many times a second, nine metres ahead of every view.
+## In a level on land --profile also takes away the trees and, in turn,
+## each kind of mesh the builder lays in blocks: ground, strewn (grass),
+## undergrowth, litter, beyond (the wood around the land), detail, trim.
 ## --only=zones,dust limits --profile to those effects, to measure one thing
 ## several times over instead of everything once.
 ## --warmup=0 starts measuring a view that many frames after the camera got
@@ -158,6 +165,14 @@ func _ready() -> void:
 		_snapshot.call_deferred()
 	if active:
 		_run.call_deferred()
+
+
+## How high the ground lies at x and z: the highest thing there that stops a
+## walker, and nought where there is nothing.
+func _ground_under(x: float, z: float) -> float:
+	var ray := PhysicsRayQueryParameters3D.create(Vector3(x, 500.0, z), Vector3(x, -100.0, z), 1)
+	var hit := get_viewport().world_3d.direct_space_state.intersect_ray(ray)
+	return (hit.position as Vector3).y if hit else 0.0
 
 
 ## Runs what was given with --eval, one expression after the other, with the
@@ -283,6 +298,8 @@ func _run() -> void:
 			marker.name = "Shot%d" % (markers.size() + 1)
 			add_child(marker)
 			marker.position = Vector3(numbers[0], numbers[1], numbers[2])
+			if pose.get_slice(",", 1).strip_edges().begins_with("+"):
+				marker.position.y += _ground_under(numbers[0], numbers[2])
 			marker.rotation_degrees = Vector3(numbers[4], numbers[3], 0.0)
 			markers.append(marker)
 
@@ -308,10 +325,12 @@ func _run() -> void:
 			if not _weapon.is_empty():
 				player.weapons.smoke(1.0)
 			Fx.advance(_shoot[0])
+		var compiled := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW)
 		for i in _warmup_frames:
 			await tree.process_frame
 
 		var frame_ms: PackedFloat64Array = await _measure(_measure_frames, view.name)
+		compiled = RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW) - compiled
 
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(out_dir.path_join(view.name + ".png"))
@@ -335,6 +354,9 @@ func _run() -> void:
 			"primitives": RenderingServer.get_rendering_info(
 				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
 			),
+			# Pipelines the renderer had to make while it drew this view:
+			# each is something seen for the first time, and may be a hitch.
+			"pipelines": compiled,
 		}
 		print("%-12s %7.1f fps avg  %7.1f fps 1%% low  %6.1f ms worst frame" % [view.name, result.avg_fps, result.low_1pct_fps, result.worst_ms])
 		if _profile:
@@ -485,6 +507,18 @@ func _profile_targets() -> Dictionary:
 	# In a level that is cut into zones, every zone has such parts of its own,
 	# and "zones" is drawing only the zones in sight: off draws all of them.
 	var level := scene.get_node_or_null("Level")
+	# A level on land: what grows on it, and the meshes the builder lays in
+	# blocks and names by what they are: the ground, what is strewn on it,
+	# the undergrowth, the litter, the wood beyond the land.
+	if level and level.has_node("Ground"):
+		if level.has_node("Trees"):
+			targets["trees"] = [[level.get_node("Trees"), "visible"]]
+		for mesh in level.get_children():
+			if mesh is MeshInstance3D:
+				var kind := String(mesh.name).rstrip("0123456789").to_lower()
+				if not targets.has(kind):
+					targets[kind] = []
+				targets[kind].append([mesh, "visible"])
 	if level and "culling" in level:
 		targets["zones"] = [[level, "culling"]]
 		for part: String in ["Props", "Decals", "Glass", "Dust"]:

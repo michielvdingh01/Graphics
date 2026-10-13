@@ -114,8 +114,9 @@ func _lie_of_the_land() -> void:
 	lay_ground()
 
 
-## Lets the woods grow, and the marram: what is kept open is open, and the
-## rest of the land has what the dunes have.
+## Lets the woods grow, and the marram, with what lies and grows under the
+## pines: what is kept open is open, and the rest of the land has what the
+## dunes have.
 func _grow() -> void:
 	# The camps, the look-out and the ground before the wall.
 	for clear: Rect2 in [
@@ -137,6 +138,8 @@ func _grow() -> void:
 	marram(Rect2(28, 96, 210, 60), 2.4, 0.1)
 	marram(Rect2(20, 58, 300, 36), 2.6, 0.0)
 	marram(Rect2(4, 160, 130, 68), 3.4, 0.3)
+	forest_floor()
+	dune_grass()
 
 
 ## The box of a stretch of the way that is fought over: from (x0, z0) to
