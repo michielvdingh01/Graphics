@@ -38,6 +38,9 @@ const THROW_TIME := 0.55
 const THROW_RELEASE := 0.4
 const THROW_SPEED := 15.0
 const HIT_MASK := 0b100101  # world + enemy + breakable
+## How far a shot is heard by an enemy that keeps watch, in metres for every
+## metre of flame at the muzzle: the pistol 17 m, the shotgun 42.
+const HEARD := 100.0
 const SWITCH_TIME := 0.3
 const FIRE_BUFFER := 0.12
 ## With nothing left to fire, the trigger swings the weapon instead: how long
@@ -624,6 +627,7 @@ func _fire(data: WeaponData) -> void:
 		_locked = 1.0
 
 	Sfx.play(data.shot_sound)
+	get_tree().call_group(&"watch", &"hears", camera.global_position, data.flash_size * HEARD)
 	Save.tally("shots")
 	if any_hit:
 		Save.tally("hits")

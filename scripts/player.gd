@@ -429,6 +429,14 @@ func _process(delta: float) -> void:
 	_fov_punch *= exp(-FOV_PUNCH_FADE * delta)
 
 
+## What a step sounds like on what the player stands on: sand has a sound of
+## its own, everything else that of a boot on concrete.
+func _step_sound() -> StringName:
+	var down := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.3, global_position + Vector3.DOWN * 0.4, 1)
+	var floor_hit := get_world_3d().direct_space_state.intersect_ray(down)
+	return &"footstep_sand" if floor_hit and Fx.surface_of(floor_hit) == "sand" else &"footstep"
+
+
 ## Moves the stride on by what was walked in `delta` seconds, sounds a step at
 ## every footfall and returns how much of a walk there is to show, see
 ## bob_weight(). A stride is only ever paused, never started afresh: a bob
@@ -440,7 +448,7 @@ func _walk(delta: float) -> float:
 		var foot := floorf(_stride)
 		_stride += speed * delta / STEP_DISTANCE
 		if floorf(_stride) > foot:
-			Sfx.play(&"footstep", -16.0 if _crouched else -10.0)
+			Sfx.play(_step_sound(), -16.0 if _crouched else -10.0)
 		_stride = fposmod(_stride, 2.0)
 	var weight := minf(speed / WALK_SPEED, BOB_SPRINT) if walking else 0.0
 	_bob_weight = lerpf(_bob_weight, weight, 1.0 - exp(-BOB_FADE * delta))

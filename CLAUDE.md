@@ -48,8 +48,8 @@ git ls-files -z | while IFS= read -r -d '' f; do if [ -f "$M/$f" ] && cmp -s "$M
 
 | Wat | Commando |
 |---|---|
-| De hele selftest (4 minuten) | `tools/selftest.sh` |
-| Alleen gevechten, routes, beeld of wat stuk kan | `tools/selftest.sh --fights`, `--routes`, `--view`, `--breaks` |
+| De hele selftest (5 minuten) | `tools/selftest.sh` |
+| Alleen gevechten, routes, beeld of wat stuk kan, of één level | `tools/selftest.sh --fights`, `--routes`, `--view`, `--breaks`, `--level=<level>` |
 | Samen spelen, personages, de sandbox | `tools/nettest.sh`, `tools/test_humanoid.sh`, `tools/test_sandbox.sh` |
 | Vaste standpunten meten, of alleen de beelden | `tools/benchmark.sh [--scene=res://scenes/<level>.tscn]`, `tools/shots.sh` |
 | Een level zone voor zone, met keurmerk en contactblad | `tools/zone_sheet.py <level>` |

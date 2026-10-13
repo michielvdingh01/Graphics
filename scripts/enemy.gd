@@ -9,6 +9,14 @@ extends CharacterBody3D
 ## not heed danger. One that panics loses its head when it is badly hurt or
 ## sees one of its own die: from then on it only runs about.
 ##
+## An enemy that is on watch (see watch()) does not know of the player yet,
+## and that is not a matter of being switched off: it walks its round or
+## stands guard, and goes by what it sees and hears. It sees what is in front
+## of it, far off if it stands in the light and hardly at all if it stands in
+## the shade of a level with land (scripts/land.gd), and it takes a moment to
+## be sure: `awareness` runs up while it has somebody in view. A shot it
+## hears. Once it knows, it is like any other, and so are those with it.
+##
 ## The grunt, rusher and heavy are this same script with different exported
 ## tuning and a different model; how the model moves is up to its rig. That is
 ## enemy_rig.gd for a robot, and humanoid_rig.gd when the theme of the enemies
@@ -29,6 +37,7 @@ const ACCEL := 22.0
 const SIGHT_RANGE := 45.0
 const ALERT_RADIUS := 14.0
 const LOS_MASK := 0b011  # world + player
+const LAND := preload("res://scripts/land.gd")
 const RIG := preload("res://scripts/enemy_rig.gd")
 const HUMANOID := preload("res://scripts/humanoid_rig.gd")
 const THEMES := preload("res://scripts/enemy_themes.gd")
@@ -78,6 +87,23 @@ const STAGGER := 0.9
 ## the seconds it gives that.
 const PANIC_RUN := Vector2(4.0, 11.0)
 const PANIC_TIME := Vector2(0.8, 2.2)
+
+## On watch: how sure it has to be before it stops and looks, how fast its
+## suspicion fades again, in shares a second, and how fast it turns to look,
+## in radians a second.
+const WARY := 0.3
+const FORGETS := 0.35
+const LOOK_PACE := 2.6
+## Somebody at its shoulder it notices whichever way it looks, and somebody
+## who runs it hears: from this many metres.
+const AT_ITS_SHOULDER := 2.6
+const HEARS_RUNNING := 9.0
+## A player who moves faster than this is running.
+const RUNNING := 6.0
+## Seconds it waits at either end of its round, and between two looks about
+## when it stands guard.
+const ROUND_WAIT := Vector2(1.5, 4.0)
+const LOOK_WAIT := Vector2(2.5, 6.0)
 
 enum Attack { COOLDOWN, TELEGRAPH, BURST }
 ## What it is doing about the player: going for it, running for cover,
@@ -134,11 +160,25 @@ enum Mode { HUNT, TO_COVER, COVER, PEEK, FLEE, PANIC }
 ## on its back takes before it is holed. Only for a model that has one.
 @export var shield := 80.0
 @export var pack := 0.0
+## On watch: from how far it makes out somebody who stands in the light, and
+## somebody who stands in the shade. A crouching player counts for less.
+@export var sight_lit := 34.0
+@export var sight_shade := 7.5
+@export var sight_crouched := 0.7
+## How far to either side of its nose it sees, in degrees.
+@export var sight_side := 58.0
+## Seconds it takes to be sure of somebody at the edge of what it sees; of
+## somebody close by, a fifth of that.
+@export var notice_time := 1.7
+## How fast it walks its round, in metres a second.
+@export var round_pace := 1.25
 
 var health := 0.0
 var dead := false
 ## True if the last thing that hit it was stopped by its plate.
 var deflected := false
+## On watch: how sure it is that somebody is there, 0 to 1. At 1 it knows.
+var awareness := 0.0
 
 var _player: CharacterBody3D
 var _alerted := false
@@ -189,6 +229,21 @@ var _pack_flame: Node3D
 var _choose_timer := 0.0
 ## True while it has its weapon on the one it is after.
 var _aims := false
+## On watch, see watch(): the spots of its round and whether it goes round
+## and round or there and back, the spot it is making for and which way
+## along the round, how long it still waits, the way it faces when it stands
+## guard and how far it looks to either side of that, and where it last saw
+## what it is not sure of.
+var _watching := false
+var _round := PackedVector3Array()
+var _round_loops := false
+var _round_at := 0
+var _round_step := 1
+var _wait := 0.0
+var _guards := 0.0
+var _looks := 0.0
+var _look := 0.0
+var _suspect := Vector3.ZERO
 ## On a guest: where the host last said it was and which way it faced, and
 ## the id of the player it has its weapon on, 0 for nobody.
 var _told_at := Vector3.ZERO
@@ -349,11 +404,54 @@ func is_alert() -> bool:
 	return _alerted and not dead
 
 
+## Puts it on watch, where it stands: it walks the spots of `beat` there and
+## back, or round and round if it `loops`, or with no beat stands guard facing
+## as it does and looking up to `looks` degrees to either side. It stays on
+## watch until it knows of the player.
+func watch(beat := PackedVector3Array(), loops := false, looks := 35.0) -> void:
+	if _alerted or dead:
+		return
+	_watching = true
+	_round = beat
+	_round_loops = loops
+	_round_at = 0
+	_round_step = 1
+	_guards = rotation.y
+	_look = rotation.y
+	_looks = deg_to_rad(looks)
+	_wait = randf_range(0.0, LOOK_WAIT.y)
+	add_to_group(&"watch")
+	if not Blast.exploded.is_connected(_hears_blast):
+		Blast.exploded.connect(_hears_blast)
+
+
+## True while it is on watch and knows of nothing.
+func is_watching() -> bool:
+	return _watching and not _alerted and not dead
+
+
+## Something loud at `at` that carries `reach` metres: a shot, a bang. One
+## that is on watch and within earshot knows where to look.
+func hears(at: Vector3, reach: float) -> void:
+	if is_watching() and global_position.distance_to(at) < reach:
+		alert()
+
+
+func _hears_blast(at: Vector3) -> void:
+	hears(at, SIGHT_RANGE * 1.4)
+
+
 func alert() -> void:
 	if _alerted or dead:
 		return
 	_alerted = true
+	awareness = 1.0
 	_attack_timer = randf_range(0.4, 1.2)
+	if _watching:
+		# Whoever is on watch with it will know in a moment: see game.gd.
+		_watching = false
+		remove_from_group(&"watch")
+		disturbed.emit()
 	Net.show(self, &"_show_alert")
 	for other in get_tree().get_nodes_in_group("enemy"):
 		if other.global_position.distance_to(global_position) < ALERT_RADIUS:
@@ -519,7 +617,13 @@ func _physics_process(delta: float) -> void:
 		if _los_timer <= 0.0:
 			_los_timer = 0.15
 			_has_los = distance < SIGHT_RANGE and _ray_hits_player(eye, target)
-		if _has_los:
+		if _watching and not _alerted:
+			_notice(delta, target - eye, distance)
+			if not _alerted:
+				desired = _keep_watch(delta)
+				_turn_towards(_face, delta, LOOK_PACE)
+				_rig.lower()
+		elif _has_los:
 			alert()
 
 		if _alerted:
@@ -791,12 +895,76 @@ func _strafe(delta: float) -> Vector3:
 	return global_basis.x * _strafe_dir * speed * 0.5
 
 
-func _turn_towards(direction: Vector3, delta: float) -> void:
+func _turn_towards(direction: Vector3, delta: float, pace := -1.0) -> void:
 	direction.y = 0.0
 	if direction.length_squared() < 0.001:
 		return
 	var yaw := atan2(-direction.x, -direction.z)
-	rotation.y = lerp_angle(rotation.y, yaw, 1.0 - exp(-turn_speed * delta))
+	rotation.y = lerp_angle(rotation.y, yaw, 1.0 - exp(-(turn_speed if pace < 0.0 else minf(pace, turn_speed)) * delta))
+
+
+# --- On watch ------------------------------------------------------------------
+
+
+## How far off it makes out the player right now, who stands `to` from its
+## eyes: far in the light, hardly in the shade, and outside what it looks at
+## only what is at its shoulder or runs.
+func _sees_as_far_as(to: Vector3) -> float:
+	var crouched: bool = _player.has_method(&"is_crouched") and _player.is_crouched()
+	var runs := Vector2(_player.velocity.x, _player.velocity.z).length() > RUNNING
+	var flat := Vector3(to.x, 0.0, to.z).normalized()
+	if flat.dot(-global_basis.z) < cos(deg_to_rad(sight_side)):
+		return HEARS_RUNNING if runs else AT_ITS_SHOULDER
+	var land := LAND.of(get_tree())
+	var shade: float = land.shade_around(_player.global_position) if land else 0.0
+	var reach := lerpf(sight_lit, sight_shade, shade) * (sight_crouched if crouched else 1.0)
+	return maxf(reach, HEARS_RUNNING) if runs else reach
+
+
+## Grows surer of the player while it has him in view, and less sure while it
+## has not; sure, it knows.
+func _notice(delta: float, to: Vector3, distance: float) -> void:
+	var reach := _sees_as_far_as(to)
+	if _has_los and distance < reach:
+		awareness += delta / (notice_time * lerpf(0.2, 1.0, distance / reach))
+		_suspect = _player.global_position
+		if awareness >= 1.0:
+			alert()
+	else:
+		awareness = maxf(awareness - FORGETS * delta, 0.0)
+
+
+## Walks its round or stands guard, and returns the velocity that goes with
+## it; `_face` is left pointing where it should look. One that thinks it saw
+## something stops and looks that way.
+func _keep_watch(delta: float) -> Vector3:
+	if awareness > WARY:
+		_face = _suspect - global_position
+		return Vector3.ZERO
+	_wait -= delta
+	if _round.size() < 2:
+		if _wait <= 0.0:
+			_wait = randf_range(LOOK_WAIT.x, LOOK_WAIT.y)
+			_look = _guards + randf_range(-_looks, _looks)
+		_face = Vector3(-sin(_look), 0.0, -cos(_look))
+		return Vector3.ZERO
+	if _wait > 0.0:
+		return Vector3.ZERO
+	var goal := _round[_round_at]
+	if _flat(goal) < 0.7:
+		var last := _round.size() - 1
+		if _round_loops:
+			_round_at = (_round_at + 1) % _round.size()
+		else:
+			if (_round_at == last and _round_step > 0) or (_round_at == 0 and _round_step < 0):
+				_round_step = -_round_step
+				_wait = randf_range(ROUND_WAIT.x, ROUND_WAIT.y)
+			_round_at += _round_step
+		return Vector3.ZERO
+	var step := _go_to(goal, round_pace)
+	if step.length_squared() > 0.01:
+		_face = step
+	return step
 
 
 ## Ducks behind something low, or stands up again. Its collider and its eyes

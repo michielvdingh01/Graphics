@@ -186,6 +186,9 @@ var _probed := {}
 var _probe_in := 0.0
 ## The players of the beds, by kind, and the seconds to the next spot.
 var _beds := {}
+## The bed of the open air in the level that is loaded, where it is not cut
+## into zones: that of a yard, unless the level says otherwise.
+var _open_bed := &"yard"
 var _spot_in := 0.0
 ## Doors that are on their way: instance id -> {at, player, still}.
 var _doors := {}
@@ -257,9 +260,13 @@ func _survey(scene: Node) -> void:
 	_rooms.clear()
 	_room = -1
 	_probed = {}
+	_open_bed = &"yard"
 	var level := scene.get_node_or_null(^"Level")
 	if level == null:
 		return
+	# A level that is not a yard between sheds says what its open air sounds
+	# like: see open_air() in tools/kit/land.gd.
+	_open_bed = level.get_meta(&"open_air", &"yard")
 	for zone in level.get_children():
 		if not zone.has_meta(&"bounds"):
 			continue
@@ -368,7 +375,7 @@ func _probe(camera: Camera3D) -> Dictionary:
 			open += 1
 	# No roof, or one that stands on posts: the open air.
 	if reach[0] >= PROBE_REACH or open >= 2:
-		return {"tuning": SPACES[&"yard"], "bed": &"yard", "beds": {&"yard": 0.0}}
+		return {"tuning": SPACES[&"yard"], "bed": _open_bed, "beds": {_open_bed: 0.0}}
 	var size := Vector3(reach[2] + reach[3], reach[0] + reach[1], reach[4] + reach[5])
 	var bed := &"hall" if size.y >= TALL else &"room"
 	var volume := size.x * size.y * size.z
