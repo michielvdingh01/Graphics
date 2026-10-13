@@ -195,7 +195,7 @@ func _litter_at(at: Vector2) -> float:
 		var reach: float = (crown[1] as Vector3).x
 		if reach < 1.2:
 			continue
-		litter = maxf(litter, 1.0 - smoothstep(reach * 1.3, reach * 2.6, Vector2(middle.x, middle.z).distance_to(at)))
+		litter = maxf(litter, 1.0 - smoothstep(reach * 3.0, reach * 6.0, Vector2(middle.x, middle.z).distance_to(at)))
 	return litter
 
 

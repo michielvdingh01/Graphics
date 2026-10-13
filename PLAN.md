@@ -2631,7 +2631,7 @@ De donkere hoek is niet overal even donker. Door het raam in de zuidmuur valt ee
 
 Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan het vijfde level bouwen, elk in een eigen worktree: alles wat hoog groeit en wat achter het land ligt. Gebouwd op de branch `duindennen`; niet gemerged, niet gepusht. De andere twee zijn `duingrond` (grond en gras) en `duinkamp` (licht, kamp en complex). Geen van de drie commit gebouwde bestanden: wie ze samenvoegt bouwt één keer, met `tools/build_model.sh trees` en dan `tools/build_level.sh dunes`. De foto's van de dennen voor van ver zijn meegecommit; wie de dennen daarna nog verandert, maakt ze opnieuw (zie "Werkwijze").
 
-De sessie viel die dag drie keer stil (de gebruikslimiet, de slaapstand van de laptop, en twee keer was de GPU van Michiel, die speelde). Het werk is in zes commits gedaan; elk ervan slaagt voor `tools/selftest.sh --level=dunes`.
+De sessie viel die dag drie keer stil (de gebruikslimiet, de slaapstand van de laptop, en twee keer was de GPU van Michiel, die speelde). Het werk is in zeven commits gedaan; elk ervan slaagt voor `tools/selftest.sh --level=dunes`.
 
 **Wat er staat**
 
@@ -2678,11 +2678,11 @@ Alles op de speelinstelling (3456×2160, Ultra, MetalFX, renderschaal vanzelf), 
 
   De bomen en de zonneschaduw van het eerste bosstandpunt zijn dus niet duurder geworden, en de bosrand met de verte kost op 6 en 14 minder dan de bosrand alleen kostte. Op 21 gaf de ene ronde 0,05 ms voor de twee samen en de andere 0,6: zo'n verschil tussen twee ronden is wat dit meten aan ruis heeft, en het hele beeld is er 0,4 ms sneller. De cijfers uit de opdracht (3,3 ms bomen, 3,6 ms zonneschaduw) zijn die middag niet teruggevonden: de trunk gaf 2,0 en 1,95.
 - **Een zachte rand via de doorzichtige pas kost het bos negen beelden per seconde.** Geprobeerd met `depth_prepass_alpha`: de kern van een kaart in de dieptepas, de rand gemengd. Om en om, twee ronden, zonder wachters, 14:40, aan een lader van 30 W, load 4 tot 7: het hele beeld ging in het bos van 13,7 naar 15,6 ms, omhoog gekeken van 12,2 naar 15,5 en op het oostelijke duin van 13,5 naar 17,1; de bomen van 2,2 tot 2,7 naar 3,4 tot 3,5, van 3,1 tot 3,5 naar 6,1 tot 7,0 en van 1,5 naar 3,7; de zonneschaduw werd op elk van de drie een milliseconde of meer duurder. De kern die in de dieptepas komt is te dun zodra de textuur klein gezien wordt, en alles ervoor wordt dan volledig belicht. De gestippelde rand doet dat niet.
-- **De laatste wijziging is niet gemeten**: de kleur van de grond vlak achter de rand van het land (de naad). Ze verandert een kaart, geen mesh.
+- **De laatste wijziging is niet gemeten**: de kleur van de grond vlak achter de rand van het land (de naad). Ze verandert een kaart, geen mesh. Nagelezen in de kaart: twee meter buiten de westrand ligt de kleur van naaldenbodem, dertig meter verder die van het duin.
 
 **Gecontroleerd, en wat niet**
 
-- `tools/selftest.sh` en `tools/selftest.sh --level=dunes` slagen op de eindstand. De bouw zegt na afloop 17% schaduw, 14 zones en 6 checkpoints.
+- `tools/selftest.sh` slaagt (13 oktober, 21:57, vóór de laatste wijziging aan de kleur van de naad); `tools/selftest.sh --level=dunes` slaagt op de eindstand. De bouw zegt na afloop 17% schaduw, 14 zones en 6 checkpoints.
 - `tools/build_check.py factory works depot powerhouse wing` (13 oktober, 20:21, vóór de scan en de kaarten van ver, die geen van die levels raken): geen bestand van die vijf levels is veranderd. Veranderd zijn de duinen en de vijf dennen; de twee struiken kwamen er gelijk uit.
 - Het blad met voor en na vanaf tien plekken: `benchmark/sheets/dunes_dennen_before_after.jpg`.
 - **Niet nagekeken**: of elke botsvorm en elke boom van het land op zijn plek staat, regel voor regel naast de trunk. Geen functie die een boom op het land zet of een botsvorm maakt is aangeraakt; de bosrand en de grond erachter hebben er geen.
