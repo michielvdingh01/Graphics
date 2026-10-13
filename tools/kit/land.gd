@@ -894,12 +894,10 @@ func _commit(zone_name: String, kind: String) -> void:
 		low.visibility_range_end = STREWN_REACH[kind.get_slice(" ", 0)]
 		low.visibility_range_end_margin = 6.0
 	elif kind.begins_with("beyond "):
-		# The wood beyond the land, see tree_wall(): it throws a shadow only
-		# where that falls away from the land, and its front row is one mesh
-		# from close by and another from afar.
+		# The wood beyond the land, see tree_wall(): it throws no shadow, and
+		# its front row is one mesh from close by and another from afar.
 		var wood := _root.get_child(0) as MeshInstance3D
-		if not _beyond_shadows.get(kind.get_slice(" ", 1).to_int(), false):
-			wood.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		wood.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if kind.ends_with(" near"):
 			wood.visibility_range_end = BEYOND_FAR
 			wood.visibility_range_end_margin = 8.0
@@ -1183,10 +1181,10 @@ const BEYOND_STRETCH := 52.0
 const BEYOND_ROWS := 4
 const BEYOND_ROW := 6.0
 const BEYOND_GAP := 5.6
-const BEYOND_FAR := 105.0
-## How much of the light gets to each row of it where the wood throws no
-## shadow, and the rows further in are simply darker; and how much of that
-## its bark gets, which stands under its own crown.
+const BEYOND_FAR := 85.0
+## How much of the light gets to each row of it: the wood throws no shadow,
+## so the rows further in are simply darker. And how much of that its bark
+## gets, which stands under its own crown.
 const BEYOND_LIGHT: Array[float] = [1.0, 0.8, 0.62, 0.5]
 const BEYOND_BARK := 0.6
 ## The pines of its edge, and of the rows behind: [kind, share].
@@ -1195,10 +1193,8 @@ const BEYOND_INNER := [["pine_a", 3.0], ["pine_b", 3.0], ["pine_c", 1.0]]
 ## What a tree of each kind adds to a mesh that many trees are merged into,
 ## by the part of its model and then by material: the arrays of a surface.
 var _merged := {}
-## How many stretches of wood beyond the land there are so far, and which
-## of them throw a shadow.
+## How many stretches of wood beyond the land there are so far.
 var _beyond := 0
-var _beyond_shadows := {}
 
 
 ## The wood that goes on beyond the land, where nobody comes: rows of pines
@@ -1209,17 +1205,15 @@ var _beyond_shadows := {}
 ## line: the front row as a tree is from the middle distance, or from afar
 ## when the stretch is far off, and the rows behind it always as from afar.
 ##
-## The shade the game knows of does not know of this wood. Where its shadow
-## would fall on the land it therefore throws none, and the rows further in
-## are simply made darker; where the sun stands on the side of the land, so
-## that its shadow falls away from it, it throws one, on itself.
+## The shade the game knows of does not know of this wood, and a shadow is
+## what a wood costs most: it throws none, and the rows further in are
+## simply made darker.
 func tree_wall(from: Vector3, to: Vector3, height := 22.0) -> void:
 	var length := from.distance_to(to)
 	var along := (to - from) / length
 	var back := along.cross(Vector3.UP)
 	var dice := RandomNumberGenerator.new()
 	dice.seed = hash([from, to])
-	var shadows := back.dot(-Vector3(_sunward.x, 0, _sunward.z).normalized()) > 0.3
 	var stretches := maxi(roundi(length / BEYOND_STRETCH), 1)
 	var stretch := length / stretches
 	for s in stretches:
@@ -1237,12 +1231,12 @@ func tree_wall(from: Vector3, to: Vector3, height := 22.0) -> void:
 				# The trees further in stand higher over those in front.
 				var size := height / 19.0 * dice.randf_range(0.84, 1.12) * (0.92 if row == 0 else 1.0)
 				var xf := Transform3D(Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3.ONE * size), at)
-				var light := (1.0 if shadows else BEYOND_LIGHT[row]) * dice.randf_range(0.82, 1.0)
+				var light := BEYOND_LIGHT[row] * dice.randf_range(0.82, 1.0)
 				var pick := dice.randf() * total
 				for kind: Array in kinds:
 					pick -= kind[1]
 					if pick <= 0.0:
-						var bark := light * (1.0 if shadows else BEYOND_BARK)
+						var bark := light * BEYOND_BARK
 						if row == 0:
 							_merge_tree(near, kind[0], "Mid", xf, light, bark)
 							_merge_tree(far, kind[0], "Far", xf, light, bark)
@@ -1254,7 +1248,6 @@ func tree_wall(from: Vector3, to: Vector3, height := 22.0) -> void:
 				var st := SurfaceTool.new()
 				st.create_from_arrays(_merged_arrays(part[1][mat]))
 				_tools["|beyond %d %s/%s" % [_beyond, part[0], mat]] = st
-		_beyond_shadows[_beyond] = shadows
 		_beyond += 1
 	# The dark of the wood, behind the last row: what is seen between the
 	# trunks, and what shuts the gaps between the crowns.
