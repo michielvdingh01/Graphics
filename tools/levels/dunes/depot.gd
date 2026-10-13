@@ -309,7 +309,7 @@ func _coil(xf: Transform3D, length: float, radius: float) -> void:
 	var st := _tool(WIRE, SLIGHT, xf * Vector3(length * 0.5, 0, 0))
 	var turns := maxi(2, roundi(length / 0.5))
 	var steps := 8
-	var band := 0.016
+	var band := 0.02
 	for wound: float in [1.0, -1.0]:
 		var loose := _depot_rng.randf_range(0.9, 1.08)
 		var phase := _depot_rng.randf() * TAU
@@ -718,9 +718,10 @@ func steel_door(xf: Transform3D, size: Vector2, deep: float) -> void:
 ## The guardroom inside the gate: a room of brick on a plinth under a slab
 ## of concrete, its footprint `size` around `centre` (x and z). Its door and
 ## a window look west at the road in from the gate, a second window looks
-## north across the yard. A stove pipe stands on its roof, and its fire
-## point hangs by the door.
-func guardroom(centre: Vector2, size: Vector3) -> void:
+## north across the yard. A stove pipe stands on its roof. Its door has
+## `plate` over it, if that says anything, and with `fire` a fire point
+## hangs on its north wall.
+func guardroom(centre: Vector2, size: Vector3, plate := "GUARDROOM", fire := true) -> void:
 	var foot := Vector3(centre.x, YARD_Y, centre.y)
 	_collide_box(Transform3D(Basis(), foot + Vector3.UP * size.y * 0.5), size, "brick")
 	var thick := 0.3
@@ -758,10 +759,12 @@ func guardroom(centre: Vector2, size: Vector3) -> void:
 	square_box(CONCRETE, west, Vector3(door_x, 2.17, -0.1), Vector3(doorway.size.x + 0.3, 0.18, 0.3))
 	fine(MID)
 	bulkhead(west * Vector3(door_x, 2.55, 0), Vector3.LEFT)
-	sign_plate(west * Vector3(door_x, 2.32, 0.012), Vector3.LEFT, "GUARDROOM", 0.14, "enamel_red")
+	if plate != "":
+		sign_plate(west * Vector3(door_x, 2.32, 0.012), Vector3.LEFT, plate, 0.14, "enamel_red")
 	downpipe(face_of(foot, size, Vector3.RIGHT) * Vector3(0.4, 0, 0), Vector3.RIGHT, size.y)
 	coarse()
-	fire_point(face_of(foot, size, Vector3.FORWARD) * Transform3D(Basis(), Vector3(5.1, 0, 0)))
+	if fire:
+		fire_point(face_of(foot, size, Vector3.FORWARD) * Transform3D(Basis(), Vector3(5.1, 0, 0)))
 
 
 ## A fire point on a wall: a red board with two buckets of sand on hooks
@@ -875,8 +878,8 @@ func manhole(at: Vector2) -> void:
 
 ## What the ground of `area` (x and z) inside the wall is: sand packed with
 ## gravel and earth, in patches, darkest along `ways`, where it is driven on
-## (each a path of x and z), and with the bare sand the wind brings lying
-## along the sides of it that are walls.
+## (each a path of x and z) and wheels have left their ruts, and with the
+## bare sand the wind brings lying along the sides of it that are walls.
 func yard_cover(area: Rect2, ways: Array, seed := 5, walled := Vector4(1, 1, 1, 1)) -> void:
 	if _cover == null:
 		return
@@ -887,6 +890,9 @@ func yard_cover(area: Rect2, ways: Array, seed := 5, walled := Vector4(1, 1, 1, 
 	var boxes: Array[Rect2] = []
 	for way: PackedVector2Array in ways:
 		boxes.append(_around(way, 3.0))
+		# The ground draws the ruts of whatever it knows as a track, see
+		# _read_land() in tools/kit/land.gd: these are tracks to it.
+		_tracks.append({"path": way, "width": 3.0})
 	for y in range(maxi(int(from.y), 0), mini(int(to.y), _cover.get_height())):
 		for x in range(maxi(int(from.x), 0), mini(int(to.x), _cover.get_width())):
 			var at := _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE
@@ -905,9 +911,7 @@ func yard_cover(area: Rect2, ways: Array, seed := 5, walled := Vector4(1, 1, 1, 
 			earth -= (1.0 - smoothstep(0.2, 3.2, edge)) * 0.5
 			for i in ways.size():
 				if boxes[i].has_point(at):
-					# Two ruts, a wheel's width either side of the middle of the way.
-					var gap := absf(_nearest_on(ways[i], at).x - 0.9)
-					earth = maxf(earth, 0.95 * (1.0 - smoothstep(0.4, 1.3, gap)))
+					earth = maxf(earth, 0.9 * (1.0 - smoothstep(1.5, 2.9, _nearest_on(ways[i], at).x)))
 			_lay_dot(x, y, COVERS.earth, clampf(earth, 0.0, 1.0))
 
 
@@ -1144,12 +1148,13 @@ func duct_riser(foot: Vector3, out: Vector3, height: float, size := Vector2(0.7,
 	coarse()
 
 
-## A tarpaulin thrown over what stands in `boxes`, each the [middle, size]
-## of a box in the frame `xf`: it lies on their tops, hangs taut between one
+## A tarpaulin thrown over something of more than one height, a tank or a
+## gun, where tarpaulin() of the field covers a stack: over what stands in
+## `boxes`, each the [middle, size] of a box in the frame `xf`: it lies on their tops, hangs taut between one
 ## high place and the next and falls from the edge of the first of them,
 ## the widest, to `hem` over the ground. It takes the place of nothing: what
 ## is under it is in the way as it was.
-func tarpaulin(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
+func sheeted(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
 	var under: Vector3 = boxes[0][0]
 	var spread: Vector3 = boxes[0][1] + Vector3(0.16, 0, 0.16)
 	var across := maxi(2, ceili(spread.x / 0.3))
