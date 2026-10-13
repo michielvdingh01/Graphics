@@ -241,6 +241,12 @@ var _scream: AudioStreamPlayer3D
 ## Whose voice it has: the sounds <voice>_alert, _hurt, _death and _panic.
 var _voice := "human"
 var _breath := 0.0
+## What it has on its back or at its hips besides what is in its hands, see
+## bear(): the thing, the bone it goes along with, and where it sits from
+## that bone.
+var _load: Node3D
+var _load_bone := -1
+var _load_hold := Transform3D()
 
 # Dying.
 var _dead := false
@@ -440,6 +446,38 @@ func muzzle() -> Vector3:
 	return _muzzle.global_position if _muzzle else global_position + Vector3.UP * fit.eyes
 
 
+## Takes `thing` on its back ("back") or at its hips ("hips"), over and above
+## whatever it has in its hands. `hold` is where the thing sits from the bone
+## that bears it, in hip heights, as the figure stands at rest: looking along
+## +Z with its left arm along +X. From then on the thing goes where the trunk
+## goes, at its own size whatever that of the figure, until release() hands
+## it back. That is how scripts/prize.gd puts a flag on somebody's back.
+func bear(thing: Node3D, on: String, hold: Transform3D) -> void:
+	release()
+	_load = thing
+	_load_bone = _hips if on == "hips" else _torso[-1]
+	var rest := _rest_global(_load_bone)
+	_load_hold = rest.affine_inverse() * Transform3D(hold.basis, rest.origin + hold.origin * _hip_height)
+	if thing.get_parent():
+		thing.get_parent().remove_child(thing)
+	_skeleton.add_child(thing)
+	_g.clear()
+	_place_load()
+
+
+## Lets go of what bear() took up and returns it, in no tree any more, for
+## whoever asked to put somewhere. Null if it bore nothing.
+func release() -> Node3D:
+	var thing := _load
+	_load = null
+	if not is_instance_valid(thing):
+		return null
+	if thing.get_parent() == _skeleton:
+		_skeleton.remove_child(thing)
+	thing.scale = Vector3.ONE
+	return thing
+
+
 ## A hit at `at` that came in along `direction` and did `amount` of damage.
 func hit(at: Vector3, direction: Vector3, amount := 0.0) -> void:
 	Fx.blood(at, direction)
@@ -623,6 +661,15 @@ func _shape(delta: float, hold_on: float) -> void:
 		var hand := _global(_arms[1].end)
 		var grasp := hand.basis.orthonormalized() * _hand_fix[1].inverse()
 		_weapon.transform = Transform3D(Basis(grasp.z, grasp.y, -grasp.x), hand.origin) * _haft
+	_place_load()
+
+
+## Puts what it bears where the bone under it has gone.
+func _place_load() -> void:
+	if _load == null:
+		return
+	var at := _global(_load_bone) * _load_hold
+	_load.transform = Transform3D(at.basis.orthonormalized().scaled(Vector3.ONE / _figure.scale.y), at.origin)
 
 
 ## Holds the weapon, or points: where it goes follows from what it is aimed
@@ -864,6 +911,10 @@ func _fall(delta: float) -> void:
 	var hold_on := 1.0 - smoothstep(0.0, 0.2, _fallen)
 	if hold_on > 0.0 or absf(_yaw) > 0.002 or _sink > 0.002:
 		_shape(delta, hold_on)
+	elif _load:
+		# Whatever nobody took off its back goes down with it.
+		_g.clear()
+		_place_load()
 
 	if not _landed and _fallen > _fall_length * 0.4:
 		_landed = true
