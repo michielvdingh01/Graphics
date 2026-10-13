@@ -94,10 +94,10 @@ func _net() -> void:
 			if cover > 0.0:
 				_image.set_pixel(x, y, Color(0.2, 0.17, 0.12, cover))
 	var scrim: Array[Color] = [Color(0.08, 0.1, 0.055), Color(0.14, 0.17, 0.085), Color(0.23, 0.185, 0.115), Color(0.18, 0.2, 0.1), Color(0.33, 0.29, 0.19)]
-	for i in 1500:
+	for i in 1150:
 		var middle := Vector2(_rng.randf(), _rng.randf()) * size
 		var thin := holes.get_pixelv(Vector2i(middle)).r
-		if thin < 0.47 and _rng.randf() > (thin - 0.2) * 1.6:
+		if thin < 0.5 and _rng.randf() > (thin - 0.24) * 1.5:
 			continue
 		var drift := shades.get_pixelv(Vector2i(middle)).r
 		var tone := scrim[clampi(int((drift - 0.22) / 0.56 * 5.0 + _rng.randf_range(-0.7, 0.7)), 0, 4)]
@@ -172,6 +172,23 @@ func _wire(from: Vector2, to: Vector2, thick: float, rust: Image, run: float, ap
 			var point := way.rotated(lean + _rng.randf_range(-0.2, 0.2)) * thick * _rng.randf_range(2.6, 3.4)
 			_stroke(to - point, to + point, thick * 0.6, steel.lightened(0.1))
 	return run + length
+
+
+## Chain-link fencing: wires that run both ways on the slant. It tiles.
+func _chainlink() -> void:
+	var size := _image.get_width()
+	var pitch := size / 4.0
+	for y in size:
+		for x in size:
+			var one := absf(fposmod(x + y + 0.5, pitch) - pitch * 0.5)
+			var other := absf(fposmod(x - y + 0.5, pitch) - pitch * 0.5)
+			var wire := minf(one, other)
+			var cover := clampf(2.6 - wire, 0.0, 1.0)
+			if cover > 0.0:
+				# Round wire: light along its middle. One runs over the other.
+				var round := 1.0 - wire / 2.6
+				var tone := lerpf(0.34, 0.62, round) * (1.0 if one < other else 0.82)
+				_image.set_pixel(x, y, Color(tone, tone * 1.02, tone * 1.04, cover))
 
 
 ## The dark of a pine wood, as it is seen between the trunks of the trees at
@@ -250,6 +267,32 @@ func _stencils() -> void:
 			if ink.a > 0.0:
 				ink.a *= smoothstep(0.26, 0.5, worn.get_pixel(x, y).r) * (0.82 + 0.18 * speck.get_pixel(x, y).r)
 				_image.set_pixel(x, y, ink)
+
+
+## The two ruts of a track that lorries use: darker, damper earth with the
+## print of the tread in it. It tiles from top to bottom.
+func _ruts() -> void:
+	var wide := _image.get_width()
+	var high := _image.get_height()
+	var grain := _tiling(0.03, 4)
+	for y in high:
+		for x in wide:
+			var u := (x + 0.5) / wide
+			var wear := grain.get_pixel(x % grain.get_width(), y % grain.get_height()).r
+			var alpha := 0.0
+			var dark := 0.0
+			for rut: float in [0.27, 0.73]:
+				var off := absf(u - rut) / 0.115
+				if off < 1.0:
+					# Chevrons of tread, pressed in.
+					var tread := fposmod((y + absf(u - rut) * wide * 1.6) / (high / 16.0), 1.0)
+					var lug := smoothstep(0.35, 0.5, tread) * (1.0 - smoothstep(0.85, 1.0, tread))
+					alpha = maxf(alpha, (1.0 - smoothstep(0.55, 1.0, off)) * (0.5 + 0.35 * lug + 0.25 * wear))
+					dark = lug
+			alpha = maxf(alpha, (1.0 - smoothstep(0.3, 0.5, absf(u - 0.5))) * 0.1 * wear)
+			if alpha > 0.0:
+				var earth := Color(0.2, 0.15, 0.1).lerp(Color(0.11, 0.08, 0.055), dark * 0.7 + wear * 0.3)
+				_image.set_pixel(x, y, Color(earth.r, earth.g, earth.b, clampf(alpha, 0.0, 0.9)))
 
 
 ## Fills a shape with `color`: any outline that does not cross itself.
