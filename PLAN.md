@@ -2626,3 +2626,72 @@ De donkere hoek is niet overal even donker. Door het raam in de zuidmuur valt ee
 - De twee teams met hun wapens: `assets/characters/sheets/uniforms_teams.jpg`.
 - De vijf in het gekozen uniform: `assets/characters/sheets/soldier_01_desert.jpg` tot en met `soldier_05_desert.jpg`, naast `soldier_01.jpg` tot en met `soldier_05.jpg`.
 - Ertegen spelen, om ze in beweging te zien: `GODOT_WINDOW=1 tools/godot.sh -- --play --enemies=soldiers_desert`. Dat commando heb ik niet kunnen proberen, want het opent een venster; `--enemies=soldiers_desert` zelf is zonder venster getest.
+
+## De duinen: de dennen, de bosrand en de verte
+
+Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan het vijfde level bouwen, elk in een eigen worktree: alles wat hoog groeit en wat achter het land ligt. Gebouwd op de branch `duindennen`; niet gemerged, niet gepusht. De andere twee zijn `duingrond` (grond en gras) en `duinkamp` (licht, kamp en complex). Geen van de drie commit gebouwde bestanden: wie ze samenvoegt bouwt één keer, in deze volgorde: `tools/build_model.sh trees`, `tools/gen_tree_cards.sh`, nog eens `tools/build_model.sh trees`, `tools/build_level.sh dunes`.
+
+**Dit hoofdstuk is geschreven voor het werk af was**, omdat de sessie drie keer stilviel (twee keer de gebruikslimiet of de slaapstand van de laptop, één keer omdat Michiel speelde en de GPU van hem was). Wat hieronder "niet gezien" of "niet gemeten" heet, is dat ook.
+
+**Wat er staat**
+
+- **De takeinden van een den zijn open** (`tools/gen_sprigs.py`, het soort `tuft`; `assets/foliage/pine_sprigs.*`). Een kruin is van 21 m af gemaakt van plaatjes van een heel takeinde, drie millimeter per beeldpunt, waar een naald er twee breed is. Dichte kwasten van dunne naalden liepen daarop dicht tot bollen, en een bol met een rafelrand, hard uitgeknipt, is een blad: dat is waarom de kruinen als loof lazen. De takeinden groeien nu met minder en dikkere naalden, alleen op het hout van de laatste twee jaar, met het kale twijgje erachter zichtbaar en de punten van de naalden los uit de pluk. Het plaatje is gerenderd zoals het was: Blender, op de CPU, 25 seconden.
+- **De rand van een gat in een kruin is gestippeld** (`shaders/crown.gdshader`: `soft`, `blur`). Waar de textuur kleiner gezien wordt dan ze gemaakt is, wordt het gat uit een vagere kopie gelezen, wat zijn rand breder maakt, en over die rand is het ene beeldpunt er wel en het volgende niet. Elk beeldpunt is er nog steeds wel of niet: de kruin blijft in de dieptepas vooraf. Zie "Gemeten" voor wat de andere weg kostte.
+- **De bosrand om het land is een bos en geen haag** (`tree_wall()` in `tools/kit/land.gd`). Het waren vier even rijen op een vaste hoogte: 864 bomen. Het zijn nu 675 bomen in opstanden, oud naast jong dat half zo hoog is, met open plekken ertussen; de rand is geen rij meer, want de voorste bomen staan tot acht meter voor de lijn, naar het land toe; en elke boom staat op de grond zoals die daar ligt (`beyond_height()`), niet op de hoogte van de lijn. Achter de laatste rij staat het donker van het bos, dat de grond en de hoogte van de opstand volgt.
+- **Achter het land ligt land** (`tools/levels/dunes/vista.gd`, nieuw; `shaders/beyond_ground.gdshader`). Het land hield op bij zijn rand, met daaronder een vlakke zandbak. Het gaat nu door op de hoogte van die rand en wordt binnen zeventig meter het land dat erachter ligt, tot 1,2 km ver: drie ringen van vierkanten om het land, van 10, 40 en 160 m, 6368 driehoeken samen. Landinwaarts, in het noorden, oosten en zuiden, staat het bos door en liggen verderop hoge duinen in rijen, tot dertig meter. In het westen ligt de kust: open lage duinen met duindoorn (470 struiken, één mesh), een zeereep van vijf tot negen meter met kerven erin, het strand en de zee, op 540 m van de westrand. Wat de grond is, zand, grijs duin, bosbodem of kruinen van ver, staat op twee kaarten die het materiaal over de grond legt (4 m per punt dichtbij, 16 m verder weg). Bossen ver weg zijn rijen van een getekende bosrand (`_treeline` in `tools/gen_foliage.gd`, opnieuw getekend: kruinen, stammen en het donker ertussen), elf achter elkaar tot een kilometer.
+- **Ten noorden van waar de speler uit het bos komt staat aan de westkant geen bos meer achter het land** (`wood_kept()` in `vista.gd`): daar is de kust open, zodat wie hoog genoeg staat over de zeereep een streep water ziet. Ten zuiden van z = 150 staat het bos er nog: de speler komt daar uit het bos.
+- **Een jonge den staat overeind vanaf 21 m.** Hij was daar een stapel liggende schijven, en hij stond van top tot voet in zijn eigen schaduw, krans over krans: dat was de donkere kegel. Zijn takken zijn nu staande kaarten, alleen de onderste kransen liggen ook, en zijn schaduw wordt geworpen door om de andere krans, op 62% van de grootte. De schaduw die het spel kent (`crowns`) is niet veranderd.
+- **Een dode tak hangt** (`_dead_branch()` in `tools/models/trees.gd`): vier knikken, naar beneden en opzij, met een of twee sporen van wat eraan zat, grijsbruin en donkerder dan de stam. Het waren drie punten op een rechte lijn, lichter dan de stam. Met eigen dobbelstenen (`_more`), zodat elke boom verder de vorm houdt die hij had.
+- **Gevelde stammen hebben de schors van de dennen** (`materials/bark.tres`: grijs waar het roder was).
+- **Een boom van ver kan één kaart zijn** (`tools/gen_tree_cards.gd` en `.sh`, `shaders/tree_far.gdshader`, `_far_card()` in `trees.gd`, `_merge_tree()` in `land.gd`). Het gereedschap fotografeert elke den van acht kanten, zonder licht: de kleur van elk punt, en op een tweede blad welke kant het op kijkt en of het hout is. De kaart draait naar wie kijkt en toont de foto van het dichtst bij waar hij staat; de zon komt er in de shader op zoals op de boom zelf. **De foto's zijn nog niet genomen**: het gereedschap tekent en de GPU was niet vrij. Zolang `assets/foliage/pine_far.json` er niet is, wordt een boom van ver getekend zoals hij was. `materials/pine_far.tres` ligt in de worktree en is niet gecommit, omdat het naar bladen wijst die er nog niet zijn.
+
+**Niet gedaan**
+
+- **De gescande den.** Gevraagd in het eerste bericht: 92 MB van Poly Haven (CC0), het takjesblad en de schors van `pine_tree_01` als losse texturen en de jonge den `pine_sapling_small` als model; de den zelf bestaat alleen als Blender-bestand van 571 MB en heeft 17,4 miljoen driehoeken. Er is geen antwoord op gekomen, dus er is niets opgehaald. De naalden zijn nog gegroeid en gerenderd, de schors is de scan die er al lag.
+- **De streep zee vanaf standpunt 6 en 21.** Uitgerekend vanaf de standpunten zelf (hoogte van het land en de kruinen van de 699 bomen, per halve graad): vanaf 21 staat het oog op 13,7 m en is de westelijke duin 15 m hoog, en vanaf 6 kijkt de camera naar het zuidwesten, tegen de duin die het land afsluit. Het water ligt in het westen, waar het land het toelaat: het is te zien van de rug van de westelijke duin (rond x = 16, z = 110 tot 125), en in kieren vanaf het oostelijke duin. Niet gezien: de beelden daarvan zijn niet gemaakt.
+
+**Gemeten**
+
+- **Een zachte rand via de doorzichtige pas kost het bos negen beelden per seconde.** Geprobeerd met `depth_prepass_alpha`: de kern van een kaart in de dieptepas, de rand gemengd. Om en om met de trunk, twee ronden, zonder wachters, op de speelinstelling (3456×2160, Ultra, MetalFX, renderschaal vanzelf), 13 oktober 14:40, aan de lader van 30 W, load 4 tot 7 terwijl een andere sessie mat:
+
+| Standpunt | Heel beeld, voor en na (ms) | Bomen, voor en na | Zonneschaduw, voor en na |
+|---|---|---|---|
+| Het bos, 1 | 13,7 en 15,6 | 2,2 tot 2,7 en 3,4 tot 3,5 | 1,7 tot 2,1 en 2,7 |
+| Het bos, omhoog gekeken | 12,2 en 15,5 | 3,1 tot 3,5 en 6,1 tot 7,0 | 1,7 tot 1,8 en 3,3 tot 3,7 |
+| Het oostelijke duin, 21 | 13,5 en 17,1 | 1,5 tot 1,6 en 3,7 tot 3,8 | 2,0 en 3,2 tot 3,6 |
+
+  Dat is 73 naar 64 fps in het bos en 74 naar 58 op het traagste standpunt. De kern die in de dieptepas komt is te dun zodra de textuur klein gezien wordt, en alles ervoor wordt dan volledig belicht. De gestippelde rand doet dat niet: hij is een harde rand met een drempel die per beeldpunt verschilt.
+- **De bosrand en de verte: 74 meshes en 171 duizend driehoeken voor het bos, waar het 72 en 156 duizend waren**, en 6 meshes met 11 duizend driehoeken voor de grond, de zee, de verre bossen en het struweel. Er staan meer bomen aan de rand als boom (twee rijen in plaats van één). Met één kaart per boom van ver wordt dat minder; **wat het per beeld kost is niet gemeten**.
+- **Niet gemeten**: de bomen en de zonneschaduw op het eerste standpunt van het bos met de nieuwe takeinden, de 0,3 ms voor de bosrand en de verte op standpunt 6, 14 en 21, en het geheel met de wachters op hun post.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh --level=dunes` slaagt op elk van de commits. De bouw zegt na afloop 17% schaduw, 14 zones en 6 checkpoints.
+- Wat ik gezien heb: tien beelden van de bosrand en het land erachter, van de grond en van boven, van vóór de nieuwe takeinden. **Niet gezien**: de nieuwe takeinden in het spel, de jonge den en de dode takken van dichtbij, de opnieuw getekende bosrand in de verte, en de zee vanaf de grond.
+- **Niet gedaan**: `tools/build_check.py factory works depot powerhouse wing`, de hele selftest, en het blad met voor en na (`benchmark/sheets/dunes_dennen_before_after.jpg`).
+
+**Onderweg gevonden**
+
+- **De kleur van een hoekpunt kwam niet aan in de shader van de grond achter het land.** De mesh had ze (nagekeken in het bestand: donkere bosbodem naast zand), de shader las overal wit, ook via een `varying` uit `vertex()`. De grond van het land zelf en de kruinen lezen hun hoekkleuren wel, met hetzelfde formaat. Niet opgelost; de kaarten zijn er de omweg voor, en ze zijn ook fijner dan vierkanten van 160 m.
+- **Een tijdslimiet kan het GPU-slot vasthouden.** `( sleep 240; kill $pid ) &` naast een run erft het slot (descriptor 9) en de uitvoer van die run: is de run klaar, dan houdt de `sleep` beide vast tot hij afloopt. Mijn eigen beelden hielden zo vier minuten het slot bezet na afloop, en twee achtergebleven `sleep 420` van een andere sessie hielden het vast over een slaapstand van de laptop heen. De bewaker moet beide sluiten: `( exec 9>&- >/dev/null 2>&1; sleep 240; kill $pid ) &`.
+- **Een bestand van een level kan geen naam kiezen die de bouwdoos al heeft.** `_wooded`, `_corner`, `_around` en `_own_ground` bestonden al in `land.gd` en `field.gd`; de bouw meldt dan een parse error in het ene bestand, bouwt de rest en schrijft een level zonder dat deel. Het level dat dan op schijf staat is stuk tot de volgende bouw.
+
+**Buiten de genoemde bestanden geraakt**
+
+- Nieuw: `tools/levels/dunes/vista.gd`, `tools/gen_tree_cards.gd` en `.sh`, `shaders/beyond_ground.gdshader`, `shaders/tree_far.gdshader`, `materials/beyond_ground.tres`, `materials/sea.tres`.
+- `tools/levels/dunes.gd`: de ene regel `build("vista")`, vóór `build("outside")`, omdat de bosrand op de grond van de verte staat.
+- `tools/levels/dunes/outside.gd`: de vier vlakke zandbakken om het land zijn weg, en de twee masten van de lijn staan op de grond die er nu ligt.
+- In `tools/kit/land.gd`: `tree_wall()`, `beyond_height()`, `_wood_high()`, `_merge_tree()`, `_merged_arrays()` en de variabelen daarboven, en in `_commit()` de takken `beyond` en `vista`.
+- De meshes van de bosrand heten nu `Beyond<n>`, zodat `--profile --only=beyond` ze samen meet, zoals `scripts/benchmark.gd` het al beschreef; de grond erachter heet `Vista<n>`.
+- `assets/manifest.json`: alleen de regel van `pine_sprigs`.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| De takeinden opnieuw renderen | `tools/gen_sprigs.sh pine_sprigs`, dan `tools/build_model.sh trees` |
+| De bomen fotograferen voor de kaart van ver (GPU) | `tools/gen_tree_cards.sh`, dan nog eens `tools/build_model.sh trees` en het level |
+| De bosrand in de verte opnieuw tekenen | `tools/gen_foliage.sh tree_line` |
+| Wat de bosrand en de verte kosten | `tools/benchmark.sh --scene=res://scenes/dunes.tscn --at="226,+1.6,172.5,140,-8;60,+1.6,84,-25,-1;327.25,13.73,157.31,80.7,-3" --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=beyond,vista --warmup=60` |
+| Het land achter de rand van boven | `tools/benchmark.sh --quick --scene=res://scenes/dunes.tscn --at="170,130,115,90,-14"` (naar het westen; 180 is het zuiden) |
+| Naar zee kijken vanaf de westelijke duin | `tools/benchmark.sh --quick --scene=res://scenes/dunes.tscn --at="16,+1.6,120,90,-2"` |
