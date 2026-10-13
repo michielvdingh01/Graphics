@@ -25,9 +25,12 @@ shader_type spatial;
 // the sun draws that shadow itself; where its shadow maps end, the ground
 // darkens by the map instead, so that a wood far off still stands on shade.
 //
-// A scan is only looked up where it shows: six look-ups on bare sand, nine
-// under the pines where moss grows on the litter, twelve where sand, litter
-// and moss meet; fewer by one for each scan within six metres.
+// A scan is only looked up where it shows. Three look-ups are always made:
+// the map and two of the mask that makes patches and rags. Each of sand,
+// needles, moss and earth then costs three where it lies (its colour from
+// close by and from afar, and its normal) and nothing where it does not:
+// six in all on bare sand or on needles, nine where moss or crust comes in,
+// twelve where three of them meet. Within six metres each is one fewer.
 uniform sampler2D sand_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D sand_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D needles_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -62,6 +65,8 @@ uniform vec3 litter_tint : source_color = vec3(0.6);
 uniform vec3 moss_tint : source_color = vec3(1.0);
 uniform vec3 crust_tint : source_color = vec3(0.8);
 uniform vec3 earth_tint : source_color = vec3(1.0);
+// The scan of earth is of dark loam: how much lighter packed sand is.
+uniform float earth_light = 2.2;
 uniform vec3 packed_tint : source_color = vec3(0.75);
 // What grass far off makes of the sand it stands on.
 uniform vec3 grass_tint : source_color = vec3(0.6, 0.62, 0.4);
@@ -112,20 +117,17 @@ void vertex() {
 // A scan from close by and, turned and five times as large, from afar: far
 // off it gives way to the second, which does not repeat where it can be
 // seen to. `far` is how much of it.
-vec3 scan(sampler2D tex, mat2 turn, float scale, vec2 at, vec2 dx, vec2 dy, float far) {
-	mat2 near = turn * scale;
-	vec3 rgb = textureGrad(tex, near * at, near * dx, near * dy).rgb;
+vec3 scan(sampler2D tex, mat2 turn, float scale, vec2 at, float far) {
+	vec3 rgb = texture(tex, turn * at * scale).rgb;
 	if (far > 0.0) {
-		mat2 wide = TURN_FAR * near * 0.21;
-		rgb = mix(rgb, textureGrad(tex, wide * at, wide * dx, wide * dy).rgb, far);
+		rgb = mix(rgb, texture(tex, TURN_FAR * turn * at * (scale * 0.21)).rgb, far);
 	}
 	return rgb;
 }
 
 // The slant a normal map gives the ground, for a scan that lies turned.
-vec2 slant(sampler2D tex, mat2 turn, float scale, vec2 at, vec2 dx, vec2 dy) {
-	mat2 near = turn * scale;
-	return turn * (textureGrad(tex, near * at, near * dx, near * dy).xy * 2.0 - 1.0);
+vec2 slant(sampler2D tex, mat2 turn, float scale, vec2 at) {
+	return turn * (texture(tex, turn * at * scale).xy * 2.0 - 1.0);
 }
 
 void fragment() {
@@ -213,8 +215,8 @@ void fragment() {
 	vec2 fallen_tilt = vec2(0.0);
 	float needles = lies.r * (1.0 - worn * 0.92) + (ragged.r - 0.5) * 0.8;
 	if (needles > 0.15) {
-		fallen = scan(needles_tex, TURN_NEEDLES, needles_scale, UV, dx, dy, far);
-		fallen_tilt = slant(needles_normal, TURN_NEEDLES, needles_scale, UV, dx, dy) * 1.3;
+		fallen = scan(needles_tex, TURN_NEEDLES, needles_scale, UV, far);
+		fallen_tilt = slant(needles_normal, TURN_NEEDLES, needles_scale, UV) * 1.3;
 		needles = smoothstep(0.38, 0.62, needles + (dot(fallen, vec3(1.2)) - 0.86) * 0.5);
 		// Rust where they fell lately, grey where they have lain long.
 		fallen = mix(fallen, vec3(dot(fallen, vec3(0.3, 0.6, 0.1))), 0.3);
@@ -222,27 +224,28 @@ void fragment() {
 	} else {
 		needles = 0.0;
 	}
-	// One scan of moss serves twice: bleached, with the sand showing
-	// through, it is the lichen and dead moss of the grey dune; as it is, it
-	// is the cushions that grow on the litter under the pines.
+	// One scan of moss serves twice. Bleached, with the sand showing
+	// through, it is the lichen and dry moss of the grey dune. Darkened, it
+	// is the moss that grows on the litter under the pines, in cushions
+	// with soft edges.
 	vec3 mossy = vec3(0.0);
 	vec2 mossy_tilt = vec2(0.0);
-	float moss = (lies.g * 0.45 + lies.r * 0.14) * (1.0 - worn) + (ragged.g - 0.5) * 0.9 + (patchy.g - 0.5) * 0.5;
+	float moss = (lies.g * 0.5 + lies.r * 0.16) * (1.0 - worn) + (ragged.g - 0.5) * 0.8 + (patchy.g - 0.5) * 0.45;
 	float crust = spot.b * (1.0 - worn) * (1.0 - needles) + (ragged.g - 0.5) * 0.7 + (patchy.b - 0.5) * 0.4;
-	if (moss > 0.3 || crust > 0.25) {
-		mossy = scan(moss_tex, TURN_MOSS, moss_scale, UV, dx, dy, far);
-		mossy_tilt = slant(moss_normal, TURN_MOSS, moss_scale, UV, dx, dy);
-		// How green the scan is here: its grass stands for a cushion.
-		float lush = (mossy.g - mossy.r * 0.85) * 6.0;
-		moss = smoothstep(0.46, 0.6, moss + lush * 0.3);
-		crust = smoothstep(0.4, 0.62, crust + lush * 0.25);
+	if (moss > 0.4 || crust > 0.2) {
+		mossy = scan(moss_tex, TURN_MOSS, moss_scale, UV, far);
+		mossy_tilt = slant(moss_normal, TURN_MOSS, moss_scale, UV);
+		moss = smoothstep(0.44, 0.72, moss);
+		// The crust is thin: it comes in where the scan has something
+		// growing, and leaves the sand bare between.
+		crust = smoothstep(0.4, 0.62, crust + (mossy.g - mossy.r * 0.85) * 1.5);
 	} else {
 		moss = 0.0;
 		crust = 0.0;
 	}
-	// Earth is what is left where wheels and boots have been: it lies on top.
-	// It lies in patches, with sand blown over it in between.
-	float earth = smoothstep(0.35, 0.65, lies.b + (ragged.b - 0.5) * 0.45 + (patchy.r - 0.55) * 0.55);
+	// Earth is what is left where wheels and boots have been: it lies on
+	// top, with an edge that is worn, not ragged.
+	float earth = smoothstep(0.4, 0.6, lies.b + (ragged.b - 0.5) * 0.25);
 
 	// --- Sand --------------------------------------------------------------
 	float bare = (1.0 - needles) * (1.0 - moss) * (1.0 - crust) * (1.0 - earth * 0.92);
@@ -251,7 +254,7 @@ void fragment() {
 	float rough = 0.96;
 	float loose = spot.g * (1.0 - driven);
 	if (bare > 0.004) {
-		vec3 sand = scan(sand_tex, TURN_SAND, sand_scale, UV, dx, dy, far);
+		vec3 sand = scan(sand_tex, TURN_SAND, sand_scale, UV, far);
 		sand = mix(sand, vec3(dot(sand, vec3(0.3, 0.6, 0.1))), sand_bleach) * sand_tint * sand_light;
 		// Low and damp, or high and dry; and streaks the wind has sorted.
 		float high = spot.r + (patchy.r - 0.5) * 0.3 + (ragged.r - 0.5) * 0.08;
@@ -260,7 +263,7 @@ void fragment() {
 		sand *= mix(1.0, crest_light, smoothstep(0.56, 0.85, high));
 		sand *= mix(0.9, 1.08, patchy.b);
 		// The scan is of sand that has set: loose sand is smoother.
-		tilt = slant(sand_normal, TURN_SAND, sand_scale, UV, dx, dy) * mix(1.0, 0.4, loose);
+		tilt = slant(sand_normal, TURN_SAND, sand_scale, UV) * mix(1.0, 0.4, loose);
 		rough = mix(0.86, 0.96, dry);
 
 		// Where the sand is loose and bare the wind shapes it: none of it
@@ -291,11 +294,13 @@ void fragment() {
 				float second = dot(UV, other) * wave * 1.13 - bend * 0.7;
 				float seen = 1.0 - smoothstep(0.6, 1.9, dot_wide * wave);
 				float much = seen * mix(1.0, 0.28, hidden);
-				// A ripple has a long back and a short face.
-				float a = first + 0.4 * sin(first);
-				float b = second + 0.4 * sin(second);
-				falls += mix(one * cos(a) * (1.0 + 0.4 * cos(first)), other * cos(b) * (1.0 + 0.4 * cos(second)), pick) * much;
-				trough += (0.5 - 0.5 * mix(sin(a), sin(b), pick)) * much;
+				if (much > 0.003) {
+					// A ripple has a long back and a short face.
+					float a = first + 0.4 * sin(first);
+					float b = second + 0.4 * sin(second);
+					falls += mix(one * cos(a) * (1.0 + 0.4 * cos(first)), other * cos(b) * (1.0 + 0.4 * cos(second)), pick) * much;
+					trough += (0.5 - 0.5 * mix(sin(a), sin(b), pick)) * much;
+				}
 				hidden = max(hidden, seen);
 				wave *= 0.31;
 				bend = bend * 0.45 + 1.7;
@@ -314,8 +319,10 @@ void fragment() {
 	}
 
 	// --- What lies on it ---------------------------------------------------
+	float shade = lies.a;
+	float sheen = 0.3;
 	if (crust > 0.0) {
-		vec3 grey = mix(mossy, vec3(dot(mossy, vec3(0.3, 0.6, 0.1))), 0.65) * crust_tint * mix(0.8, 1.15, patchy.r);
+		vec3 grey = mix(mossy, vec3(dot(mossy, vec3(0.3, 0.6, 0.1))), 0.5) * crust_tint * mix(0.85, 1.12, patchy.r);
 		ground = mix(ground, grey, crust);
 		tilt = mix(tilt, mossy_tilt, crust);
 		rough = mix(rough, 0.94, crust);
@@ -324,30 +331,35 @@ void fragment() {
 	tilt = mix(tilt, fallen_tilt, needles);
 	rough = mix(rough, 0.9, needles);
 	if (moss > 0.0) {
-		ground = mix(ground, mossy * moss_tint * mix(0.75, 1.15, patchy.b), moss);
+		// Dark olive, and greener where the sun does not dry it out.
+		vec3 cushion = mix(mossy, vec3(dot(mossy, vec3(0.3, 0.6, 0.1))), 0.4) * moss_tint * mix(vec3(1.0), vec3(0.82, 1.1, 0.78), shade) * mix(0.8, 1.1, patchy.b);
+		ground = mix(ground, cushion, moss);
 		tilt = mix(tilt, mossy_tilt * 1.4, moss);
 		rough = mix(rough, 0.95, moss);
 	}
 	if (earth > 0.004) {
-		vec3 packed = scan(earth_tex, TURN_EARTH, earth_scale, UV, dx, dy, far) * earth_tint * mix(0.8, 1.15, patchy.g) * mix(0.82, 1.1, ragged.r);
-		packed *= 1.0 - (rut * 0.25 + print * 0.14);
-		ground = mix(ground, packed, earth * 0.92);
-		tilt = mix(tilt, slant(earth_normal, TURN_EARTH, earth_scale, UV, dx, dy), earth);
-		rough = mix(rough, 0.9, earth);
+		// Packed ground is not much darker than sand. It is another stuff:
+		// grit and stones trodden flat, greyer, with a harder face.
+		vec3 packed = scan(earth_tex, TURN_EARTH, earth_scale, UV, far);
+		packed = mix(packed, vec3(dot(packed, vec3(0.3, 0.6, 0.1))), 0.35) * earth_tint * earth_light;
+		packed *= mix(0.9, 1.08, patchy.g) * mix(0.94, 1.05, ragged.r) * (1.0 - (rut * 0.2 + print * 0.12));
+		ground = mix(ground, packed, earth * 0.94);
+		tilt = mix(tilt, slant(earth_normal, TURN_EARTH, earth_scale, UV) * 1.5, earth);
+		rough = mix(rough, 0.74, earth);
+		sheen = mix(sheen, 0.45, earth);
 	}
 
 	// Grass too far off to be drawn: the sand between it darkens to it.
 	float grassy = spot.a * smoothstep(grass_from, grass_to, depth) * (0.6 + 0.4 * ragged.g);
 	ground = mix(ground, ground * grass_tint, grassy);
 
-	float shade = lies.a;
 	ground *= mix(vec3(1.0), straw_tint, foot * 0.6) * (1.0 - foot * foot_depth * (1.0 - 0.6 * shade));
 	float mapped = smoothstep(shadow_from, shadow_to, depth);
 	// Under a crown the sky is hidden as well as the sun: a little darker
 	// from close by too.
 	ALBEDO = ground * mix(1.0, 1.0 - shade_depth, shade * mapped) * mix(1.0, 0.88, shade);
 	ROUGHNESS = rough;
-	SPECULAR = 0.3;
+	SPECULAR = sheen;
 	// The tilt of ripples and ruts, turned from the world into the lie of
 	// the mesh, on top of what the scans say.
 	tilt -= vec2(dot(rises, east.xz), dot(rises, north.xz)) * inversesqrt(1.0 + dot(rises, rises));

@@ -1,14 +1,14 @@
 shader_type spatial;
 render_mode cull_disabled;
 
-// A sheaf of grass on a card: marram, or the low grass of the grey dune. The
-// texture is a picture of real blades with the gaps between them (see
-// tools/render_grass.py), four sheaves side by side, and comes with one of
-// which way each blade faces. A clump is a ring of such cards that arch
-// outwards, see _clump() in tools/kit/land.gd: its corners are handed
-// normals that point up and out of the clump, so that it is lit as one
-// mass, like the ground it stands on, and the blades only add their own
-// tilt to that.
+// Grass on a card: a tussock of marram, or a tuft of the fine grass that
+// grows low. The texture is a picture of real blades with the gaps between
+// them (see tools/render_grass.py), four plants to a picture, and comes
+// with one of which way each blade faces. A clump is a few such cards that
+// stand through each other, see _clump() and _tuft() in tools/kit/land.gd:
+// its corners are handed normals that point up and out of the clump, so
+// that it is lit as one mass, like the ground it stands on, and the blades
+// only add their own tilt to that.
 //
 // The vertex colour says what the card cannot: red is how far a corner
 // bends in the wind (none at the foot), green where in its sway the clump
@@ -52,7 +52,7 @@ void fragment() {
 	vec4 blade = texture(blades_tex, UV);
 	float depth = -VERTEX.z;
 	vec3 colour = blade.rgb * tint;
-	colour = mix(colour, vec3(dot(blade.rgb, vec3(0.3, 0.6, 0.1))) * 2.2 * straw_tint, COLOR.a);
+	colour = mix(colour, vec3(dot(blade.rgb, vec3(0.3, 0.6, 0.1))) * 2.0 * straw_tint, COLOR.a);
 	colour *= COLOR.b;
 	ALBEDO = colour;
 	ALPHA = blade.a;

@@ -49,6 +49,10 @@ const SLIGHT_SHEET := DETAIL | NO_COLLIDE
 ## A track that is further off than this is none to the ground material, in
 ## metres.
 const TRACK_FAR := 10.0
+## What is strewn on the land goes into a mesh a block of ground, one for
+## each of these, and this is how far off each is still drawn, in metres:
+## clumps of grass, what grows under the pines, and what lies on the ground.
+const STREWN_REACH := {"strewn": 85.0, "undergrowth": 50.0, "litter": 40.0}
 ## A clump of grass this large and larger has caught a mound of sand, this
 ## high for a clump of size one.
 const MOUND_FROM := 0.5
@@ -109,9 +113,13 @@ var _grown := {}
 var _trees: Node3D
 ## Where no tree is to stand: what a level keeps open (x and z).
 var _open: Array[Rect2] = []
-## The meshes of scanned models that are strewn about one by one, by model
-## and part: {mesh, fit}. See sprig().
+## The pieces of scanned models that are strewn about, by model and part:
+## what _scan_piece() made of each.
 var _strewn := {}
+## Whether the level asked for what lies and grows under its pines, see
+## forest_floor(), and for the fine grass that grows low, see dune_grass().
+var _floor_asked := false
+var _grass_asked := false
 ## What somebody has drawn on the map of the land in red: spots (x and z)
 ## with a ring round each. And the material that shows that map, once a
 ## level has asked for one: see map_sheet().
@@ -613,6 +621,11 @@ func _dress_ground() -> void:
 	_read_land()
 	_strew_rng.seed = hash(_level_name() + " strewn")
 	_stand_marram()
+	if _floor_asked:
+		_strew_wood()
+	if _grass_asked:
+		_strew_grass()
+	_stain_standings()
 	var across := _across()
 	var down := _down()
 	# The clumps of each block: the sand each has caught is part of the
@@ -873,12 +886,13 @@ func _commit(zone_name: String, kind: String) -> void:
 	super(zone_name, kind)
 	if kind.begins_with("ground "):
 		(_root.get_child(0) as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	elif kind.begins_with("strewn "):
-		# Tufts of grass: there are thousands, and none matters from afar.
-		var tufts := _root.get_child(0) as MeshInstance3D
-		tufts.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		tufts.visibility_range_end = 85.0
-		tufts.visibility_range_end_margin = 6.0
+	elif kind.get_slice(" ", 0) in STREWN_REACH:
+		# What grows low and what lies about: there are thousands, and none
+		# matters from afar.
+		var low := _root.get_child(0) as MeshInstance3D
+		low.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		low.visibility_range_end = STREWN_REACH[kind.get_slice(" ", 0)]
+		low.visibility_range_end_margin = 6.0
 
 
 # --- The shade ---------------------------------------------------------------------
@@ -975,8 +989,8 @@ func _stops_sun(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameters
 
 
 ## Leaves what the game has to know of the land on the level, see
-## scripts/land.gd: where the shade lies. And puts down what was strewn. Both
-## are files of the level, written once last time's have been cleared out.
+## scripts/land.gd: where the shade lies. It is a file of the level, written
+## once last time's have been cleared out.
 func _finish_zones() -> void:
 	super()
 	if _shade_bits:
@@ -996,11 +1010,6 @@ func _finish_zones() -> void:
 		var heights := "%s%s_land.res" % [OUT_DIR, _level_name()]
 		ResourceSaver.save(field, heights, ResourceSaver.FLAG_COMPRESS)
 		field.take_over_path(heights)
-	for key: String in _strewn:
-		var mesh: Mesh = _strewn[key].mesh
-		var file := "%s%s_%s.res" % [OUT_DIR, _level_name(), key.get_file()]
-		ResourceSaver.save(mesh, file, ResourceSaver.FLAG_COMPRESS)
-		mesh.take_over_path(file)
 
 
 ## The shade is worked out when the builder has the level standing in a world.
@@ -1221,46 +1230,374 @@ func thicket(path: Array, width := 3.0, height := 2.6) -> void:
 		_collide_box(Transform3D(Basis.looking_at(heading), Vector3(middle.x, (low + top) * 0.5, middle.y)), Vector3(width * 0.6, top - low, heading.length() + 0.6), "soft")
 
 
-## Stands one mesh of a scanned model on the ground at `xf`: a fern out of
-## the four the model holds, say. `model` is its id in the manifest and `part`
-## the name of the node in it. It is in nobody's way, casts no shadow and is
-## not drawn from far off.
-func sprig(model: String, part: String, xf: Transform3D) -> void:
+## One part of a scanned model as it is strewn: its corners with its foot at
+## nought, at the level of detail its importer made that comes nearest to
+## `triangles` of them. `model` is its id in the manifest
+## and `part` the name of the node in it. {points, normals, uvs, corners,
+## high}.
+func _scan_piece(model: String, part: String, triangles: int) -> Dictionary:
 	var key := model + "/" + part
 	if not _strewn.has(key):
-		# A copy of its own: a mesh inside an imported scene is not something
-		# a level can point at. It becomes a file of the level, see
-		# _finish_zones().
 		var found := (_model(model).scene as PackedScene).instantiate()
 		var one := found.find_child(part, true, false) as MeshInstance3D
+		var arrays := one.mesh.surface_get_arrays(0)
+		var corners: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var surface := RenderingServer.mesh_get_surface(one.mesh.get_rid(), 0)
+		var wide := 2 if (surface.vertex_count as int) <= 65536 else 4
+		# Of the levels the importer made, the one nearest to what was asked.
+		var nearest := absf(log(corners.size() / 3.0 / triangles))
+		for lod: Dictionary in surface.get("lods", []):
+			var packed: PackedByteArray = lod.index_data
+			@warning_ignore("integer_division")
+			var count := packed.size() / wide
+			var off := absf(log(count / 3.0 / triangles))
+			if off < nearest:
+				nearest = off
+				corners = PackedInt32Array()
+				for i in count:
+					corners.append(packed.decode_u16(i * 2) if wide == 2 else packed.decode_u32(i * 4))
 		var box := one.mesh.get_aabb()
-		_strewn[key] = {
-			"mesh": one.mesh.duplicate(true),
-			"fit": Transform3D(one.transform.basis, one.transform.basis * -Vector3(box.get_center().x, box.position.y, box.get_center().z)),
-		}
+		var fit := Transform3D(one.transform.basis, one.transform.basis * -Vector3(box.get_center().x, box.position.y, box.get_center().z))
+		var points := PackedVector3Array()
+		var normals := PackedVector3Array()
+		for point: Vector3 in arrays[Mesh.ARRAY_VERTEX]:
+			points.append(fit * point)
+		for normal: Vector3 in arrays[Mesh.ARRAY_NORMAL]:
+			normals.append(fit.basis * normal)
+		_strewn[key] = {"points": points, "normals": normals, "uvs": arrays[Mesh.ARRAY_TEX_UV], "corners": corners, "high": box.size.y}
 		found.free()
-	var node := MeshInstance3D.new()
-	node.name = part.to_pascal_case()
-	node.mesh = _strewn[key].mesh
-	node.transform = xf * (_strewn[key].fit as Transform3D)
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	node.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
-	node.visibility_range_end = 55.0
-	node.visibility_range_end_margin = 5.0
-	if not _root.has_node("Strewn"):
-		var under := Node3D.new()
-		under.name = "Strewn"
-		_add(under, _root)
-	_add(node, _root.get_node("Strewn"))
+	return _strewn[key]
+
+
+## Stands or lays `piece`, see _scan_piece(), at `xf`, in the material `mat`
+## (one of shaders/strewn.gdshader). It goes into the mesh its block of
+## ground has for `kind`, one of STREWN_REACH: it is in nobody's way, casts
+## no shadow and sinks away with distance. `sways` is how much of the wind
+## it feels, none for wood.
+func _strew(kind: String, mat: String, piece: Dictionary, xf: Transform3D, sways := 1.0) -> void:
+	@warning_ignore("integer_division")
+	var st := _tool_named("|%s %d %d/%s" % [kind, int(xf.origin.x) / GROUND_BLOCK, int(xf.origin.z) / GROUND_BLOCK, mat])
+	var points: PackedVector3Array = piece.points
+	var normals: PackedVector3Array = piece.normals
+	var uvs: PackedVector2Array = piece.uvs
+	var size := xf.basis.get_scale().y
+	var phase := fposmod(xf.origin.x * 0.37 + xf.origin.z * 0.61, 1.0)
+	for corner: int in piece.corners:
+		var point := points[corner]
+		st.set_color(Color(clampf(point.y / (piece.high as float), 0.0, 1.0) * sways, phase, clampf(point.y * size * 0.5, 0.0, 1.0)))
+		st.set_normal((xf.basis * normals[corner]).normalized())
+		st.set_uv(uvs[corner])
+		st.add_vertex(xf * point)
+
+
+## Stands one part of a scanned plant on the ground at `xf`: a fern out of
+## the four the model holds, say. `model` is its id in the manifest and
+## `part` the name of the node in it.
+func sprig(model: String, part: String, xf: Transform3D) -> void:
+	_strew("undergrowth", SPRIGS[model], _scan_piece(model, part, 260), xf)
+
+
+## The material each scanned plant is strewn in.
+const SPRIGS := {"fern_02": "fern", "shrub_03": "dune_weed", "weed_plant_02": "ground_weed"}
+const FERNS: Array[String] = ["fern_02_a", "fern_02_b", "fern_02_c", "fern_02_d"]
+const WEEDS: Array[String] = ["shrub_03_a", "shrub_03_b", "shrub_03_c", "shrub_03_d"]
+const BOUGHS: Array[String] = ["dry_branches_medium_01_a", "dry_branches_medium_01_b", "dry_branches_medium_01_c"]
 
 
 ## Ferns under the pines around `at`: `count` of them within `radius`.
 func ferns(at: Vector2, radius: float, count: int) -> void:
-	var parts: Array[String] = ["fern_02_a", "fern_02_b", "fern_02_c", "fern_02_d"]
 	for i in count:
 		var spot := at + Vector2.RIGHT.rotated(_prop_rng.randf() * TAU) * radius * sqrt(_prop_rng.randf())
 		var size := _prop_rng.randf_range(0.9, 1.5)
-		sprig("fern_02", parts[_prop_rng.randi() % 4], Transform3D(Basis(Vector3.UP, _prop_rng.randf() * TAU).scaled(Vector3.ONE * size), ground(spot.x, spot.y, -0.02)))
+		sprig("fern_02", FERNS[_prop_rng.randi() % 4], Transform3D(Basis(Vector3.UP, _prop_rng.randf() * TAU).scaled(Vector3.ONE * size), ground(spot.x, spot.y, -0.02)))
+
+
+## What a pine wood drops and what grows in it, wherever the land is wood:
+## cones under every crown and roots at the foot of every trunk, dead boughs
+## where they fell, ferns in drifts, thickest where the sun gets in, and
+## weeds along its edges and beside its tracks. It is strewn when the ground
+## is dressed, see _strew_wood().
+func forest_floor() -> void:
+	_floor_asked = true
+
+
+## Strews what forest_floor() asked for, now that every tree stands and the
+## shade is known.
+func _strew_wood() -> void:
+	var dice := _strew_rng
+	var drifts := _noise(1301, 21.0)
+	var cones := 0
+	var roots := 0
+	var count := {"fern": 0, "weed": 0, "bough": 0}
+	# What grows: a throw for every two strides of the land.
+	var step := 1.9
+	for row in int(_land.size.y / step):
+		for column in int(_land.size.x / step):
+			var at := _land.position + (Vector2(column, row) + Vector2(dice.randf(), dice.randf())) * step
+			var chance := dice.randf()
+			var size := dice.randf()
+			var yaw := dice.randf() * TAU
+			var pick := dice.randi()
+			if not _land.grow(-3.0).has_point(at) or firm_at(at) > 0.2 or slope(at.x, at.y) > 32.0:
+				continue
+			var deep := _between(_wooded, at)
+			if deep < 0.06:
+				continue
+			var by_track := absf(_by_track[_spot_at(at)].x)
+			var lit := 1.0 if not _in_shade(at) else 0.35
+			var thick := smoothstep(0.05, 0.5, drifts.get_noise_2dv(at))
+			var xf := Transform3D(Basis(Vector3.UP, yaw), ground(at.x, at.y, -0.02))
+			if deep > 0.35 and by_track > 2.8 and chance < thick * lit * 0.22:
+				_strew("undergrowth", "fern", _scan_piece("fern_02", FERNS[pick % 4], 260), xf.scaled_local(Vector3.ONE * lerpf(0.9, 1.7, size)))
+				count.fern += 1
+			elif by_track > 2.2 and (deep < 0.42 or by_track < 4.6) and chance > 0.6 and chance < 0.6 + lit * 0.2 * (1.0 - thick):
+				_strew("undergrowth", "dune_weed", _scan_piece("shrub_03", WEEDS[pick % 4], 170), xf.scaled_local(Vector3.ONE * lerpf(1.0, 1.9, size)))
+				count.weed += 1
+			elif deep > 0.4 and by_track > 2.3 and chance > 0.984:
+				# A bough lies as the ground lies.
+				var lying := resting(at.x, at.y, rad_to_deg(yaw), 0.6, 0.01)
+				_strew("undergrowth", "dead_wood", _scan_piece("dry_branches_medium_01", BOUGHS[pick % 3], 950), lying.scaled_local(Vector3.ONE * lerpf(0.8, 1.5, size)), 0.0)
+				count.bough += 1
+	# What every pine has at its foot and has dropped around it.
+	if _trees:
+		for tree: Node3D in _trees.get_children():
+			var info := _tree_kind(tree.scene_file_path.get_file().get_basename())
+			var girth: float = info.girth * tree.scale.y
+			if girth <= 0.0:
+				continue
+			var at := Vector2(tree.position.x, tree.position.z)
+			var reach := 2.0
+			for crown: Array in info.crowns:
+				reach = maxf(reach, (crown[1] as Vector3).x * tree.scale.y)
+			for i in dice.randi_range(4, 8):
+				var spot := at + Vector2.RIGHT.rotated(dice.randf() * TAU) * lerpf(girth + 0.3, reach * 1.15, sqrt(dice.randf()))
+				_cone(spot, dice)
+				cones += 1
+			if girth > 0.14:
+				var turn := dice.randf() * TAU
+				var many := dice.randi_range(3, 5)
+				for i in many:
+					_pine_root(at, girth, turn + TAU * (i + dice.randf_range(-0.3, 0.3)) / many, dice)
+					roots += 1
+	print("Floor: %d ferns, %d weeds, %d boughs, %d cones, %d roots" % [count.fern, count.weed, count.bough, cones, roots])
+
+
+## The fine grass that grows low, in tufts a hand or two high: under the
+## pines where the sun gets in, on the crust of the grey dune, and on a
+## track where no wheel goes, between the ruts and along its sides. It is
+## strewn when the ground is dressed, see _strew_grass().
+func dune_grass() -> void:
+	_grass_asked = true
+
+
+## Strews what dune_grass() asked for.
+func _strew_grass() -> void:
+	var dice := _strew_rng
+	var glades := _noise(1409, 14.0)
+	var tufts := 0
+	var step := 1.5
+	for row in int(_land.size.y / step):
+		for column in int(_land.size.x / step):
+			var at := _land.position + (Vector2(column, row) + Vector2(dice.randf(), dice.randf())) * step
+			var chance := dice.randf()
+			var seed := int(dice.randi())
+			if not _land.grow(-3.0).has_point(at) or firm_at(at) > 0.3 or cover_at("earth", at) > 0.3 or slope(at.x, at.y) > 34.0:
+				continue
+			if absf(_by_track[_spot_at(at)].x) < 3.4:
+				continue
+			# How much of it grows here: in the wood by the light, in the
+			# open by the crust.
+			var patch := glades.get_noise_2dv(at)
+			var want := smoothstep(0.4, 0.75, look_at_ground(at).b) * smoothstep(-0.35, 0.2, patch) * 0.55
+			if _between(_wooded, at) > 0.3:
+				want = smoothstep(0.0, 0.4, patch) * (0.5 if not _in_shade(at) else 0.14)
+			if chance > want:
+				continue
+			# It stands a few tufts together.
+			for i in 2 + seed % 3:
+				var beside := at + Vector2.RIGHT.rotated(seed * 0.013 + i * 2.3) * 0.34 * i
+				_tuft("dune_grass", beside, 0.55 + 0.12 * ((seed >> (4 + i * 2)) % 5), seed + i)
+				tufts += 1
+	for cut: Dictionary in _tracks:
+		var way: PackedVector2Array = cut.path
+		var run := 0.0
+		for i in way.size() - 1:
+			var along := way[i + 1] - way[i]
+			run += along.length()
+			var right := Vector2(-along.y, along.x).normalized()
+			var seed := int(dice.randi())
+			var chance := dice.randf()
+			if cover_at("earth", way[i]) > 0.3 and _earth_beside.get_pixelv(Vector2i(((way[i] - _land.position) * COVER_SCALE).floor().clamp(Vector2.ZERO, Vector2(_cover.get_size() - Vector2i.ONE)))).r > 0.3:
+				continue
+			# Between the ruts, which weave as the material has them weave,
+			# and along both sides: more of it where a wood shelters it.
+			var sheltered := 0.35 + 0.65 * smoothstep(0.1, 0.4, _between(_wooded, way[i]))
+			var weave := 0.17 * sin(run * 0.071) + 0.09 * sin(run * 0.19 + 1.7)
+			var knots := glades.get_noise_2dv(way[i] * 2.3)
+			if chance < smoothstep(-0.3, 0.3, knots) * 0.75 * sheltered:
+				_tuft("dune_grass", way[i] + right * (-weave + ((seed % 100) / 100.0 - 0.5) * 0.5), 0.5 + 0.1 * (seed % 4), seed)
+				tufts += 1
+			for side: float in [-1.0, 1.0]:
+				if (seed >> (8 if side > 0.0 else 12)) % 16 < int(7.0 * sheltered):
+					_tuft("dune_grass", way[i] + right * side * (2.5 + 0.9 * ((seed >> 16) % 100) / 100.0), 0.6 + 0.12 * ((seed >> 20) % 5), seed + 7)
+					tufts += 1
+	print("Grass: %d tufts" % tufts)
+
+
+## A tuft of fine grass at `at`, `size` times a tuft that stands half a
+## metre high: three cards that stand through each other and lean apart,
+## each with one quarter of the picture `mat` shows. The tufts of a block of
+## ground are one mesh, which is only drawn from close by, see _commit().
+func _tuft(mat: String, at: Vector2, size: float, seed: int) -> void:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = seed
+	@warning_ignore("integer_division")
+	var st := _tool_named("|litter %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.y) / GROUND_BLOCK, mat])
+	var foot := ground(at.x, at.y, -0.03)
+	var phase := dice.randf()
+	var withered := dice.randf() * dice.randf()
+	var turn := dice.randf() * TAU
+	for card in 3:
+		var angle := turn + card * TAU / 3.0 + dice.randf_range(-0.3, 0.3)
+		var out := Vector3(cos(angle), 0.0, sin(angle))
+		var side := Vector3(-out.z, 0.0, out.x)
+		# Which quarter: the withered ones, in seed, are the taller.
+		var quarter := dice.randi() % 4
+		var top := 0.42 if quarter < 2 else 0.2
+		var high := size * (1.0 - top) * 1.1
+		var half := size * 0.55 * 0.5 * dice.randf_range(0.85, 1.15)
+		var left := quarter * 0.25 + 0.003
+		var right := quarter * 0.25 + 0.247
+		if dice.randf() < 0.5:
+			var swap := left
+			left = right
+			right = swap
+		var lean := out * high * dice.randf_range(0.15, 0.5)
+		var low := foot - out * size * 0.05
+		var corners: Array[Vector3] = [low - side * half, low + side * half, low + lean + Vector3.UP * high + side * half, low + lean + Vector3.UP * high - side * half]
+		var uvs: Array[Vector2] = [Vector2(left, 1.0), Vector2(right, 1.0), Vector2(right, top), Vector2(left, top)]
+		var lit: Array[Color] = [Color(0, phase, 0.6, withered), Color(0, phase, 0.6, withered), Color(1, phase, 1, withered), Color(1, phase, 1, withered)]
+		var normal := (Vector3.UP + out * 0.3).normalized()
+		for corner: int in [0, 2, 1, 0, 3, 2]:
+			st.set_color(lit[corner])
+			st.set_normal(normal)
+			st.set_uv(uvs[corner])
+			st.add_vertex(corners[corner])
+
+
+## Darkens the ground where a lorry, a jeep or a tank stands: what drips
+## out of an engine and an axle, as a stain or two under each. Whatever
+## stands under the node "Vehicles" of the level counts, see vehicle() in
+## tools/kit/field.gd.
+func _stain_standings() -> void:
+	var parked := _root.get_node_or_null("Vehicles")
+	if parked == null:
+		return
+	var dice := _strew_rng
+	for standing: Node3D in parked.get_children():
+		var nose := -standing.transform.basis.z
+		for drip: float in [0.55, -0.35]:
+			var at := standing.position + nose * (drip * 2.4 + dice.randf_range(-0.3, 0.3)) + standing.transform.basis.x * dice.randf_range(-0.35, 0.35)
+			var wide := dice.randf_range(0.9, 1.7)
+			var stain := Decal.new()
+			stain.name = "Drip"
+			stain.texture_albedo = load("res://assets/decals/stain_%d.png" % dice.randi_range(1, 2))
+			# It lies as the ground lies there, and is deep enough for
+			# ground that is not level.
+			stain.transform = resting(at.x, at.z, dice.randf() * 360.0, 0.8)
+			stain.size = Vector3(wide, 0.7, wide * dice.randf_range(0.7, 1.2))
+			stain.modulate = Color(0.5, 0.42, 0.34, dice.randf_range(0.55, 0.8))
+			stain.upper_fade = 0.05
+			stain.lower_fade = 0.05
+			stain.distance_fade_enabled = true
+			stain.distance_fade_begin = 35.0
+			stain.distance_fade_length = 10.0
+			_add(stain, _group("Decals", stain.position))
+
+
+## True if the sun does not come to the ground at `at`, as _shade_land() found.
+func _in_shade(at: Vector2) -> bool:
+	if _shade_bits == null:
+		return false
+	var dot := Vector2i(((at - _land.position) * COVER_SCALE).floor())
+	var size := _shade_bits.get_size()
+	return dot.x >= 0 and dot.y >= 0 and dot.x < size.x and dot.y < size.y and _shade_bits.get_bitv(dot)
+
+
+## A pine cone lying on the ground at `at`: a thumb long, fat in the middle.
+func _cone(at: Vector2, dice: RandomNumberGenerator) -> void:
+	const SIDES := 5
+	@warning_ignore("integer_division")
+	var st := _tool_named("|litter %d %d/pine_litter" % [int(at.x) / GROUND_BLOCK, int(at.y) / GROUND_BLOCK])
+	var long := dice.randf_range(0.055, 0.085)
+	var xf := Transform3D(Basis(Vector3.UP, dice.randf() * TAU) * Basis(Vector3.RIGHT, dice.randf_range(-0.3, 0.3)), ground(at.x, at.y, long * 0.2))
+	var patch := Vector2(dice.randf(), dice.randf())
+	# It lies along its own Z: a point, two rings and a point.
+	var rings: Array[Vector2] = [Vector2(-0.5, 0.0), Vector2(-0.22, 0.27), Vector2(0.18, 0.3), Vector2(0.5, 0.0)]
+	var points: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	var uvs: Array[Vector2] = []
+	for ring in rings.size():
+		for side in SIDES + 1:
+			var out := Vector3(cos(TAU * side / SIDES), sin(TAU * side / SIDES), 0.0)
+			points.append(xf * ((out * rings[ring].y + Vector3(0, 0, rings[ring].x)) * long))
+			normals.append(xf.basis * (out + Vector3(0, 0, rings[ring].x * 1.4)).normalized())
+			uvs.append(patch + Vector2(float(side) / SIDES * 0.16, ring * 0.05))
+	for ring in rings.size() - 1:
+		for side in SIDES:
+			var a := ring * (SIDES + 1) + side
+			for corner: int in [a, a + SIDES + 2, a + 1, a, a + SIDES + 1, a + SIDES + 2]:
+				st.set_color(Color(0, 0, 0.02))
+				st.set_normal(normals[corner])
+				st.set_uv(uvs[corner])
+				st.add_vertex(points[corner])
+
+
+## A root of the pine that stands at `at` with a trunk `girth` thick: it
+## leaves the trunk towards `heading`, lies on the ground for a stride, and
+## goes under.
+func _pine_root(at: Vector2, girth: float, heading: float, dice: RandomNumberGenerator) -> void:
+	const SIDES := 5
+	@warning_ignore("integer_division")
+	var st := _tool_named("|litter %d %d/pine_litter" % [int(at.x) / GROUND_BLOCK, int(at.y) / GROUND_BLOCK])
+	var out := Vector2.RIGHT.rotated(heading)
+	var bend := dice.randf_range(-0.7, 0.7)
+	var long := girth * dice.randf_range(2.6, 5.0)
+	var thick := girth * dice.randf_range(0.34, 0.5)
+	# Where it runs, and how high over the ground and how thick it is there:
+	# out of the trunk a hand over the ground, down on to it, along it with
+	# a kink or two, and under.
+	var path: Array[Vector3] = []
+	var radii: Array[float] = []
+	for i in 6:
+		var t := i / 5.0
+		var spot := at + out.rotated(bend * t * t + dice.randf_range(-0.12, 0.12) * minf(i, 1)) * (girth * 0.5 + long * t)
+		var lift: float = [girth * 1.1 + thick, thick * 0.9, thick * 0.35, thick * 0.1, -thick * 0.3, -thick * 1.4][i]
+		path.append(ground(spot.x, spot.y, lift))
+		radii.append(thick * [1.2, 1.0, 0.8, 0.62, 0.46, 0.3][i])
+	var around: Array[Vector3] = []
+	var run := 0.0
+	var u := dice.randf()
+	for i in path.size():
+		var along := (path[mini(i + 1, path.size() - 1)] - path[maxi(i - 1, 0)]).normalized()
+		var side := along.cross(Vector3.UP).normalized()
+		var up := side.cross(along)
+		var ring: Array[Vector3] = []
+		for s in SIDES + 1:
+			ring.append(side * cos(TAU * s / SIDES) + up * sin(TAU * s / SIDES))
+		if i > 0:
+			var length := path[i].distance_to(path[i - 1])
+			for s in SIDES:
+				var corners: Array[Vector3] = [path[i - 1] + around[s] * radii[i - 1], path[i - 1] + around[s + 1] * radii[i - 1], path[i] + ring[s + 1] * radii[i], path[i] + ring[s] * radii[i]]
+				var normals: Array[Vector3] = [around[s], around[s + 1], ring[s + 1], ring[s]]
+				var uvs: Array[Vector2] = [Vector2(u + s * 0.12, run), Vector2(u + (s + 1) * 0.12, run), Vector2(u + (s + 1) * 0.12, run + length * 0.6), Vector2(u + s * 0.12, run + length * 0.6)]
+				for corner: int in [0, 1, 2, 0, 2, 3]:
+					st.set_color(Color(0, 0, 0.03))
+					st.set_normal(normals[corner])
+					st.set_uv(uvs[corner])
+					st.add_vertex(corners[corner])
+			run += length * 0.6
+		around = ring
 
 
 ## Marram over `area` (x and z), where the sand is loose and bare. It grows
@@ -1330,76 +1667,77 @@ func _spot_at(at: Vector2) -> int:
 	return clampi(int(spot.y), 0, _down() - 1) * _across() + clampi(int(spot.x), 0, _across() - 1)
 
 
+## What a card shows of each of the four tussocks in the picture of a
+## grass material such as "marram", see tools/render_grass.py: two cells by
+## two, of which a card is cut to a trapezium, narrow at the foot. For each
+## tussock how high it stands in its cell, as a share of the cell.
+const TUSSOCK_HIGH: Array[float] = [0.9, 0.96, 0.84, 0.56]
+## How wide a tussock is at its foot and at its top, as a share of its cell.
+const TUSSOCK_FOOT := 0.44
+const TUSSOCK_TOP := 0.86
+## How large a cell is for a clump of size one, in metres.
+const TUSSOCK_CELL := 1.2
+
+
 ## A clump of grass at `at`, `size` times a clump that stands a metre high:
-## sheaves of blades on cards (shaders/grass.gdshader) that rise from one
-## foot, upright in the middle and arching further out the further out they
-## stand. `seed` is what makes it this clump and no other. The clumps of a
-## block of ground are one mesh, which casts no shadow and is not drawn
-## from far off, see _commit().
+## pictures of a whole tussock on cards (shaders/grass.gdshader) that stand
+## through each other in its middle, each leaning its own way a little, and
+## round them a skirt of shorter ones that lean well out. `seed` is what
+## makes it this clump and no other. The clumps of a block of ground are one
+## mesh, which casts no shadow and is not drawn from far off, see _commit().
 func _clump(mat: String, at: Vector2, size: float, seed: int) -> void:
 	var dice := RandomNumberGenerator.new()
 	dice.seed = seed
 	@warning_ignore("integer_division")
 	var st := _tool_named("|strewn %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.y) / GROUND_BLOCK, mat])
-	var foot := ground(at.x, at.y, (MOUND_HIGH * size if size >= MOUND_FROM else 0.0) - 0.04)
+	var foot := ground(at.x, at.y, (MOUND_HIGH * size if size >= MOUND_FROM else 0.0) - 0.05 * size)
 	var phase := dice.randf()
 	# How much of it is last year's straw.
 	var withered := dice.randf() * dice.randf()
-	var sheaves := 2 + int(size * 5.5)
 	var turn := dice.randf() * TAU
-	for i in sheaves:
-		# From the middle outwards.
-		var share := (i + 0.5) / sheaves
-		var angle := turn + i * 2.4 + dice.randf_range(-0.35, 0.35)
-		var out := Vector3(cos(angle), 0.0, sin(angle))
-		# A card does not stand square to the way it leans.
-		var side := Vector3(-out.z, 0.0, out.x).rotated(Vector3.UP, dice.randf_range(-0.6, 0.6))
-		var long := size * dice.randf_range(0.85, 1.15) * lerpf(1.05, 0.78, share)
-		var wide := long * 0.5 * dice.randf_range(0.9, 1.2)
-		var lean := lerpf(0.06, 0.8, share) + dice.randf_range(-0.08, 0.12)
-		var droop := lerpf(0.3, 0.9, share) * dice.randf_range(0.6, 1.3)
-		# Which sheaf of the four in the picture: tall ones in the middle,
-		# one in flower now and then, straw and short ones around them.
-		var roll := dice.randf()
-		var sheaf := 3
-		if share < 0.4:
-			sheaf = 1 if roll < 0.25 and size > 0.6 else 0
-		elif roll < 0.3 + withered * 0.5:
-			sheaf = 2
-		elif roll < 0.6:
-			sheaf = 0
-		var left := sheaf * 0.25 + 0.003
-		var right := sheaf * 0.25 + 0.247
-		if dice.randf() < 0.5:
-			var swap := left
-			left = right
-			right = swap
-		var at_row := foot + out * size * 0.14 * share
-		var points: Array[Vector3] = []
+	# In flower or not, the whole clump.
+	var flowers := size > 0.6 and dice.randf() < 0.35
+	var upright := 3 if size > 0.55 else 2
+	var skirt := (2 + dice.randi() % 3) if size > 0.4 else 0
+	for card in upright + skirt:
+		var stands := card < upright
+		var angle := turn + (card * PI / upright if stands else (card - upright) * TAU / maxi(skirt, 1) + 0.6) + dice.randf_range(-0.3, 0.3)
+		var side := Vector3(cos(angle), 0.0, sin(angle))
+		var out := Vector3(-side.z, 0.0, side.x)
+		# Which tussock of the four: in leaf or in flower in the middle, and
+		# round it short ones and straw.
+		var tussock := 1 if flowers and card == 0 else (2 if dice.randf() < withered else 0)
+		if not stands:
+			tussock = 2 if dice.randf() < 0.25 + withered * 0.5 else 3
+		var cell := TUSSOCK_CELL * size * dice.randf_range(0.88, 1.12) * (1.0 if stands else 0.8)
+		var high: float = cell * TUSSOCK_HIGH[tussock]
+		var lean := dice.randf_range(-0.16, 0.16) if stands else dice.randf_range(0.5, 0.85)
+		var low := foot + (Vector3.ZERO if stands else out * 0.1 * size)
+		var top := low + (Vector3.UP * cos(lean) + out * sin(lean)) * high
+		var left := float(tussock % 2) * 0.5
+		@warning_ignore("integer_division")
+		var over := float(tussock / 2) * 0.5
+		var mirror := -1.0 if dice.randf() < 0.5 else 1.0
+		var light := 1.0 if stands else 0.88
+		var corners: Array[Vector3] = []
 		var normals: Array[Vector3] = []
 		var uvs: Array[Vector2] = []
 		var lit: Array[Color] = []
-		var before := 0.0
-		for row in 3:
-			var t: float = [0.0, 0.42, 1.0][row]
-			var slant := lean + droop * (t + before) * (t + before) * 0.25
-			at_row += (Vector3.UP * cos(slant) + out * sin(slant)) * long * (t - before)
-			before = t
-			var half: float = wide * 0.5 * [0.6, 0.9, 1.0][row]
-			var normal := (Vector3.UP * 0.9 + out * (0.2 + 0.5 * t)).normalized()
-			var light := lerpf(0.45, 1.0, t) * lerpf(0.82, 1.0, share)
-			for edge: float in [-1.0, 1.0]:
-				points.append(at_row + side * half * edge)
-				normals.append(normal)
-				uvs.append(Vector2(left if edge < 0.0 else right, 1.0 - t))
-				lit.append(Color(t * t, phase, light, withered))
 		for row in 2:
-			for i_corner: int in [0, 1, 3, 0, 3, 2]:
-				var corner: int = row * 2 + i_corner
-				st.set_color(lit[corner])
-				st.set_normal(normals[corner])
-				st.set_uv(uvs[corner])
-				st.add_vertex(points[corner])
+			var half := cell * 0.5 * (TUSSOCK_FOOT if row == 0 else TUSSOCK_TOP)
+			var share := (TUSSOCK_FOOT if row == 0 else TUSSOCK_TOP) * 0.5
+			for edge: float in [-1.0, 1.0]:
+				corners.append((low if row == 0 else top) + side * half * edge)
+				# Lit as one round mass: up at the foot, up and outwards at
+				# the tips.
+				normals.append((Vector3.UP + (side * edge * 0.55 + out * (0.0 if stands else 0.5)) * row).normalized())
+				uvs.append(Vector2(left + 0.25 + share * edge * mirror * 0.5, over + 0.5 - 0.005 - (TUSSOCK_HIGH[tussock] * 0.5 if row == 1 else 0.0)))
+				lit.append(Color(row, phase, light * (0.5 if row == 0 else 1.0), withered))
+		for corner: int in [0, 1, 3, 0, 3, 2]:
+			st.set_color(lit[corner])
+			st.set_normal(normals[corner])
+			st.set_uv(uvs[corner])
+			st.add_vertex(corners[corner])
 
 
 ## The sand a clump of grass at `at` has caught: a low mound, added to the

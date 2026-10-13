@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/strewn.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/models/weed_plant_02/textures/weed_plant_02_diff_1k.jpg" id="leaf"]
+[ext_resource type="Texture2D" path="res://assets/models/weed_plant_02/textures/weed_plant_02_nor_gl_1k.jpg" id="leaf_n"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/leaf_tex = ExtResource("leaf")
+shader_parameter/leaf_normal = ExtResource("leaf_n")
+shader_parameter/tint = Color(0.85, 0.85, 0.8, 1)
+shader_parameter/wind = Vector2(0.12, 1)
+shader_parameter/sway = 0.01
+shader_parameter/through = 0.3
+shader_parameter/roughness = 0.75
+shader_parameter/fade_from = 28.0
+shader_parameter/fade_to = 38.0

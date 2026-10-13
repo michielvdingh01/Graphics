@@ -1,5 +1,5 @@
 #!/bin/sh
-# Renders the sheaves of grass listed in assets/manifest.json (source "rendered"), in Blender on the
+# Renders the grass listed in assets/manifest.json (source "rendered"), in Blender on the
 # processor and without a window, and imports them: all of them, or only those named. A minute.
 BLENDER="${BLENDER:-/opt/homebrew/bin/blender}"
 GODOT="${GODOT:-/Applications/Godot.app/Contents/MacOS/Godot}"
