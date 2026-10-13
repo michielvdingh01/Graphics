@@ -185,8 +185,11 @@ func undone(what: String) -> bool:
 	return what in _undone
 
 
-## What the difficulty that is set comes down to: see RULES.
+## What the difficulty that is set comes down to: see RULES. In a match it
+## is the rules of the match, which are the same whatever is set.
 func rules() -> Dictionary:
+	if Match.active:
+		return Match.rules
 	return RULES[clampi(difficulty, 0, RULES.size() - 1)]
 
 

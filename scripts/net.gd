@@ -28,20 +28,20 @@ signal said(text: String)
 
 ## UDP port a host listens on, which is the one to forward to it on a router.
 const PORT := 24565
-const MAX_PLAYERS := 8
+const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 8
+const VERSION := 9
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
 const JOIN_TIME := 8.0
 const CONFIG := "user://net.cfg"
 ## What a guest may have the host do to a node, see ask().
-const ASKS: Array[StringName] = [&"take_damage", &"explode"]
+const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm"]
 ## What a machine may report its player did, see player_did().
 const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt"]
-const NOBODY := {"level": "", "at": "", "kills": 0, "theme": ""}
+const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
 
 ## Bits of what a player is doing, as they go over the wire.
 enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4 }
@@ -53,7 +53,8 @@ var players := {}
 ## The ids of those whose level is loaded, as a set.
 var present := {}
 ## What is being played: the level, the checkpoint to carry on from after
-## everybody has died, the kills that stood then and who the enemies are.
+## everybody has died, the kills that stood then, who the enemies are, and
+## the match that it is, if it is one: what Match.open() takes.
 var session := NOBODY.duplicate()
 ## What this player is called, and the address last joined.
 var player_name := "Player"
@@ -208,7 +209,7 @@ func leave() -> void:
 func load_level(scene: String, at := "", kills := 0) -> void:
 	if not active or not multiplayer.is_server():
 		return
-	session = {"level": scene, "at": at, "kills": kills, "theme": Settings.enemy_theme}
+	session = {"level": scene, "at": at, "kills": kills, "theme": Settings.enemy_theme, "match": Match.setup if Match.active else {}}
 	present = {}
 	_waiting.clear()
 	game = null

@@ -109,6 +109,8 @@ var health := MAX_HEALTH
 var dead := false
 ## Nothing hurts it: for watching a fight from the inside, see sandbox.gd.
 var invulnerable := false
+## The side it is on in a match (scripts/match.gd), -1 outside of one.
+var team := -1
 ## Lets the self-test drive the player without a captured mouse.
 var force_control := false
 
@@ -210,6 +212,12 @@ func shake(amount: float) -> void:
 ## the damage alone it would move the view by less than anybody can see.
 func hit_weight(amount: float) -> float:
 	return sqrt(clampf(amount / HIT_FULL, 0.0, 1.0))
+
+
+## True if a shot that landed at `at` is one to the head: in a match the
+## player is shot at like anybody else.
+func is_headshot(at: Vector3) -> bool:
+	return at.y - global_position.y > _eye_height - 0.24
 
 
 ## Mends the player by `amount`. False if there was nothing to mend.
@@ -350,8 +358,9 @@ func _physics_process(delta: float) -> void:
 	_was_on_floor = is_on_floor()
 
 	_since_damage += delta
-	var regen_to: float = Settings.rules().regen_to
-	if _since_damage > REGEN_DELAY and health < regen_to:
+	var rules: Dictionary = Settings.rules()
+	var regen_to: float = rules.regen_to
+	if _since_damage > rules.get("regen_after", REGEN_DELAY) and health < regen_to:
 		health = minf(health + REGEN_RATE * delta, regen_to)
 		health_changed.emit(health, MAX_HEALTH)
 

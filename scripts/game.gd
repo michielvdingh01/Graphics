@@ -17,6 +17,10 @@ extends Node3D
 ##
 ## In the sandbox (see sandbox.gd) one zone of the level is all there is: the
 ## fight for it is fought over and over, and there is no way on or out.
+##
+## In a match (see match.gd) the level is an arena and no more: the route is
+## off, no robots stand in it, and who is in it and what they are there for
+## is the match's to say.
 
 ## What the HUD shows as the thing to do, and how many robots still stand in
 ## the way of it.
@@ -30,6 +34,9 @@ signal finished(next: String)
 ## The player has picked something up: what the HUD says of it, and in what
 ## colour.
 signal picked_up(text: String, tint: Color)
+## The navmesh has been baked from the colliders of the level. The server
+## that finds the ways over it has it a moment later.
+signal baked
 
 const GRUNT := preload("res://scenes/enemy.tscn")
 const RUSHER := preload("res://scenes/enemy_rusher.tscn")
@@ -158,6 +165,8 @@ func _ready() -> void:
 	if playing:
 		if Sandbox.active:
 			Sandbox.arrive(self)
+		elif Match.active:
+			Match.arrive(self)
 		else:
 			_resume()
 			post_robots()
@@ -179,9 +188,13 @@ func _ready() -> void:
 		return
 	# The level's static body is built a frame late, so wait before baking from
 	# it. The server only picks this bake up with region_use_async_iterations off.
-	await get_tree().physics_frame
-	await get_tree().physics_frame
+	for i in 2:
+		await get_tree().physics_frame
+		if not is_inside_tree():
+			# The sandbox or a match has sent the player on to another level.
+			return
 	nav_region.bake_navigation_mesh(false)
+	baked.emit()
 	# Cover is only looked for where there is fighting: in the zones.
 	var grounds: Array[AABB] = []
 	for zone in zones:
@@ -631,8 +644,9 @@ func _update_objective() -> void:
 
 
 func _on_player_died() -> void:
-	if Sandbox.active:
-		# That is the end of a round, which the sandbox starts again.
+	if Sandbox.active or Match.active:
+		# That is the end of a round, which the sandbox starts again, or a
+		# death like any other in a match, which has the player back.
 		return
 	Save.tally("deaths")
 	Save.flush()

@@ -567,6 +567,8 @@ func _fire(data: WeaponData) -> void:
 	var headshot := false
 	var killed := false
 	var ends := PackedVector3Array()
+	# In a match a shot also lands on whoever is on the other side.
+	var mask := HIT_MASK | (Match.foes_of(player) if Match.active else 0)
 
 	# A load of shot makes one sound per thing it lands on, not one per pellet.
 	var struck := {}
@@ -576,7 +578,7 @@ func _fire(data: WeaponData) -> void:
 		var direction := camera.global_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)
 		direction = direction.normalized()
 		var end := origin + direction * data.max_range
-		var query := PhysicsRayQueryParameters3D.create(origin, end, HIT_MASK, [player.get_rid()])
+		var query := PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()])
 		var hit := space.intersect_ray(query)
 		if hit:
 			end = hit.position
@@ -598,7 +600,11 @@ func _fire(data: WeaponData) -> void:
 				var head: bool = robot and target.is_headshot(end)
 				if head:
 					amount *= data.headshot_multiplier
-				killed = Net.damage(target, amount, end, direction) or killed
+				if Match.active:
+					# The match keeps count of who shot whom, and with what.
+					killed = Match.hit(player, target, amount, end, direction, _index, head) or killed
+				else:
+					killed = Net.damage(target, amount, end, direction) or killed
 				# A shot that the plate on its arm stopped is no hit.
 				if robot and not target.deflected:
 					any_hit = true
@@ -608,6 +614,8 @@ func _fire(data: WeaponData) -> void:
 		if i % 3 == 0:
 			Fx.tracer(muzzle, end)
 	Net.player_did(&"fired", [_index, ends])
+	if Match.active:
+		Match.fired(player, muzzle, data.flash_size * HEARD)
 
 	var recoil_scale := lerpf(1.0, data.ads_recoil_scale, ads_blend)
 	player.add_recoil(
@@ -786,6 +794,7 @@ func _release_grenade() -> void:
 	grenade.global_position = from
 	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
 	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
+	grenade.thrower = Match.number(player) if Match.active else 0
 	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity])
 	Sfx.play(&"throw", -6.0)
 
@@ -806,9 +815,10 @@ func _land_blow() -> void:
 	var aim := camera.global_basis
 	var space := get_world_3d().direct_space_state
 	var found := {}
+	var mask := HIT_MASK | (Match.foes_of(player) if Match.active else 0)
 	for off: Vector2 in [Vector2.ZERO, Vector2(-0.22, 0), Vector2(0.22, 0), Vector2(0, -0.25), Vector2(0, 0.18)]:
 		var end := origin + aim * Vector3(off.x, off.y, -1.0).normalized() * MELEE_REACH
-		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, HIT_MASK, [player.get_rid()]))
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()]))
 		if hit and (found.is_empty() or (hit.collider.has_method("is_headshot") and not found.collider.has_method("is_headshot"))):
 			found = hit
 	if found.is_empty():
@@ -823,7 +833,11 @@ func _land_blow() -> void:
 	if not target.has_method("take_damage"):
 		return
 	var robot := target.has_method("is_headshot")
-	var killed: bool = Net.damage(target, MELEE_DAMAGE, at, direction)
+	var killed: bool
+	if Match.active:
+		killed = Match.hit(player, target, MELEE_DAMAGE, at, direction, Match.MELEE)
+	else:
+		killed = Net.damage(target, MELEE_DAMAGE, at, direction)
 	if robot and not target.deflected:
 		hit_confirmed.emit(false, killed)
 

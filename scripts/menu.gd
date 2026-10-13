@@ -11,7 +11,10 @@ extends CanvasLayer
 ## "Sandbox" lists the experiments of sandbox.gd. With one of them open the
 ## pause menu is where its switches are.
 
-enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER, SANDBOX }
+enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER, SANDBOX, MATCH }
+
+## What the screen of a match has on it: see scripts/match_menu.gd.
+const MATCH_MENU := preload("res://scripts/match_menu.gd")
 
 const LEVELS: Array[Dictionary] = [
 	{"name": "Factory", "scene": "res://scenes/factory.tscn", "music": &"level1and2"},
@@ -68,7 +71,7 @@ func _ready() -> void:
 		_device = DEVICES.find("Controller")
 	Net.entering.connect(_on_entering)
 	Net.left.connect(_on_left)
-	if "--play" in OS.get_cmdline_user_args() or Sandbox.active:
+	if "--play" in OS.get_cmdline_user_args() or Sandbox.active or Match.active:
 		_show(Screen.NONE)
 	else:
 		# Set before the level's own _ready runs, so it knows to stay inert.
@@ -107,7 +110,7 @@ func run_summary(run: Dictionary) -> PackedStringArray:
 
 ## True while the loaded level is only a backdrop for the title screen.
 func at_title() -> bool:
-	return _screen == Screen.TITLE or _screen == Screen.LEVELS or _screen == Screen.TOGETHER or _screen == Screen.SANDBOX or (
+	return _screen == Screen.TITLE or _screen == Screen.LEVELS or _screen == Screen.TOGETHER or _screen == Screen.SANDBOX or _screen == Screen.MATCH or (
 		(_screen == Screen.CONTROLS or _screen == Screen.SETTINGS) and _parent == Screen.TITLE
 	)
 
@@ -129,7 +132,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_show(Screen.TOGETHER if _hosting else Screen.TITLE)
 		Screen.TOGETHER:
 			_leave_together()
-		Screen.SANDBOX:
+		Screen.SANDBOX, Screen.MATCH:
 			_show(Screen.TITLE)
 		Screen.CONTROLS, Screen.SETTINGS:
 			_show(_parent)
@@ -175,6 +178,7 @@ func _show(screen: Screen) -> void:
 					text += ", %s" % (checkpoint.title as String).to_lower()
 				_button(text, _play.bind(checkpoint.level, false))
 			_button("New game", _choose_level.bind(false))
+			_button("Multiplayer", _show.bind(Screen.MATCH))
 			_button("Play together", _show.bind(Screen.TOGETHER))
 			if not Sandbox.experiments.is_empty():
 				_button("Sandbox", _show.bind(Screen.SANDBOX))
@@ -201,18 +205,22 @@ func _show(screen: Screen) -> void:
 			for experiment: String in Sandbox.experiments:
 				_button(Sandbox.title(experiment), _try.bind(experiment))
 			_button("Back", _show.bind(Screen.TITLE))
+		Screen.MATCH:
+			MATCH_MENU.build(self)
 		Screen.PAUSE:
-			_heading("Sandbox" if Sandbox.active else "Playing together" if Net.active else "Paused", 44)
+			_heading("Sandbox" if Sandbox.active else Match.title() if Match.active else "Playing together" if Net.active else "Paused", 44)
 			if Net.active:
 				_note(_company())
 			_button("Resume", _show.bind(Screen.NONE))
 			if Sandbox.active:
 				_sandbox()
+			elif Match.active:
+				_button("Start the match again", _then_resume.bind(Match.again))
 			elif Net.is_host():
 				_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
 			_button("Controls", _show.bind(Screen.CONTROLS))
 			_button("Settings", _show.bind(Screen.SETTINGS))
-			_button("Leave the sandbox" if Sandbox.active else "Leave the game" if Net.active else "Quit to title", _quit_to_title)
+			_button("Leave the sandbox" if Sandbox.active else "Leave the match" if Match.active else "Leave the game" if Net.active else "Quit to title", _quit_to_title)
 		Screen.CONTROLS:
 			_heading("Controls", 44)
 			_controls()
@@ -271,6 +279,7 @@ func _play(scene: String, fresh: bool) -> void:
 func _quit_to_title() -> void:
 	Net.leave()
 	Sandbox.close()
+	Match.close()
 	_show(Screen.TITLE)
 	get_tree().reload_current_scene()
 

@@ -203,7 +203,10 @@ func _measure() -> void:
 func _light() -> void:
 	for i in SETTLE:
 		await get_tree().physics_frame
-	if not is_inside_tree() or _size.x <= 0.0 or _size.y <= 0.0:
+		if not is_inside_tree():
+			# The level was left for another before it had settled.
+			return
+	if _size.x <= 0.0 or _size.y <= 0.0:
 		return
 	var scene := get_tree().current_scene
 	var space := get_world_3d().direct_space_state

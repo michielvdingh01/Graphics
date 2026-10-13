@@ -23,12 +23,14 @@ SelfTest="*res://scripts/selftest.gd"
 HumanoidTest="*res://scripts/humanoid_test.gd"
 NetTest="*res://scripts/net_test.gd"
 SandboxTest="*res://scripts/sandbox_test.gd"
+MatchTest="*res://scripts/match_test.gd"
 Settings="*res://scripts/settings.gd"
 Save="*res://scripts/save.gd"
 Net="*res://scripts/net.gd"
 Blast="*res://scripts/blast.gd"
 Squad="*res://scripts/squad.gd"
 Sandbox="*res://scripts/sandbox.gd"
+Match="*res://scripts/match.gd"
 Menu="*res://scripts/menu.gd"
 
 [display]
@@ -165,6 +167,12 @@ pause={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":6,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+scoreboard={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194306,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":4,"pressure":0.0,"pressed":false,"script":null)
+]
+}
 look_left={
 "deadzone": 0.15,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":2,"axis_value":-1.0,"script":null)
@@ -194,6 +202,8 @@ look_down={
 3d_physics/layer_4="debris"
 3d_physics/layer_5="explosive"
 3d_physics/layer_6="breakable"
+3d_physics/layer_9="side_one"
+3d_physics/layer_10="side_two"
 
 [navigation]
 

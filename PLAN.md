@@ -2347,3 +2347,57 @@ Het keurmerk: "Every zone has what it is held to".
 - **De plattegrond die de twee fouten liet zien is een los script gebleven** en geen gereedschap: hoogte, steile kanten, schaduw, bomen, botsvormen, zones en posten van boven. Voor het volgende level met land is dat het eerste om te maken.
 - `tools/level_map.py` kan geen land tekenen: het kent alleen dozen op een vloer op nul.
 - De muziek is het stuk van de andere levels. Niemand heeft dat op het gehoor gekozen.
+
+## Een ruw potje: stap 1 van de wedstrijden
+
+Op 13 oktober 2026 gevraagd: verder met de bouw van de wedstrijden. Dit is stap 1 uit "Wedstrijden: teams, bots en een buit (plan)": een wedstrijd die te spelen is, alleen tegen bots, in team deathmatch en ieder voor zich. Gebouwd op de branch `potje`, vanaf de trunk met de duinen erin. De buit (2d, branch `buit`) en de uniformen (2e, branch `uniformen`) zitten er niet in: die branches zijn niet gemerged.
+
+**Wat er nu is**
+
+- **Een wedstrijd is een tweede manier om een level te spelen** (`scripts/match.gd`, de autoload `Match`). Hij neemt het level over zoals de sandbox: de route staat uit, er staan geen robots, de uitgang blijft dicht, en wat het spel had opgeslagen staat opzij zolang hij open is. Starten kan met "Multiplayer" op het titelscherm (soort, arena, aantal, Start) of met `--match=<soort>:<level>:<aantal>`; `--only-bots` laat de speler toekijken.
+- **Iedereen die meedoet is een deelnemer**, mens of bot, met een nummer, een naam, een kant en een stand. Een bot is de pop van een medespeler (`scripts/puppet.gd`) met een brein erin. Raken, doodgaan, terugkomen en tellen gaan voor allebei door dezelfde functie, `Match.harm()`: wie op dezelfde kant staat raak je niet, je eigen granaat raakt jou wel, en wie net terug is, is anderhalve seconde onkwetsbaar of tot hij zelf schiet.
+- **De kanten staan op eigen botslagen** (9 en 10). Een schot zoekt alleen op de laag van de ander en gaat dus door je eigen team heen, en je loopt door teamgenoten heen en tegen de ander aan. Bij ieder voor zich staat iedereen op één laag.
+- **Team deathmatch en ieder voor zich** zijn elk een bestand in `scripts/modes/` naast `mode.gd`, dat zegt wat twee teams doen; de getallen staan in `assets/match.json` (50 punten of 10 minuten, terug na 3 s; 25 punten, terug na 2 s). Health komt na vijf seconden zonder treffer helemaal terug, wie terugkomt heeft waarmee een level begint, en wie valt laat een halve minuut een blik munitie liggen.
+- **De bots** (`scripts/bot.gd`, de eerste versie) lopen naar de dichtstbijzijnde vijand die ze kennen en schieten als ze er een zien. Kennen is: gezien (binnen 110° voor zich, met een vrije lijn naar hoofd of borst), gehoord (een schot zover het draagt) of door geraakt. Een bot draagt één wapen van de speler, verdeeld over zijn kant (karabijn, pistoolmitrailleur, shotgun, scherpschuttersgeweer), met de schade, de vuursnelheid en het magazijn van dat wapen; elk schot is een echte straal langs waar hij richt. Zijn richtpunt loopt een halve seconde achter zijn doel aan en zwerft er 2° omheen, en hij schiet 0,55 s na het zien: de kolom "Regular" uit het plan. Wie anderhalve seconde niet vooruitkomt, bedenkt iets anders, en dat wordt geteld.
+- **Terugkomen** (`scripts/arena.gd`, de eerste versie): de plekken komen uit het navmesh zoals in de proef van het plan, en gekozen wordt de plek het verst van de dichtstbijzijnde vijand die geen vijand ziet en waar niemand staat. De twee kanten beginnen bij de twee plekken die in loopafstand het verst uit elkaar liggen (op het fabrieksterrein 219 m lopen en 58 m hemelsbreed, in de centrale 177 m: de getallen van het plan); bij ieder voor zich begint iedereen zo ver mogelijk van de rest. Wie neergezet wordt kijkt langs de eerste vier meter van de weg naar de ander, niet naar de muur waarachter die staat.
+- **De wedstrijd wacht tot de wegzoeker het level kent.** `game.gd` meldt met het signaal `baked` dat het navmesh gebakken is, en de server die de wegen zoekt heeft het pas een of meer frames later; tot dan geeft hij lege wegen terug, ook als een level een navmesh uit de bouw meebrengt. Zonder dat wachten stonden op het fabrieksterrein beide kanten op één hoop en vielen er negen doden in de eerste twee seconden. In de fabriek ging het toevallig goed, en alleen daar keek de test; gevonden is het op een beeld van het spel.
+- **In beeld** (`scripts/match_hud.gd`): bovenaan jouw punten in blauw, die van de ander in oranje, de soort, de stand waarbij gewonnen is en de klok; rechtsboven wie wie neerhaalde en waarmee; als je dood bent wie het deed en de tellen tot je terug bent; onder Tab de tabel; aan het eind VICTORY, DEFEAT of DRAW, met Enter voor nog een keer. Teamgenoten hebben hun naam in blauw boven het hoofd, ook door muren heen; een vijand heeft niets.
+- **Wat er aan de gedeelde bestanden veranderd is**, zoals het plan het voor stap 1 opsomt: `game.gd` roept `Match` aan waar het de sandbox aanroept; `puppet.gd` heeft een kant, een hoofd dat geraakt kan worden, en kan door een brein bestuurd worden; `player.gd` een kant en een hoofd; `weapons.gd` zoekt in een wedstrijd ook op de laag van de ander en meldt wie schoot en waarmee; `blast.gd` en `grenade.gd` zeggen wie gooide; `Settings.rules()` geeft in een wedstrijd de regels van de wedstrijd; `net.gd` gaat naar twaalf spelers en versie 9 en heeft plaats voor de opzet van een wedstrijd; `menu.gd` één knop en één scherm; `project.godot` de autoloads, de twee lagen en Tab voor de tabel.
+- **Twee fouten die er al zaten** en bij het wisselen van level boven kwamen: `game.gd` en `daylight.gd` wachtten een paar frames en gingen dan verder in een level dat al weg was, als de sandbox of een wedstrijd de speler meteen doorstuurde. Beide kijken nu of ze nog in de boom staan.
+
+**Getest en gemeten**, 13 oktober 2026, M1 Pro op de accu, load 5 tot 10, terwijl een andere sessie op de GPU mat. Alles zonder GPU.
+
+- `tools/test_match.sh`, 36 controles: bots spelen in de fabriek drie tegen drie tot acht punten (20 tot 24 s wedstrijd, zes keer versneld), elke dood is één keer geteld en elke kill een punt, wie viel kwam terug en geen van hen stond binnen 8 m van een vijand; daarna nog een keer vanaf nul; daarna ieder voor zich met de speler erin: zijn schot telt, een bot kan hem neerhalen, hij staat drie tellen later weer in hetzelfde level, en zijn health komt helemaal terug; het menu start zes tegen zes op het fabrieksterrein, en daar staan de dichtstbijzijnde twee van verschillende kanten 51 m uit elkaar.
+- `tools/selftest.sh` (401 controles), `tools/nettest.sh`, `tools/test_sandbox.sh` en `tools/test_humanoid.sh` slagen op deze stand.
+- **Twaalf bots een minuut lang**, `tools/test_match.sh --match=tdm:works:6 --only-bots --soak=60`, twee keer: 36 en 33 doden, geen noodspawn, geen bot vast. In de centrale ieder voor zich met twaalf, twee keer: 73 en 71 doden, niemand vast. Daar valt er elke seconde iemand: twaalf beginnen er op 8 tot 16 m van elkaar, in zicht.
+- **Wat het de processor kost.** Het denken en lopen van twaalf bots samen: 30 tot 41 ms per seconde wedstrijd, 0,3 ms per stap van de physics (120 per seconde), waarvan ruim de helft het verplaatsen van het lijf. De hele stap duurde op het fabrieksterrein met twaalf vechtende bots gemiddeld 2,2 tot 3,6 ms (zeven keer gemeten) en met twee 1,1 en 1,3 ms (vier keer gemeten; de andere twee keer 4,8 en 6,0 ms met uitschieters van 155 ms, iets anders op de laptop). Die ruim één milliseconde verschil zit dus niet in de bots zelf; waar wel is niet uitgezocht. Het navmesh is het niet (0,01 ms). In de centrale zat in beide runs één stap van 0,44 s, kort na het begin; zonder die stap is het gemiddelde daar 3,9 ms. Wat die stap is, is niet uitgezocht: het opzoeken van dekking bij het laden ligt voor de hand, en dat gebruikt een wedstrijd nog niet.
+
+**Wat er niet in zit, en bij welke stap het hoort**
+
+- Bots die dekking nemen, terugtrekken, kennis delen, granaten gooien, en de vier niveaus: 2a. Er is nu één niveau.
+- De rest van de spawnregels (een dood in de buurt, gevaar, teamgenoten dichtbij, niet de vorige plek, loten uit drie), de afleiding van bases, het keurmerk en het blad: 2b. Loopafstand naar de vijand telt nog niet: het is hemelsbreed.
+- Het scherm zoals het plan het beschrijft (bots per kant instellen, onthouden wat je koos, niet meer spelers aanbieden dan een arena draagt), de signalen in het geluid, het teken dat flauwer wordt met de afstand: 2c.
+- **Over het net.** Een wedstrijd wordt nu op één machine gespeeld: `Match.open()` verlaat een spel met anderen. De vorm is er wel naar (alles wat te zien is loopt via `Net.show`, de host zegt waar de bots zijn), maar een gast die een wedstrijd binnenkomt is niet gebouwd en niet getest: stap 4.
+- De duinen staan niet in de lijst van arena's: te groot, en er is nog geen stuk van afgebakend. Met `--match=` kan het wel; boven de 1 200 plekken worden ze uitgedund.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het leuk is, en of de bots te goed of te slecht zijn.** Er is geen potje gespeeld: alles hierboven komt uit tests zonder venster en uit drie losse beelden van het spel (de stand, de klok, wie wie neerhaalde en "Back in 1" staan waar ze horen). Vier treffers van een karabijn zijn dodelijk en een bot schiet een halve seconde nadat hij je ziet.
+- **De blauwe naam boven een teamgenoot** heb ik niet in beeld gehad: op het ene beeld waar iemand naast de speler stond, lag hij er al.
+- **Wat het op het volle scherm kost.** De meting uit het plan (om en om met een leeg level, 3456×2160 met MetalFX) is niet gedaan: de laptop stond op de accu en een andere sessie mat op de GPU.
+- **Of er iets hapert als de eerste soldaat in beeld komt.** De poppen worden gemaakt terwijl het beeld opkomt, maar pipelines zijn niet geteld.
+- **Hoe de twee kanten uit elkaar te houden zijn** zonder de uniformen van 2e: nu alleen aan de blauwe naam boven je eigen kant. De pop trekt het woestijnuniform aan zodra `soldier_0N_desert` bestaat, dus na de merge van `uniformen` vanzelf.
+
+**Nog open**
+
+- Wie valt, verdwijnt zodra hij terugkomt: het lijk is de pop zelf. Bij drie tellen is dat te zien.
+- Een bot ziet door ruiten en struiken heen wat de speler niet ziet, en andersom: hij kijkt alleen naar de wereldlaag.
+- Een vat dat een bot of de speler raakt en dat iemand doodt, telt voor niemand.
+- Het `Kills`-tellertje van de gewone HUD telt in een wedstrijd de kills van de speler; het doel van de route blijft leeg.
+- `buit` en `uniformen` voegen elk een sectie achteraan dit bestand toe, deze branch ook: bij het mergen alle drie houden, in de volgorde waarin ze binnenkomen.
+
+**Wat Michiel bekijkt**
+
+- Spelen, zes tegen zes op het fabrieksterrein: `GODOT_WINDOW=1 /Users/michielvandeningh/dev/Graphics/.claude/worktrees/potje/tools/godot.sh -- --play --match=tdm:works:6`
+- Ieder voor zich met acht in de centrale: dezelfde regel met `--match=ffa:powerhouse:8`.
+- Alleen kijken hoe bots het onder elkaar doen: `--only-bots` erachter.

@@ -80,13 +80,14 @@ var _tick := 0.0
 
 ## Something goes off at `position`: `damage` at the centre, nothing beyond
 ## `radius`. `size` is how large it looks, 1 for a fuel barrel, and `source`
-## the body that is exploding, if it is still there to be in the way.
+## the body that is exploding, if it is still there to be in the way. `by` is
+## who set it off, as a match numbers those who play, 0 for nobody.
 ##
 ## In a game with others the host does the harm and everybody sees the blast;
 ## on a guest this asks the host for it, as a grenade of its player does.
-func explode(position: Vector3, radius: float, damage: float, size := 1.0, source: CollisionObject3D = null) -> void:
+func explode(position: Vector3, radius: float, damage: float, size := 1.0, source: CollisionObject3D = null, by := 0) -> void:
 	if Net.is_guest():
-		Net.ask(self, &"explode", [position, radius, damage, size])
+		Net.ask(self, &"explode", [position, radius, damage, size, null, by])
 		return
 	Net.show(self, &"_show_blast", [position, radius, size])
 
@@ -137,7 +138,11 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 		var away := (offset.normalized() + Vector3.UP * 0.4).normalized()
 		var player := body.is_in_group("player")
 		# A blast is not a bullet: no plate in front of somebody stops it.
-		if body.has_method("take_blast"):
+		if Match.active and Match.plays(body):
+			# In a match it is whose blast it was that counts, and it does to
+			# a player what it does to anybody.
+			Match.harm(Match.number(body), damage * strength, middle, away * 2.5, by, Match.BLAST)
+		elif body.has_method("take_blast"):
 			body.take_blast(damage * strength, middle, away * 2.5)
 		elif body.has_method("take_damage"):
 			body.take_damage(damage * strength * (PLAYER_SHARE if player else 1.0), middle, away * 2.5)
