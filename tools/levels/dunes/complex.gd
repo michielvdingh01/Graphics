@@ -130,7 +130,7 @@ func _inner_yard() -> void:
 	vehicle("tank", Vector2(120.0, 15.4), 0.0)
 	# The tank in the shed is laid up under a tarpaulin: over its hull and
 	# its turret, with the gun out in front.
-	tarpaulin(resting(120.0, 15.4, 180.0, 2.4), [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)]])
+	sheeted(resting(120.0, 15.4, 180.0, 2.4), [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)]])
 	_shed_fittings(roof_y)
 	_fuel_point()
 	vehicle("tank_b", Vector2(104.0, 41.0), -90.0)
@@ -153,6 +153,8 @@ func _inner_yard() -> void:
 		crates(Vector3(72.0 + row * 9.0, YARD_Y, 31.0), 4 - row % 2)
 		pallet(Vector3(75.2 + row * 9.0, YARD_Y, 31.6), 10.0 * row, 3 + row)
 	bags(Vector3(92.0, YARD_Y, 36.0), 20.0, 4, 2)
+	# The cement is kept dry under a tarpaulin.
+	tarpaulin(Vector3(92.0, YARD_Y, 36.0), 20.0, Vector3(1.24, 0.3 + 4.0 * (_model(BAG).box as AABB).size.y, 0.9))
 	tyres(Vector3(112.0, YARD_Y, 29.0), 4)
 	tyres(Vector3(113.1, YARD_Y, 29.5), 3)
 	vehicle("jeep", Vector2(146.0, 46.0), -95.0)

@@ -309,7 +309,7 @@ func _coil(xf: Transform3D, length: float, radius: float) -> void:
 	var st := _tool(WIRE, SLIGHT, xf * Vector3(length * 0.5, 0, 0))
 	var turns := maxi(2, roundi(length / 0.5))
 	var steps := 8
-	var band := 0.016
+	var band := 0.02
 	for wound: float in [1.0, -1.0]:
 		var loose := _depot_rng.randf_range(0.9, 1.08)
 		var phase := _depot_rng.randf() * TAU
@@ -1148,12 +1148,13 @@ func duct_riser(foot: Vector3, out: Vector3, height: float, size := Vector2(0.7,
 	coarse()
 
 
-## A tarpaulin thrown over what stands in `boxes`, each the [middle, size]
-## of a box in the frame `xf`: it lies on their tops, hangs taut between one
+## A tarpaulin thrown over something of more than one height, a tank or a
+## gun, where tarpaulin() of the field covers a stack: over what stands in
+## `boxes`, each the [middle, size] of a box in the frame `xf`: it lies on their tops, hangs taut between one
 ## high place and the next and falls from the edge of the first of them,
 ## the widest, to `hem` over the ground. It takes the place of nothing: what
 ## is under it is in the way as it was.
-func tarpaulin(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
+func sheeted(xf: Transform3D, boxes: Array, hem := 0.4) -> void:
 	var under: Vector3 = boxes[0][0]
 	var spread: Vector3 = boxes[0][1] + Vector3(0.16, 0, 0.16)
 	var across := maxi(2, ceili(spread.x / 0.3))
