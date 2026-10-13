@@ -2676,24 +2676,27 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 - **Het budget is op drie van de vijf gehaald en op twee net niet.** De twee traagste standpunten, het oostelijke duin en het bivak, zijn gelijk of beter; het wagenpark, waar het model voor veraf voor bedoeld was, wint 0,6 en tekent een kwart miljoen driehoeken minder. De binnenplaats en de achterdeur, de twee snelste, verliezen 0,7 en 0,5: daar staat wat er het meest bij kwam (het glas met zijn kamers, de vlag, de was, de doelen, de sterkere occlusie). Wat daarvan hoeveel kost is niet uitgezocht.
 - **Een ronde eerder die middag** (18:33, op de accu, 59%, load 4,5) gaf hetzelfde beeld: +0,1, +0,6, −0,9, −0,9 en +0,9. Daarna zijn de doelen en de draden bij het kleine goed gezet, dat geen schaduw werpt.
-- **Mijn eigen tijdslimiet hield de GPU bezet.** Elke run die ik onder het GPU-slot startte had een bewaker ernaast (`( sleep 240; kill $pid ) &`). Die bewaker erft het slot, en zijn `sleep` leeft door als de run klaar is: na elke run van mij bleef het slot tot vier minuten dicht (na een meetrun zeven), en één keer negentien minuten, voor iedereen. De andere sessies gebruiken dezelfde regel. Zo'n bewaker moet het slot loslaten: `( sleep 240; kill $pid ) 9>&- &`. Gevonden met `lsof` op het slotbestand toen vier runs stonden te wachten op niemand.
 - **Een reeks van drie ronden daartussen is mislukt**: ze liep van 20:15 tot 20:27 naast het spel van Michiel, die om 20:13 de fabriek startte. Ik had met `ps` gekeken voor ik de reeks in de rij voor de GPU zette, en niet meer toen ze twee uur later begon. Alles halveerde, aan beide kanten (37 tegen 37, 40 tegen 42, 46 tegen 42, 47 tegen 46, 34 tegen 33). Niets waard, en het heeft hem tien minuten beeldsnelheid gekost.
 - **Pipelines tijdens het tekenen**: op het eerste standpunt, dat geen laadscherm heeft, 103 waar het er 97 waren; op de vier daarna geen. Een rondgang vanaf het titelscherm is niet gelopen.
 - **Niet gemeten**: aan de eigen lader en op een stille laptop, in beweging, in een gevecht, en wat de acht probes, het glas en de sterkere occlusie elk kosten.
 
 **Gecontroleerd, en wat niet**
 
+- `tools/selftest.sh` slaagt op de eindstand, 401 controles; `tools/nettest.sh` (62) en `tools/test_sound.sh` (38) ook.
+- `tools/build_check.py factory works depot powerhouse wing`: geen bestand van die vijf levels komt er anders uit. Wat verandert zijn de duinen, de showroom en de vier voertuigmodellen.
+- **De drie branches samen**: `duinkamp` gaat zonder botsing samen met `duingrond` en met `duindennen`, op `PLAN.md` na, waar alle drie een hoofdstuk aan het eind zetten (droog geprobeerd met `git merge-tree`). Het keurmerk van het level (`tools/zone_sheet.py dunes --posted`) is op deze branch niet gedraaid.
 - **Wat staat, staat waar het stond.** Na de laatste bouw alle 780 botsvormen (vorm, maat, plek, richting, oppervlak), elk geplaatst model en voertuig, de bits van de schaduwkaart en elke area en marker naast die van de trunk gelegd: 1864 regels, geen verschil. De bouw zegt 17% schaduw, 14 zones en 6 checkpoints.
-- `tools/selftest.sh --level=dunes` slaagt (86 controles) na elke mijlpaal.
+- `tools/selftest.sh --level=dunes` slaagde (86 controles) voor elke commit.
 - `tools/test_effects.sh` slaagt, 259 controles, met de gewijzigde `scripts/window.gd`: de ramen van de fabriek, het fabrieksterrein, het depot en de centrale breken als voorheen. Daarbij een nieuw deel, `tools/effects/reveal.gd`, voor de duinen: elke ruit zit in een raam, de ruiten van een opening zijn één raam, een schot vanaf de grond dat op de muur stopt breekt de ruit erachter en geen andere, en een stap op een plaat is beton en ernaast zand.
 - **Niets in beweging gezien.** De wind, de vlag, de wolk en het oog zijn beoordeeld op stilstaande beelden en op getallen. Van het oog is een wandeling uitgerekend zonder beeld: langs het spoor door het bos blijft het binnen het dode gebied (het bos is daar half licht), bij de bosrand loopt het een tiende op.
 
 **Onderweg gevonden**
 
 - **De occlusie deed niets.** Wie in de schaduw stond, stond nergens op: straal 1,2 en sterkte 1,6 zijn op deze afstanden niet te zien. Dat was de helft van "alles in de schaduw krijgt dezelfde tint".
-- **Een probe geeft het dak terug.** De tent werd eerst oranje van binnen: de probe ving het doek waar de zon doorheen schijnt, en alles wat glimt gaf dat terug. Hij geeft nu een derde daarvan terug. Of de tent van binnen goed is, weet ik niet: zie "Niet kunnen beoordelen".
+- **Een probe geeft het dak terug.** De tent werd eerst fel oranje van binnen: de probe ving het doek waar de zon doorheen schijnt, en alles wat glimt gaf dat terug. Hij geeft nu een vijfde daarvan terug.
 - **Een schot op een raam kwam nooit bij het glas.** De muur van het hoofdgebouw is een dichte botsvorm op het vlak van de gevel, en het glas ligt 24 cm terug. Dat stond al als open punt in "De duinen: het beeld"; één oppervlak maken van het glas alleen was niet genoeg geweest.
 - **Ruiten met een roede ertussen zijn elk een eigen raam**: een raam is wat hoek aan hoek ligt. Het glas loopt daarom door achter de roeden.
+- **Mijn eigen tijdslimiet hield de GPU bezet.** Elke run die ik onder het GPU-slot startte had een bewaker ernaast (`( sleep 240; kill $pid ) &`). Die bewaker erft het slot, en zijn `sleep` leeft door als de run klaar is: na elke run van mij bleef het slot tot vier minuten dicht (na een meetrun zeven), en één keer negentien minuten, voor iedereen. De andere sessies gebruiken dezelfde regel. Zo'n bewaker moet het slot loslaten: `( sleep 240; kill $pid ) 9>&- &`. Gevonden met `lsof` op het slotbestand toen vier runs stonden te wachten op niemand.
 - **`out` is een woord van de shadertaal**, en een bouw zonder beeld merkt een shader die niet compileert wel op, maar bouwt door.
 - **Het blad met stencils had vier kentekens waar geen voertuig er een van droeg.** Ze zijn vervangen door de tien cijfers en de letters waar een kenteken mee begint.
 
@@ -2707,10 +2710,18 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 **Niet kunnen beoordelen**
 
 - **Alles wat beweegt**: of de wand van de tent bolt of klappert, of de vlag wappert of flappert, of de was natuurlijk hangt, of een wolk te vaak komt of te donker is, en of het oog helpt of hindert. De getallen staan bovenaan `scripts/eyes.gd` en `scripts/cloud.gd`.
-- **De tent van binnen.** Ze is warmer en egaler geworden dan ze was, en het laatste beeld ervan (na het terugdraaien van wat de probe teruggeeft) heb ik niet gezien.
+- **De tent van binnen.** Ze is donkerder en warmer geworden: het tafelblad ging op het beeld van 0,68, 0,48, 0,31 naar 0,62, 0,35, 0,10. Dat is het hout zonder het blauwe licht van een hemel die er onder een dak niet is, en zo hoort het; of het mooier is dan het was, weet ik niet. Van de zestien beelden op het blad met voor en na vind ik dit het minst, samen met het net van de schaduwkant (nog steeds donker), de bunker (het stuk net over zijn hoek hangt als een lap) en het appèlveld (de doelen zijn van veraf twee streepjes).
 - **Of de kamers achter het glas overtuigen**, van dichtbij en schuin van opzij. Van onderaf zie je vooral plafonds.
 - **Het model voor veraf op 34 m**: of de overgang te zien is als je op een voertuig af loopt.
 - **Het geluid** van een stap en een schot op de platen: getest is dat het spel "beton" zegt, niet hoe het klinkt.
+
+**Voor Michiel om te bekijken**
+
+- Voor en na, zestien plekken: `benchmark/sheets/dunes_kamp_before_after.jpg`.
+- De zon op 48, 30 en 20 graden, om uit te kiezen: `benchmark/sheets/dunes_sun_proposal.jpg`.
+- Spelen, want de wind, de vlag, de wolk en het oog zijn alleen in beweging te beoordelen: `/Applications/Godot.app/Contents/MacOS/Godot --path /Users/michielvandeningh/dev/Graphics/.claude/worktrees/duinkamp res://scenes/dunes.tscn -- --play`. In die worktree staat het level gebouwd; de trunk is sinds het begin van deze branch niet veranderd.
+- Een wolk die blijft hangen, om te zien wat hij met het licht doet: hetzelfde commando met `--cloud=1` erachter.
+- Een stap en een schot op de betonplaten van de binnenplaats: te horen in het spel, op de weg achter het hoofdgebouw.
 
 **Nog open**
 
