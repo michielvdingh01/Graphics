@@ -2734,3 +2734,37 @@ Op 12 oktober 2026 gebouwd op de branch `buit`: stap 2d van "Wedstrijden: teams,
 - Wat valt, blijft liggen: een bal rolt niet.
 - Wie achteruit loopt met de vlag, heeft het doek naar voren: de heupen staan dan andersom.
 - Het net van de bal is alleen van dichtbij te zien, en de bal hangt links: van rechts gezien zit het lijf ervoor.
+
+## Capture the flag: de eerste versie
+
+Op 13 oktober 2026 zei Michiel dat capture the flag nog gebouwd moest worden. Het plan zette dat achter het brein van de bots (2a) en de arena (2b); dit is een eerste versie zonder die twee, op de branch `potje`, met de buit van 2d erin (de branch `buit` is daarvoor binnengehaald).
+
+**Wat er nu is**
+
+- **De regels** (`scripts/modes/ctf.gd`): elke kant heeft een buit op een standaard aan haar eigen uiteinde van de arena. Tegen de buit van de ander aan lopen is hem pakken. Wie hem draagt laat hem vallen waar hij neergaat; de kant van wie hij is brengt hem terug door hem aan te raken, en na twintig seconden gaat hij vanzelf. Een punt is de buit van de ander op je eigen standaard brengen terwijl de jouwe daar staat. Drie punten of twaalf minuten; een kill is geen punt; je bent vijf tellen weg en komt terug op de grond van je eigen basis, 6 tot 25 m lopen van je standaard.
+- **De buit kies je**: vlag, voetbal of banaan, op het scherm "Multiplayer" (de knop "Prize", die er alleen bij capture the flag staat) of als vierde deel van `--match=ctf:works:6:banana`. De lijst komt uit `assets/prizes.json`: een buit erbij staat er vanzelf tussen.
+- **De bots verdelen het werk**, in de volgorde waarin ze bij hun kant kwamen: halen, bewaken, halen, zwerven, halen, bewaken. Een haler loopt naar de buit van de ander, of met wie hem draagt mee. Een wachter staat op een vaste plek 4 tot 12 m van zijn standaard. Wie de buit heeft rent naar huis en vecht alleen met wie binnen 14 m komt. Ligt de eigen buit ergens, dan gaat de dichtstbijzijnde bot hem halen; loopt iemand ermee weg, dan gaan de wachters en de zwerver erachteraan. Wie ergens moet zijn, loopt door terwijl hij schiet in plaats van te blijven staan vechten: zonder dat stonden de halers van beide kanten halverwege tegenover elkaar tot er een viel.
+- **In beeld**: onder de stand twee regels, van hun buit en van de jouwe: thuis, bij wie, of op de grond met de tellen tot hij teruggaat, en hoe ver weg. Boven elke buit staat YOURS of THEIRS, door muren heen. Wie de buit pakt, laat vallen, terugbrengt of scoort staat bij wie-wie-neerhaalde.
+- **Een spelsoort kan nu meer dan tellen.** `scripts/modes/mode.gd` heeft er haken bij: wat er bij het begin in het level komt, wat er elke stap gebeurt, wat er gebeurt als iemand valt, waar iemand terugkomt, waar een bot heen moet, of hij haast heeft, en wat er onder de stand staat. `match.gd` weet niets van een buit; `Match.show_mode()` laat een spelsoort iets op elke machine doen. Een vierde spelsoort is weer één bestand.
+
+**Getest**, zonder GPU.
+
+- `tools/test_match.sh`, 63 controles. Voor capture the flag: elke kant heeft een banaan aan haar eigen uiteinde in haar eigen kleur; je eigen buit thuis aanraken doet niets; tegen die van de ander aan lopen pakt hem; wie hem draagt laat hem vallen waar hij neergaat en die kill is geen punt; een eigen speler brengt hem terug door hem aan te raken; beide kunnen tegelijk weg zijn en dan scoort niemand; een buit die ligt gaat vanzelf naar huis, en wie daar met de andere stond te wachten scoort op dat moment; wie viel komt terug bij zijn eigen basis; het menu gaat langs de drie soorten en de drie soorten buit.
+- `tools/test_prize.sh` van de buit slaagt met de wedstrijd erbij.
+- **Bots onder elkaar.** In de fabriek, drie tegen drie: in vijf minuten is de buit 3 keer gepakt en één keer binnengebracht; in een andere run van tweeënhalve minuut 3 keer gepakt, 3 keer gevallen, 3 keer teruggebracht en niet gescoord; in een run van vier minuten is hij niet gepakt. Op het fabrieksterrein (zes tegen zes, vier minuten, 91 doden) en in de centrale (vier tegen vier, 69 doden) pakte geen bot de buit: de halers van beide kanten komen elkaar in het midden tegen. Het punt moet daar van de speler komen.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het leuk is.** Niemand heeft het gespeeld. Ik heb één beeld gezien, van het begin: de stand, de twee regels over de buit, de banaan met het blauwe lint op zijn kist en YOURS erboven.
+- **Hoe de buit eruitziet op de rug van wie hem draagt in een wedstrijd.** De bladen van 2d laten dat zien op een pop die stilstaat; in een potje heb ik het niet in beeld gehad. Bij de speler zelf hangt hij op zijn eigen rug, waar hij hem niet ziet.
+- **De geluiden.** Pakken, terugbrengen en scoren lenen de geluiden van een granaat oprapen, munitie oprapen en een checkpoint. Eigen signalen, in twee of drie varianten om te kiezen, horen bij 2c.
+
+**Nog open**
+
+- De standaard staat op het uiteinde zelf, niet op "de meest beschutte plek met drie meter vrije vloer" uit het plan, en een basis heeft geen eigen grond buiten wat binnen 25 m lopen ligt.
+- Wat de speler doet verandert niets aan wie wat doet: blijf je thuis, dan gaat er geen bot meer halen.
+- De drager is voor iedereen altijd te vinden: de bots weten waar hij is, en de speler leest de afstand. Het plan wilde dat de tegenpartij hem alleen ziet als een van hen hem ziet.
+- Een wachter staat stil met zijn gezicht waar hij toevallig heen keek.
+- Op het fabrieksterrein is het één gang heen en dezelfde gang terug, zoals het plan al zei: een arena met drie wegen is stap 5.
+- Meer voorwerpen als buit, en ze laden van buiten de build zodat vrienden ze ook krijgen: Michiels vraag van 12 oktober. De tabel en het menu zijn erop gebouwd; het laden van buiten de build niet.
+- Over het net is niets hiervan gebouwd: stap 4.

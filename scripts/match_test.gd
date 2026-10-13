@@ -216,6 +216,82 @@ func _run() -> void:
 	_check("they run as fast as anybody, and fight", fastest > player.WALK_SPEED and others[0].brain.SPRINT == player.SPRINT_SPEED and zombie_kills + Match.tally[me.team] > 0)
 	Settings.enemy_theme = theme
 
+	# Capture the flag, with a banana.
+	_check("capture the flag opens", Match.open({"mode": "ctf", "level": "factory", "size": 3, "prize": "banana", "only_bots": true}) and Match.title() == "Capture the flag")
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	game = tree.current_scene
+	var rules: RefCounted = Match.mode
+	var prizes: Array = rules.prizes
+	var ctf_arena: RefCounted = Match.arena
+	_check("each side has a banana on a stand at its own end, in a colour of its own", prizes.size() == 2 and prizes.all(func(prize: Node3D) -> bool: return is_instance_valid(prize) and prize.kind == "banana" and prize.state == rules.HOME)
+		and prizes[0].global_position.distance_to(ctf_arena.spots[ctf_arena.ends[0]]) < 0.1 and prizes[1].global_position.distance_to(ctf_arena.spots[ctf_arena.ends[1]]) < 0.1
+		and prizes[0].tint != prizes[1].tint)
+	for who: RefCounted in Match.entrants.values():
+		who.brain.process_mode = Node.PROCESS_MODE_DISABLED
+		who.safe = 0.0
+	var blues: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team == 0)
+	var oranges: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team == 1)
+	var runner: RefCounted = blues[0]
+	var second: RefCounted = blues[1]
+	var keeper: RefCounted = oranges[0]
+	var aside := Vector3(0.4, 0.0, 0.0)
+	runner.body.global_position = prizes[0].global_position + aside
+	await _wait(0.3)
+	_check("touching one's own prize at home does nothing", prizes[0].state == rules.HOME)
+	runner.body.global_position = prizes[1].global_position + aside
+	await _wait(0.3)
+	_check("walking into the other side's prize takes it", prizes[1].state == rules.CARRIED and prizes[1].carrier == runner.body and rules.hurries(runner) and rules.carried_by(runner) == 1)
+	_check("whoever has it is wanted at their own stand", (rules.wish(runner) as Vector3).distance_to(prizes[0].global_position) < 0.1)
+	runner.body.global_position = ctf_arena.spots[ctf_arena.caches(1)[0] if false else 0] if false else (prizes[0].global_position + prizes[1].global_position) * 0.5
+	var fell_at: Vector3 = runner.body.global_position
+	Match.harm(runner.id, 500.0, fell_at, Vector3.FORWARD, keeper.id, 0)
+	_check("whoever has it drops it where they go down, and that kill is nobody's point", prizes[1].state == rules.DOWN and Vector2(prizes[1].where().x - fell_at.x, prizes[1].where().z - fell_at.z).length() < 1.5
+		and runner.out > 0.0 and Match.tally == [0, 0] and keeper.kills == 1)
+	_check("the nearest of its own side is wanted there", (rules.wish(rules._nearest(1, prizes[1].where())) as Vector3).distance_to(prizes[1].where()) < 0.1)
+	keeper.body.global_position = prizes[1].where() + aside
+	await _wait(0.3)
+	_check("one of its own side brings it home by touching it", prizes[1].state == rules.HOME)
+	second.body.global_position = prizes[1].global_position + aside
+	await _wait(0.3)
+	keeper.body.global_position = prizes[0].global_position + aside
+	await _wait(0.3)
+	_check("both can be away at once", prizes[1].carrier == second.body and prizes[0].carrier == keeper.body)
+	second.body.global_position = prizes[0].global_position + aside
+	await _wait(0.3)
+	_check("and nobody scores at a stand that is empty", Match.tally == [0, 0] and prizes[1].state == rules.CARRIED)
+	Match.harm(keeper.id, 500.0, keeper.body.global_position, Vector3.FORWARD, second.id, 0)
+	rules.numbers = rules.numbers.duplicate()
+	rules.numbers.returns = 1.0
+	await _wait(1.6)
+	_check("a prize that lies there goes home by itself after a while", prizes[0].state == rules.HOME)
+	await _wait(0.3)
+	_check("and whoever waited at the stand with the other one scores", Match.tally == [1, 0] and prizes[1].state == rules.HOME and Match.state == Match.State.PLAYING)
+	rules.numbers.returns = 20.0
+	await _wait(float(rules.numbers.respawn) + 0.3)
+	var home: Vector3 = ctf_arena.spots[ctf_arena.ends[0]]
+	_check("whoever went down comes back on the ground of their own base", runner.out <= 0.0 and runner.body.global_position.distance_to(home) < 26.0 and runner.body.global_position.distance_to(home) > 3.0)
+	# Bots play it out among themselves.
+	for who: RefCounted in Match.entrants.values():
+		who.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	var took := [0]
+	Match.said.connect(func(text: String) -> void:
+		if text.contains(" has "):
+			took[0] += 1)
+	Engine.time_scale = 6.0
+	clock = 0.0
+	var before: Array = Match.tally.duplicate()
+	Match.left = 300.0
+	while Match.state == Match.State.PLAYING and clock < 320.0:
+		await _wait(0.5)
+		clock += 0.5
+	Engine.time_scale = 1.0
+	print("  capture the flag among bots: %d : %d after %.0f s, the prize taken %d times, %d times a bot got stuck" % [Match.tally[0], Match.tally[1], clock, took[0], Match.stuck])
+	_check("bots go and take the prize", took[0] >= 1)
+	_check("it ends at three points or when the time is up, for whoever leads then", Match.state == Match.State.OVER
+		and Match.won == (rules.DRAW if Match.tally[0] == Match.tally[1] else 0 if Match.tally[0] > Match.tally[1] else 1)
+		and Match.tally[0] >= before[0] and maxi(Match.tally[0], Match.tally[1]) <= 3)
+
 	# What the menu offers, and leaving.
 	Menu._show(Menu.Screen.MATCH)
 	var offered := Menu._column.get_children().filter(func(control: Node) -> bool: return control is Button).map(func(button: Button) -> String: return button.text)
@@ -223,10 +299,19 @@ func _run() -> void:
 	var buttons := Menu._column.get_children().filter(func(control: Node) -> bool: return control is Button)
 	var kind: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Kind"))[0]
 	var was := kind.text
+	var kinds_seen := [was]
+	for i in Match.kinds.size() - 1:
+		kind.pressed.emit()
+		kinds_seen.append(kind.text)
+	_check("on which a button goes through the kinds, capture the flag among them", kinds_seen.has("Kind  ·  Capture the flag") and kinds_seen.has("Kind  ·  Free for all") and kinds_seen.has("Kind  ·  Team deathmatch"))
+	var prize_button: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Prize"))[0]
+	var prizes_seen := []
+	for i in 3:
+		prizes_seen.append(prize_button.text)
+		prize_button.pressed.emit()
+	_check("and another through what is fought over, when it is capture the flag", prize_button.visible and prizes_seen.has("Prize  ·  Flag") and prizes_seen.has("Prize  ·  Football") and prizes_seen.has("Prize  ·  Giant banana"))
 	kind.pressed.emit()
-	_check("on which a button goes through the kinds", kind.text != was and kind.text.begins_with("Kind"))
-	kind.pressed.emit()
-	_check("and back to the first", kind.text == was)
+	_check("and back to the first", kind.text == was and not prize_button.visible)
 	var against: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Against"))[0]
 	var seen := [against.text]
 	for i in 8:
@@ -290,6 +375,11 @@ func _soak(seconds: float) -> void:
 	var nearest := INF
 	var walked := 0.0
 	var stood := {}
+	var news := {}
+	Match.said.connect(func(text: String) -> void:
+		for word: String in [" has ", " dropped ", " brought ", " back home", " scored "]:
+			if text.contains(word):
+				news[word.strip_edges()] = int(news.get(word.strip_edges(), 0)) + 1)
 	while waited < seconds:
 		await _wait(0.5)
 		waited += 0.5
@@ -305,6 +395,8 @@ func _soak(seconds: float) -> void:
 				if other.out <= 0.0 and Match.mode.hostile(who, other):
 					nearest = minf(nearest, who.body.global_position.distance_to(other.body.global_position))
 	print("  each walked %.1f m a second on average; the nearest two against each other ever came is %.0f m" % [walked / seconds / Match.entrants.size(), nearest])
+	if not news.is_empty():
+		print("  the score is %d : %d; what was said of the prizes, and how often: %s" % [Match.tally[0], Match.tally[1], news])
 	physics.sort()
 	var mean := 0.0
 	for sample in physics:

@@ -206,11 +206,11 @@ func where() -> Vector3:
 ## whoever has to know that when something else changes, such as a prize
 ## that comes home while its owner waits there with the other one.
 func within_reach() -> Array[Node3D]:
-	return _touch.get_overlapping_bodies() if is_instance_valid(_touch) and state != State.CARRIED else []
+	return _touch.get_overlapping_bodies() if is_instance_valid(_touch) and _touch.monitoring and state != State.CARRIED else []
 
 
 func at_stand() -> Array[Node3D]:
-	return _base.get_overlapping_bodies() if is_instance_valid(_base) else []
+	return _base.get_overlapping_bodies() if is_instance_valid(_base) and _base.monitoring else []
 
 
 ## What it is called, and how a sentence speaks of it.

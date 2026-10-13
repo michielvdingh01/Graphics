@@ -178,7 +178,9 @@ func line_up(side: int, count: int) -> Array[Transform3D]:
 ## at `friends`: the spot furthest from the nearest enemy that none of them
 ## sees and nobody stands on. If no spot is safe, the one furthest from them
 ## all, which is counted in `emergencies`.
-func pick(foes: PackedVector3Array, friends: PackedVector3Array) -> Transform3D:
+##
+## `among` narrows it down to those spots, as around() gives them: a base.
+func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := PackedInt32Array()) -> Transform3D:
 	var gaps := PackedFloat32Array()
 	gaps.resize(spots.size())
 	for i in spots.size():
@@ -186,7 +188,7 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array) -> Transform3D:
 		for foe in foes:
 			gap = minf(gap, spots[i].distance_to(foe))
 		gaps[i] = gap
-	var order := range(spots.size())
+	var order := Array(among) if not among.is_empty() else range(spots.size())
 	order.sort_custom(func(a: int, b: int) -> bool: return gaps[a] > gaps[b])
 	var best := -1
 	for spot: int in order.slice(0, LOOKS):
@@ -210,6 +212,16 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array) -> Transform3D:
 		if towards == _middle() or foe.distance_to(spots[best]) < towards.distance_to(spots[best]):
 			towards = foe
 	return _facing(spots[best], _ahead(spots[best], towards))
+
+
+## The spots that are no nearer to the end of `side` than `from` metres to
+## walk and no further than `to`: the ground around a base.
+func around(side: int, from: float, to: float) -> PackedInt32Array:
+	var found := PackedInt32Array()
+	for spot in spots.size():
+		if walks[side][spot] >= from and walks[side][spot] <= to:
+			found.append(spot)
+	return found
 
 
 ## A spot to walk to for want of anything better.

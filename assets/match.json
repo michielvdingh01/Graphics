@@ -15,6 +15,7 @@
 	"cells": {"spots_for_one": 250, "most": 4, "back": 45.0},
 	"modes": {
 		"tdm": {"title": "Team deathmatch", "limit": 50, "minutes": 10, "respawn": 3.0, "least": 1, "most": 6, "size": 6},
-		"ffa": {"title": "Free for all", "limit": 25, "minutes": 10, "respawn": 2.0, "least": 2, "most": 12, "size": 8}
+		"ffa": {"title": "Free for all", "limit": 25, "minutes": 10, "respawn": 2.0, "least": 2, "most": 12, "size": 8},
+		"ctf": {"title": "Capture the flag", "limit": 3, "minutes": 12, "respawn": 5.0, "least": 2, "most": 6, "size": 6, "returns": 20.0}
 	}
 }

@@ -12,7 +12,7 @@ const ARENAS: Array[String] = ["works", "powerhouse", "factory", "depot", "dunes
 const NOT_OFFERED: Array[String] = ["soldiers_desert", "panic_clowns", "mannequin_zombie"]
 
 ## What was chosen last, for as long as the game runs.
-static var chosen := {"mode": "tdm", "level": "works", "size": 0}
+static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag"}
 
 
 static func build(menu: Node) -> void:
@@ -24,6 +24,9 @@ static func build(menu: Node) -> void:
 	var kind: Button = menu._button("", func() -> void: pass)
 	var arena: Button = menu._button("", func() -> void: pass)
 	var size: Button = menu._button("", func() -> void: pass)
+	# What is fought over, where that is something: any prize the table has.
+	var prize: Button = menu._button("", func() -> void: pass)
+	var prizes: PackedStringArray = (load("res://scripts/prize.gd") as GDScript).kinds()
 	var enemies: Button = menu._button("", func() -> void: pass)
 	var difficulty: Button = menu._button("", func() -> void: pass)
 	# Who there is to play against: every theme that has people in it. Robots
@@ -40,6 +43,8 @@ static func build(menu: Node) -> void:
 		kind.text = "Kind  ·  %s" % numbers.title
 		arena.text = "Arena  ·  %s" % (chosen.level as String).capitalize()
 		size.text = ("Players a side  ·  %d" if teams else "Players  ·  %d") % chosen.size
+		prize.visible = chosen.mode == "ctf" and not prizes.is_empty()
+		prize.text = "Prize  ·  %s" % str((load("res://scripts/prize.gd") as GDScript).spec(chosen.prize).get("name", chosen.prize))
 		enemies.text = "Against  ·  %s" % themes[maxi(themes.find(Settings.enemy_theme), 0)].capitalize()
 		difficulty.text = "Difficulty  ·  %s" % Settings.DIFFICULTY_NAMES[clampi(Settings.difficulty, 0, Settings.DIFFICULTY_NAMES.size() - 1)]
 	kind.pressed.connect(func() -> void:
@@ -52,6 +57,9 @@ static func build(menu: Node) -> void:
 	size.pressed.connect(func() -> void:
 		var numbers: Dictionary = Match.kinds[chosen.mode]
 		chosen.size = chosen.size + 1 if chosen.size < int(numbers.most) else int(numbers.least)
+		refresh.call())
+	prize.pressed.connect(func() -> void:
+		chosen.prize = prizes[(maxi(prizes.find(chosen.prize), 0) + 1) % prizes.size()]
 		refresh.call())
 	enemies.pressed.connect(func() -> void:
 		# The setting of the game itself, so that it is one choice everywhere.

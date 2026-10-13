@@ -33,6 +33,12 @@ const LOOK := 0.12
 const LEVEL := {"reaction": 0.55, "wander": 2.0, "aim_time": 0.6, "fov": 110.0}
 ## How far under the eyes of its target it aims, in metres: at the chest.
 const CHEST := 0.5
+## One that is in a hurry, with a prize on its back, still turns on an enemy
+## who is this near, in metres.
+const CORNERED := 14.0
+## One that has somewhere to be goes on walking there while it fights
+## somebody who is further off than this, in metres.
+const PRESSES_ON := 7.0
 ## It fires while its aim is no further off its target than this, in degrees.
 const ON_TARGET := 3.5
 ## What its spread is on top of that of its weapon over the sights, in degrees.
@@ -51,8 +57,11 @@ const RANGES: Array[float] = [16.0, 10.0, 6.0, 10.0, 32.0]
 ## It has got nowhere if it moved less than this many metres in this many
 ## seconds while it meant to walk.
 const STUCK := Vector2(0.4, 1.5)
-## Seconds between two looks for the way to somewhere that moves.
+## Seconds between two looks for the way to somewhere that moves, and the
+## seconds it goes somewhere else after it got stuck on the way to where the
+## match wants it.
 const REPATH := 0.3
+const DETOUR := 3.0
 const EYE := 1.6
 
 ## The entrant it thinks for, see match.gd.
@@ -86,6 +95,8 @@ var _stood_for := 0.0
 var _sprinting := false
 var _level := LEVEL
 var _path_at := 0.0
+## Until when it goes its own way instead of where the match wants it.
+var _detour := 0.0
 
 
 func _ready() -> void:
@@ -159,7 +170,12 @@ func _physics_process(delta: float) -> void:
 	var eye: Vector3 = _body.head.global_position
 	var desired := Vector3.ZERO
 	var facing := Vector3.ZERO
-	if _target:
+	# What the kind of match wants of it, unless it got nowhere with that a
+	# moment ago.
+	var wish: Variant = Match.mode.wish(me) if _clock >= _detour else null
+	# Whoever has something better to do than to fight runs on, unless the
+	# enemy is on top of them.
+	if _target and not (Match.mode.hurries(me) and eye.distance_to(_target.body.head.global_position) > CORNERED):
 		_seen += delta
 		var at: Vector3 = _target.body.head.global_position - Vector3.UP * CHEST
 		var distance := eye.distance_to(at)
@@ -171,6 +187,9 @@ func _physics_process(delta: float) -> void:
 		_aim = _aim.lerp(at + _off, 1.0 - exp(-delta * 3.0 / float(_level.aim_time)))
 		facing = _aim - eye
 		desired = _fight(delta, distance)
+		if wish != null and distance > PRESSES_ON:
+			# It has somewhere to be: it walks on, firing as it goes.
+			desired = _towards(wish, WALK)
 		_sprinting = false
 		var on_target := (_aim - eye).normalized().dot((at - eye).normalized()) > cos(deg_to_rad(ON_TARGET))
 		if _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
@@ -180,7 +199,7 @@ func _physics_process(delta: float) -> void:
 				_reload = _data.reload_time
 	else:
 		_seen = 0.0
-		desired = _roam()
+		desired = _roam(wish)
 		_sprinting = desired.length() > WALK
 		if desired.length_squared() > 0.01:
 			facing = desired
@@ -253,10 +272,15 @@ func _fight(delta: float, distance: float) -> Vector3:
 	return _body.global_basis.x * _strafe * WALK * 0.6
 
 
-## With nobody in sight: to where it last knew of somebody, the nearest
-## first, and otherwise to the half of the arena where the other side is to
-## be found, or just somewhere if there are no sides.
-func _roam() -> Vector3:
+## With nobody in sight: to where the kind of match wants it, if anywhere;
+## else to where it last knew of somebody, the nearest first, and otherwise
+## to the half of the arena where the other side is to be found, or just
+## somewhere if there are no sides.
+func _roam(wish: Variant) -> Vector3:
+	# What the kind of match wants of it comes first.
+	if wish != null:
+		_going = false
+		return _towards(wish, SPRINT)
 	var nearest := INF
 	var lead := Vector3.ZERO
 	for id: int in _known.keys():
@@ -312,6 +336,7 @@ func _notice_stuck(delta: float, desired: Vector3) -> void:
 		_known.clear()
 		_going = false
 		_strafe = -_strafe
+		_detour = _clock + DETOUR
 		Match.stuck += 1
 
 

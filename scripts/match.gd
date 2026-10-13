@@ -3,9 +3,10 @@ extends Node
 ## everybody for themselves, fight until one has the points or the time is
 ## up, and whoever dies is back a moment later somewhere safe. It is opened
 ## from the title screen, or with --match=<kind>:<level>:<size> on the command
-## line: tdm or ffa, the name of a level, and how many play a side, or in all
-## where there are no sides. --only-bots leaves the player out of it, to look
-## on.
+## line: tdm, ffa or ctf, the name of a level, and how many play a side, or in
+## all where there are no sides; capture the flag takes :<prize> after that, a
+## name from assets/prizes.json. --only-bots leaves the player out of it, to
+## look on.
 ##
 ## It takes the level over the way the sandbox does: the route is off, no
 ## robots stand in it and there is no way out. Everybody who plays is an
@@ -33,6 +34,8 @@ signal felled(by: int, fallen: int, weapon: int, head: bool)
 signal began
 ## It is over; `won` is a side or the number of an entrant, or mode.DRAW.
 signal ended(won: int)
+## Something happened that is worth a line: who took the prize, who scored.
+signal said(text: String)
 
 enum State { NONE, LOADING, PLAYING, OVER }
 
@@ -46,6 +49,7 @@ const PUPPET := "res://scenes/puppet.tscn"
 const MODES := {
 	"tdm": preload("res://scripts/modes/tdm.gd"),
 	"ffa": preload("res://scripts/modes/ffa.gd"),
+	"ctf": preload("res://scripts/modes/ctf.gd"),
 }
 const THEMES := preload("res://scripts/enemy_themes.gd")
 const FILE := "res://assets/match.json"
@@ -186,6 +190,8 @@ func _ready() -> void:
 				what.level = asked[1]
 			if asked.size() > 2:
 				what.size = asked[2].to_int()
+			if asked.size() > 3:
+				what.prize = asked[3]
 			open(what)
 
 
@@ -206,6 +212,7 @@ func open(what: Dictionary) -> bool:
 	state = State.LOADING
 	mode = MODES[kind].new()
 	mode.numbers = kinds[kind]
+	mode.host = self
 	var size := int(what.get("size", 0))
 	if size <= 0:
 		size = int(mode.numbers.size)
@@ -215,6 +222,7 @@ func open(what: Dictionary) -> bool:
 		"scene": scene,
 		"size": clampi(size, int(mode.numbers.least), int(mode.numbers.most)),
 		"only_bots": bool(what.get("only_bots", false)),
+		"prize": str(what.get("prize", "flag")),
 	}
 	Save.set_aside(true)
 	# As the game starts its first level is still on its way in: that one
@@ -266,6 +274,43 @@ func arrive(game: Node3D) -> void:
 		# The player looks on, and is in nobody's way.
 		game.player.invulnerable = true
 		game.player.collision_layer = 0
+
+
+## The level that is the arena, and whether the match is being played: for
+## the rules of a kind, see scripts/modes/mode.gd.
+func level() -> Node3D:
+	return _game
+
+
+func playing() -> bool:
+	return state == State.PLAYING
+
+
+## Runs `method` of the rules on every machine: for what a kind of match has
+## to show that the others do not, such as a prize that is taken.
+func show_mode(method: StringName, args: Array) -> void:
+	Net.show(self, &"_show_mode", [method, args])
+
+
+func _show_mode(method: StringName, args: Array) -> void:
+	if mode and mode.has_method(method):
+		mode.callv(method, args)
+	changed.emit()
+
+
+## A line for the HUD, and a sound with it if `sound` names one.
+func say(text: String, sound := &"") -> void:
+	said.emit(text)
+	if sound:
+		Sfx.play(sound, -6.0)
+
+
+## Ends the match if the rules say somebody has won.
+func judge() -> void:
+	if state == State.PLAYING and not Net.is_guest():
+		var winner: int = mode.winner(entrants.values(), tally, false)
+		if winner != mode.NOBODY:
+			Net.show(self, &"_show_end", [winner])
 
 
 ## What the match is called, for a heading: "Team deathmatch".
@@ -403,12 +448,10 @@ func _fell(who: Entrant, push: Vector3) -> void:
 		weapon = who.blame[1]
 		head = who.blame[2]
 	who.blame = []
+	mode.fell(who)
 	who.out = float(mode.numbers.respawn)
 	Net.show(self, &"_show_fall", [by, who.id, weapon, head, push])
-	if state == State.PLAYING:
-		var winner: int = mode.winner(entrants.values(), tally, false)
-		if winner != mode.NOBODY:
-			Net.show(self, &"_show_end", [winner])
+	judge()
 
 
 func _show_fall(by: int, fallen: int, weapon: int, head: bool, push: Vector3) -> void:
@@ -447,7 +490,7 @@ func _bring_back(who: Entrant) -> void:
 			foes.append(other.body.global_position)
 		else:
 			friends.append(other.body.global_position)
-	Net.show(self, &"_show_back", [who.id, arena.pick(foes, friends)])
+	Net.show(self, &"_show_back", [who.id, mode.come_back(who, foes, friends)])
 
 
 func _show_back(id: int, pose: Transform3D) -> void:
@@ -505,6 +548,7 @@ func _physics_process(delta: float) -> void:
 			# As far as a person's does, and no further.
 			who.health = minf(who.health + MENDS * delta, float(rules.regen_to))
 	_tend_cells()
+	mode.tick(delta)
 	_tick -= delta
 	if _tick <= 0.0:
 		_tick = TICK
@@ -544,6 +588,7 @@ func _begin() -> void:
 			roster.append([-(place + 1), NAMES[named % NAMES.size()], side, arm])
 			named += 1
 	Net.show(self, &"_show_roster", [roster])
+	mode.begin()
 	# Where they start: a side at its end, or everybody as far apart as can be.
 	var lines := {}
 	for who: Entrant in entrants.values():
