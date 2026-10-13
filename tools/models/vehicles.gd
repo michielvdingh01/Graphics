@@ -16,7 +16,6 @@ const ARMY := "army_green"
 ## Steel that was never painted, or not for long: a chassis, a track.
 const IRON := "track"
 const RUBBER := "tyre"
-const BARE := "bare_steel"
 const CANVAS := "canvas"
 const PANE := "glass"
 const WOOD := "wood"
@@ -74,7 +73,11 @@ func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> v
 ## high, on a face that stands in the XY of `xf` and looks along its +Z.
 func _stencil(mark: Rect2, xf: Transform3D, size: Vector2) -> void:
 	part("Marks")
-	(_parts["Marks"].node as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var marks := _parts["Marks"].node as MeshInstance3D
+	marks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Nobody reads a number from further off than this.
+	marks.visibility_range_end = 70.0
+	marks.visibility_range_end_margin = 6.0
 	var frame := _m * xf
 	var half := size * 0.5
 	var out := frame.basis.z
@@ -112,7 +115,7 @@ func _hoop(mat: String, center: Vector3, axis: Vector3, radius: float, thickness
 ## `out`: a cross-country tyre with the bars of its tread, on a pressed rim
 ## with its hub. `bars` is how many bars the tread has; with none it is the
 ## tyre alone, for the inner one of a pair.
-func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 14) -> void:
+func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 8) -> void:
 	var from := at - out * width * 0.5
 	if bars == 0:
 		_turned(RUBBER, from, out, PackedVector2Array([Vector2(radius * 0.6, 0), Vector2(radius * 0.94, 0), Vector2(radius, width * 0.25), Vector2(radius, width * 0.75), Vector2(radius * 0.94, width), Vector2(radius * 0.6, width)]), 8, true)
@@ -120,14 +123,14 @@ func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 14) 
 	_turned(RUBBER, from, out, PackedVector2Array([
 		Vector2(radius * 0.6, width * 0.04), Vector2(radius * 0.88, 0), Vector2(radius, width * 0.24),
 		Vector2(radius, width * 0.76), Vector2(radius * 0.88, width), Vector2(radius * 0.6, width * 0.96),
-	]), 14, true)
+	]), 12, true)
 	var frame := _up_along(out)
 	for bar in bars:
 		var turn := TAU * bar / bars
 		var spoke := frame.x * cos(turn) + frame.z * sin(turn)
 		# The bars of the tread lie slanted, from either shoulder in turn.
 		var slant := Basis(spoke, 0.5 if bar % 2 == 0 else -0.5)
-		_box(RUBBER, _m * Transform3D(slant * Basis(out, spoke, out.cross(spoke)), at + spoke * (radius + 0.001) + out * width * (0.19 if bar % 2 == 0 else -0.19)), Vector3(width * 0.58, 0.018, radius * 0.13), _part)
+		_box(RUBBER, _m * Transform3D(slant * Basis(out, spoke, out.cross(spoke)), at + spoke * (radius + 0.001) + out * width * (0.19 if bar % 2 == 0 else -0.19)), Vector3(width * 0.58, 0.018, radius * 0.2), _part)
 	_turned(ARMY, from, out, PackedVector2Array([
 		Vector2(radius * 0.61, width * 0.9), Vector2(radius * 0.56, width * 0.6), Vector2(radius * 0.3, width * 0.52), Vector2(radius * 0.22, width * 0.86), Vector2(0, width * 0.88),
 	]), 12)
@@ -135,12 +138,12 @@ func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 14) 
 	_turned(IRON, from, out, PackedVector2Array([Vector2(0, width * 0.2), Vector2(radius * 0.6, width * 0.2)]), 8)
 
 
-## A lamp that looks along `ahead` from `at`: a pressed bucket, a bright rim
-## and a lens.
-func _lamp(at: Vector3, ahead: Vector3, radius: float) -> void:
-	_turned(ARMY, at - ahead * radius * 1.3, ahead, PackedVector2Array([Vector2(0, 0), Vector2(radius * 0.85, radius * 0.4), Vector2(radius, radius * 1.3)]), 8, true)
-	_turned(BARE, at, ahead, PackedVector2Array([Vector2(radius * 1.04, -0.008), Vector2(radius * 1.04, 0.01), Vector2(radius * 0.88, 0.01), Vector2(0, -radius * 0.5)]), 8)
-	_turned(PANE, at, ahead, PackedVector2Array([Vector2(radius * 0.88, 0.008), Vector2(0, 0.024)]), 8, true)
+## A lamp that looks along `ahead` from `at`: a pressed bucket with a rim,
+## and a lens in it, or the blind it is blacked out with.
+func _lamp(at: Vector3, ahead: Vector3, radius: float, lens := true) -> void:
+	_turned(ARMY, at - ahead * radius * 1.3, ahead, PackedVector2Array([Vector2(0, 0), Vector2(radius * 0.85, radius * 0.4), Vector2(radius, radius * 1.3), Vector2(radius * 1.05, radius * 1.3), Vector2(radius * 1.05, radius * 1.45), Vector2(radius * 0.88, radius * 1.45), Vector2(radius * 0.86, radius * 1.2), Vector2(0, radius * 1.05)]), 8)
+	if lens:
+		_turned(PANE, at, ahead, PackedVector2Array([Vector2(radius * 0.88, 0.008), Vector2(0, 0.024)]), 8, true)
 
 
 ## A jerrycan standing at `at`, turned `yaw_deg`: pressed in two halves,
@@ -159,9 +162,9 @@ func _jerrycan(at: Vector3, yaw_deg: float) -> void:
 ## A shovel and an axe, strapped along the side of a vehicle on the side
 ## `side`, from `at` backwards.
 func _pioneer_tools(at: Vector3, side: float) -> void:
-	_bar(WOOD, at, at + Vector3(0, 0, 0.62), 0.016, 6)
+	_bar(ARMY, at, at + Vector3(0, 0, 0.62), 0.016, 6)
 	_piece(IRON, at + Vector3(side * 0.004, -0.015, -0.11), Vector3(0.012, 0.2, 0.24))
-	_bar(WOOD, at + Vector3(0, -0.13, 0.05), at + Vector3(0, -0.13, 0.6), 0.015, 6)
+	_bar(ARMY, at + Vector3(0, -0.13, 0.05), at + Vector3(0, -0.13, 0.6), 0.015, 6)
 	_piece(IRON, at + Vector3(side * 0.004, -0.13, 0.0), Vector3(0.022, 0.16, 0.09))
 	for z: float in [0.16, 0.48]:
 		_plate(CANVAS, at + Vector3(side * 0.012, -0.065, z), Vector3(0.01, 0.2, 0.03))
@@ -257,7 +260,7 @@ func _jeep() -> void:
 		_piece(ARMY, Vector3(x, 1.35, -0.57), Vector3(0.035, 0.44, 0.035), lean)
 	_piece(PANE, Vector3(0, 1.35, -0.57), Vector3(1.36, 0.4, 0.008), lean)
 	_bar(IRON, Vector3(-0.36, 1.54, -0.615), Vector3(-0.2, 1.3, -0.585), 0.005, 4)
-	_plate(BARE, Vector3(-0.78, 1.34, -0.6), Vector3(0.1, 0.07, 0.008))
+	_plate(PANE, Vector3(-0.78, 1.34, -0.6), Vector3(0.1, 0.07, 0.008))
 	_bar(IRON, Vector3(-0.7, 1.3, -0.57), Vector3(-0.78, 1.34, -0.6), 0.006, 4)
 
 	# Where they sit, what they drive it with, and what hangs on the back.
@@ -358,7 +361,7 @@ func _truck() -> void:
 		_piece(ARMY, Vector3(x * 0.98, 2.14, -1.76), Vector3(0.045, 0.6, 0.045), Vector3(-6, 0, 0))
 		_piece(ARMY, Vector3(x * 0.04, 2.14, -1.76), Vector3(0.045, 0.6, 0.045), Vector3(-6, 0, 0))
 		_piece(PANE, Vector3(x * 0.51, 2.14, -1.762), Vector3(0.9, 0.52, 0.012), Vector3(-6, 0, 0))
-		_piece(BARE, Vector3(x * 1.2, 2.0, -1.74), Vector3(0.14, 0.2, 0.012))
+		_piece(PANE, Vector3(x * 1.2, 2.0, -1.74), Vector3(0.14, 0.2, 0.012))
 		_bar(IRON, Vector3(x * 1.0, 1.9, -1.72), Vector3(x * 1.2, 2.0, -1.73), 0.008, 4)
 	_piece(ARMY, Vector3(0, 2.43, -1.79), Vector3(2.0, 0.045, 0.045))
 	_piece(ARMY, Vector3(0, 1.87, -1.73), Vector3(2.0, 0.045, 0.045))
@@ -550,8 +553,8 @@ func _tank(tank: String, traverse_deg: float, number: Rect2) -> void:
 		# behind and the rollers the track comes back over.
 		for i in 6:
 			var z := -2.12 + i * 0.83
-			_turned(RUBBER, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.345, 0.02), Vector2(0.345, 0.45), Vector2(0.27, 0.47)]), 14)
-			_turned(ARMY, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.28, 0.46), Vector2(0.25, 0.4), Vector2(0.14, 0.4), Vector2(0.11, 0.5), Vector2(0, 0.5)]), 14)
+			_turned(IRON, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.345, 0.02), Vector2(0.345, 0.45), Vector2(0.27, 0.47)]), 10)
+			_turned(ARMY, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.28, 0.46), Vector2(0.25, 0.4), Vector2(0.14, 0.4), Vector2(0.11, 0.5), Vector2(0, 0.5)]), 10)
 		_turned(ARMY, Vector3(x - side * 0.22, 0.64, -2.82), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.31, 0.0), Vector2(0.31, 0.46), Vector2(0.24, 0.4), Vector2(0.1, 0.44), Vector2(0, 0.44)]), 14)
 		_turned(IRON, Vector3(x - side * 0.2, 0.64, 2.74), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.3, 0.0), Vector2(0.3, 0.42), Vector2(0.16, 0.42), Vector2(0.12, 0.5), Vector2(0, 0.5)]), 14)
 		for tooth in 12:
@@ -576,10 +579,10 @@ func _tank(tank: String, traverse_deg: float, number: Rect2) -> void:
 			_piece(ARMY, Vector3(x + side * 0.03, 1.465, bin.x), Vector3(0.48, 0.02, bin.y + 0.02))
 			for catch: float in [-0.3, 0.3]:
 				_piece(IRON, Vector3(x + side * 0.27, 1.42, bin.x + catch * bin.y), Vector3(0.015, 0.07, 0.04))
-		_bar("steel", Vector3(x, 1.26, 2.5), Vector3(x, 1.3, 3.05), 0.07, 8)
-		_bar("steel", Vector3(x, 1.3, 3.05), Vector3(x + side * 0.12, 1.3, 3.15), 0.075, 8)
+		_bar(IRON, Vector3(x, 1.26, 2.5), Vector3(x, 1.3, 3.05), 0.07, 8)
+		_bar(IRON, Vector3(x, 1.3, 3.05), Vector3(x + side * 0.12, 1.3, 3.15), 0.075, 8)
 		# A lamp behind its guard on the front plate, and a hook to tow by.
-		_lamp(Vector3(side * 0.62, 1.36, -2.42), Vector3.FORWARD, 0.075)
+		_lamp(Vector3(side * 0.62, 1.36, -2.42), Vector3.FORWARD, 0.075, false)
 		_rail(IRON, [Vector3(side * 0.5, 1.26, -2.55), Vector3(side * 0.5, 1.46, -2.5), Vector3(side * 0.74, 1.46, -2.5), Vector3(side * 0.74, 1.26, -2.55)], 0.008)
 		_piece(IRON, Vector3(side * 0.7, 0.72, -2.94), Vector3(0.08, 0.16, 0.14))
 		_piece(IRON, Vector3(side * 0.7, 0.72, 2.95), Vector3(0.08, 0.16, 0.14))
@@ -597,7 +600,6 @@ func _tank(tank: String, traverse_deg: float, number: Rect2) -> void:
 	_turned(ARMY, Vector3(0.48, 1.53, -1.55), Vector3.UP, PackedVector2Array([Vector2(0.3, 0), Vector2(0.3, 0.04), Vector2(0.27, 0.06), Vector2(0, 0.06)]), 12)
 	for x: float in [0.3, 0.66]:
 		_piece(ARMY, Vector3(x, 1.58, -1.9), Vector3(0.16, 0.08, 0.1))
-		_piece(PANE, Vector3(x, 1.59, -1.955), Vector3(0.12, 0.04, 0.006))
 	for x: float in [-0.5, 0.5]:
 		_plate(IRON, Vector3(x, 1.535, 1.75), Vector3(0.86, 0.012, 1.5))
 		for i in 9:
@@ -642,7 +644,7 @@ func _tank(tank: String, traverse_deg: float, number: Rect2) -> void:
 	_bar(IRON, Vector3(0.45, 2.7, 0.5), Vector3(0.45, 2.73, -0.6), 0.022, 6)
 	_piece(IRON, Vector3(0.45, 2.7, 0.3), Vector3(0.08, 0.1, 0.3))
 	_piece(ARMY, Vector3(0.6, 2.62, 0.3), Vector3(0.14, 0.14, 0.2))
-	_lamp(Vector3(-0.05, 2.5, -0.55), Vector3.FORWARD, 0.11)
+	_lamp(Vector3(-0.05, 2.5, -0.55), Vector3.FORWARD, 0.11, false)
 	_bar(IRON, Vector3(-0.05, 2.34, -0.5), Vector3(-0.05, 2.42, -0.5), 0.02, 5)
 	for x: float in [-0.7, 0.75]:
 		_bar(IRON, Vector3(x, 2.34, 1.15), Vector3(x, 2.46, 1.15), 0.03, 6)

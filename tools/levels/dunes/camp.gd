@@ -93,7 +93,7 @@ func _bivouac() -> void:
 	_pole(post + Vector3.DOWN * 0.2, post + Vector3.UP * 1.85, 0.03, 0.025)
 	_pole(other + Vector3.DOWN * 0.2, other + Vector3.UP * 1.8, 0.03, 0.025)
 	washing_line(post + Vector3.UP * 1.8, other + Vector3.UP * 1.75)
-	drop("barrel_stove", ground(287.6, 116.6), 30)
+	strew("barrel_stove", ground(287.6, 116.6), 30)
 	strew("metal_jerrycan_green", ground(287.2, 115.6), 80)
 	strew("metal_jerrycan_green", ground(286.7, 115.8), 95)
 	kit(Vector2(298.4, 113.6), 110.0)
@@ -116,7 +116,9 @@ func _furnish(tent_xf: Transform3D) -> void:
 	helmet(tent_xf * (TABLE + Vector3(-0.3, 0.84, -0.5)), 30.0)
 	helmet(tent_xf * Vector3(3.3, 0.77, -1.12), 140.0)
 	for mug: Vector2 in [Vector2(0.55, 0.5), Vector2(-0.7, 0.42), Vector2(-1.1, 0.1)]:
-		cylinder("galvanised", tent_xf * (TABLE + Vector3(mug.x, 0.84, mug.y)), 0.04, 0.085, SLIGHT, Vector3.ZERO, 0.045, 8)
+		_small = true
+		cylinder(ARMY, tent_xf * (TABLE + Vector3(mug.x, 0.84, mug.y)), 0.04, 0.085, SLIGHT, Vector3.ZERO, 0.045, 8)
+		_small = false
 	var back := tent_xf * Vector3(-2.7, 0, -2.3)
 	kit(Vector2(back.x, back.z), 5.0)
 	back = tent_xf * Vector3(2.2, 0, -2.4)
