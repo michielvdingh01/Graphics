@@ -115,7 +115,7 @@ func _inner_yard() -> void:
 	nissen_hut(Vector2(38.0, 34.0), 0.0, 14.0)
 	# A flagstaff between the huts and the gate.
 	cylinder("galvanised", Vector3(58.0, YARD_Y, 28.0), 0.06, 9.0, SLIGHT, Vector3.ZERO, 0.035, 8)
-	_sheet(CANVAS, [Vector3(58.05, YARD_Y + 7.6, 28.0), Vector3(59.9, YARD_Y + 7.45, 28.25), Vector3(59.9, YARD_Y + 8.65, 28.25), Vector3(58.05, YARD_Y + 8.8, 28.0)], 0.0, 3, 1)
+	flag(Vector3(58.0, YARD_Y + 8.82, 28.07))
 	# The shed along the north wall, open to the yard, and what stands in it.
 	var roof_y := YARD_Y + 4.4
 	box("roof", Vector3(103.0, roof_y, 15.0), Vector3(52.0, 0.12, 14.0), Vector3(3, 0, 0), SLIGHT)

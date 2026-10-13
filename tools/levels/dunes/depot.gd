@@ -97,7 +97,7 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		_fine_tools[key] = st
-	return _fine_tools[key]
+	return _still(_fine_tools[key], mat)
 
 
 ## The new kinds of concrete and brick are concrete and brick to a bullet.

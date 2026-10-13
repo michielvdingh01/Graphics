@@ -10,7 +10,13 @@ extends "res://tools/model_builder.gd"
 ## paint, shaders/field_paint.gdshader, that knows how high over the ground a
 ## spot lies and lays the sand on from below. What is stencilled on it is a
 ## mesh of its own, "Marks", that throws no shadow. A level stands a vehicle
-## with vehicle() in tools/kit/field.gd, which knows what of it is in the way.
+## with vehicle() in tools/kit/field.gd, which knows what of it is in the way,
+## and gives each its own number and its own load there.
+##
+## Every vehicle is built twice: "Body" is what is seen of it from close by,
+## and "Far" the same vehicle from FAR_FROM metres on, put together from the
+## same description with everything small left out of it and everything
+## round made coarse: see _twice().
 
 const ARMY := "army_green"
 ## Steel that was never painted, or not for long: a chassis, a track.
@@ -38,6 +44,24 @@ const TOP_SPEED := Rect2(0.5, 0.75, 0.5, 0.125)
 const NO_STEP := Rect2(0, 0.875, 0.5, 0.125)
 const PETROL := Rect2(0.5, 0.875, 0.5, 0.125)
 
+## From how far off a vehicle is drawn as its far model, and how far apart
+## the two distances are at which it changes one way and the other, in metres.
+const FAR_FROM := 34.0
+const FAR_MARGIN := 4.0
+## What the far model leaves out: a piece that is shorter than this every
+## way, or thinner than that two ways, or a slat; a bar thinner than this,
+## and anything turned that is smaller across.
+const FAR_SHORT := 0.34
+const FAR_THIN := 0.032
+const FAR_BAR := 0.07
+const FAR_ROUND := 0.2
+## How many sides something round has in the far model, at most.
+const FAR_SIDES := 8
+
+## True while the far model of a vehicle is being built, and true if that
+## one keeps its bare iron: a tank is half tracks, under a lorry nobody looks.
+var _far := false
+var _far_iron := false
 ## The surfaces that are canvas, and what their vertex colour tells
 ## shaders/canvas.gdshader of the cloth: how much of the ground has got into
 ## it, how far it has faded, how much light gets into its folds and how much
@@ -47,17 +71,111 @@ var _dye := Color(0.2, 0.5, 0.9, 0.0)
 
 
 func _describe() -> void:
-	_jeep()
-	_truck()
-	_tank("tank", 0.0, NUMBER_14)
-	_tank("tank_b", 38.0, NUMBER_23)
+	_twice(_jeep)
+	_twice(_truck)
+	_twice(_tank.bind("tank", 0.0), true)
+	_twice(_tank.bind("tank_b", 38.0), true)
+
+
+## Builds a vehicle as `build` describes it, and then once more as its far
+## model: the same description, with _far set. `iron` keeps the bare iron in
+## that one.
+func _twice(build: Callable, iron := false) -> void:
+	_far = false
+	build.call()
+	var near := _parts["Body"].node as MeshInstance3D
+	near.visibility_range_end = FAR_FROM
+	near.visibility_range_end_margin = FAR_MARGIN
+	part("Far")
+	var far := _parts["Far"].node as MeshInstance3D
+	far.visibility_range_begin = FAR_FROM
+	far.visibility_range_begin_margin = FAR_MARGIN
+	_far = true
+	_far_iron = iron
+	_m = Transform3D()
+	build.call()
+	_far = false
+	_m = Transform3D()
+	part("Body")
+
+
+## The far model belongs to the vehicle that was just built.
+func model(model_name: String) -> void:
+	if not _far:
+		super(model_name)
 
 
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	if _far:
+		# Fewer paints, and so fewer things to draw: no glass, boards the
+		# colour of the steel, and bare iron only where it is most of what
+		# shows. What is left out goes into a surface that is never kept.
+		if mat == PANE or (mat == IRON and not _far_iron):
+			return _tool_named("|left out")
+		if mat == WOOD:
+			mat = ARMY
 	var st := super(mat, flags, at)
 	if mat == CANVAS:
 		_cloths[st] = true
 	return st
+
+
+## True if a box of `size` is too small for the far model: see FAR_SHORT.
+func _too_small(size: Vector3) -> bool:
+	var sides: Array[float] = [absf(size.x), absf(size.y), absf(size.z)]
+	sides.sort()
+	return sides[2] < FAR_SHORT or sides[1] < FAR_THIN or (sides[0] < 0.02 and sides[1] < 0.15)
+
+
+func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
+	if _far and _too_small(size):
+		return
+	super(mat, xf, size, flags)
+
+
+## In the far model nothing has rounded edges.
+func _block(mat: String, center: Vector3, size: Vector3, radius := 0.02, rot_deg := Vector3.ZERO) -> void:
+	if _far:
+		_piece(mat, center, size, rot_deg)
+	else:
+		super(mat, center, size, radius, rot_deg)
+
+
+func _plate(mat: String, center: Vector3, size: Vector3) -> void:
+	if _far:
+		_piece(mat, center, size)
+	else:
+		super(mat, center, size)
+
+
+func _bar(mat: String, from: Vector3, to: Vector3, radius: float, segments := 12) -> void:
+	if _far:
+		if radius < FAR_BAR or maxf(from.distance_to(to), radius * 2.0) < FAR_SHORT:
+			return
+		segments = mini(segments, FAR_SIDES)
+	super(mat, from, to, radius, segments)
+
+
+## In the far model something turned keeps its ends and where it is widest,
+## and nothing of what lies between.
+func _turned(mat: String, from: Vector3, axis: Vector3, profile: PackedVector2Array, segments := 24, smooth := false) -> void:
+	if _far:
+		var widest := 0.0
+		for spot in profile:
+			widest = maxf(widest, spot.x)
+		if widest < FAR_ROUND:
+			return
+		var coarse := PackedVector2Array()
+		for i in profile.size():
+			if i == 0 or i == profile.size() - 1 or profile[i].x >= widest * 0.98:
+				coarse.append(profile[i])
+		profile = coarse
+		segments = mini(segments, FAR_SIDES)
+	super(mat, from, axis, profile, segments, smooth)
+
+
+func slab(mat: String, xf: Transform3D, outline: PackedVector2Array, thickness: float, bevel := 0.0, flags := 0) -> void:
+	super(mat, xf, outline, thickness, 0.0 if _far else bevel, flags)
 
 
 ## Canvas is not worn along its edges as steel is: its vertex colour says
@@ -72,6 +190,8 @@ func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> v
 ## Something stencilled on: the square `mark` of the sheet, `size` wide and
 ## high, on a face that stands in the XY of `xf` and looks along its +Z.
 func _stencil(mark: Rect2, xf: Transform3D, size: Vector2) -> void:
+	if _far:
+		return
 	part("Marks")
 	var marks := _parts["Marks"].node as MeshInstance3D
 	marks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -100,12 +220,16 @@ func _piece(mat: String, center: Vector3, size: Vector3, rot_deg := Vector3.ZERO
 
 ## A rail of tube bent through `points`: a grip, a bow, a guard.
 func _rail(mat: String, points: Array, radius: float) -> void:
+	if _far:
+		return
 	for i in points.size() - 1:
 		_bar(mat, points[i], points[i + 1], radius, 4)
 
 
 ## A hoop of rod round `axis` at `center`: a steering wheel, an eye to tow by.
 func _hoop(mat: String, center: Vector3, axis: Vector3, radius: float, thickness: float) -> void:
+	if _far:
+		return
 	_turned(mat, center, axis, PackedVector2Array([
 		Vector2(radius - thickness, 0), Vector2(radius, -thickness), Vector2(radius + thickness, 0), Vector2(radius, thickness), Vector2(radius - thickness, 0),
 	]), 10, true)
@@ -125,7 +249,7 @@ func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 8) -
 		Vector2(radius, width * 0.76), Vector2(radius * 0.88, width), Vector2(radius * 0.6, width * 0.96),
 	]), 12, true)
 	var frame := _up_along(out)
-	for bar in bars:
+	for bar in (0 if _far else bars):
 		var turn := TAU * bar / bars
 		var spoke := frame.x * cos(turn) + frame.z * sin(turn)
 		# The bars of the tread lie slanted, from either shoulder in turn.
@@ -141,6 +265,8 @@ func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 8) -
 ## A lamp that looks along `ahead` from `at`: a pressed bucket with a rim,
 ## and a lens in it, or the blind it is blacked out with.
 func _lamp(at: Vector3, ahead: Vector3, radius: float, lens := true) -> void:
+	if _far:
+		return
 	_turned(ARMY, at - ahead * radius * 1.3, ahead, PackedVector2Array([Vector2(0, 0), Vector2(radius * 0.85, radius * 0.4), Vector2(radius, radius * 1.3), Vector2(radius * 1.05, radius * 1.3), Vector2(radius * 1.05, radius * 1.45), Vector2(radius * 0.88, radius * 1.45), Vector2(radius * 0.86, radius * 1.2), Vector2(0, radius * 1.05)]), 8)
 	if lens:
 		_turned(PANE, at, ahead, PackedVector2Array([Vector2(radius * 0.88, 0.008), Vector2(0, 0.024)]), 8, true)
@@ -149,6 +275,8 @@ func _lamp(at: Vector3, ahead: Vector3, radius: float, lens := true) -> void:
 ## A jerrycan standing at `at`, turned `yaw_deg`: pressed in two halves,
 ## with its three handles.
 func _jerrycan(at: Vector3, yaw_deg: float) -> void:
+	if _far:
+		return
 	var turn := Vector3(0, yaw_deg, 0)
 	var frame := Transform3D(Basis.from_euler(turn * PI / 180.0), at)
 	_block(ARMY, at + Vector3(0, 0.2, 0), Vector3(0.34, 0.4, 0.15), 0.035, turn)
@@ -162,6 +290,8 @@ func _jerrycan(at: Vector3, yaw_deg: float) -> void:
 ## A shovel and an axe, strapped along the side of a vehicle on the side
 ## `side`, from `at` backwards.
 func _pioneer_tools(at: Vector3, side: float) -> void:
+	if _far:
+		return
 	_bar(ARMY, at, at + Vector3(0, 0, 0.62), 0.016, 6)
 	_piece(IRON, at + Vector3(side * 0.004, -0.015, -0.11), Vector3(0.012, 0.2, 0.24))
 	_bar(ARMY, at + Vector3(0, -0.13, 0.05), at + Vector3(0, -0.13, 0.6), 0.015, 6)
@@ -181,6 +311,8 @@ func _seat(at: Vector3, wide: float) -> void:
 
 ## A steering wheel on its column, the wheel at `at`.
 func _steering(at: Vector3, radius: float) -> void:
+	if _far:
+		return
 	var axis := Vector3(0, 0.62, 0.78)
 	_bar(IRON, at - axis * 0.45, at, 0.016, 6)
 	_hoop(IRON, at, axis, radius, 0.012)
@@ -416,11 +548,7 @@ func _truck() -> void:
 		_piece(ARMY, Vector3(x, 1.04, 3.592), Vector3(0.06, 0.46, 0.02))
 	_piece(IRON, Vector3(0, 0.86, 3.5), Vector3(0.14, 0.14, 0.2))
 	_hoop(IRON, Vector3(0, 0.86, 3.64), Vector3.UP, 0.05, 0.014)
-	# What it carries.
-	_piece(WOOD, Vector3(-0.55, 1.52, 2.9), Vector3(0.9, 0.44, 0.6))
-	_piece(WOOD, Vector3(0.52, 1.47, 2.7), Vector3(0.7, 0.34, 0.9))
-	_piece(WOOD, Vector3(-0.5, 1.5, 2.1), Vector3(0.8, 0.4, 0.55), Vector3(0, 12, 0))
-	_jerrycan(Vector3(0.5, 1.3, 3.25), 20.0)
+	# What it carries is not the same for two lorries: the level loads it.
 	_tilt()
 
 	_stencil(STAR, Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, 1.872, -2.5)), Vector2(0.62, 0.62))
@@ -448,6 +576,10 @@ func _tilt() -> void:
 	var front := -0.36
 	var back := 3.56
 	var steps := 16
+	# From afar the canvas is taut: a span from hoop to hoop, and half the
+	# corners round a hoop.
+	var every := 4 if _far else 1
+	var round_every := 2 if _far else 1
 	var st := _tool(CANVAS, _part, Vector3(0, 2.4, 1.6))
 	var spots: Array = []
 	var tones: Array = []
@@ -466,21 +598,21 @@ func _tilt() -> void:
 		tones.append(tone)
 	# The vertex colours here are the cloth's own, corner by corner.
 	_cloths.erase(st)
-	for step in steps:
-		for i in round.size() - 1:
+	for step in range(0, steps, every):
+		for i in range(0, round.size() - 1, round_every):
 			var a: Vector3 = spots[step][i]
-			var b: Vector3 = spots[step][i + 1]
-			var c: Vector3 = spots[step + 1][i + 1]
-			var d: Vector3 = spots[step + 1][i]
+			var b: Vector3 = spots[step][i + round_every]
+			var c: Vector3 = spots[step + every][i + round_every]
+			var d: Vector3 = spots[step + every][i]
 			var out := (b - a).cross(d - a).normalized()
-			_quad(st, [a, b, c, d], [out, out, out, out], [Vector2(a.z, i * 0.36), Vector2(b.z, (i + 1) * 0.36), Vector2(c.z, (i + 1) * 0.36), Vector2(d.z, i * 0.36)],
-				[tones[step][i], tones[step][i + 1], tones[step + 1][i + 1], tones[step + 1][i]])
+			_quad(st, [a, b, c, d], [out, out, out, out], [Vector2(a.z, i * 0.36), Vector2(b.z, (i + round_every) * 0.36), Vector2(c.z, (i + round_every) * 0.36), Vector2(d.z, i * 0.36)],
+				[tones[step][i], tones[step][i + round_every], tones[step + every][i + round_every], tones[step + every][i]])
 	# The front, shut: a fan from its middle to the hoop.
 	var hub := Vector3(0, 2.35, front - 0.03)
 	var faces := [Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD]
-	for i in round.size() - 1:
+	for i in range(0, round.size() - 1, round_every):
 		var a := Vector3(round[i].x, round[i].y, front)
-		var b := Vector3(round[i + 1].x, round[i + 1].y, front)
+		var b := Vector3(round[i + round_every].x, round[i + round_every].y, front)
 		_tri(st, [hub, b, a], faces, [Vector2(0, 2.35), Vector2(b.x, b.y), Vector2(a.x, a.y)], [Color(0.1, 0.45, 0.85, 0.75), Color(0.1, 0.5, 1.0, 0.75), Color(0.1, 0.5, 1.0, 0.75)])
 	_tri(st, [hub, Vector3(round[0].x, round[0].y, front), Vector3(-round[0].x, round[0].y, front)], faces,
 		[Vector2(0, 2.35), Vector2(1.2, 1.7), Vector2(-1.2, 1.7)], [Color(0.1, 0.45, 0.85, 0.75), Color(0.3, 0.5, 1.0, 0.75), Color(0.3, 0.5, 1.0, 0.75)])
@@ -525,6 +657,18 @@ func _track(x: float) -> void:
 		var turn := PI * 0.5 + PI * 5.0 / 6.0 * i / 8.0
 		run.append(Vector2(-2.82, 0.64) + Vector2(cos(turn), sin(turn)) * 0.36)
 	run.append(run[0])
+	if _far:
+		# From afar it is a band: a plate for every third stretch of its run.
+		var band := PackedVector2Array()
+		for i in range(0, run.size() - 1, 3):
+			band.append(run[i])
+		band.append(run[0])
+		for i in band.size() - 1:
+			var length := band[i].distance_to(band[i + 1])
+			var along := (band[i + 1] - band[i]) / length
+			var middle := (band[i] + band[i + 1]) * 0.5
+			super._box(IRON, _m * Transform3D(Basis(Vector3.RIGHT, Vector3(0, along.x, -along.y), Vector3(0, along.y, along.x)), Vector3(x, middle.y, middle.x)), Vector3(0.56, 0.045, length + 0.02), _part)
+		return
 	var pitch := 0.155
 	var left := 0.0
 	for i in run.size() - 1:
@@ -542,8 +686,8 @@ func _track(x: float) -> void:
 ## A medium tank: a hull with a sloped front between its tracks, bins on
 ## the guards over them and skirts hung before them, some of which it has
 ## lost; and a slab-sided turret with a long gun, turned `traverse_deg` to
-## its right, with `number` painted on it.
-func _tank(tank: String, traverse_deg: float, number: Rect2) -> void:
+## its right. Its number is its own, and the level paints it on.
+func _tank(tank: String, traverse_deg: float) -> void:
 	model(tank)
 	_dye = Color(0.3, 0.55, 0.8, 0.0)
 	for side: float in [-1.0, 1.0]:
@@ -670,7 +814,6 @@ func _tank(tank: String, traverse_deg: float, number: Rect2) -> void:
 	for x: float in [-0.4, 0.35]:
 		_bar(CANVAS, Vector3(x - 0.02, 1.87, 1.62), Vector3(x + 0.02, 1.87, 1.62), 0.146, 8)
 	for x: float in [-1.0, 1.0]:
-		_stencil_side(number, Vector3(x * 1.083, 1.98, 0.6), x, Vector2(0.4, 0.4))
 		_stencil_side(STAR, Vector3(x * 1.083, 1.98, -0.1), x, Vector2(0.36, 0.36))
 	_m = Transform3D()
 	_stencil(PLATE_50, Transform3D(Basis(Vector3.RIGHT, deg_to_rad(57.2)) * Basis(Vector3.UP, PI), Vector3(-0.86, 1.292, -2.42)), Vector2(0.22, 0.22))

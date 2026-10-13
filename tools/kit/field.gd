@@ -21,6 +21,13 @@ const SLIGHT := DETAIL | NO_COLLIDE
 ## dirt in it, not faded, hanging free and letting the sun through. See
 ## shaders/canvas.gdshader.
 const CLOTH := Color(0.0, 0.5, 1.0, 1.0)
+## What moves in the wind: cloth that says in UV2 how far each of its
+## corners gives, in metres, and how light it is: 0 for a wall of canvas that
+## fills and sinks back, 1 for a shirt on a line. See shaders/canvas.gdshader.
+const WINDBLOWN: Array[String] = ["canvas", "camo_net", "flag"]
+## The way the wind blows over the land (x and z), as the grass and the
+## canvas have it in their shaders.
+const WIND := Vector2(0.12, 1.0)
 ## From how far off the small things are still drawn: ropes, pegs, strands
 ## of wire. See _trim().
 const TRIM_REACH := 80.0
@@ -33,9 +40,20 @@ const VEHICLES := {
 	"tank": {"span": 2.4, "boxes": [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)], [Vector3(0, 2.0, -3.3), Vector3(0.3, 0.3, 3.6)]]},
 	"tank_b": {"span": 2.4, "boxes": [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.0), Vector3(2.6, 0.85, 2.8)]]},
 }
+## The sheet of what an army stencils on what it drives, as far as a level
+## uses it: the ten figures in a row, and under them the letters a number
+## begins with, by the kind of vehicle, and the stroke between its parts.
+## Each as [where on the sheet it begins, how much of the sheet it takes].
+## See _stencils() in tools/gen_foliage.gd.
+const FIGURES := Rect2(0, 0.5, 0.1, 0.125)
+const NUMBER_BEGINS := {"jeep": Rect2(0, 0.625, 0.25, 0.125), "truck": Rect2(0.25, 0.625, 0.25, 0.125), "tank": Rect2(0.5, 0.625, 0.25, 0.125), "tank_b": Rect2(0.5, 0.625, 0.25, 0.125)}
+const STROKE := Rect2(0.825, 0.625, 0.1, 0.125)
+## How far the turret of each tank is traversed to its right, in degrees.
+const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
 
-## The node the vehicles of the level stand under.
+## The node the vehicles of the level stand under, and how many there are.
 var _vehicles: Node3D
+var _vehicle_count := 0
 ## True while what is being built is one of the small things: it goes into
 ## the surface of _trim() whatever builds it. See _tool().
 var _small := false
@@ -64,7 +82,16 @@ func _dice(at: Vector2, salt := 0) -> RandomNumberGenerator:
 ## further off than TRIM_REACH, see _commit().
 func _trim(mat: String, at: Vector3) -> SurfaceTool:
 	@warning_ignore("integer_division")
-	return _tool_named("|trim %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.z) / GROUND_BLOCK, mat])
+	return _still(_tool_named("|trim %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.z) / GROUND_BLOCK, mat]), mat)
+
+
+## Cloth says of every corner how it gives in the wind, in UV2: see _cloth().
+## A surface of cloth has that from its first corner on, and whatever is
+## built into it stands still unless it says otherwise.
+func _still(st: SurfaceTool, mat: String) -> SurfaceTool:
+	if mat in WINDBLOWN:
+		st.set_uv2(Vector2.ZERO)
+	return st
 
 
 ## Something small that is in nobody's way goes with the small things, as
@@ -72,7 +99,7 @@ func _trim(mat: String, at: Vector3) -> SurfaceTool:
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 	if _small and flags & DETAIL and flags & NO_COLLIDE and not _moving:
 		return _trim(mat, at)
-	return super(mat, flags, at)
+	return _still(super(mat, flags, at), mat)
 
 
 func _commit(zone_name: String, kind: String) -> void:
@@ -100,8 +127,9 @@ func _corner(st: SurfaceTool, at: Vector3, normal: Vector3, uv: Vector2, tone: C
 
 ## Cloth through a grid of `spots`, `across` squares to a row, that faces
 ## the side `out` points to. It is shaded as one smooth sheet: every spot
-## faces the way the cloth lies there. `uvs` and `tones` go with the spots.
-func _cloth(st: SurfaceTool, spots: PackedVector3Array, across: int, uvs: PackedVector2Array, tones: PackedColorArray, out: Vector3) -> void:
+## faces the way the cloth lies there. `uvs` and `tones` go with the spots,
+## and so does `gives` for cloth that moves in the wind: see WINDBLOWN.
+func _cloth(st: SurfaceTool, spots: PackedVector3Array, across: int, uvs: PackedVector2Array, tones: PackedColorArray, out: Vector3, gives := PackedVector2Array()) -> void:
 	var wide := across + 1
 	@warning_ignore("integer_division")
 	var down := spots.size() / wide - 1
@@ -123,7 +151,11 @@ func _cloth(st: SurfaceTool, spots: PackedVector3Array, across: int, uvs: Packed
 			# Godot's winding is clockwise: two triangles, each given backwards.
 			for c: int in [0, 2, 1, 0, 3, 2]:
 				var k := corners[c]
+				if not gives.is_empty():
+					st.set_uv2(gives[k])
 				_corner(st, spots[k], -normals[k] if turned else normals[k], uvs[k], tones[k])
+	if not gives.is_empty():
+		st.set_uv2(Vector2.ZERO)
 
 
 ## A skin over rings of spots, `around` to a ring and one more that lies on
@@ -438,6 +470,12 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 		var between := pow(sin(PI * fposmod((x + half) / bay, 1.0)), 2.0) if absf(x) < half else 0.0
 		var fall := (sqrt(s * s + 0.0012) - 0.0346) / 0.966
 		return size.y - (size.y - eaves) * fall - (0.035 + 0.075 * between) * sin(PI * minf(s, 1.0)) - 0.07 * between * s * s
+	# How the roof gives in the wind over a spot of the floor: it is held
+	# along its ridge and at every pole, and breathes where it hangs between
+	# them. Whatever is sewn on it goes with it.
+	var breathes := func(x: float, z: float) -> Vector2:
+		var slack := pow(sin(PI * fposmod((x + half) / bay, 1.0)), 2.0) if absf(x) < half else 0.0
+		return Vector2(0.014 * slack * sin(PI * minf(absf(z) / deep, 1.0)), 0.0)
 	# Puts a spot of the tent where it stands, and on the ground where it
 	# hangs that low.
 	var stood := func(x: float, y: float, z: float) -> Vector3:
@@ -453,6 +491,7 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 	var spots := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var tones := PackedColorArray()
+	var gives := PackedVector2Array()
 	var fade := PackedFloat32Array()
 	for x in columns:
 		fade.append(own.randf_range(-0.07, 0.07))
@@ -462,18 +501,21 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 			spots.append(xf * Vector3(x, roof.call(x, s * deep), -s * deep))
 			uvs.append(Vector2(x + 50.0, s * slope))
 			tones.append(Color(0.1 * absf(s) * absf(s), 0.62 - 0.12 * absf(s) + fade[i], 1.0, 1.0))
-	_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3.UP)
+			gives.append(breathes.call(x, s * deep))
+	_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3.UP, gives)
 	# A band doubled over the ridge, and a patch or two where it was mended.
 	for side: float in [-1.0, 1.0]:
 		spots.clear()
 		uvs.clear()
 		tones.clear()
+		gives.clear()
 		for s: float in [0.0, 0.035, 0.07]:
 			for x in columns:
 				spots.append(xf * Vector3(x, roof.call(x, s * deep) + 0.006, s * deep * side))
 				uvs.append(Vector2(s * slope + 7.3, x))
 				tones.append(Color(0.0, 0.42, 1.0, 0.3))
-		_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3.UP)
+				gives.append(breathes.call(x, s * deep))
+		_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3.UP, gives)
 	for patch in 3:
 		var x := own.randf_range(-half * 0.8, half * 0.8)
 		var s := own.randf_range(0.2, 0.8) * (1.0 if patch < 2 else -1.0)
@@ -483,6 +525,7 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 		spots.clear()
 		uvs.clear()
 		tones.clear()
+		gives.clear()
 		for j in 3:
 			for i in 3:
 				var px := x + wide * (i - 1)
@@ -490,25 +533,30 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 				spots.append(xf * Vector3(px, roof.call(px, pz) + 0.005, pz))
 				uvs.append(Vector2(pz + 3.1 * patch, px))
 				tones.append(Color(0.0, shade, 1.0, 0.25))
-		_cloth(st, spots, 2, uvs, tones, Vector3.UP)
+				gives.append(breathes.call(px, pz))
+		_cloth(st, spots, 2, uvs, tones, Vector3.UP, gives)
 
 	# What hangs from the eaves: the valance, and under it the wall.
 	for side: float in [-1.0, 1.0]:
 		spots.clear()
 		uvs.clear()
 		tones.clear()
+		gives.clear()
 		for drop: float in [0.0, 0.08, 0.17]:
 			for x in columns:
 				var z := (deep + over + drop * 0.12) * side
 				spots.append(xf * Vector3(x, roof.call(x, (deep + over) * side) - drop, z))
 				uvs.append(Vector2(x + 50.0, slope * (1.0 + over / deep) + drop))
 				tones.append(Color(0.1, 0.5, 1.0 - drop * 0.9, 1.0))
-		_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3(0, 0, side))
+				# The valance hangs free: its hem is never still.
+				gives.append(Vector2(0.16 * drop, 0.7))
+		_cloth(st, spots, columns.size() - 1, uvs, tones, Vector3(0, 0, side), gives)
 	# The back, a length of wall to every bay, laced to the next at a pole.
 	var heights := PackedFloat32Array([1.0, 0.85, 0.55, 0.25, 0.06, 0.0])
 	spots.clear()
 	uvs.clear()
 	tones.clear()
+	gives.clear()
 	var belly := PackedFloat32Array()
 	for i in bays:
 		belly.append(own.randf_range(-0.05, 0.06))
@@ -522,13 +570,17 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 			spots.append(stood.call(x, h * top, -deep - out))
 			uvs.append(Vector2(x + 20.0, -h * top))
 			tones.append(Color(pow(clampf(1.0 - h * top / 0.34, 0.0, 1.0), 2.0), 0.47 + 0.05 * sin(i * 1.7), 1.0 - 0.3 * smoothstep(0.8, 1.0, h), 1.0))
+			# A wall is laced to its poles, hangs from the eave and is held
+			# by the sand on its sod cloth: it fills in the middle of a bay.
+			gives.append(Vector2(0.04 * sin(PI * fposmod(i / 4.0, 1.0)) * sin(PI * h), 0.15))
 	# The sod cloth: what lies on the ground along its foot, with sand on it.
 	for i in bays * 4 + 1:
 		var x := -half + bay * i / 4.0
 		spots.append(stood.call(x, 0.004, -deep - 0.13 - 0.03 * sin(i * 2.3)))
 		uvs.append(Vector2(x + 20.0, 0.12))
 		tones.append(Color(1.0, 0.5, 1.0, 0.0))
-	_cloth(st, spots, bays * 4, uvs, tones, Vector3(0, 0, -1))
+		gives.append(Vector2.ZERO)
+	_cloth(st, spots, bays * 4, uvs, tones, Vector3(0, 0, -1), gives)
 	_collide_box(xf * Transform3D(Basis(), Vector3(0, eaves * 0.5, -deep)), Vector3(size.x, eaves, 0.06), "soft")
 	# The ends: each in two halves that lap over one another under the ridge
 	# and are held shut there with toggles.
@@ -538,6 +590,7 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 			spots.clear()
 			uvs.clear()
 			tones.clear()
+			gives.clear()
 			var swell := own.randf_range(-0.03, 0.05)
 			var across := PackedFloat32Array([1.0, 0.75, 0.5, 0.25, 0.0, -0.035] if part < 0.0 else [1.0, 0.75, 0.5, 0.25, 0.0])
 			for h in heights:
@@ -549,12 +602,15 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 					spots.append(stood.call(x + end * out, h * top, z))
 					uvs.append(Vector2(z + 31.0 + end, -h * top))
 					tones.append(Color(pow(clampf(1.0 - h * top / 0.34, 0.0, 1.0), 2.0), 0.47 + 0.04 * part, 1.0 - 0.25 * smoothstep(0.8, 1.0, h), 1.0))
+					# Held at the corner pole and toggled shut under the ridge.
+					gives.append(Vector2(0.035 * sin(PI * clampf(share, 0.0, 1.0)) * sin(PI * h), 0.15))
 			for share in across:
 				var z := share * deep * part
 				spots.append(stood.call(x + end * 0.14, 0.004, z))
 				uvs.append(Vector2(z + 31.0 + end, 0.12))
 				tones.append(Color(1.0, 0.5, 1.0, 0.0))
-			_cloth(st, spots, across.size() - 1, uvs, tones, Vector3(end, 0, 0))
+				gives.append(Vector2.ZERO)
+			_cloth(st, spots, across.size() - 1, uvs, tones, Vector3(end, 0, 0), gives)
 		_small = true
 		for toggle in 6:
 			var y := 0.3 + toggle * 0.42
@@ -633,13 +689,15 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 			spots.clear()
 			uvs.clear()
 			tones.clear()
+			gives.clear()
 			for j in 2:
 				for k: float in [-0.13, 0.0, 0.13]:
 					var pz := (deep + over - 0.24 * j * (1.0 - absf(k) * 5.0)) * side
 					spots.append(xf * Vector3(x + k, roof.call(x + k, pz) + 0.005, pz))
 					uvs.append(Vector2(k + 9.0, j * 0.2))
 					tones.append(Color(0.1, 0.36, 1.0, 0.2))
-			_cloth(st, spots, 2, uvs, tones, Vector3.UP)
+					gives.append(breathes.call(x + k, pz))
+			_cloth(st, spots, 2, uvs, tones, Vector3.UP, gives)
 	# Two ropes from either end of the ridge, against the wind.
 	for end: float in [-1.0, 1.0]:
 		for side: float in [-1.0, 1.0]:
@@ -671,6 +729,7 @@ func bivouac(at: Vector2, yaw_deg: float) -> void:
 		spots.clear()
 		uvs.clear()
 		tones.clear()
+		var gives := PackedVector2Array()
 		for j in 5:
 			var v := j / 4.0
 			for i in 9:
@@ -681,7 +740,9 @@ func bivouac(at: Vector2, yaw_deg: float) -> void:
 				spots.append(on_ground(spot, y) if j == 4 else spot)
 				uvs.append(Vector2(x + 3.0 + side, v * 1.4))
 				tones.append(Color(pow(clampf(v * 3.0 - 2.0, 0.0, 1.0), 2.0), shade + 0.04 * side, 1.0, 1.0))
-		_cloth(st, spots, 8, uvs, tones, Vector3(0, 0.6, side))
+				# Buttoned along the ridge, pegged along the hem.
+				gives.append(Vector2(0.022 * sin(PI * v) * sin(PI * i / 8.0), 0.3))
+		_cloth(st, spots, 8, uvs, tones, Vector3(0, 0.6, side), gives)
 		for x: float in [-long, 0.0, long]:
 			_peg(on_ground(xf * Vector3(x, 0, side * (wide + 0.03)), 0.08), Vector3(0, 0, -side), 0.26)
 	# The end that is shut: two flaps, one over the other.
@@ -759,6 +820,7 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 	var spots := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var tones := PackedColorArray()
+	var gives := PackedVector2Array()
 	for j in 7:
 		var z := half.y - size.y * j / 6.0
 		for i in across + 1:
@@ -766,11 +828,15 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 			spots.append(corner.call(x, z, height - hang.call(x, z) + (own.randf_range(-0.04, 0.04) if j > 0 and j < 6 else 0.0)))
 			uvs.append(Vector2(x, z))
 			tones.append(Color.WHITE)
-	_cloth(st, spots, across, uvs, tones, Vector3.UP)
+			# A net is slack: it lifts and settles where it hangs between
+			# its poles, the more the lower it hangs.
+			gives.append(Vector2(0.16 * hang.call(x, z), 0.35))
+	_cloth(st, spots, across, uvs, tones, Vector3.UP, gives)
 	for side: float in [-1.0, 1.0]:
 		spots.clear()
 		uvs.clear()
 		tones.clear()
+		gives.clear()
 		# How far out each peg stands; between two pegs the hem is drawn in
 		# and lifts off the ground.
 		var out := PackedFloat32Array()
@@ -787,7 +853,10 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 				spots.append(top.lerp(foot, v) + Vector3.DOWN * 0.28 * sin(PI * v))
 				uvs.append(Vector2(x, side * (half.y + v * 2.6)))
 				tones.append(Color.WHITE)
-		_cloth(st, spots, across, uvs, tones, Vector3(0, 0.7, side))
+				# The skirt joins the top where that moves, and is held at
+				# its pegs; between them the hem is free.
+				gives.append(Vector2(lerpf(0.16 * hang.call(x, side * half.y), 0.07 * lift, v) + 0.07 * sin(PI * v), 0.35))
+		_cloth(st, spots, across, uvs, tones, Vector3(0, 0.7, side), gives)
 		for peg in pegs + 1:
 			var x := -half.x + size.x * peg / pegs
 			_peg(corner.call(x, side * (half.y + out[peg] + 0.03), 0.08), xf.basis * Vector3(0, 0, -side), 0.3)
@@ -796,6 +865,7 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 		spots.clear()
 		uvs.clear()
 		tones.clear()
+		gives.clear()
 		for j in 3:
 			for i in 9:
 				var z := -half.y + size.y * i / 8.0
@@ -803,7 +873,9 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 				spots.append(corner.call(end * (half.x + 0.1 * j), z, height - hang.call(end * half.x, z) - drop))
 				uvs.append(Vector2(end * (half.x + drop), z))
 				tones.append(Color.WHITE)
-		_cloth(st, spots, 8, uvs, tones, Vector3(end, 0.3, 0))
+				# The apron hangs free, and its rags are never still.
+				gives.append(Vector2(0.16 * hang.call(end * half.x, z) + 0.3 * drop, 0.35 + 0.3 * j))
+		_cloth(st, spots, 8, uvs, tones, Vector3(end, 0.3, 0), gives)
 	for x: float in [-half.x, 0.0, half.x]:
 		for z: float in [-half.y, half.y]:
 			var foot: Vector3 = corner.call(x, z, 0.0)
@@ -1345,15 +1417,46 @@ func washing_line(from: Vector3, to: Vector3) -> void:
 		var spots := PackedVector3Array()
 		var uvs := PackedVector2Array()
 		var tones := PackedColorArray()
-		for j in 3:
+		var gives := PackedVector2Array()
+		for j in 5:
 			for i in 3:
 				var t := (run + wide * i * 0.5) / length
 				var hangs := from.lerp(to, t) + Vector3.DOWN * 0.12 * sin(PI * t)
-				spots.append(hangs + Vector3.DOWN * long * j * 0.5 + way.cross(Vector3.UP) * 0.03 * sin(i * 2.0 + j * 1.3 + run))
-				uvs.append(Vector2(run + wide * i * 0.5, long * j * 0.5))
+				spots.append(hangs + Vector3.DOWN * long * j * 0.25 + way.cross(Vector3.UP) * 0.03 * sin(i * 2.0 + j * 0.65 + run))
+				uvs.append(Vector2(run + wide * i * 0.5, long * j * 0.25))
 				tones.append(Color(0.0, shade, 0.9, 0.9))
-		_cloth(st, spots, 2, uvs, tones, way.cross(Vector3.UP))
+				# Pegged to the line, and free below it: the further down,
+				# the further the wind takes it.
+				gives.append(Vector2(long * 0.38 * pow(j / 4.0, 1.5), 1.0))
+		_cloth(st, spots, 2, uvs, tones, way.cross(Vector3.UP), gives)
 		run += wide + own.randf_range(0.15, 0.5)
+
+
+## A flag flying from the head of its hoist at `head`: `size` is how long
+## and how high it is. It is hung out flat here, straight downwind, and
+## flies in shaders/flag.gdshader, which has the wind of the grass. With it
+## the halyard, down to a cleat `cleat` under the head.
+func flag(head: Vector3, size := Vector2(2.3, 1.45), cleat := 6.2) -> void:
+	var st := _tool("flag", SLIGHT, head)
+	var downwind := WIND.normalized()
+	var along := Vector3(downwind.x, 0, downwind.y)
+	var across := 14
+	var down := 7
+	# The staff side of the cloth faces the way the wind comes across it.
+	var faces := Vector3.UP.cross(along)
+	for j in down:
+		for i in across:
+			var corners: Array[Vector2i] = [Vector2i(i, j), Vector2i(i + 1, j), Vector2i(i + 1, j + 1), Vector2i(i, j + 1)]
+			for c: int in [0, 2, 1, 0, 3, 2]:
+				var on := Vector2(corners[c]) / Vector2(across, down)
+				st.set_color(Color.WHITE)
+				st.set_normal(faces)
+				st.set_uv(on)
+				st.set_uv2(size)
+				st.add_vertex(head + along * on.x * size.x + Vector3.DOWN * on.y * size.y)
+	st.set_uv2(Vector2.ZERO)
+	_rope(head + Vector3.UP * 0.06, head + Vector3(0.05, -cleat, 0.03), 0.0, 0.004)
+	_rope(head + Vector3.DOWN * size.y, head + Vector3(0.05, -cleat, 0.03), 0.0, 0.004)
 
 
 ## Cases of brass where a gun was fired, or where they were thrown out of a
@@ -1411,3 +1514,150 @@ func vehicle(kind: String, at: Vector2, yaw_deg: float) -> void:
 	for part: Array in facts.boxes:
 		_collide_box(xf * Transform3D(Basis(), part[0]), part[1], "metal")
 	cover("earth", at, facts.span * 1.6, 0.7)
+	# No two are the same vehicle: each has its number, and what it carries.
+	_vehicle_count += 1
+	var own := _dice(at, 20)
+	_small = true
+	_number(kind, xf, _vehicle_count)
+	match kind:
+		"jeep":
+			_load_jeep(xf, own)
+		"truck":
+			_load_truck(xf, own)
+		_:
+			_load_tank(xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2)), xf, own)
+	_small = false
+
+
+## A part of the sheet of stencils, painted `size` wide and high on a face
+## that lies in the XY of `xf` and looks along its +Z.
+func _mark(part: Rect2, xf: Transform3D, size: Vector2) -> void:
+	var half := size * 0.5
+	var out := xf.basis.z
+	_quad(_trim("field_marks", xf.origin), [xf * Vector3(-half.x, -half.y, 0.004), xf * Vector3(half.x, -half.y, 0.004), xf * Vector3(half.x, half.y, 0.004), xf * Vector3(-half.x, half.y, 0.004)],
+		[out, out, out, out], [Vector2(part.position.x, part.end.y), part.end, Vector2(part.end.x, part.position.y), part.position])
+
+
+## `figures` stencilled `height` high around the origin of `xf`, read from
+## its +Z: figures, and a stroke for anything else. With `begins`, the
+## letters of that part of the sheet go before them.
+func _stencilled(figures: String, xf: Transform3D, height: float, begins := Rect2()) -> void:
+	var wide := height * 0.8
+	var lead := height * 2.0 if begins.has_area() else 0.0
+	var run := -(lead + wide * figures.length()) * 0.5
+	if begins.has_area():
+		_mark(begins, xf * Transform3D(Basis(), Vector3(run + lead * 0.5, 0, 0)), Vector2(lead, height))
+	run += lead
+	for i in figures.length():
+		var figure := figures.unicode_at(i) - 48
+		var part := Rect2(FIGURES.position + Vector2(figure * FIGURES.size.x, 0), FIGURES.size) if figure >= 0 and figure <= 9 else STROKE
+		_mark(part, xf * Transform3D(Basis(), Vector3(run + wide * (i + 0.5), 0, 0)), Vector2(wide, height))
+
+
+## The frame of a mark on the side `side` of a vehicle (-1 its left, 1 its
+## right) at `at`: it reads the right way round from there.
+func _on_side(at: Vector3, side: float) -> Transform3D:
+	return Transform3D(Basis(Vector3.FORWARD * side, Vector3.UP, Vector3.RIGHT * side), at)
+
+
+## The number of the vehicle that stands at `xf`, the `serial`th of the
+## level: a field car and a lorry carry theirs on either side of the bonnet
+## and on the bumper, a tank its last two figures large on its turret.
+func _number(kind: String, xf: Transform3D, serial: int) -> void:
+	var number := "-%02d-%02d" % [41 + serial * 7 % 50, 10 + (serial * 37 + 5) % 89]
+	var begins: Rect2 = NUMBER_BEGINS[kind]
+	match kind:
+		"jeep":
+			for side: float in [-1.0, 1.0]:
+				_stencilled(number, xf * _on_side(Vector3(side * 0.461, 0.945, -1.15), side), 0.06, begins)
+			_stencilled(number, xf * Transform3D(Basis(Vector3.UP, PI), Vector3(-0.36, 0.5, -1.768)), 0.052, begins)
+		"truck":
+			for side: float in [-1.0, 1.0]:
+				_stencilled(number, xf * _on_side(Vector3(side * 0.611, 1.69, -2.45), side), 0.075, begins)
+			_stencilled(number, xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.52, 0.86, -3.446)), 0.085, begins)
+		_:
+			var turret := xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2))
+			for side: float in [-1.0, 1.0]:
+				_stencilled(number.right(2), turret * _on_side(Vector3(side * 1.081, 1.98, 0.6), side), 0.34)
+
+
+## A box that lies on a vehicle: of `mat`, `size` across, its middle at
+## `at` in the frame `xf`, turned `yaw_deg`.
+func _stowed_box(mat: String, xf: Transform3D, at: Vector3, size: Vector3, yaw_deg := 0.0) -> void:
+	_box(mat, xf * Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at), size, SLIGHT)
+
+
+## What a field car has in the back of it: whatever its crew threw there.
+func _load_jeep(xf: Transform3D, own: RandomNumberGenerator) -> void:
+	var st := _trim(CANVAS, xf.origin)
+	var across := xf.basis.x.normalized()
+	var took := 0
+	if own.randf() < 0.6:
+		_bundle(st, xf * Vector3(own.randf_range(-0.2, 0.2), 1.06, 1.0), across.rotated(xf.basis.y.normalized(), own.randf_range(-0.2, 0.2)), 0.66, 0.13, Color(0.3, own.randf_range(0.35, 0.5), 1.0, 0.0))
+		took += 1
+	if own.randf() < 0.5:
+		_bundle(st, xf * Vector3(own.randf_range(-0.3, 0.3), 1.0 + 0.2 * took, 1.12), across, 0.5, 0.085, Color(0.2, own.randf_range(0.7, 0.85), 1.0, 0.0))
+	if own.randf() < 0.45:
+		_stowed_box("wood", xf, Vector3(0.36, 0.72, 0.42), Vector3(0.46, 0.26, 0.32), own.randf_range(-12, 12))
+	if own.randf() < 0.4:
+		helmet(xf * Vector3(0.36, 0.91, -0.02), own.randf_range(0, 360))
+		_small = true
+	if own.randf() < 0.35:
+		_stowed_box(ARMY, xf, Vector3(-0.34, 0.69, 0.44), Vector3(0.3, 0.2, 0.16), own.randf_range(60, 120))
+
+
+## What a lorry has on its bed, as far as it shows under the tilt from
+## behind: cases, drums, sacks, or next to nothing.
+func _load_truck(xf: Transform3D, own: RandomNumberGenerator) -> void:
+	var bed := 1.297
+	match own.randi() % 5:
+		0, 1:
+			# Cases, stacked as they came off the last lorry.
+			# Three abreast, and a second layer on the first.
+			var under: Array[float] = [0.0, 0.0, 0.0]
+			for i in own.randi_range(3, 6):
+				var size := Vector3(own.randf_range(0.42, 0.56), own.randf_range(0.3, 0.46), own.randf_range(0.5, 0.8))
+				var lane := i % 3
+				_stowed_box("wood" if own.randf() < 0.7 else ARMY, xf, Vector3(-0.62 + lane * 0.62 + own.randf_range(-0.03, 0.03), bed + under[lane] + size.y * 0.5, 2.95 + own.randf_range(-0.1, 0.1)), size, own.randf_range(-5, 5))
+				under[lane] += size.y
+		2:
+			# Drums of fuel, standing, and one on its side against them.
+			for i in own.randi_range(3, 5):
+				var at := Vector3(-0.72 + (i % 3) * 0.7 + own.randf_range(-0.03, 0.03), bed, 3.1 - floorf(i / 3.0) * 0.64)
+				_cylinder(ARMY, xf * Transform3D(Basis(), at), 0.29, 0.88, SLIGHT, 0.29, 10)
+				for hoop: float in [0.28, 0.6]:
+					_cylinder(ARMY, xf * Transform3D(Basis(), at + Vector3(0, hoop, 0)), 0.3, 0.03, SLIGHT, 0.3, 10)
+		3:
+			# Sacks, thrown on in a heap.
+			var st := _trim(SACKING, xf.origin)
+			for i in own.randi_range(5, 8):
+				var layer := floorf(i / 4.0)
+				var at := Vector3(-0.6 + (i % 4) * 0.4 + own.randf_range(-0.05, 0.05), bed + 0.1 + layer * 0.19, 2.9 + own.randf_range(-0.2, 0.25) - layer * 0.15)
+				var shade := own.randf_range(0.75, 1.0)
+				_bundle(st, xf * at, xf.basis.z.normalized().rotated(xf.basis.y.normalized(), own.randf_range(-0.5, 0.5)), 0.62, 0.11, Color(shade, shade * 0.97, shade * 0.9, 0.9))
+		_:
+			# Unloaded: the sheet it was covered with, folded, and a can.
+			_bundle(_trim(CANVAS, xf.origin), xf * Vector3(own.randf_range(-0.5, 0.3), bed + 0.12, 2.6), xf.basis.x.normalized(), 0.9, 0.13, Color(0.35, 0.4, 0.9, 0.0))
+			_stowed_box(ARMY, xf, Vector3(0.7, bed + 0.21, 3.2), Vector3(0.34, 0.42, 0.15), own.randf_range(-30, 30))
+
+
+## What a tank carries on its back: `turret` is the frame of its turret,
+## `hull` that of its hull.
+func _load_tank(turret: Transform3D, hull: Transform3D, own: RandomNumberGenerator) -> void:
+	var st := _trim(CANVAS, hull.origin)
+	var across := hull.basis.x.normalized()
+	if own.randf() < 0.65:
+		# A sheet, rolled and lashed across the engine deck.
+		_bundle(st, hull * Vector3(own.randf_range(-0.1, 0.1), 1.7, 2.58), across, own.randf_range(1.2, 1.6), 0.13, Color(0.3, own.randf_range(0.38, 0.55), 0.9, 0.0))
+	if own.randf() < 0.55:
+		_stowed_box("wood", hull, Vector3(own.randf_range(0.4, 0.6) * (1.0 if own.randf() < 0.5 else -1.0), 1.71, own.randf_range(1.3, 1.9)), Vector3(0.55, 0.28, 0.4), own.randf_range(-8, 8))
+	if own.randf() < 0.5:
+		# A baulk of timber along the guard, for when it bogs.
+		_cylinder("wood", hull * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3((1.0 if own.randf() < 0.5 else -1.0) * 1.22, 1.6, -1.1)), 0.085, 2.2, SLIGHT, 0.085, 7)
+	if own.randf() < 0.5:
+		_bundle(st, turret * Vector3(own.randf_range(-0.3, 0.3), 2.21, 1.62), turret.basis.x.normalized(), 0.8, 0.1, Color(0.2, own.randf_range(0.6, 0.85), 1.0, 0.0))
+	if own.randf() < 0.4:
+		helmet(turret * Vector3(-0.45, 2.38, 0.25), own.randf_range(0, 360))
+		_small = true
+	if own.randf() < 0.4:
+		_stowed_box(ARMY, hull, Vector3(-0.3, 1.72, 2.2), Vector3(0.34, 0.3, 0.15), own.randf_range(-20, 20))
