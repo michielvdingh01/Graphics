@@ -36,6 +36,9 @@ const VEHICLES := {
 
 ## The node the vehicles of the level stand under.
 var _vehicles: Node3D
+## True while what is being built is one of the small things: it goes into
+## the surface of _trim() whatever builds it. See _tool().
+var _small := false
 
 
 func _surface(mat: String) -> String:
@@ -62,6 +65,14 @@ func _dice(at: Vector2, salt := 0) -> RandomNumberGenerator:
 func _trim(mat: String, at: Vector3) -> SurfaceTool:
 	@warning_ignore("integer_division")
 	return _tool_named("|trim %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.z) / GROUND_BLOCK, mat])
+
+
+## Something small that is in nobody's way goes with the small things, as
+## long as _small says so: a mug, a peg, a helmet.
+func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	if _small and flags & DETAIL and flags & NO_COLLIDE and not _moving:
+		return _trim(mat, at)
+	return super(mat, flags, at)
 
 
 func _commit(zone_name: String, kind: String) -> void:
@@ -205,7 +216,9 @@ func _peg(at: Vector3, pull: Vector3, length := 0.4) -> void:
 	var away := -Vector3(pull.x, 0, pull.z).normalized()
 	var lean := (Vector3.UP + away * 0.45).normalized()
 	var foot := on_ground(at, -length * 0.62)
+	_small = true
 	_box("wood", Transform3D(_up_along(lean), foot + lean * length * 0.5), Vector3(0.045, length, 0.03), SLIGHT)
+	_small = false
 
 
 ## A guy rope from `head` down to a peg at `foot`, with the wooden runner it
@@ -215,7 +228,9 @@ func _guy(head: Vector3, foot: Vector3) -> void:
 	_rope(head, peg, 0.03)
 	_peg(peg, head - peg)
 	var runner := peg.lerp(head, 0.3)
+	_small = true
 	_box("wood", Transform3D(_along(head - peg), runner + Vector3.DOWN * 0.012), Vector3(0.035, 0.016, 0.11), SLIGHT)
+	_small = false
 
 
 # --- Sandbags ----------------------------------------------------------------------
@@ -283,12 +298,14 @@ func _sack(xf: Transform3D, length: float, tint: Color, own: RandomNumberGenerat
 	# Along the sack: where a ring lies, how wide and how high it is there,
 	# and how round: 0.6 is a sack under load, 1 a neck that was tied.
 	var rings: Array[Vector4] = [
-		Vector4(-0.5, 0.86, 0.07, 0.6), Vector4(-0.455, 0.95, 0.62, 0.6), Vector4(-0.33, 1.0, 0.97, 0.6), Vector4(0.0, 1.0, 1.0, 0.6),
-		Vector4(0.33, 1.0, 0.97, 0.6), Vector4(0.455, 0.95, 0.62, 0.6), Vector4(0.5, 0.86, 0.07, 0.6),
+		Vector4(-0.5, 0.86, 0.0, 0.6), Vector4(-0.455, 0.95, 0.62, 0.6), Vector4(-0.33, 1.0, 0.98, 0.6),
+		Vector4(0.33, 1.0, 0.98, 0.6), Vector4(0.455, 0.95, 0.62, 0.6), Vector4(0.5, 0.86, 0.0, 0.6),
 	]
-	if own.randf() < 0.22:
-		rings = rings.slice(0, 5)
-		rings.append_array([Vector4(0.44, 0.7, 0.8, 0.85), Vector4(0.5, 0.25, 0.34, 1.0), Vector4(0.525, 0.2, 0.26, 1.0), Vector4(0.58, 0.42, 0.14, 1.0)])
+	# One in five was tied at its neck and not folded under.
+	var tied := own.randf() < 0.2
+	if tied:
+		rings = rings.slice(0, 4)
+		rings.append_array([Vector4(0.44, 0.7, 0.8, 0.85), Vector4(0.5, 0.25, 0.34, 1.0), Vector4(0.58, 0.42, 0.14, 1.0)])
 	var mirror := -1.0 if own.randf() < 0.5 else 1.0
 	var lean := own.randf_range(-0.12, 0.12)
 	var droop := own.randf_range(0.0, 0.22)
@@ -310,7 +327,8 @@ func _sack(xf: Transform3D, length: float, tint: Color, own: RandomNumberGenerat
 			# Dark underneath and where two sacks meet end to end.
 			var lit := (0.72 + 0.28 * sin(turn) if top else 0.7 + 0.2 * absf(cos(turn)) + 0.1 * sin(turn)) * (0.8 if ring.z < 0.5 else 1.0)
 			tones.append(Color(tint.r, tint.g, tint.b, lit))
-	_skin(st, spots, around, uvs, tones, 3)
+	# A seam shuts a sack by itself; a neck ends in a tuft of hessian.
+	_skin(st, spots, around, uvs, tones, 2 if tied else 0)
 
 
 ## Sand along the foot of something that stands from `from` to `to` (x and
@@ -537,9 +555,11 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 				uvs.append(Vector2(z + 31.0 + end, 0.12))
 				tones.append(Color(1.0, 0.5, 1.0, 0.0))
 			_cloth(st, spots, across.size() - 1, uvs, tones, Vector3(end, 0, 0))
+		_small = true
 		for toggle in 6:
 			var y := 0.3 + toggle * 0.42
 			_box("wood", xf * Transform3D(Basis(Vector3.RIGHT, 0.3), Vector3(x + end * 0.03, y, -0.02)), Vector3(0.022, 0.018, 0.07), SLIGHT)
+		_small = false
 		_collide_box(xf * Transform3D(Basis(), Vector3(x, eaves * 0.5, 0)), Vector3(0.06, eaves, size.z), "soft")
 
 	# The front is rolled up under its eave and tied there with tapes; at
@@ -808,7 +828,7 @@ func _strand(from: Vector3, to: Vector3, sag := 0.0) -> void:
 	var way := (to - from) / length
 	var flat := way.cross(Vector3.UP).normalized() if absf(way.y) < 0.95 else Vector3.RIGHT
 	var up := flat.cross(way)
-	var st := _trim("wire", (from + to) * 0.5)
+	var st := _tool("wire", SLIGHT, (from + to) * 0.5)
 	for piece in pieces:
 		var t0 := float(piece) / pieces
 		var t1 := float(piece + 1) / pieces
@@ -915,8 +935,8 @@ func wire_coil(from: Vector2, to: Vector2) -> void:
 ## way.
 ##
 ## A round pole between two irons set in a block of concrete, banded in
-## paint, with a disc hung from its middle for whoever drives up to it, a
-## rope to pull it down by and a forked post to lie in.
+## paint, with a disc hung from its middle for whoever drives up to it and
+## a forked post to lie in.
 func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
 	box("concrete", xf * Vector3(0, 0.25, 0), Vector3(0.5, 0.5, 0.5), Vector3(0, yaw_deg, 0))
@@ -947,11 +967,6 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 			_local_box("paper", arm, middle + Vector3(0, 0, z), Vector3(0.3, 0.065, 0.004), SLIGHT)
 		for x: float in [-0.1, 0.1]:
 			_local_box("steel", arm, middle + Vector3(x, 0.25, 0), Vector3(0.008, 0.12, 0.008), SLIGHT)
-		_rope(arm * Vector3(length - 0.06, -0.03, 0), arm * Vector3(length - 0.02, -0.75, 0.04), 0.0, 0.005)
-	else:
-		_rope(arm * Vector3(length - 0.06, -0.03, 0), on_ground(xf * Vector3(0.9, 0, 0.1), 0.7), 0.25, 0.005)
-	var own := _dice(at, 5)
-	_drift(at - Vector2(0.3, 0).rotated(-deg_to_rad(yaw_deg)), at + Vector2(0.3, 0).rotated(-deg_to_rad(yaw_deg)), 0.24, own)
 
 
 ## A sentry box of boards, its open front facing `yaw_deg`: on skids, with
@@ -981,15 +996,10 @@ func sentry_box(at: Vector2, yaw_deg: float) -> void:
 		var rises := Vector3(-side * cos(pitch), sin(pitch), 0)
 		var frame := xf * Transform3D(Basis(rises.cross(faces), rises, faces), Vector3(0, 2.6, 0) - rises * 0.44 + faces * 0.012)
 		corrugated("roof", frame, Vector2(1.56, 0.92), 0.076, 0.016, SLIGHT)
-	_local_box("steel", xf, Vector3(0, 2.61, 0), Vector3(0.1, 0.02, 1.58), SLIGHT)
+	_local_box("roof", xf, Vector3(0, 2.61, 0), Vector3(0.1, 0.02, 1.58), SLIGHT)
 	# Inside: a shelf, and a peg with what hangs on it.
 	_local_box("wood", xf, Vector3(0, 1.25, -0.5), Vector3(1.1, 0.03, 0.16), SLIGHT)
 	_local_box("wood", xf, Vector3(0.45, 1.7, -0.56), Vector3(0.03, 0.03, 0.08), SLIGHT)
-	var own := _dice(at, 6)
-	for x: float in [-0.66, 0.66]:
-		var from := xf * Vector3(x, 0, -0.66)
-		var to := xf * Vector3(x, 0, 0.66)
-		_drift(Vector2(from.x, from.z), Vector2(to.x, to.z), 0.02, own)
 
 
 ## A board on a post with `text` on it, which has to be in the manifest as a
@@ -1009,8 +1019,8 @@ func sign_post(at: Vector2, yaw_deg: float, text: String, height := 0.2, board :
 
 ## A pillbox: a low block of concrete with a slit to shoot from on the side
 ## `yaw_deg` faces and a steel door at the back, half dug in. Nobody is in
-## it: its crew stand outside. The slit lies deep in its splay, a net has
-## been thrown over one corner, and the sand has drifted against it.
+## it: its crew stand outside. The slit lies deep in its frame, and the
+## sand has drifted against it.
 func pillbox(at: Vector2, yaw_deg: float) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y, -0.5))
 	var turn := Vector3(0, yaw_deg, 0)
@@ -1024,27 +1034,16 @@ func pillbox(at: Vector2, yaw_deg: float) -> void:
 	for x: float in [-1.0, 1.0]:
 		_local_box("concrete", xf, Vector3(x * 1.46, 2.06, 2.26), Vector3(0.18, 0.5, 0.12), SLIGHT)
 	# The door, in its frame, and a step down to it.
-	_local_box("steel", xf, Vector3(1.2, 1.52, -2.215), Vector3(1.04, 2.02, 0.03), SLIGHT)
+	_local_box("door", xf, Vector3(1.2, 1.52, -2.215), Vector3(1.04, 2.02, 0.03), SLIGHT)
 	_local_box("door", xf, Vector3(1.2, 1.5, -2.235), Vector3(0.9, 1.9, 0.03), SLIGHT)
 	for y: float in [0.9, 2.1]:
-		_local_box("steel", xf, Vector3(0.78, y, -2.255), Vector3(0.12, 0.05, 0.02), SLIGHT)
-	_local_box("steel", xf, Vector3(1.56, 1.5, -2.265), Vector3(0.03, 0.16, 0.04), SLIGHT)
+		_local_box("door", xf, Vector3(0.78, y, -2.255), Vector3(0.12, 0.05, 0.02), SLIGHT)
+	_local_box("door", xf, Vector3(1.56, 1.5, -2.265), Vector3(0.03, 0.16, 0.04), SLIGHT)
 	_local_box("concrete", xf, Vector3(1.2, 0.46, -2.5), Vector3(1.3, 0.12, 0.6), SLIGHT)
-	# On its roof: the pipe that airs it, and the eyes it was lifted by.
-	_cylinder("steel", xf * Transform3D(Basis(), Vector3(-1.6, 3.25, -1.2)), 0.07, 0.5, SLIGHT, -1.0, 8)
-	_cylinder("steel", xf * Transform3D(Basis(), Vector3(-1.6, 3.72, -1.2)), 0.13, 0.05, SLIGHT, 0.04, 8)
-	for x: float in [-2.1, 2.1]:
-		for z: float in [-1.8, 1.8]:
-			_local_box("steel", xf, Vector3(x, 3.29, z), Vector3(0.02, 0.09, 0.14), SLIGHT)
-	# A net over one corner of it, hanging down its sides and weighted with
-	# a few bags.
+	# On its roof: the pipe that airs it.
+	_cylinder("door", xf * Transform3D(Basis(), Vector3(-1.6, 3.25, -1.2)), 0.07, 0.5, SLIGHT, -1.0, 8)
+	_cylinder("door", xf * Transform3D(Basis(), Vector3(-1.6, 3.72, -1.2)), 0.13, 0.05, SLIGHT, 0.04, 8)
 	var own := _dice(at, 8)
-	_sheet("camo_net", [xf * Vector3(0.4, 3.27, 0.3), xf * Vector3(0.4, 3.27, 2.47), xf * Vector3(2.77, 3.27, 2.47), xf * Vector3(2.77, 3.27, 0.3)], 0.0, 3, 3)
-	_sheet("camo_net", [xf * Vector3(0.4, 3.27, 2.47), xf * Vector3(0.5, 2.25, 2.56), xf * Vector3(2.8, 2.05, 2.58), xf * Vector3(2.77, 3.27, 2.47)], 0.0, 4, 2)
-	_sheet("camo_net", [xf * Vector3(2.77, 3.27, 2.47), xf * Vector3(2.88, 2.05, 2.56), xf * Vector3(2.86, 2.4, 0.4), xf * Vector3(2.77, 3.27, 0.3)], 0.0, 4, 2)
-	for bag in 3:
-		var lies := xf * Transform3D(Basis(Vector3.UP, own.randf() * TAU), Vector3(0.8 + bag * 0.75, 3.26, 0.7 + own.randf_range(-0.3, 0.9)))
-		_sack(lies, 0.56, Color(0.85, 0.82, 0.76), own, true)
 	wall_decal(_pick("leak"), xf * Vector3(-1.2, 2.2, 2.21), xf.basis * Vector3.BACK, 1.4, 1.8)
 	wall_decal("grime", xf * Vector3(0, 0.9, 2.21), xf.basis * Vector3.BACK, 4.6, 1.0)
 	wall_decal("grime", xf * Vector3(0, 0.9, -2.21), xf.basis * Vector3.FORWARD, 4.6, 1.0)
@@ -1094,7 +1093,7 @@ func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 		corrugated("roof", xf * Transform3D(Basis(rises.cross(faces), rises, faces), Vector3(0, height + 3.18, 0) - rises * 1.05), Vector2(3.9, 2.1), 0.13, 0.025, SLIGHT)
 	for z: float in [-1.5, 1.5]:
 		extrude("wood", PackedVector2Array([Vector2(-1.55, 0), Vector2(1.55, 0), Vector2(0, 0.44)]), 0.03, xf * Transform3D(Basis(), Vector3(0, height + 2.6, z)), SLIGHT)
-	_local_box("steel", xf, Vector3(0, height + 3.2, 0), Vector3(0.12, 0.02, 3.94), SLIGHT)
+	_local_box("roof", xf, Vector3(0, height + 3.2, 0), Vector3(0.12, 0.02, 3.94), SLIGHT)
 	# The ladder, and a searchlight that is off by day.
 	for x: float in [-0.25, 0.25]:
 		beam("wood", xf * Vector3(x, 0.2, 2.1), xf * Vector3(x, height + 0.4, 1.56), 0.06, SLIGHT)
@@ -1103,7 +1102,6 @@ func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 		_local_box("wood", xf, Vector3(0, 0.2 + share * (height + 0.2), lerpf(2.1, 1.56, share)), Vector3(0.5, 0.04, 0.04), SLIGHT)
 	var lamp := xf * Transform3D(Basis.from_euler(Vector3(deg_to_rad(70.0), deg_to_rad(45.0), 0)), Vector3(1.3, height + 1.72, 1.3))
 	_cylinder("dark_steel", lamp, 0.2, 0.3, SLIGHT, -1.0, 10)
-	_cylinder("bare_steel", lamp * Transform3D(Basis(), Vector3(0, 0.3, 0)), 0.19, 0.012, SLIGHT, -1.0, 10)
 	_local_box("dark_steel", xf, Vector3(1.3, height + 1.56, 1.3), Vector3(0.05, 0.3, 0.05), SLIGHT)
 	_collide_box(xf * Transform3D(Basis(), Vector3(0, height * 0.5, 0)), Vector3(2.9, height, 2.9), "wood")
 
@@ -1134,25 +1132,25 @@ func nissen_hut(at: Vector2, yaw_deg: float, length := 11.0, radius := 2.6) -> v
 		# The door in its frame, with a step; a window either side of it.
 		_local_box("wood", wall, Vector3(0, 1.04, 0.01), Vector3(1.08, 2.12, 0.04), SLIGHT)
 		_local_box("door", wall, Vector3(0, 1.0, 0.03), Vector3(0.9, 2.0, 0.03), SLIGHT)
-		_local_box("steel", wall, Vector3(0.36, 1.0, 0.055), Vector3(0.03, 0.14, 0.03), SLIGHT)
+		_local_box("door", wall, Vector3(0.36, 1.0, 0.055), Vector3(0.03, 0.14, 0.03), SLIGHT)
 		_local_box("concrete", wall, Vector3(0, 0.05, 0.3), Vector3(1.3, 0.14, 0.6), SLIGHT)
 		for x: float in [-1.35, 1.35]:
-			_local_box("paper", wall, Vector3(x, 1.5, 0.01), Vector3(0.78, 0.68, 0.035), SLIGHT)
+			_local_box("wood", wall, Vector3(x, 1.5, 0.01), Vector3(0.78, 0.68, 0.035), SLIGHT)
 			_local_box("scope_glass", wall, Vector3(x, 1.5, 0.02), Vector3(0.68, 0.58, 0.03), SLIGHT)
-			_local_box("paper", wall, Vector3(x, 1.5, 0.03), Vector3(0.03, 0.58, 0.02), SLIGHT)
-			_local_box("paper", wall, Vector3(x, 1.5, 0.03), Vector3(0.68, 0.03, 0.02), SLIGHT)
+			_local_box("wood", wall, Vector3(x, 1.5, 0.03), Vector3(0.03, 0.58, 0.02), SLIGHT)
+			_local_box("wood", wall, Vector3(x, 1.5, 0.03), Vector3(0.68, 0.03, 0.02), SLIGHT)
 			_local_box("concrete", wall, Vector3(x, 1.13, 0.03), Vector3(0.86, 0.06, 0.1), SLIGHT)
 		# The sheet stands a hand's breadth proud of the brick, on a rim.
 		for i in panels:
 			var from := PI * i / panels
 			var to := PI * (i + 1) / panels
-			beam("steel", wall * (Vector3(cos(from), sin(from), 0) * (radius + 0.01) + Vector3(0, 0, 0.05)), wall * (Vector3(cos(to), sin(to), 0) * (radius + 0.01) + Vector3(0, 0, 0.05)), 0.05, SLIGHT, 0.02)
+			beam("roof", wall * (Vector3(cos(from), sin(from), 0) * (radius + 0.01) + Vector3(0, 0, 0.05)), wall * (Vector3(cos(to), sin(to), 0) * (radius + 0.01) + Vector3(0, 0, 0.05)), 0.05, SLIGHT, 0.02)
 	# A kerb of concrete the sheet stands on, and the stove's pipe.
 	for side: float in [-1.0, 1.0]:
 		_local_box("concrete", xf, Vector3(0, 0.12, side * (radius + 0.02)), Vector3(length, 0.3, 0.16), SLIGHT)
 	var flue := xf * Vector3(length * 0.5 - 1.6, 0, 0.9)
-	_cylinder("steel", Transform3D(Basis(), flue + Vector3.UP * (radius * 0.9)), 0.07, 1.1, SLIGHT, -1.0, 8)
-	_cylinder("steel", Transform3D(Basis(), flue + Vector3.UP * (radius * 0.9 + 1.12)), 0.14, 0.06, SLIGHT, 0.03, 8)
+	_cylinder("roof", Transform3D(Basis(), flue + Vector3.UP * (radius * 0.9)), 0.07, 1.1, SLIGHT, -1.0, 8)
+	_cylinder("roof", Transform3D(Basis(), flue + Vector3.UP * (radius * 0.9 + 1.12)), 0.14, 0.06, SLIGHT, 0.03, 8)
 	_collide_box(xf * Transform3D(Basis(), Vector3(0, radius * 0.45, 0)), Vector3(length, radius * 0.9, radius * 1.8), "metal")
 	_collide_box(xf * Transform3D(Basis(), Vector3(0, radius * 0.9, 0)), Vector3(length, radius * 0.2, radius * 1.1), "metal")
 	cover("earth", at, length * 0.6, 0.6)
@@ -1174,19 +1172,14 @@ func campfire(at: Vector2) -> void:
 	cover("earth", at, 2.6, 0.9)
 	var own := _dice(at, 9)
 	var hearth := ground(at.x, at.y)
-	# Ash, and the ends of what did not burn through.
-	cylinder("rubber", hearth + Vector3.UP * 0.02, 0.36, 0.05, SLIGHT, Vector3.ZERO, 0.28, 10)
-	for i in 4:
-		var turn := own.randf() * TAU
-		var out := Vector3(cos(turn), 0, sin(turn))
-		rod("rubber", hearth + out * 0.05 + Vector3.UP * 0.1, hearth + out * own.randf_range(0.3, 0.42) + Vector3.UP * 0.05, 0.028, SLIGHT, 5)
+	_small = true
 	# The tripod, three poles lashed at the top, a chain and the dixie.
 	var top := hearth + Vector3.UP * 1.35
 	for i in 3:
 		var turn := TAU * i / 3.0 + 1.3
 		rod("steel", hearth + Vector3(cos(turn), 0, sin(turn)) * 0.62, top + Vector3(cos(turn), 0, sin(turn)) * -0.04, 0.014, SLIGHT, 5)
 	rod("steel", top, top + Vector3.DOWN * 0.62, 0.005, SLIGHT, 4)
-	cylinder("galvanised", top + Vector3.DOWN * 0.9, 0.14, 0.22, SLIGHT, Vector3.ZERO, 0.15, 10)
+	cylinder("steel", top + Vector3.DOWN * 0.9, 0.14, 0.22, SLIGHT, Vector3.ZERO, 0.15, 10)
 	rod("steel", top + Vector3(-0.14, -0.7, 0), top + Vector3(0, -0.62, 0), 0.004, SLIGHT, 4)
 	rod("steel", top + Vector3(0.14, -0.7, 0), top + Vector3(0, -0.62, 0), 0.004, SLIGHT, 4)
 	# Wood for the night, stacked by one of the seats.
@@ -1198,8 +1191,9 @@ func campfire(at: Vector2) -> void:
 			rod("bark", stack + across + Vector3.UP * (0.06 + layer * 0.11) - lies * own.randf_range(0.28, 0.34), stack + across + Vector3.UP * (0.06 + layer * 0.11) + lies * own.randf_range(0.28, 0.34), 0.06, SLIGHT, 6)
 	# Mugs on a log, and a tin.
 	for i in 2:
-		cylinder("galvanised", seats[0] + Vector3(own.randf_range(-0.3, 0.3), 0.17, own.randf_range(-0.05, 0.05)), 0.04, 0.085, SLIGHT, Vector3.ZERO, 0.045, 8)
-	_box("galvanised", Transform3D(Basis(Vector3.UP, own.randf() * TAU), seats[2] + Vector3(0.2, 0.2, 0)), Vector3(0.17, 0.055, 0.12), SLIGHT)
+		cylinder("steel", seats[0] + Vector3(own.randf_range(-0.3, 0.3), 0.17, own.randf_range(-0.05, 0.05)), 0.04, 0.085, SLIGHT, Vector3.ZERO, 0.045, 8)
+	_box("steel", Transform3D(Basis(Vector3.UP, own.randf() * TAU), seats[2] + Vector3(0.2, 0.2, 0)), Vector3(0.17, 0.055, 0.12), SLIGHT)
+	_small = false
 	smoke(Vector3(at.x, hearth.y + 0.3, at.y), 30.0)
 
 
@@ -1234,8 +1228,8 @@ func ground_sheet(at: Vector2, yaw_deg: float, size: Vector2) -> void:
 			# Clear of the ground, which is not as flat as a sheet.
 			spots.append(ground(spot.x, spot.z, 0.03 + (0.0 if edge else own.randf_range(0.0, 0.02))))
 			uvs.append(Vector2(spot.x, spot.z))
-			tones.append(Color(own.randf_range(0.05, 0.36) if not edge else 0.55, own.randf_range(0.4, 0.55), 0.9, 0.0))
-	_cloth(_tool(CANVAS, SLIGHT, ground(at.x, at.y)), spots, across, uvs, tones, Vector3.UP)
+			tones.append(Color(own.randf_range(0.05, 0.36) if not edge else 0.42, own.randf_range(0.4, 0.55), 0.9, 0.0))
+	_cloth(_trim(CANVAS, ground(at.x, at.y)), spots, across, uvs, tones, Vector3.UP)
 
 
 ## A tarpaulin drawn over a stack that stands at `at` (its foot) turned
@@ -1283,7 +1277,7 @@ func tarpaulin(at: Vector3, yaw_deg: float, size: Vector3) -> void:
 ## both: what a man owns in the field.
 func kit(at: Vector2, yaw_deg: float, bag := true, roll := true) -> void:
 	var way := Basis(Vector3.UP, deg_to_rad(yaw_deg)) * Vector3.RIGHT
-	var st := _tool(CANVAS, SLIGHT, ground(at.x, at.y))
+	var st := _trim(CANVAS, ground(at.x, at.y))
 	if bag:
 		_bundle(st, ground(at.x, at.y, 0.14), way, 0.72, 0.15, Color(0.3, 0.42, 1.0, 0.0))
 	if roll:
@@ -1293,26 +1287,30 @@ func kit(at: Vector2, yaw_deg: float, bag := true, roll := true) -> void:
 
 ## A steel helmet put down at `at`, on the ground or on whatever is there.
 func helmet(at: Vector3, yaw_deg := 0.0) -> void:
+	_small = true
 	revolve(ARMY, Transform3D(Basis.from_euler(Vector3(0.12, deg_to_rad(yaw_deg), 0.08)), at), PackedVector2Array([
 		Vector2(0.155, 0.0), Vector2(0.15, 0.03), Vector2(0.13, 0.1), Vector2(0.085, 0.15), Vector2(0.0, 0.165),
 	]), SLIGHT, 10, true)
+	_small = false
 
 
 ## A field telephone at `at`: the set in its case, the handset on it, and
 ## its line running off along the ground towards `line_to` (x and z).
 func field_telephone(at: Vector3, yaw_deg: float, line_to: Vector2) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
+	_small = true
 	rounded_box(ARMY, xf * Transform3D(Basis(), Vector3(0, 0.07, 0)), Vector3(0.26, 0.14, 0.12), 0.012, SLIGHT)
-	_local_box("rubber", xf, Vector3(0, 0.16, 0), Vector3(0.2, 0.035, 0.045), SLIGHT)
+	_local_box(ARMY, xf, Vector3(0, 0.16, 0), Vector3(0.2, 0.035, 0.045), SLIGHT)
 	for x: float in [-0.085, 0.085]:
-		_local_box("rubber", xf, Vector3(x, 0.15, 0), Vector3(0.05, 0.05, 0.055), SLIGHT)
-	rod("steel", xf * Vector3(0.14, 0.08, 0), xf * Vector3(0.17, 0.08, 0), 0.02, SLIGHT, 6)
+		_local_box(ARMY, xf, Vector3(x, 0.15, 0), Vector3(0.05, 0.05, 0.055), SLIGHT)
+	rod(ARMY, xf * Vector3(0.14, 0.08, 0), xf * Vector3(0.17, 0.08, 0), 0.02, SLIGHT, 6)
 	var far := ground(line_to.x, line_to.y, 0.015)
 	var points := PackedVector3Array([xf * Vector3(-0.13, 0.04, 0), on_ground(xf * Vector3(-0.3, 0, 0.1), 0.015)])
 	for step in range(1, 6):
 		var spot := points[1].lerp(far, step / 5.0) + Vector3(sin(step * 2.1) * 0.25, 0, cos(step * 1.7) * 0.25) * (1.0 if step < 5 else 0.0)
 		points.append(on_ground(spot, 0.015))
-	hose("rubber", points, 0.005, SLIGHT, 4)
+	hose(ARMY, points, 0.005, SLIGHT, 4)
+	_small = false
 
 
 ## Duckboards on the ground from `from` to `to` (x and z): slats nailed on
@@ -1322,12 +1320,14 @@ func duckboards(from: Vector2, to: Vector2, wide := 0.7) -> void:
 	var way := (to - from) / length
 	var yaw := Vector3(0, rad_to_deg(atan2(way.x, way.y)), 0)
 	var slats := int(length / 0.14)
+	_small = true
 	for side: float in [-1.0, 1.0]:
 		var bearer := (from + to) * 0.5 + way.orthogonal() * side * wide * 0.32
 		box("wood", ground(bearer.x, bearer.y, 0.025), Vector3(0.07, 0.05, length), yaw, SLIGHT)
 	for i in slats:
 		var at := from + way * length * (i + 0.5) / slats
 		box("wood", ground(at.x, at.y, 0.062), Vector3(wide, 0.024, 0.1), yaw, SLIGHT)
+	_small = false
 
 
 ## A line strung from `from` to `to`, with washing on it.
@@ -1360,12 +1360,14 @@ func washing_line(from: Vector3, to: Vector3) -> void:
 ## tank: `count` of them lying about `at`.
 func shell_cases(at: Vector2, count: int) -> void:
 	var own := _dice(at, 13)
+	_small = true
 	for i in count:
 		var spot := at + Vector2(own.randf_range(-0.7, 0.7), own.randf_range(-0.5, 0.5))
 		var turn := own.randf() * TAU
 		var way := Vector3(cos(turn), 0, sin(turn))
 		var middle := ground(spot.x, spot.y, 0.045)
 		_cylinder("brass", Transform3D(_up_along(way), middle - way * 0.3), 0.047, 0.6, SLIGHT, 0.04, 8)
+	_small = false
 
 
 ## A thread of smoke that rises `height` over `at`: what is seen of a camp

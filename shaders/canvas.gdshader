@@ -30,6 +30,18 @@ uniform float strip = 0.9;
 uniform float through : hint_range(0.0, 4.0) = 1.1;
 uniform float roughness : hint_range(0.0, 1.0) = 0.93;
 
+void vertex() {
+	// The sun shines through one thickness of canvas: the inside of a roof
+	// is lit by what falls on its outside. Its own shadow would lie on it
+	// there, in the dots of the shadow map. The cloth therefore throws its
+	// shadow from a hand's breadth further from the light than it hangs.
+	if (IN_SHADOW_PASS) {
+		vec4 seen = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+		seen.z -= 0.09;
+		VERTEX = (inverse(MODELVIEW_MATRIX) * seen).xyz;
+	}
+}
+
 void fragment() {
 	vec3 wide = texture(wear_mask, UV * 0.09).rgb;
 	vec3 fine = texture(wear_mask, UV * 0.71 + vec2(0.31, 0.57)).rgb;

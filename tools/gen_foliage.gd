@@ -155,10 +155,10 @@ func _net() -> void:
 			if cover > 0.0:
 				_image.set_pixel(x, y, Color(0.2, 0.17, 0.12, cover))
 	var scrim: Array[Color] = [Color(0.08, 0.1, 0.055), Color(0.14, 0.17, 0.085), Color(0.23, 0.185, 0.115), Color(0.18, 0.2, 0.1), Color(0.33, 0.29, 0.19)]
-	for i in 1500:
+	for i in 1150:
 		var middle := Vector2(_rng.randf(), _rng.randf()) * size
 		var thin := holes.get_pixelv(Vector2i(middle)).r
-		if thin < 0.47 and _rng.randf() > (thin - 0.2) * 1.6:
+		if thin < 0.5 and _rng.randf() > (thin - 0.24) * 1.5:
 			continue
 		var drift := shades.get_pixelv(Vector2i(middle)).r
 		var tone := scrim[clampi(int((drift - 0.22) / 0.56 * 5.0 + _rng.randf_range(-0.7, 0.7)), 0, 4)]

@@ -19,7 +19,7 @@ func _describe() -> void:
 	cover("earth", Vector2(142, 186), 9.0, 0.95, 0.5)
 	# The guard has a drum to warm his hands at, a telephone in his box, and
 	# his helmet on the bags.
-	drop("barrel_stove", ground(141.3, 180.3), 15)
+	strew("barrel_stove", ground(141.3, 180.3), 15)
 	field_telephone(ground(139.8, 180.7, 1.265), 10.0, Vector2(147.0, 175.5))
 	helmet(ground(143.25, 189.9, 0.99), 75.0)
 	kit(Vector2(143.9, 192.9), 20.0)
