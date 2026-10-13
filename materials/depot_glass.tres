@@ -6,8 +6,14 @@
 [resource]
 shader = ExtResource("shader")
 shader_parameter/wear_mask = ExtResource("mask")
-shader_parameter/mirror = Color(0.34, 0.38, 0.42, 1)
+shader_parameter/mirror = 0.09
 shader_parameter/film = Color(0.3, 0.29, 0.25, 1)
 shader_parameter/painted = Color(0.36, 0.4, 0.36, 1)
 shader_parameter/lean = 0.07
 shader_parameter/dirt = 0.6
+shader_parameter/room_corner = Vector2(300, 27)
+shader_parameter/room_bay = Vector2(8.2667, 7.2)
+shader_parameter/room_ground = 6.4
+shader_parameter/room_deep = 7.0
+shader_parameter/room_light = 0.2
+shader_parameter/room_grain = ExtResource("mask")

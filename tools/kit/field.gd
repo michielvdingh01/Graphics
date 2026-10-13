@@ -21,6 +21,11 @@ const SLIGHT := DETAIL | NO_COLLIDE
 ## dirt in it, not faded, hanging free and letting the sun through. See
 ## shaders/canvas.gdshader.
 const CLOTH := Color(0.0, 0.5, 1.0, 1.0)
+## What is left of the light of the sky in a tent and under a net: its
+## colour by the time it has come through canvas or been thrown up by the
+## sand, and how strong.
+const TENT_LIGHT := Color(0.6, 0.57, 0.46, 0.32)
+const NET_LIGHT := Color(0.82, 0.83, 0.8, 0.6)
 ## What moves in the wind: cloth that says in UV2 how far each of its
 ## corners gives, in metres, and how light it is: 0 for a wall of canvas that
 ## fills and sinks back, 1 for a shirt on a line. See shaders/canvas.gdshader.
@@ -54,6 +59,12 @@ const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
 ## The node the vehicles of the level stand under, and how many there are.
 var _vehicles: Node3D
 var _vehicle_count := 0
+## How many shelter() there are, for their names.
+var _shelters := 0
+## How far before the glass of the level a shot stops, on the wall the glass
+## sits in: the deepest reveal of its windows. The mesh of the glass says so
+## to scripts/window.gd, see _commit().
+var _glass_reveal := 0.0
 ## True while what is being built is one of the small things: it goes into
 ## the surface of _trim() whatever builds it. See _tool().
 var _small := false
@@ -114,6 +125,35 @@ func _commit(zone_name: String, kind: String) -> void:
 		var column := _root.get_child(0) as MeshInstance3D
 		column.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		column.extra_cull_margin = 12.0
+	elif kind == "glass" and zone_name == "" and _glass_reveal > 0.0:
+		(_root.get_child(0) as MeshInstance3D).set_meta(&"reveal", _glass_reveal)
+
+
+## The light under a roof that keeps the sky off: in a tent, under a net,
+## in an open shed. Out of doors everything in the shade is lit by the whole
+## of the sky and by the sand; under a roof most of that is kept out, and a
+## thing stands darker on the ground the further in it stands. A box in the
+## frame `xf`, `size` across, in which what is lit from all round is `light`
+## instead of the sky, its alpha how strong; over `blend` metres inside its
+## sides it goes over into the open air. It is a reflection probe: what
+## shines in there shows the inside of the tent, and not the sky, `shine`
+## of it. Canvas with the sun on it glows, and a tent that gave all of that
+## back would be the colour of its roof all through.
+func shelter(xf: Transform3D, size: Vector3, light: Color, blend := 0.8, shine := 0.8) -> void:
+	_shelters += 1
+	var node := ReflectionProbe.new()
+	node.name = "Shelter%d" % _shelters
+	node.transform = xf
+	node.size = size
+	node.box_projection = true
+	node.enable_shadows = true
+	node.ambient_mode = ReflectionProbe.AMBIENT_COLOR
+	node.ambient_color = Color(light.r, light.g, light.b)
+	node.ambient_color_energy = light.a
+	node.blend_distance = blend
+	node.intensity = shine
+	node.max_distance = maxf(size.x, size.z) * 0.5 + 6.0
+	_add(node, _root)
 
 
 ## One corner at a time: the spot, which way it faces, where on the texture
@@ -704,6 +744,12 @@ func tent(at: Vector2, yaw_deg: float, size := Vector3(7.0, 3.1, 5.0)) -> Transf
 			_guy(xf * Vector3(end * (half + 0.1), size.y - 0.05, 0), xf * Vector3(end * (half + own.randf_range(1.9, 2.3)), 0, side * own.randf_range(1.2, 1.6)))
 	casts_shade(xf * Vector3(0, size.y * 0.75, 0), Vector3(half + 0.4, 0.9, half + 0.4) if absf(fposmod(yaw_deg, 180.0) - 90.0) < 45.0 else Vector3(half + 0.4, 0.9, deep + 0.4))
 	cover("earth", at, maxf(half, deep) + 1.6, 0.9)
+	# Inside it is dim. The box reaches as far beyond the walls and under
+	# the ground as it takes to go over into the open air, so that it is as
+	# dim against a wall as in the middle; out of the open front it goes
+	# over where the light comes in.
+	var over_into := 0.8
+	shelter(xf * Transform3D(Basis(), Vector3(0, (size.y - over_into) * 0.5, 0.2)), Vector3(size.x + over_into * 2.0, size.y + over_into, size.z + over_into * 2.0 + 0.4), TENT_LIGHT, over_into, 0.35)
 	return xf
 
 
@@ -884,6 +930,7 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 			if x != 0.0:
 				_guy(foot + Vector3.UP * height, corner.call(x + signf(x) * 2.1, z + signf(z) * 0.5, 0.0))
 	var middle: Vector3 = corner.call(0.0, 0.0, height - 0.3)
+	shelter(Transform3D(xf.basis, corner.call(0.0, 0.0, height * 0.5 - 0.3)), Vector3(size.x + 0.6, height + 0.6, size.y + 3.0), NET_LIGHT, 1.6)
 	var reach := maxf(half.x, half.y) if absf(fposmod(yaw_deg, 90.0) - 45.0) < 20.0 else 0.0
 	casts_shade(middle, Vector3(maxf(half.x, reach) + 0.5, 0.7, maxf(half.y, reach) + 1.2) if absf(fposmod(yaw_deg, 180.0) - 90.0) > 45.0 else Vector3(maxf(half.y, reach) + 1.2, 0.7, maxf(half.x, reach) + 0.5))
 
@@ -1096,15 +1143,71 @@ func sign_post(at: Vector2, yaw_deg: float, text: String, height := 0.2, board :
 func pillbox(at: Vector2, yaw_deg: float) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y, -0.5))
 	var turn := Vector3(0, yaw_deg, 0)
-	box("concrete", xf * Vector3(0, 1.5, 0), Vector3(5.0, 3.0, 4.4), turn, DETAIL)
-	box("concrete", xf * Vector3(0, 3.1, 0), Vector3(5.5, 0.3, 4.9), turn, SLIGHT)
-	# The slit: dark, deep in a frame of concrete with a sill that sheds
-	# the rain.
-	_local_box("rubber", xf, Vector3(0, 2.05, 2.205), Vector3(2.6, 0.38, 0.02), SLIGHT)
-	_local_box("concrete", xf, Vector3(0, 2.32, 2.27), Vector3(3.1, 0.16, 0.14), SLIGHT)
-	_box("concrete", xf * Transform3D(Basis(Vector3.RIGHT, 0.35), Vector3(0, 1.8, 2.26)), Vector3(3.1, 0.1, 0.2), SLIGHT)
-	for x: float in [-1.0, 1.0]:
-		_local_box("concrete", xf, Vector3(x * 1.46, 2.06, 2.26), Vector3(0.18, 0.5, 0.12), SLIGHT)
+	# What is in the way is the block it always was. What is seen of it is
+	# poured in a shutter of boards with its front corners cut off, under a
+	# roof a foot and a half thick that was poured after it and stands over
+	# it all round, its upper edge cut back.
+	_collide_box(Transform3D(Basis.from_euler(turn * PI / 180.0), xf * Vector3(0, 1.5, 0)), Vector3(5.0, 3.0, 4.4), _surface("concrete"))
+	var cut := 0.42
+	# Seen from above, with the front of it (+Z) down: counter-clockwise.
+	var up_frame := xf * Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), Vector3.ZERO)
+	extrude("concrete", PackedVector2Array([
+		Vector2(-2.5 + cut, -2.2), Vector2(2.5 - cut, -2.2), Vector2(2.5, -2.2 + cut), Vector2(2.5, 2.2), Vector2(-2.5, 2.2), Vector2(-2.5, -2.2 + cut),
+	]), 3.0, up_frame * Transform3D(Basis(), Vector3(0, 0, 1.5)), SLIGHT)
+	var eave := 0.28
+	extrude("concrete", PackedVector2Array([
+		Vector2(-2.5 + cut - eave * 0.4, -2.2 - eave), Vector2(2.5 - cut + eave * 0.4, -2.2 - eave), Vector2(2.5 + eave, -2.2 + cut - eave * 0.4),
+		Vector2(2.5 + eave, 2.2 + eave), Vector2(-2.5 - eave, 2.2 + eave), Vector2(-2.5 - eave, -2.2 + cut - eave * 0.4),
+	]), 0.34, up_frame * Transform3D(Basis(), Vector3(0, 0, 3.12)), SLIGHT)
+	extrude("concrete", PackedVector2Array([
+		Vector2(-2.3 + cut, -2.1), Vector2(2.3 - cut, -2.1), Vector2(2.4, -2.0 + cut), Vector2(2.4, 2.3), Vector2(-2.4, 2.3), Vector2(-2.4, -2.0 + cut),
+	]), 0.14, up_frame * Transform3D(Basis(), Vector3(0, 0, 3.36)), SLIGHT)
+	# The slit, stepped back into the wall so that nothing glances in: two
+	# frames of concrete, one inside the other, and the dark behind them.
+	# Out of it, the muzzle of what is laid on the track.
+	_local_box("rubber", xf, Vector3(0, 2.05, 2.205), Vector3(2.4, 0.34, 0.02), SLIGHT)
+	for step: Vector3 in [Vector3(3.3, 0.86, 0.1), Vector3(2.9, 0.6, 0.2)]:
+		_local_box("concrete", xf, Vector3(0, 2.05 + step.y * 0.5 + 0.07, 2.2 + step.z * 0.5), Vector3(step.x + 0.28, 0.14, step.z), SLIGHT)
+		_box("concrete", xf * Transform3D(Basis(Vector3.RIGHT, 0.3), Vector3(0, 2.05 - step.y * 0.5 - 0.04, 2.2 + step.z * 0.5)), Vector3(step.x + 0.28, 0.1, step.z + 0.06), SLIGHT)
+		for x: float in [-1.0, 1.0]:
+			_local_box("concrete", xf, Vector3(x * (step.x * 0.5 + 0.07), 2.05, 2.2 + step.z * 0.5), Vector3(0.14, step.y, step.z), SLIGHT)
+	# What is new here rolls dice of its own; the sand at its foot falls as
+	# it always did.
+	var newer := _dice(at, 28)
+	var aim := Basis(Vector3.UP, newer.randf_range(-0.3, 0.3)) * Basis(Vector3.RIGHT, 0.06)
+	_cylinder("dark_steel", xf * Transform3D(aim * Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 2.02, 2.0)), 0.017, 0.62, SLIGHT, 0.017, 6)
+	_cylinder("dark_steel", xf * Transform3D(aim * Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 2.02, 2.0) + aim * Vector3(0, 0, 0.5)), 0.027, 0.16, SLIGHT, 0.022, 6)
+	# The eyes it was lifted its shutters by, left in the roof, and the
+	# irons a net is hung from along its front.
+	_small = true
+	for corner: Vector2 in [Vector2(-1.9, -1.6), Vector2(1.9, -1.6), Vector2(-1.9, 1.7), Vector2(1.9, 1.7)]:
+		var foot := xf * Vector3(corner.x, 3.42, corner.y)
+		rod("steel", foot + xf.basis.x * 0.07, foot + Vector3.UP * 0.1, 0.008, SLIGHT, 4)
+		rod("steel", foot - xf.basis.x * 0.07, foot + Vector3.UP * 0.1, 0.008, SLIGHT, 4)
+	for x: float in [-2.2, -1.1, 0.0, 1.1, 2.2]:
+		rod("steel", xf * Vector3(x, 3.2, 2.46), xf * Vector3(x, 3.2, 2.58), 0.008, SLIGHT, 4)
+	_small = false
+	# What is left of its net, hung from those irons over one corner.
+	var hangs := 1.0 if newer.randf() < 0.5 else -1.0
+	var net := _tool("camo_net", SLIGHT, xf.origin)
+	var spots := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var tones := PackedColorArray()
+	var gives := PackedVector2Array()
+	for j in 4:
+		var v := j / 3.0
+		for i in 6:
+			var u := i / 5.0
+			var x := hangs * lerpf(0.5, 2.95, u)
+			var out := lerpf(2.56, 3.05, v) + 0.12 * sin(u * 5.0 + v * 2.0)
+			var low := lerpf(3.2, 0.62 + 0.5 * absf(sin(u * 7.0 + hangs)), pow(v, 0.8))
+			# Round the corner at its far end.
+			var spot := Vector3(x, low, out - maxf(u - 0.75, 0.0) * 2.6)
+			spots.append(xf * spot)
+			uvs.append(Vector2(u * 2.6 + at.x, v * 2.7))
+			tones.append(Color.WHITE)
+			gives.append(Vector2(0.09 * v, 0.5))
+	_cloth(net, spots, 5, uvs, tones, xf.basis * Vector3(0, 0.2, 1), gives)
 	# The door, in its frame, and a step down to it.
 	_local_box("door", xf, Vector3(1.2, 1.52, -2.215), Vector3(1.04, 2.02, 0.03), SLIGHT)
 	_local_box("door", xf, Vector3(1.2, 1.5, -2.235), Vector3(0.9, 1.9, 0.03), SLIGHT)
@@ -1113,8 +1216,10 @@ func pillbox(at: Vector2, yaw_deg: float) -> void:
 	_local_box("door", xf, Vector3(1.56, 1.5, -2.265), Vector3(0.03, 0.16, 0.04), SLIGHT)
 	_local_box("concrete", xf, Vector3(1.2, 0.46, -2.5), Vector3(1.3, 0.12, 0.6), SLIGHT)
 	# On its roof: the pipe that airs it.
-	_cylinder("door", xf * Transform3D(Basis(), Vector3(-1.6, 3.25, -1.2)), 0.07, 0.5, SLIGHT, -1.0, 8)
-	_cylinder("door", xf * Transform3D(Basis(), Vector3(-1.6, 3.72, -1.2)), 0.13, 0.05, SLIGHT, 0.04, 8)
+	_cylinder("door", xf * Transform3D(Basis(), Vector3(-1.6, 3.43, -1.2)), 0.07, 0.5, SLIGHT, -1.0, 8)
+	_cylinder("door", xf * Transform3D(Basis(), Vector3(-1.6, 3.9, -1.2)), 0.13, 0.05, SLIGHT, 0.04, 8)
+	# A slab over the door, to keep the rain and the splinters off it.
+	_local_box("concrete", xf, Vector3(1.2, 2.72, -2.5), Vector3(1.7, 0.16, 0.7), SLIGHT)
 	var own := _dice(at, 8)
 	wall_decal(_pick("leak"), xf * Vector3(-1.2, 2.2, 2.21), xf.basis * Vector3.BACK, 1.4, 1.8)
 	wall_decal("grime", xf * Vector3(0, 0.9, 2.21), xf.basis * Vector3.BACK, 4.6, 1.0)
@@ -1183,16 +1288,31 @@ func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 ## between two windows, and at one end the pipe of its stove.
 func nissen_hut(at: Vector2, yaw_deg: float, length := 11.0, radius := 2.6) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y, -0.05))
-	var panels := 12
-	for i in panels:
-		var from := PI * i / panels
-		var to := PI * (i + 1) / panels
-		var a := Vector3(0, sin(from), cos(from)) * radius
-		var b := Vector3(0, sin(to), cos(to)) * radius
-		var out := ((a + b) * 0.5).normalized()
-		# A panel stands in the XY of its frame and faces its +Z: out of the hut.
-		var frame := xf * Transform3D(Basis(Vector3.RIGHT, out.cross(Vector3.RIGHT), out), (a + b) * 0.5)
-		corrugated("roof", frame, Vector2(length + 0.12, a.distance_to(b) + 0.02), 0.16, 0.022, SLIGHT)
+	# The roof is a half round of corrugated sheet, bent over ribs: round, and
+	# not a row of flats. Its corrugations are those of the scan it is drawn
+	# with, which run over the arch; the sheets lap one over the next down
+	# either side, each standing a little proud of the one below it.
+	var panels := 20
+	var st := _tool("roof", SLIGHT, xf.origin)
+	var long := length + 0.12
+	var laps: Array[int] = [0, 4, 8, 12, 16, 20]
+	for lap in laps.size() - 1:
+		# The sheets nearer the ridge lie over those below them.
+		var over := 0.012 * (2.0 - absf(lap - 2.0))
+		for i in range(laps[lap], laps[lap + 1]):
+			var from := PI * i / panels
+			var to := PI * (i + 1) / panels
+			# A sheet reaches a hand's breadth under the next one up.
+			if i == laps[lap] and lap > 2:
+				from -= 0.035
+			if i == laps[lap + 1] - 1 and lap < 2:
+				to += 0.035
+			var a := Vector3(0, sin(from), cos(from))
+			var b := Vector3(0, sin(to), cos(to))
+			var reach := radius + over
+			var points: Array[Vector3] = [xf * (a * reach + Vector3(-long * 0.5, 0, 0)), xf * (a * reach + Vector3(long * 0.5, 0, 0)), xf * (b * reach + Vector3(long * 0.5, 0, 0)), xf * (b * reach + Vector3(-long * 0.5, 0, 0))]
+			var faces: Array[Vector3] = [xf.basis * a, xf.basis * a, xf.basis * b, xf.basis * b]
+			_quad(st, points, faces, [Vector2(0, from * radius), Vector2(long, from * radius), Vector2(long, to * radius), Vector2(0, to * radius)])
 	var face := PackedVector2Array()
 	for i in panels + 1:
 		face.append(Vector2(cos(PI * i / panels), sin(PI * i / panels)) * (radius - 0.02))

@@ -438,12 +438,24 @@ func tracer(from: Vector3, to: Vector3, tint := Color(1.0, 0.7, 0.35)) -> void:
 ## What a ray hit is made of: "concrete", "brick", "metal", "wood", "soft" or
 ## "sand", "flesh" for somebody, or "air" for a wall nobody sees at the edge
 ## of open land. The level builder marks every collider that is not concrete.
+##
+## Land is one collider and all of it sand, but slabs may lie on it: the
+## builder leaves where on the collider, as "paved", the parts of the land
+## (x and z) that are laid with concrete. A hit there is on concrete.
 func surface_of(hit: Dictionary) -> String:
 	var body := hit.collider as CollisionObject3D
 	if body == null or body.get_shape_owners().is_empty():
 		return "concrete"
 	var shape := body.shape_owner_get_owner(body.shape_find_owner(hit.shape))
-	return shape.get_meta(&"surface", "concrete") if shape else "concrete"
+	if shape == null:
+		return "concrete"
+	var surface: String = shape.get_meta(&"surface", "concrete")
+	if surface == "sand" and shape.has_meta(&"paved") and hit.has("position"):
+		var at := Vector2(hit.position.x, hit.position.z)
+		for slab: Rect2 in shape.get_meta(&"paved"):
+			if slab.has_point(at):
+				return "concrete"
+	return surface
 
 
 ## A shot that came in along `incoming` lands on the level: `hit` is what the
