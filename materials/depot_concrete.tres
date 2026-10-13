@@ -1,0 +1,25 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/weathered_wall.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/concrete_wall_008/concrete_wall_008_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/concrete_wall_008/concrete_wall_008_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/concrete_wall_008/concrete_wall_008_arm.jpg" id="arm"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/albedo_tex = ExtResource("diff")
+shader_parameter/normal_tex = ExtResource("nor")
+shader_parameter/orm_tex = ExtResource("arm")
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/uv_scale = 0.333
+shader_parameter/tint = Color(0.93, 0.92, 0.88, 1)
+shader_parameter/pours = 0.8
+shader_parameter/streaks = 0.85
+shader_parameter/damp = 0.7
+shader_parameter/green = 0.55
+shader_parameter/sand = 0.65
+shader_parameter/weep_height = 0.8
+shader_parameter/foot_y = 6.4
+shader_parameter/sunward = Vector2(-0.56, 0.83)
+shader_parameter/sand_tint = Color(0.6, 0.555, 0.49, 1)

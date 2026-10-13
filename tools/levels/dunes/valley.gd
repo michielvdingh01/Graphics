@@ -17,6 +17,13 @@ func _describe() -> void:
 	_put("old_military_crate", 142.8, 191.6, 80)
 	vehicle("jeep", Vector2(148.5, 191.5), 78.0)
 	cover("earth", Vector2(142, 186), 9.0, 0.95, 0.5)
+	# The guard has a drum to warm his hands at, a telephone in his box, and
+	# his helmet on the bags.
+	strew("barrel_stove", ground(141.3, 180.3), 15)
+	field_telephone(ground(139.8, 180.7, 1.265), 10.0, Vector2(147.0, 175.5))
+	helmet(ground(143.25, 189.9, 0.99), 75.0)
+	kit(Vector2(143.9, 192.9), 20.0)
+	strew("metal_jerrycan_green", ground(140.9, 181.2), 100)
 	probe("Pass", ground(142, 186, 3.0), Vector3(40, 10, 40), Vector3.ZERO)
 
 	# The valley: a look-out on the knoll under the north dune, the lorry
@@ -34,6 +41,11 @@ func _describe() -> void:
 	fuel(ground(245.2, 199.2))
 	barrel(ground(244.9, 200.6))
 	cover("earth", Vector2(240, 197.5), 6.5, 0.8)
+	tarpaulin(ground(236.2, 199.4), 12.0, Vector3(1.12, 0.4, 0.86))
+	ground_sheet(Vector2(239.6, 200.9), 14.0, Vector2(2.2, 1.3))
+	for can: Vector3 in [Vector3(239.0, 200.8, 10), Vector3(239.5, 201.0, 25), Vector3(240.0, 200.9, -10), Vector3(240.5, 201.1, 70)]:
+		strew("metal_jerrycan_green", ground(can.x, can.y, 0.03), can.z)
+	helmet(ground(227.9, 172.6, 0.85), 310.0)
 	ferns(Vector2(190, 214), 8.0, 6)
 	# Thorn scrub shuts off the wood to the east, beyond where the track
 	# turns north.

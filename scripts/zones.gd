@@ -470,6 +470,30 @@ func _wall_off() -> void:
 		return
 	var vertices := PackedVector3Array()
 	var indices := PackedInt32Array()
+	wall_boxes(body, vertices, indices)
+	if indices.is_empty():
+		return
+	var walls := ArrayOccluder3D.new()
+	walls.set_arrays(vertices, indices)
+	_occluder = OccluderInstance3D.new()
+	_occluder.name = "Walls"
+	_occluder.occluder = walls
+	add_child(_occluder)
+	# Only what is drawn itself is left out behind a wall. A lightmap, a lamp,
+	# a reflection probe and a decal are known to the renderer by a box, and
+	# that box being hidden says nothing of what they light or colour. With
+	# the lightmaps left in, a wall changed which of them the renderer took:
+	# it uses eight to a frame, a level has more, and rooms came out with or
+	# without their baked light other than they did before. See PLAN.md.
+	for node: VisualInstance3D in find_children("*", "VisualInstance3D", true, false):
+		if not node is GeometryInstance3D:
+			RenderingServer.instance_geometry_set_flag(node.get_instance(), RenderingServer.INSTANCE_FLAG_IGNORE_OCCLUSION_CULLING, true)
+
+
+## Adds the walls among the colliders of `body` to an occluder that is being
+## put together, as boxes: its corners to `vertices` and its triangles to
+## `indices`. scripts/hidden.gd does the same for a level on land.
+static func wall_boxes(body: Node3D, vertices: PackedVector3Array, indices: PackedInt32Array) -> void:
 	for node in body.get_children():
 		var collider := node as CollisionShape3D
 		var shape := (collider.shape if collider else null) as BoxShape3D
@@ -488,20 +512,3 @@ func _wall_off() -> void:
 			vertices.append(place * (half * Vector3(1.0 if corner & 1 else -1.0, 1.0 if corner & 2 else -1.0, 1.0 if corner & 4 else -1.0)))
 		for index: int in [0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3]:
 			indices.append(first + index)
-	if indices.is_empty():
-		return
-	var walls := ArrayOccluder3D.new()
-	walls.set_arrays(vertices, indices)
-	_occluder = OccluderInstance3D.new()
-	_occluder.name = "Walls"
-	_occluder.occluder = walls
-	add_child(_occluder)
-	# Only what is drawn itself is left out behind a wall. A lightmap, a lamp,
-	# a reflection probe and a decal are known to the renderer by a box, and
-	# that box being hidden says nothing of what they light or colour. With
-	# the lightmaps left in, a wall changed which of them the renderer took:
-	# it uses eight to a frame, a level has more, and rooms came out with or
-	# without their baked light other than they did before. See PLAN.md.
-	for node: VisualInstance3D in find_children("*", "VisualInstance3D", true, false):
-		if not node is GeometryInstance3D:
-			RenderingServer.instance_geometry_set_flag(node.get_instance(), RenderingServer.INSTANCE_FLAG_IGNORE_OCCLUSION_CULLING, true)

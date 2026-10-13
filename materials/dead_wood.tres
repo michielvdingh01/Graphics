@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/strewn.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/models/dry_branches_medium_01/textures/dry_branches_medium_01_diff_1k.jpg" id="leaf"]
+[ext_resource type="Texture2D" path="res://assets/models/dry_branches_medium_01/textures/dry_branches_medium_01_nor_gl_1k.jpg" id="leaf_n"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/leaf_tex = ExtResource("leaf")
+shader_parameter/leaf_normal = ExtResource("leaf_n")
+shader_parameter/tint = Color(0.85, 0.82, 0.78, 1)
+shader_parameter/wind = Vector2(0.12, 1)
+shader_parameter/sway = 0.0
+shader_parameter/through = 0.0
+shader_parameter/roughness = 0.9
+shader_parameter/fade_from = 38.0
+shader_parameter/fade_to = 48.0
