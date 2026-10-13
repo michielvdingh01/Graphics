@@ -39,7 +39,7 @@ void fragment() {
 	vec2 corner = (UV - COLOR.rg * span) * edged;
 	float pour = 0.5 + 0.5 * sin(dot(corner, vec2(0.93, 1.71))) * sin(dot(corner, vec2(2.37, 0.61)) + 1.3);
 
-	vec3 albedo = min(scan * gain, vec3(1.0)) * tint * mix(0.8, 1.08, pour) * mix(0.88, 1.08, wide.r);
+	vec3 albedo = min(scan * gain, vec3(1.0)) * tint * mix(0.7, 1.1, pour) * mix(0.86, 1.08, wide.r);
 	float rough = 0.86;
 
 	// Wheels have gone the way the slabs lie.
@@ -60,9 +60,9 @@ void fragment() {
 	albedo = mix(albedo, vec3(0.05, 0.045, 0.04), crack * 0.85);
 
 	// Dirt lies in the joints and creeps out of them.
-	float joint = 1.0 - smoothstep(0.0, 0.02 + 0.05 * fine.g, away);
-	albedo *= 1.0 - 0.28 * (1.0 - smoothstep(0.0, 0.6, away)) * fine.b;
-	albedo = mix(albedo, vec3(0.07, 0.06, 0.05), joint * 0.7);
+	float joint = 1.0 - smoothstep(0.0, 0.025 + 0.06 * fine.g, away);
+	albedo *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.7, away)) * (0.3 + 0.7 * fine.b);
+	albedo = mix(albedo, vec3(0.06, 0.055, 0.045), joint * 0.85);
 
 	// Sand, in drifts and along the joints.
 	float drift = smoothstep(0.6, 0.8, wide.g * 0.7 + fine.b * 0.4 + (1.0 - smoothstep(0.0, 0.18, away)) * 0.12) * sand;

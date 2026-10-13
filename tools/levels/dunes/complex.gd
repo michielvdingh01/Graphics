@@ -213,6 +213,11 @@ func _yard_ground() -> void:
 		gully(at, at.x < 72.0)
 	for at: Vector2 in [Vector2(69.6, 39.5), Vector2(97.0, 23.6), Vector2(150.5, 23.8), Vector2(214.0, 23.4), Vector2(137.0, 17.0)]:
 		manhole(at)
+	# Where the guard falls in: a square edged with whitewashed stones.
+	var square := Rect2(129.0, 30.5, 26.0, 12.0)
+	var edges: Array[Vector2] = [square.position, Vector2(square.end.x, square.position.y), square.end, Vector2(square.position.x, square.end.y)]
+	for i in 4:
+		kerb(edges[i], edges[(i + 1) % 4], true)
 	# The flagstaff stands in a square of whitewashed kerbs.
 	for side: Array in [[Vector2(56.2, 26.2), Vector2(59.8, 26.2)], [Vector2(59.8, 26.2), Vector2(59.8, 29.8)], [Vector2(59.8, 29.8), Vector2(56.2, 29.8)], [Vector2(56.2, 29.8), Vector2(56.2, 26.2)]]:
 		kerb(side[0], side[1], true)
@@ -544,10 +549,7 @@ func _behind() -> void:
 	pallet(Vector3(229.0, YARD_Y, 24.6), 80.0, 3)
 	tyres(Vector3(286.0, YARD_Y, 24.8), 3)
 	_put("portable_generator", 290.0, 21.5, 90)
-	box("brick", Vector3(300.0, YARD_Y + 1.7, 14.0), Vector3(8.0, 3.4, 6.0), Vector3.ZERO, DETAIL)
-	box("concrete", Vector3(300.0, YARD_Y + 3.5, 14.0), Vector3(8.6, 0.22, 6.6), Vector3.ZERO, SLIGHT)
-	box("door", Vector3(295.97, YARD_Y + 1.0, 14.0), Vector3(0.06, 2.0, 0.9), Vector3.ZERO, SLIGHT)
-	wall_decal("grime", Vector3(295.98, YARD_Y + 0.6, 14.0), Vector3.LEFT, 5.6, 1.2)
+	guardroom(Vector2(300.0, 14.0), Vector3(8.0, 3.4, 6.0), "", false)
 	probe("Behind", Vector3(248.0, YARD_Y + 4.0, 16.5), Vector3(146, 10, 20), Vector3.ZERO)
 
 
