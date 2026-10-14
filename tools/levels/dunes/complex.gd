@@ -21,6 +21,7 @@ func _describe() -> void:
 	_inner_yard()
 	_main_building()
 	_behind()
+	_yard_life()
 	_commit_fine()
 
 
@@ -115,7 +116,7 @@ func _inner_yard() -> void:
 	nissen_hut(Vector2(38.0, 34.0), 0.0, 14.0)
 	# A flagstaff between the huts and the gate.
 	cylinder("galvanised", Vector3(58.0, YARD_Y, 28.0), 0.06, 9.0, SLIGHT, Vector3.ZERO, 0.035, 8)
-	_sheet(CANVAS, [Vector3(58.05, YARD_Y + 7.6, 28.0), Vector3(59.9, YARD_Y + 7.45, 28.25), Vector3(59.9, YARD_Y + 8.65, 28.25), Vector3(58.05, YARD_Y + 8.8, 28.0)], 0.0, 3, 1)
+	flag(Vector3(58.0, YARD_Y + 8.82, 28.07))
 	# The shed along the north wall, open to the yard, and what stands in it.
 	var roof_y := YARD_Y + 4.4
 	box("roof", Vector3(103.0, roof_y, 15.0), Vector3(52.0, 0.12, 14.0), Vector3(3, 0, 0), SLIGHT)
@@ -123,6 +124,8 @@ func _inner_yard() -> void:
 		box("steel", Vector3(x, YARD_Y + 2.0, 21.6), Vector3(0.2, 4.6, 0.2), Vector3.ZERO, DETAIL)
 		beam("steel", Vector3(x, roof_y - 0.5, 21.6), Vector3(x, roof_y + 0.25, 8.4), 0.14, SLIGHT)
 	casts_shade(Vector3(103.0, roof_y, 15.0), Vector3(27.0, 0.7, 8.0))
+	# Under its roof and against the wall it is darker the further in.
+	shelter(Transform3D(Basis(), Vector3(103.0, YARD_Y + 2.1, 14.2)), Vector3(52.0, 5.0, 15.6), Color(0.8, 0.78, 0.7, 0.55), 2.5)
 	vehicle("jeep", Vector2(84.0, 15.5), 0.0)
 	vehicle("jeep", Vector2(89.6, 15.2), 5.0)
 	vehicle("truck", Vector2(99.5, 15.2), 0.0)
@@ -163,6 +166,55 @@ func _inner_yard() -> void:
 	for at: Vector3 in [Vector3(57.0, YARD_Y, 12.0), Vector3(57.9, YARD_Y, 12.4), Vector3(57.3, YARD_Y, 13.2), Vector3(58.4, YARD_Y, 13.4)]:
 		barrel(at)
 	probe("Yard", Vector3(97.0, YARD_Y + 4.0, 31.0), Vector3(156, 10, 49), Vector3.ZERO)
+
+
+## What says that men live and work in the yard, in the middle of it and
+## between the huts. All of it is new, built after everything else so that
+## no dice fall differently for what stood here, and none of it is in
+## anybody's way.
+func _yard_life() -> void:
+	# The square the guard falls in on is where they kick a ball about when
+	# nobody is looking: two goals knocked together out of poles, and the
+	# ball where it was left.
+	# All of it is thin: it throws no shadow worth drawing, and is not drawn
+	# from across the yard.
+	_small = true
+	for end: Array in [[130.6, 1.0], [153.4, -1.0]]:
+		var x: float = end[0]
+		var lean := 0.04 * (end[1] as float)
+		for z: float in [34.9, 38.1]:
+			beam("wood", Vector3(x, YARD_Y - 0.1, z), Vector3(x + lean, YARD_Y + 2.05, z), 0.07, SLIGHT)
+			beam("wood", Vector3(x - (end[1] as float) * 0.9, YARD_Y, z), Vector3(x + lean, YARD_Y + 1.5, z), 0.05, SLIGHT)
+		beam("wood", Vector3(x + lean, YARD_Y + 2.05, 34.8), Vector3(x + lean, YARD_Y + 2.05, 38.2), 0.07, SLIGHT)
+	rounded_box("wood", Transform3D(Basis.from_euler(Vector3(0.4, 0.7, 0.2)), Vector3(143.7, YARD_Y + 0.11, 39.4)), Vector3(0.22, 0.22, 0.22), 0.108, SLIGHT)
+	# What they took off to play: a tunic over the stones, a helmet, a can.
+	helmet(Vector3(129.4, YARD_Y + 0.02, 33.6), 70.0)
+	_small = true
+	_bundle(_trim(CANVAS, Vector3(129.3, YARD_Y, 34.2)), Vector3(129.25, YARD_Y + 0.07, 34.3), Vector3(0.3, 0, 1).normalized(), 0.5, 0.06, Color(0.2, 0.55, 0.9, 0.0))
+	_small = false
+	# Between the huts: the washing, on lines from hut to hut.
+	for gap: float in [27.0, 40.5]:
+		var from := Vector3(39.5, YARD_Y, gap - 2.6)
+		var to := Vector3(43.8, YARD_Y, gap + 2.4)
+		_pole(from + Vector3.DOWN * 0.2, from + Vector3.UP * 1.9, 0.03, 0.025)
+		_pole(to + Vector3.DOWN * 0.2, to + Vector3.UP * 1.85, 0.03, 0.025)
+		washing_line(from + Vector3.UP * 1.85, to + Vector3.UP * 1.8)
+	# The current for the lamps on the wall comes along it overhead, from
+	# mast to mast, and across the yard from the mast behind the main building.
+	var high := YARD_Y + 7.7
+	_small = true
+	var south: Array[float] = [40.0, 100.0, 136.0, 168.0]
+	var north: Array[float] = [30.0, 66.0, 150.0, 180.0]
+	for i in south.size() - 1:
+		wire(Vector3(south[i], high, WALL_Z - 0.4), Vector3(south[i + 1], high, WALL_Z - 0.4), 0.9, 0.008)
+	for i in north.size() - 1:
+		wire(Vector3(north[i], high, WALL_NORTH + 0.4), Vector3(north[i + 1], high, WALL_NORTH + 0.4), 0.9 if north[i + 1] - north[i] < 60.0 else 1.6, 0.008)
+	wire(Vector3(168.0, high, WALL_Z - 0.4), Vector3(180.0, high, WALL_NORTH + 0.4), 1.4, 0.008)
+	wire(Vector3(WALL_WEST + 0.4, high, 28.0), Vector3(30.0, high, WALL_NORTH + 0.4), 0.5, 0.008)
+	wire(Vector3(WALL_WEST + 0.4, high, 28.0), Vector3(40.0, high, WALL_Z - 0.4), 0.7, 0.008)
+	_small = false
+	# A line of whitewashed stones from the gate road to the flagstaff.
+	kerb(Vector2(60.0, 30.2), Vector2(65.8, 30.2), true)
 
 
 ## What the yard is laid with: slab roads from the gate to the sheds and on
@@ -322,6 +374,8 @@ func _main_building() -> void:
 	box("concrete", Vector3(BACK_DOOR_X, lintel + 0.1, (front + way_back) * 0.5), Vector3(WAY_IN.x + 0.4, 0.2, WAY_IN.y), Vector3.ZERO, SLIGHT)
 	coarse()
 	roller_door(Vector3(BACK_DOOR_X, YARD_Y + 1.7, face + 0.01), Vector3.FORWARD, Vector2(4.0, 3.4), true)
+	# Behind the door it is as dark as a building is by day.
+	shelter(Transform3D(Basis(), Vector3(BACK_DOOR_X, YARD_Y + 1.9, (front + way_back) * 0.5 + 0.2)), Vector3(WAY_IN.x + 0.3, 4.2, WAY_IN.y + 0.6), Color(0.7, 0.72, 0.78, 0.22), 0.6)
 	tube(Vector3(BACK_DOOR_X, lintel - 0.16, front + 5.5), false, true, false, 5.0)
 	crates(Vector3(BACK_DOOR_X - 1.1, YARD_Y, way_back - 1.3), 3)
 	pallet(Vector3(BACK_DOOR_X + 1.3, YARD_Y, way_back - 1.2), 8.0, 3)

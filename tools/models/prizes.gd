@@ -57,7 +57,7 @@ func _flag() -> void:
 	for height: float in [top - 0.02, top - CLOTH.y * 0.5, top - CLOTH.y + 0.02]:
 		_ring("brass", Vector3(0, height, 0), Vector3.UP, MAST_RADIUS + 0.004, 0.004)
 	# The cloth is a part of its own that lies in its own x and y, as
-	# shaders/flag.gdshader wants it: x from the mast to the fly end, y up.
+	# shaders/prize_flag.gdshader wants it: x from the mast to the fly end, y up.
 	part("Team", Transform3D(Basis(Vector3.FORWARD, Vector3.UP, Vector3.RIGHT), Vector3(0, top - CLOTH.y, -MAST_RADIUS)))
 	var st := _tool("flag_cloth", _part, Vector3.ZERO)
 	var across := 24

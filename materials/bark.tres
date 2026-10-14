@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/textures/pine_bark/pine_bark_arm.jpg" id="arm"]
 
 [resource]
-albedo_color = Color(0.82, 0.78, 0.74, 1)
+albedo_color = Color(0.64, 0.66, 0.72, 1)
 albedo_texture = ExtResource("diff")
 orm_texture = ExtResource("arm")
 normal_enabled = true

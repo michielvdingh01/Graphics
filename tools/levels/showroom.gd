@@ -228,6 +228,8 @@ func _field() -> void:
 	_pole(ground(-38.0, 51.5), ground(-38.0, 51.5, 1.85), 0.03, 0.025)
 	_pole(ground(-33.6, 51.0), ground(-33.6, 51.0, 1.8), 0.03, 0.025)
 	washing_line(ground(-38.0, 51.5, 1.8), ground(-33.6, 51.0, 1.75))
+	_pole(ground(-35.0, 47.0), ground(-35.0, 47.0, 5.0), 0.04, 0.03)
+	flag(ground(-35.0, 47.05, 4.9), Vector2(2.3, 1.45), 3.6)
 	var kinds: Array[String] = ["pine_a", "pine_b", "pine_c", "pine_d", "pine_young", "scrub_a", "scrub_b"]
 	for i in kinds.size():
 		tree(kinds[i], Vector2(-66 + i * 4.6, 44))

@@ -1,6 +1,6 @@
 [gd_resource type="ShaderMaterial" format=3]
 
-[ext_resource type="Shader" path="res://shaders/flag.gdshader" id="shader"]
+[ext_resource type="Shader" path="res://shaders/prize_flag.gdshader" id="shader"]
 [ext_resource type="Texture2D" path="res://assets/masks/grain_weave.png" id="grain"]
 
 [resource]

@@ -1,15 +1,16 @@
-[gd_resource type="StandardMaterial3D" format=3]
+[gd_resource type="ShaderMaterial" format=3]
 
+[ext_resource type="Shader" path="res://shaders/camo_net.gdshader" id="shader"]
 [ext_resource type="Texture2D" path="res://assets/foliage/camo_net.png" id="net"]
+[ext_resource type="Texture2D" path="res://assets/foliage/camo_net_n.png" id="relief"]
 
 [resource]
-transparency = 2
-alpha_scissor_threshold = 0.5
-cull_mode = 2
-albedo_texture = ExtResource("net")
-roughness = 0.95
-metallic_specular = 0.2
-backlight_enabled = true
-backlight = Color(0.42, 0.4, 0.26, 1)
-uv1_scale = Vector3(0.7, 0.7, 0.7)
-texture_filter = 5
+shader = ExtResource("shader")
+shader_parameter/net_tex = ExtResource("net")
+shader_parameter/net_normal = ExtResource("relief")
+shader_parameter/scale = 0.5
+shader_parameter/cut = 0.5
+shader_parameter/relief = 1.0
+shader_parameter/lit_through = Color(0.6, 0.58, 0.36, 1)
+shader_parameter/through = 0.9
+shader_parameter/wind = Vector2(0.12, 1)

@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/tree_far.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/foliage/pine_far.png" id="far"]
+[ext_resource type="Texture2D" path="res://assets/foliage/pine_far_n.png" id="facing"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/far_tex = ExtResource("far")
+shader_parameter/far_facing = ExtResource("facing")
+shader_parameter/sides = 8.0
+shader_parameter/cut = 0.35
+shader_parameter/through = 0.2
+shader_parameter/scatter = 0.22
+shader_parameter/wrap = 0.35
+shader_parameter/roughness = 0.85
+shader_parameter/vary = 0.12
