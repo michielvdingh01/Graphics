@@ -2633,7 +2633,6 @@ Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan de dui
 
 **Niet gedaan, en waarom**
 
-- **De lucht op 8k** (punt 1). Dat is een download (Poly Haven, CC0, 74,8 MB); ik heb erom gevraagd en geen antwoord gekregen, en heb niets opgehaald. Wat er klaar voor ligt: het bestand vervangt `assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr`; ingepakt kost het ongeveer 45 MB videogeheugen waar het nu 11 is. De luchten staan niet in LFS en GitHub waarschuwt boven 50 MB per bestand.
 - **De soldaten aan de kaarttafel overleggen niet** (punt 5). Welke houding iemand in rust heeft, kiest `scripts/humanoid_rig.gd` uit de set van zijn thema, en wat een wachter doet leest `scripts/enemy.gd` uit wat het level hem meegeeft. Het level kan zeggen "sta hier en kijk daarheen", niet "praat". Zonder die twee bestanden gaat het niet, en die zijn van het wedstrijdwerk.
 
 **Het voorstel voor de zon** (punt 4, niet ingebouwd): `benchmark/sheets/dunes_sun_proposal.jpg`. De zon op 48 graden (nu), 30 en 20, elk vanaf het bos, de vallei, het bivak en de binnenplaats, het level telkens opnieuw gebouwd met de zon op die hoogte:
@@ -2648,6 +2647,7 @@ Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan de dui
 
 **Wat er staat**
 
+- **De lucht op 8k** (punt 1), op 14 oktober op Michiels woord ("haal de lucht op 8k maar op") van Poly Haven gehaald: dezelfde lucht, `kloofendal_48d_partly_cloudy_puresky`, CC0, 74,8 MB, met de md5 die Poly Haven opgeeft. Ze vervangt het bestand van 4k onder dezelfde naam, dus niets anders verandert: 22,8 beeldpunten per graad waar het er 11,4 waren (het scherm toont er 27). Ingepakt is ze 44,7 MB videogeheugen waar het 11 was. Het bestand staat gewoon in git en niet in LFS; GitHub waarschuwt boven 50 MB per bestand en weigert boven 100. **Importeren duurt bijna vijf minuten** (283 s): wie samenvoegt kloont `.godot/imported/kloofendal_48d_partly_cloudy_puresky.hdr-076e20260abd913f1cc04c7a14686286.bptc.ctex` uit deze worktree mee, zoals `CLAUDE.md` zegt.
 - **Oogaanpassing** (`scripts/eyes.gd`, de knoop `Eyes` in `scenes/dunes.tscn`). Wie uit de schaduw de zon in stapt, ziet het beeld even te licht, en andersom even te donker. Het meet het beeld niet: het leest het licht bij het oog af van de schaduwkaart die het level al heeft (`scripts/land.gd`), over de grond een paar passen om de kijker heen en over de grond waar hij op uitkijkt, en laat het oog daar traag achteraan komen (1,8 s naar het licht, 3 s naar het donker). Het beeld is zoveel over- of onderbelicht als het oog achterloopt, tot hoogstens één stop naar het licht en 0,6 naar het donker; de gloed groeit mee. **Een oog dat bij is verandert niets**: wie stilstaat ziet het level precies zoals zonder deze knoop, en een benchmark, die op een standpunt neergezet wordt, ook. Uit met één regel: `script = ExtResource("eyes")` onder `[node name="Eyes"` in `scenes/dunes.tscn`.
 - **Een wolk voor de zon** (`scripts/cloud.gd`, de knoop `Clouds`). Om de 45 tot 110 seconden schuift er in 4 tot 8 seconden een wolk voor de zon, blijft 14 tot 34 seconden en gaat weer; een op de drie is dun. Onder een volle wolk houdt de zon 30% van haar kracht en verliest ze haar warmte, het hemellicht houdt 84%. Alleen de zon en het hemellicht van de scène; geen shader weet ervan en de schaduw van de wolk trekt niet over het land. Een benchmark heeft er geen, zodat een beeld vanaf een standpunt elke keer hetzelfde is; `--cloud=0.7` houdt er een voor de zon. Uit met één regel: `script = ExtResource("cloud")`.
 - **Wind in doek en net** (`shaders/canvas.gdshader`, `shaders/camo_net.gdshader`, `tools/kit/field.gd`). Doek zegt per hoekpunt, in UV2, hoe ver het meegeeft en hoe licht het is; de shader beweegt het met dezelfde vlagen als het gras (`wind` 0,12 en 1,0). De wanden van de tent bollen tussen hun palen, het dak ademt waar het hangt, de volant fladdert, de schuiltenten trillen, de was waait uit, en een net tilt en zakt en zijn rafels bewegen. Wat vastzit (de nok, een paal, de zoom in het zand) beweegt niet. De rook van het bivak helde tegen de wind van het gras in en gaat nu mee.
@@ -2672,7 +2672,9 @@ Drie ronden, de trunk en de branch om en om, op 13 oktober 2026 van 20:34 tot 20
 | De achterdeur, 19 | 91,3 en 85,3 | 90,8 en 85,4 | −0,5 | 621 en 1,33, 619 en 1,27 |
 | Het oostelijke duin, 21 | 69,4 en 66,1 | 70,3 en 67,1 | +1,0 | 1202 en 2,83, 1172 en 2,64 |
 
-De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elkaar.
+De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elkaar. Dat was met de lucht van 4k.
+
+- **De lucht op 8k**, apart gemeten: 14 oktober van 06:50 tot 06:54, aan de lader, load 4 (net na het importeren), twee ronden om en om tegen een kopie van de branch met de lucht van 4k. Het bivak −0,1, het wagenpark −0,2, de binnenplaats −0,1, de achterdeur −0,1, het oostelijke duin 0,0; tekenopdrachten en driehoeken gelijk. Een derde ronde is niet afgemaakt: de reeks hield zichzelf tegen toen Michiel om 06:55 de duinen ging spelen.
 
 - **Het budget is op drie van de vijf gehaald en op twee net niet.** De twee traagste standpunten, het oostelijke duin en het bivak, zijn gelijk of beter; het wagenpark, waar het model voor veraf voor bedoeld was, wint 0,6 en tekent een kwart miljoen driehoeken minder. De binnenplaats en de achterdeur, de twee snelste, verliezen 0,7 en 0,5: daar staat wat er het meest bij kwam (het glas met zijn kamers, de vlag, de was, de doelen, de sterkere occlusie). Wat daarvan hoeveel kost is niet uitgezocht.
 - **Een ronde eerder die middag** (18:33, op de accu, 59%, load 4,5) gaf hetzelfde beeld: +0,1, +0,6, −0,9, −0,9 en +0,9. Daarna zijn de doelen en de draden bij het kleine goed gezet, dat geen schaduw werpt.
@@ -2725,7 +2727,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 **Nog open**
 
-- **De lucht op 8k**: zie bovenaan. En als Michiel een lagere zon kiest: de lucht die erbij hoort, `SUN_RISE` in `tools/levels/dunes/plan.gd`, de stand en de kleur van de zon in `scenes/dunes.tscn`, en `sunward` in `materials/depot_concrete.tres`. Het blad is gemaakt met twee losse scripts in de scratchmap van deze sessie (een kopie van de worktree per zonnestand, gebouwd en gefotografeerd); dat is geen gereedschap geworden.
+- **Als Michiel een lagere zon kiest**: de lucht die erbij hoort, `SUN_RISE` in `tools/levels/dunes/plan.gd`, de stand en de kleur van de zon in `scenes/dunes.tscn`, en `sunward` in `materials/depot_concrete.tres`. Het blad is gemaakt met twee losse scripts in de scratchmap van deze sessie (een kopie van de worktree per zonnestand, gebouwd en gefotografeerd); dat is geen gereedschap geworden.
 - **De wolk is niet gelijk voor wie samen speelt**: elke speler heeft zijn eigen klok.
 - **Wie aan de tafel staat, overlegt niet**: zie bovenaan.
 - **De schaduw van de wolk trekt niet over het land**; dat vraagt de shader van de grond.
