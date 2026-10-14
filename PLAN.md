@@ -3059,3 +3059,49 @@ Op 12 oktober 2026 vroeg Michiel om in het menu te kunnen kiezen uit allerlei vo
 | Een buit controleren zoals het spel hem toont | `tools/prize_check.sh <naam>` of `tools/prize_check.sh <map>` |
 | Het blad in het spel, alleen als niemand speelt | `tools/prize_sheet.py <naam>` (`--run` voor een soldaat in de pas) |
 | De test | `tools/test_prize.sh` |
+
+## De duinen: een lagere zon
+
+Op 14 oktober 2026 gekozen uit het blad met de zonnestanden (`benchmark/sheets/dunes_sun_proposal.jpg`): "Ja doe een lagere zon", en daarna 30 graden met de heiige lucht van dezelfde plek. Gebouwd op de branch `duinzon`, vanaf de trunk met `duinkamp` erin (`e07fd22`). Dezelfde dag op Michiels woord ("merge het maar in de trunk") in `fase-2-vertical-slice` gevoegd; niet gepusht.
+
+**Wat er staat**
+
+- **De zon staat op 28,6 graden** waar ze op 48 stond, in dezelfde richting (214,1 graden van noord over oost): precies waar de nieuwe lucht haar zon heeft, en 1,4 graden onder de 30 van het blad. De stand is in de lucht zelf gemeten, als het midden van haar helderste punten; dezelfde meting gaf voor de oude lucht 47,96 graden. `SUN_RISE` in `tools/levels/dunes/plan.gd` en de stand van de zon in `scenes/dunes.tscn`.
+- **De lucht** is `kloofendal_28d_misty_puresky` op 8k, van Poly Haven (CC0, 56,3 MB, met de md5 die Poly Haven opgeeft): een heiige dag zonder wolken. In de scan staat de zon 45 graden verder om dan in de oude. `shaders/dune_sky.gdshader` kan de lucht nu ronddraaien (`turn`, hier 0,1253 van een slag); de mipmaps worden genomen alsof ze niet gedraaid is, zodat de naad niet als streep in de lucht komt.
+- **Zon en nevel**: de zon is warmer en zwakker (kleur 1, 0,9, 0,76 en kracht 3,4 waar 1, 0,94, 0,83 en 3,9), de nevel iets dikker (0,0013 waar 0,0009). Op het oog gezet.
+- **25% van het land ligt in de schaduw** waar het 17% was. Dat is wat een wachter ook ziet: wie in de schaduw staat wordt pas op 7,5 m gezien, dus er is meer plek om ongezien te komen.
+
+**Gemeten**
+
+Drie ronden, de trunk en de lage zon om en om, 14 oktober van 08:44 tot 08:49, aan de lader, load 3 tot 6, niemand anders op de GPU. 3456×2160, Ultra, MetalFX, renderschaal vanzelf, de soldaten op hun post:
+
+| Standpunt | Trunk, fps en 1% low | Lage zon | Verschil | Tekenopdrachten en driehoeken, trunk en lage zon |
+|---|---|---|---|---|
+| Het bivak, 8 | 77,3 en 69,3 | 77,5 en 69,6 | +0,3 | 979 en 1,77 miljoen, 1202 en 2,47 |
+| Het wagenpark, 10 | 88,3 en 79,4 | 89,2 en 83,7 | +0,9 | 935 en 2,11, 1039 en 2,24 |
+| De binnenplaats, 16 | 89,6 en 68,6 | 89,2 en 73,7 | −0,4 | 672 en 1,36, 830 en 1,68 |
+| De achterdeur, 19 | 87,1 en 77,7 | 91,4 en 77,1 | +4,2 | 621 en 1,27, 777 en 1,60 |
+| Het oostelijke duin, 21 | 71,5 en 64,1 | 71,8 en 67,5 | +0,3 | 1158 en 2,59, 1366 en 2,93 |
+
+- **Geen verschil in beelden per seconde dat groter is dan de ruis.** De +4,2 bij de achterdeur komt uit één trage ronde van de trunk (92, 90, 80). Wel tekent de lage zon 100 tot 220 tekenopdrachten en tot 0,7 miljoen driehoeken meer: langere schaduwen, en dus meer dat in de schaduwkaarten moet. Op deze laptop kost dat niets meetbaars; op een tragere wel.
+
+**Gecontroleerd**
+
+- `tools/selftest.sh --level=dunes` slaagt, 86 controles, ook die van de schaduw en het sluipen.
+- Elke botsvorm en elk geplaatst model staat waar het in de trunk stond; alleen de schaduwkaart verschilt (79.344 bits waar 53.840).
+- Gezien op acht beelden naast de trunk, met één recht naar de zon: de gloed in de lucht staat midden in beeld en de schaduwen vallen naar de camera.
+
+**Onderweg gevonden**
+
+- **Een nieuwe lucht krijgt van Godot de standaardinstellingen**: onverpakt en zonder mipmaps, 134 MB in het videogeheugen. Haar `.import` heeft nu de instellingen van de oude lucht, en ze is 44,7 MB. Importeren duurt vier minuten (248 s): wie samenvoegt kloont `.godot/imported/kloofendal_28d_misty_puresky.hdr-230abe7e25b767ca48038a9eaba81b20.*` uit deze worktree mee.
+
+**Achterhaald**: "De zon. Ze staat op 48 graden" in "De duinen: het vijfde level", en de 17% schaduw van alle hoofdstukken over de duinen.
+
+**Niet kunnen beoordelen**
+
+- **Of de heiige lucht mooier is dan zon en wolken.** De wereld is er bleker en vlakker door. De wolk voor de zon (`scripts/cloud.gd`) blijft komen, ook al zijn er geen wolken in de lucht te zien.
+- **Of het sluipen te makkelijk wordt** met een kwart meer schaduw.
+
+**Nog open**
+
+- **De lucht van 48 graden staat er nog** (`assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr`, 75 MB), door niets gebruikt. Terug naar die zon is de lucht, `SUN_RISE` en de zon in de scène terugzetten en de duinen bouwen; weg ermee is het bestand, zijn `.import` en zijn regel in het manifest.

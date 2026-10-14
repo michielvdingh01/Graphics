@@ -14,9 +14,16 @@ uniform float ground_energy = 0.8;
 // height of the look (the sine of its angle).
 uniform float ground_from = 0.1;
 uniform float energy = 1.0;
+// How far the scan is turned round, as a share of a whole turn: so that the
+// sun in it stands where the sun of the level does.
+uniform float turn = 0.0;
 
 void sky() {
-	vec3 above = texture(panorama, SKY_COORDS).rgb;
+	// Turned, the place where the scan wraps round lies somewhere else in the
+	// sky; the steps from one dot to the next are taken from the scan as it
+	// lies, which has no seam there.
+	vec2 at = vec2(fract(SKY_COORDS.x - turn), SKY_COORDS.y);
+	vec3 above = textureGrad(panorama, at, dFdx(SKY_COORDS), dFdy(SKY_COORDS)).rgb;
 	float below = smoothstep(0.0, -ground_from, EYEDIR.y);
 	COLOR = mix(above, ground * ground_energy, below) * energy;
 }
