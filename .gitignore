@@ -7,3 +7,5 @@ build/
 # Made by tools/proof_level.sh, to measure with.
 scenes/proof.tscn
 scenes/levels/proof_level.tscn
+# Python's own, from the Blender scripts in tools/.
+__pycache__/

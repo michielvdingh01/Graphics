@@ -14,6 +14,15 @@ extends Node3D
 ## Whoever carries it bears it on a rig that knows how (bear() of
 ## scripts/humanoid_rig.gd, which a puppet has and an enemy that is a person),
 ## and on its own back otherwise, as the player of this machine does.
+##
+## Next to the table there are the prizes made on this machine, each a folder
+## of its own in user://prizes/ (see MADE): a prize.json with what a line of
+## the table says, and the model as a .glb, which is read as the game runs.
+## Such a prize needs no new build of the game, and a game that is already
+## running finds it the next time somebody asks what there is (reread()).
+## Whatever of its model takes the colour of a team is a mesh whose name
+## begins with Team, as in the models of the table. What the folder does not
+## say of how it sits, follows from its size: see _made_poses().
 
 ## Somebody has come within reach of the prize, which is at home or down.
 signal touched(body: Node3D)
@@ -26,6 +35,22 @@ enum State { HOME, CARRIED, DOWN }
 
 const TABLE := "res://assets/prizes.json"
 const MODELS := "res://scenes/models/%s.scn"
+## Where the prizes made on this machine are, a folder each. A test reads a
+## folder of its own instead, see _made_folder().
+const MADE := "user://prizes"
+## What a made prize stands on when its folder does not say: a spot on the
+## floor with a ring in the colour of its team.
+const MADE_STAND := "football_stand"
+## The material of the parts of a made prize that take the colour of a team,
+## when its folder does not name another of the team materials.
+const MADE_TEAM := "team_paint"
+const TEAM_MATERIALS: Array[String] = ["team_paint", "team_ribbon", "team_leather"]
+## How far behind the chest bone, which is in the middle of the trunk, the
+## front of a made prize hangs on somebody's back, in metres: the back itself
+## is some 10 cm behind that bone, where the banana lies against it. And how
+## far below that bone its middle hangs: on the back, not behind the head.
+const BACK_GAP := 0.12
+const BACK_DROP := 0.22
 ## How near somebody has to come to touch it, or to count as at the stand.
 const REACH := 1.0
 ## The layer of what can touch it, the players, and that of the level.
@@ -46,6 +71,9 @@ const PREVIEW_TINTS: Array[Color] = [Color(0.5, 0.5, 0.5), Color(0.1, 0.34, 0.85
 
 static var _prizes := {}
 static var _read := false
+## The models of made prizes as they were read: path -> {"when", "team",
+## "scene"}, the time the file was written and the material its Team parts got.
+static var _glbs := {}
 
 ## Which prize it is: a name from the table.
 @export var kind := "flag"
@@ -84,16 +112,69 @@ static func spec(of: String) -> Dictionary:
 	return found if found is Dictionary else {}
 
 
+## Looks again at what there is, the next time somebody asks: for a prize
+## made while the game runs.
+static func reread() -> void:
+	_read = false
+
+
+## Whether a prize was made on this machine rather than listed in the table.
+static func made(of: String) -> bool:
+	return spec(of).has("folder")
+
+
 static func _all() -> Dictionary:
 	if not _read:
 		_read = true
+		_prizes = {}
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TABLE)) if FileAccess.file_exists(TABLE) else null
 		var listed: Variant = parsed.get("prizes") if parsed is Dictionary else null
 		if listed is Dictionary:
-			_prizes = listed
+			_prizes = (listed as Dictionary).duplicate()
 		else:
 			push_warning("%s lists no prizes" % TABLE)
+		var folder := _made_folder()
+		var names := Array(DirAccess.get_directories_at(folder)) if DirAccess.dir_exists_absolute(folder) else []
+		names.sort()
+		for made_name: String in names:
+			var entry := _read_made("%s/%s" % [folder, made_name])
+			if entry.is_empty():
+				continue
+			if _prizes.has(made_name):
+				push_warning("A prize called %s is in the table already; the one in %s is left out." % [made_name, folder])
+				continue
+			_prizes[made_name] = entry
 	return _prizes
+
+
+## Where the made prizes are read from: user://prizes/; while one of the
+## tests of the game runs, a folder of that checkout's own, so that the
+## prizes of whoever plays here change nothing a test counts; and with
+## --prizes=<folder> on the command line, that folder.
+static func _made_folder() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--prizes="):
+			return arg.get_slice("=", 1).trim_suffix("/")
+	var tree := Engine.get_main_loop() as SceneTree
+	var settings := tree.root.get_node_or_null("Settings") if tree else null
+	if settings and settings.testing():
+		return "user://selftest/%s/prizes" % tree.root.get_node("SelfTest").checkout()
+	return MADE
+
+
+## The line of the table for the made prize in `folder`, with the folder in
+## it; nothing if there is no prize there to be shown.
+static func _read_made(folder: String) -> Dictionary:
+	var path := folder + "/prize.json"
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not parsed is Dictionary or not FileAccess.file_exists("%s/%s" % [folder, str(parsed.get("model", ""))]):
+		push_warning("%s does not say which of its files is the model, or that file is not there." % path)
+		return {}
+	var entry: Dictionary = parsed
+	entry["folder"] = folder
+	return entry
 
 
 func _ready() -> void:
@@ -115,16 +196,17 @@ func _build() -> void:
 	carrier = null
 	state = State.HOME
 	down_for = 0.0
-	_spec = spec(kind)
+	_spec = spec(kind).duplicate(true)
 	if _spec.is_empty():
 		push_warning("No prize called '%s'; there is %s." % [kind, ", ".join(kinds())])
 		return
-	_stand = _scene(str(_spec.get("stand", "")))
+	_stand = _scene(str(_spec.get("stand", MADE_STAND if made(kind) else "")))
 	if _stand:
 		_stand.name = "Stand"
 		add_child(_stand)
 	_base = _reach("Base", self, reached)
 	_make_item()
+	_made_poses()
 	_dress()
 	_settle()
 	if is_inside_tree() and not Benchmark.active:
@@ -231,12 +313,15 @@ func the() -> String:
 func preview(pose: float) -> void:
 	var order := kinds()
 	var hundredths := roundi(pose * 100.0) % 100
+	# Past the tenth prize the tens go in front: 12.21 is the twelfth on
+	# somebody's back.
+	var whole := floori(pose + 0.001)
 	@warning_ignore("integer_division")
-	kind = order[clampi(hundredths / 10, 0, order.size() - 1)]
+	kind = order[clampi(whole / 10 * 10 + hundredths / 10, 0, order.size() - 1)]
 	team = clampi(hundredths % 10, 0, PREVIEW_TINTS.size() - 1) - 1
 	tint = PREVIEW_TINTS[team + 1]
 	_build()
-	var stance := floori(pose + 0.001)
+	var stance := whole % 10
 	if stance == 2 or stance == 3:
 		var bearer: CharacterBody3D = (load("res://scenes/puppet.tscn") as PackedScene).instantiate()
 		bearer.id = 1 + maxi(team, 0)
@@ -441,6 +526,7 @@ func _looks() -> Array[MeshInstance3D]:
 		for mesh: MeshInstance3D in whole.find_children("*", "MeshInstance3D", true, false):
 			var copy := MeshInstance3D.new()
 			copy.mesh = mesh.mesh
+			copy.material_override = mesh.material_override
 			copy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			copy.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 			if String(mesh.name).begins_with("Team"):
@@ -450,13 +536,100 @@ func _looks() -> Array[MeshInstance3D]:
 	return looks
 
 
+## A model or a stand: a file in the folder of a made prize, or one of the
+## models of the table by name.
 func _scene(model: String) -> Node3D:
+	if _spec.has("folder") and model.get_extension() == "glb":
+		return _made_scene("%s/%s" % [_spec.folder, model])
 	var path := MODELS % model
 	if model == "" or not ResourceLoader.exists(path):
 		if model:
 			push_warning("No model %s for the prize %s" % [path, kind])
 		return null
 	return (load(path) as PackedScene).instantiate() as Node3D
+
+
+## The model of a made prize, read from its .glb once for as long as that
+## file stays as it is, with the parts called Team in the material of a team.
+func _made_scene(path: String) -> Node3D:
+	var when := FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	var named := str(_spec.get("team", MADE_TEAM))
+	if not TEAM_MATERIALS.has(named):
+		named = MADE_TEAM
+	var known: Dictionary = _glbs.get(path, {})
+	if known.get("when", -2) != when or known.get("team") != named:
+		var document := GLTFDocument.new()
+		var state := GLTFState.new()
+		var error := document.append_from_file(path, state) if when >= 0 else ERR_FILE_NOT_FOUND
+		var root := document.generate_scene(state) as Node3D if error == OK else null
+		if root == null:
+			push_warning("The model %s of the prize %s could not be read: %s" % [path, kind, error_string(error)])
+			return null
+		var team_material: Material = load("res://materials/%s.tres" % named)
+		for node in root.find_children("*", "", true, false):
+			node.owner = root
+			if node is MeshInstance3D:
+				# Nothing here gets a lightmap, as with the models of the table.
+				node.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+				if String(node.name).begins_with("Team"):
+					node.material_override = team_material
+		var packed := PackedScene.new()
+		packed.pack(root)
+		root.free()
+		known = {"when": when, "team": named, "scene": packed}
+		_glbs[path] = known
+	return (known.scene as PackedScene).instantiate() as Node3D
+
+
+## Where a made prize sits, as far as its folder does not say: a way of
+## sitting may give only how it is turned ("turn"), or nothing at all, and
+## then where it is ("at") follows from its size, turned that way. At home it
+## stands in the middle of the top of its stand, down in the middle of where
+## it fell, and carried it hangs on the back like a pack, its middle BACK_DROP
+## below the chest bone and its front BACK_GAP behind it. Unturned, it
+## stands the way up it was made and faces the way it was made to face; only
+## carried, a prize that is deeper than it is wide is turned a quarter, so
+## that its broad side lies against the back and it does not stick out.
+func _made_poses() -> void:
+	if not _spec.has("folder") or _model == null:
+		return
+	var box := _bounds(_model)
+	var top := _bounds(_stand).end.y if _stand else 0.0
+	for way: String in ["home", "down", "carried"]:
+		var entry: Dictionary = _spec.get(way, {})
+		if way == "carried" and not entry.has("turn") and not entry.has("at") and box.size.z > box.size.x * 1.15:
+			entry.turn = [0, 90, 0]
+		if not entry.has("at"):
+			var turned := Transform3D(_pose(entry).basis, Vector3.ZERO) * box
+			var middle := turned.get_center()
+			match way:
+				"home":
+					entry.at = [-middle.x, top - turned.position.y, -middle.z]
+				"down":
+					entry.at = [-middle.x, -turned.position.y, -middle.z]
+				"carried":
+					entry.at = [-middle.x / HIP_HEIGHT, (-BACK_DROP - middle.y) / HIP_HEIGHT, -(BACK_GAP + turned.end.z) / HIP_HEIGHT]
+		if way == "carried" and not entry.has("on"):
+			entry.on = "back"
+		_spec[way] = entry
+
+
+## The box round every mesh of `whole`, in its own frame.
+static func _bounds(whole: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for mesh: MeshInstance3D in whole.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		var frame := Transform3D()
+		var node: Node = mesh
+		while node != whole and node is Node3D:
+			frame = (node as Node3D).transform * frame
+			node = node.get_parent()
+		var part := frame * mesh.get_aabb()
+		box = part if first else box.merge(part)
+		first = false
+	return box
 
 
 ## A ball over `under` that tells `heard` who of the players comes into it.

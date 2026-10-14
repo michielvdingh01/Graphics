@@ -2796,3 +2796,52 @@ Op 13 oktober 2026 zei Michiel dat capture the flag nog gebouwd moest worden. He
 - Op het fabrieksterrein is het één gang heen en dezelfde gang terug, zoals het plan al zei: een arena met drie wegen is stap 5.
 - Meer voorwerpen als buit, en ze laden van buiten de build zodat vrienden ze ook krijgen: Michiels vraag van 12 oktober. De tabel en het menu zijn erop gebouwd; het laden van buiten de build niet.
 - Over het net is niets hiervan gebouwd: stap 4.
+
+## Een buit uit een beschrijving
+
+Op 12 oktober 2026 vroeg Michiel om in het menu te kunnen kiezen uit allerlei voorwerpen als "vlag" van capture the flag, en om er een nieuw "makkelijk in te laden met een prompt" als hij met vrienden speelt. Op 14 oktober zei hij dat die prompt een opdracht aan Claude is, en dat het bovenop `potje` gebouwd mocht worden voordat dat in de trunk staat. Gebouwd op de branch `buitkeuze`, die van `potje` afstamt. **Niet in de trunk, en zonder `potje` kan het er niet in.**
+
+**Wat er staat**
+
+- **Een buit kan gemaakt worden op de machine waarop gespeeld wordt.** Zo'n buit is een map in `user://prizes/<naam>/` met `model.glb` en `prize.json`, en daarnaast `build.py` (het script dat hem maakte), `preview.png` en eventueel `sheet.jpg`. `scripts/prize.gd` leest die mappen naast `assets/prizes.json`, en doet dat opnieuw elke keer dat het scherm "Multiplayer" opent (`reread()`): een buit die gemaakt wordt terwijl het spel draait, staat er dan bij, zonder herstart en zonder nieuwe build. Een map zonder model of met de naam van een buit uit de tabel wordt overgeslagen, met een waarschuwing.
+- **Het model is een `.glb`**, gelezen met `GLTFDocument` terwijl het spel draait, dus ook in de gebouwde versie. Een `.glb` kan geen code bevatten, een `.scn` wel. Dat telt zodra een host zijn buiten naar gasten stuurt.
+- **De kleur van het team** krijgt elke mesh waarvan de naam met Team begint, net als bij de drie buiten uit de tabel. Die mesh krijgt het materiaal van een team (`team_paint`, `team_ribbon` of `team_leather`, te kiezen in `prize.json`), zodat dezelfde instance uniforms hem kleuren.
+- **Hoe de buit zit, volgt uit zijn maat** voor zover `prize.json` het niet zegt. Thuis staat hij midden op zijn standaard en gevallen rechtop waar hij viel. Gedragen hangt hij als een rugzak: het midden 22 cm onder het borstbot, de voorkant 12 cm erachter, en wat dieper is dan breed wordt een kwartslag gedraaid zodat de brede kant tegen de rug ligt. `prize.json` mag ook alleen een draaiing geven; de plek wordt dan berekend met die draaiing erbij. De standaard is een van die uit de tabel, standaard de stip met de ring; een eigen standaard als `.glb` kan ook.
+- **Het scherm.** "Prize" op het scherm "Multiplayer" opent een lijst van alle buiten; achter die van deze machine staat "made here", en wie er een kiest gaat terug met die buit gekozen. De keuze blijft bewaard (`Settings.prize`). Hij staat op het scherm van de wedstrijd en niet onder Settings, waar Michiel hem eerst vroeg: daar staat ook de rest van wat bij een wedstrijd hoort, "Against" en "Difficulty" inbegrepen.
+- **Het maken.** `tools/prizes/kit.py` is een werkplaats in Blender, zonder venster. Een vorm is een afstandsveld (bollen, staven, blokken en ringen die in elkaar overlopen, zoals de handschoen van de schutter gemaakt is) of is gemaakt van gedraaide profielen, blokken, buizen en ringen. `save()` zet het voorwerp op de grond, exporteert het, schrijft `prize.json` en maakt op de processor een beeld naast een figuur van 1,8 m. `tools/make_prize.sh <script>` doet dat en controleert de buit daarna zoals het spel hem toont (`tools/prize_check.sh`). Het rekenen kost zo'n tien seconden en geen GPU, dus het kan terwijl Michiel speelt.
+- **`/buit`**, een skill in `.claude/skills/buit/SKILL.md`, beschrijft voor elke sessie in dit project de stappen, de maten en wanneer de GPU niet gebruikt mag worden. Michiel typt wat hij wil, de sessie schrijft het script, maakt de buit, bekijkt het beeld en zegt waar hij te kiezen is.
+- **`tools/prize_sheet.py`** neemt de gemaakte buiten mee. Het blad van één gemaakte buit komt als `sheet.jpg` in zijn eigen map. Voorbij de tiende buit staan de tientallen vóór de pose: `12.21` is de twaalfde op iemands rug.
+- **Drie voorbeelden**, gemaakt zoals de skill het zegt en neergezet in de `user://prizes/` van Michiel: een badeend van 83 cm met een kraag in de teamkleur, op de stip; een pylon van 75 cm met twee banden in de teamkleur; een beker van 67 cm met een band om de voet, op de kist. De scripts staan in `tools/prizes/`.
+
+**De bladen** `assets/prizes/sheets/made_prizes.jpg` en `made_prizes_run.jpg`: de drie voorbeelden in de hal van de fabriek, thuis in de kleur van beide kanten, gedragen door een soldaat die stilstaat of rent, en gevallen.
+
+**Gevonden onderweg: de wedstrijdtest schreef de instellingen van Michiel.** In de test gaan de knoppen "Against" en "Difficulty" langs hun keuzes, en `Settings.put()` slaat die op in `user://settings.cfg`. Alleen de selftest en de benchmark werden daarvan uitgezonderd. Na elke run van `tools/test_match.sh` stond de moeilijkheid in zijn bestand dus op Hard en zijn tegenstander op wat de test als laatste had gekozen. Nu slaat geen enkele test meer instellingen op (`Settings.testing()`). Tests lezen gemaakte buiten uit een map van hun eigen checkout (`user://selftest/<checkout>/prizes`), zodat de buiten van Michiel niets veranderen aan wat een test telt.
+
+**Getest**, zonder GPU, terwijl Michiel een deel van de tijd speelde. Load 3 tot 5.
+
+- `tools/test_prize.sh`: 122 controles, waarvan 36 nieuw. Een gemaakte buit staat na de drie uit de tabel in de lijst. Een met de naam van een buit uit de tabel en een zonder model blijven weg. Wat later gemaakt wordt, verschijnt pas als er opnieuw gekeken wordt. Een gemaakte krat met een band doorloopt alles wat de drie andere ook doorlopen: thuis staat hij precies op de standaard, met de band in het materiaal van een team; hij wordt gepakt en hangt 12 cm achter het borstbot; hij ligt op de vloer, niet erin; hij hangt op een pop, verhuist mee bij het wisselen van wapen en valt neer als die verdwijnt.
+- `tools/test_match.sh`: 77 controles, tegen 75 op `potje`. Nieuw: "Prize" opent een lijst met de vlag, de voetbal en de banaan, en wie er een kiest gaat terug met die buit gekozen en bewaard.
+- `tools/selftest.sh`: 401 controles, evenveel als op `potje`. `tools/nettest.sh`: geslaagd aan beide kanten.
+- De drie voorbeelden en een script van buiten het project door `tools/make_prize.sh`: per stuk tien seconden.
+- Het bestand met de instellingen van Michiel is na de wedstrijdtest niet veranderd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het snel genoeg gaat op een avond met vrienden.** Het rekenen kost tien seconden, maar eerst moet het script geschreven worden en het beeld bekeken. Voor de drie voorbeelden was dat een paar minuten per stuk, waarvan het meeste bij het eerste.
+- **Hoe ze er in beweging uitzien.** Op de bladen hangen de pylon en de beker rechtop op de rug van een soldaat die voorover rent, en van achteren zie je vooral de zwarte voet van de pylon. Of dat er gek uitziet of gewoon grappig, zie je pas in een potje.
+- **Wat de eerste keer tekenen kost.** Een gemaakte buit heeft eigen materialen. De buit laat ze bij het neerzetten één keer tekenen (`Fx.rehearse()`), zoals de drie uit de tabel, maar ik heb niet geteld hoeveel pipelines dat zijn.
+
+**Nog open**
+
+- **Vrienden krijgen een gemaakte buit nog niet.** Wedstrijden over het netwerk bestaan nog niet (stap 4). Als ze er zijn, moet de host bij het begin van een wedstrijd de map van de gekozen buit meesturen: een `.glb` van een paar honderd kB en een `prize.json`. Een gast bewaart die in een map van die host.
+- **Een gemaakte buit zit niet in git en niet in de build.** Wil Michiel er een voor iedereen, dan gaat het script naar `tools/prizes/` en is er nog een manier nodig om het model met het spel mee te leveren.
+- **Kantelen.** Het spel rekent de plek uit met de doos rond het model, niet met de vorm zelf. Een draaiing om de verticale as gaat goed, maar een gekantelde buit zweeft of zakt een stukje weg.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| Een buit maken uit een script, en controleren | `tools/make_prize.sh <script.py>` |
+| Een buit controleren zoals het spel hem toont | `tools/prize_check.sh <naam>` of `tools/prize_check.sh <map>` |
+| Het blad in het spel, alleen als niemand speelt | `tools/prize_sheet.py <naam>` (`--run` voor een soldaat in de pas) |
+| De test | `tools/test_prize.sh` |

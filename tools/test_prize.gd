@@ -5,6 +5,11 @@ extends SceneTree
 ## it, changes weapon with it on his back, lets go of it, is taken out of the
 ## level with it, and it is sent home. Whose rules those are is not looked at:
 ## the prize has none of its own.
+##
+## Next to those it makes prizes of its own the way a prize is made on a
+## machine (see scripts/prize.gd): a folder in user://prizes/ with a model as
+## a .glb. tools/test_prize.sh gives the test a home of its own, so that is
+## not the folder of whoever plays here.
 
 const FACTORY := "res://scenes/factory.tscn"
 const PRIZE := "res://scenes/prize.tscn"
@@ -13,6 +18,10 @@ const PUPPET := "res://scenes/puppet.tscn"
 const SPOT := Vector3(12, 0, 4)
 const AWAY := Vector3(17.5, 0, 5.5)
 const BLUE := Color(0.1, 0.34, 0.85)
+## The prize the test makes: a crate with a band round it in the colour of
+## its team, as long, high and deep as this.
+const MADE := "test_crate"
+const MADE_SIZE := Vector3(0.6, 0.4, 0.3)
 ## Seconds the whole of it may take before it is given up as hung.
 const LIMIT := 120.0
 
@@ -43,6 +52,7 @@ func _run() -> void:
 		enemy.queue_free()
 	await _frames(4)
 	var prize_script: GDScript = load("res://scripts/prize.gd")
+	await _made_ones(prize_script)
 	var kinds: PackedStringArray = prize_script.kinds()
 	check(kinds.size() >= 3 and kinds.has("flag") and kinds.has("football") and kinds.has("banana"), "the table lists a flag, a football and a banana")
 	for kind in kinds:
@@ -55,10 +65,12 @@ func _run() -> void:
 
 func _go_through(kind: String, prize_script: GDScript) -> void:
 	var spec: Dictionary = prize_script.spec(kind)
-	var models_there := true
-	for key in ["model", "stand"]:
-		models_there = models_there and ResourceLoader.exists("res://scenes/models/%s.scn" % spec.get(key, ""))
-	check(models_there and spec.has("home") and spec.has("carried") and spec.has("down"), "it has a model, a stand and three ways of sitting")
+	var made: bool = prize_script.made(kind)
+	if not made:
+		var models_there := true
+		for key in ["model", "stand"]:
+			models_there = models_there and ResourceLoader.exists("res://scenes/models/%s.scn" % spec.get(key, ""))
+		check(models_there and spec.has("home") and spec.has("carried") and spec.has("down"), "it has a model, a stand and three ways of sitting")
 	var prize: Node3D = (load(PRIZE) as PackedScene).instantiate()
 	prize.kind = kind
 	prize.team = 0
@@ -70,6 +82,8 @@ func _go_through(kind: String, prize_script: GDScript) -> void:
 		_heard[heard] = 0
 		prize.connect(heard, func(_body: Variant = null) -> void: _heard[heard] += 1)
 	await _frames(3)
+	# What it does not say of how it sits, a made prize has from its size.
+	spec = prize._spec
 
 	# At home.
 	var item := prize.get_node_or_null("Prize") as Node3D
@@ -77,6 +91,13 @@ func _go_through(kind: String, prize_script: GDScript) -> void:
 	check(item != null and stand != null and item.get_node_or_null("Model") != null, "it stands at home, on its stand")
 	var home: Array = spec.home.at
 	check(item != null and item.global_position.distance_to(SPOT + Vector3(home[0], home[1], home[2])) < 0.01, "where the table says")
+	if made:
+		var bottom: float = item.global_position.y + prize_script._bounds(item.get_node("Model")).position.y
+		var top: float = SPOT.y + prize_script._bounds(stand).end.y
+		check(absf(bottom - top) < 0.005, "a made prize stands on top of its stand (%.3f m over it)" % (bottom - top))
+		var band := item.find_child("Team*", true, false) as MeshInstance3D
+		var material := band.material_override as ShaderMaterial if band else null
+		check(material != null and material.shader == (load("res://materials/team_paint.tres") as ShaderMaterial).shader, "and what of it takes the colour of a team is in the material for that")
 	var coloured := 0
 	var parts := 0
 	for whole: Node3D in [stand, item]:
@@ -107,6 +128,12 @@ func _go_through(kind: String, prize_script: GDScript) -> void:
 	check(net == null or net.visible, "in its net, if it has one")
 	walker.global_position = AWAY
 	await _frames(4)
+	if made:
+		# Nothing of it reaches into the trunk of whoever carries it, whose
+		# back is some 10 cm behind the middle of it.
+		var box: AABB = prize_script._bounds(item.get_node("Model"))
+		var nearest: float = (walker.global_transform.affine_inverse() * item.get_node("Model").global_transform * box).position.z
+		check(nearest > 0.1, "a made prize hangs clear of the back of whoever carries it (%.2f m behind the middle)" % nearest)
 	check(prize.where().distance_to(AWAY) < 0.01 and item.global_position.distance_to(AWAY) < 1.6, "it goes where that one goes")
 	var behind: Vector3 = walker.global_transform.affine_inverse() * item.global_position
 	check(behind.z > 0.05 and behind.y > 0.3, "on his back")
@@ -124,6 +151,9 @@ func _go_through(kind: String, prize_script: GDScript) -> void:
 	prize.drop()
 	await _frames(3)
 	var down: Array = spec.down.at
+	if made:
+		var lowest: float = (item.get_node("Model").global_transform * prize_script._bounds(item.get_node("Model"))).position.y
+		check(absf(lowest) < 0.005, "a made prize lies on the floor, not in it (%.3f m)" % lowest)
 	check(prize.state == 2 and prize.carrier == null and _heard.moved == 2, "it can be dropped")
 	check(item.get_parent() == prize and absf(item.global_position.y - down[1]) < 0.03 and Vector2(item.global_position.x - AWAY.x, item.global_position.z - AWAY.z).length() < 0.05, "and lies on the floor where that one stood")
 	check(net == null or not net.visible, "out of its net")
@@ -176,6 +206,81 @@ func _go_through(kind: String, prize_script: GDScript) -> void:
 	check(prize.state == 0 and item.get_parent() == prize, "and it goes home from there")
 	prize.queue_free()
 	await _frames(2)
+
+
+## Makes prizes as they are made on a machine, and checks that they are
+## there when they should be and left out when they should be: one as it
+## should be, one whose model is missing, one with the name of a prize of the
+## table, and one that comes while the game runs.
+func _made_ones(prize_script: GDScript) -> void:
+	var home := ProjectSettings.globalize_path("user://")
+	if not home.contains("prize_home"):
+		check(false, "the test has a home of its own, so as not to make prizes in that of whoever plays here (%s)" % home)
+		return
+	_clear("user://prizes")
+	check(_make(MADE, "Test crate"), "a prize can be made as a model in a folder")
+	_make("flag", "Not the flag")
+	DirAccess.make_dir_recursive_absolute("user://prizes/test_missing")
+	var broken := FileAccess.open("user://prizes/test_missing/prize.json", FileAccess.WRITE)
+	broken.store_string(JSON.stringify({"name": "Nothing", "model": "model.glb"}))
+	broken.close()
+	prize_script.reread()
+	var kinds: PackedStringArray = prize_script.kinds()
+	check(kinds.has(MADE) and prize_script.made(MADE) and not prize_script.made("flag") and kinds.find(MADE) > kinds.find("banana"), "a prize made here is there next to those of the table, after them")
+	check(prize_script.spec("flag").get("name") == "Flag" and not kinds.has("test_missing"), "one with the name of a prize of the table is left out, and one without its model")
+	_make("test_late", "Late")
+	check(not prize_script.kinds().has("test_late"), "what is made later is not seen until somebody looks again")
+	prize_script.reread()
+	check(prize_script.kinds().has("test_late"), "and then it is")
+	_clear("user://prizes/test_late")
+	_clear("user://prizes/test_missing")
+	_clear("user://prizes/flag")
+	prize_script.reread()
+	await _frames(1)
+
+
+## A made prize: a crate with a band, as a .glb in a folder of its own with a
+## prize.json that says no more than its name and its model.
+func _make(prize_name: String, title: String) -> bool:
+	var folder := "user://prizes/" + prize_name
+	DirAccess.make_dir_recursive_absolute(folder)
+	var root := Node3D.new()
+	root.name = prize_name.to_pascal_case()
+	var parts := {"Body": [MADE_SIZE, Color(0.85, 0.75, 0.2)], "Team": [Vector3(MADE_SIZE.x + 0.02, 0.06, MADE_SIZE.z + 0.02), Color.WHITE]}
+	for part_name: String in parts:
+		var box := BoxMesh.new()
+		box.size = parts[part_name][0]
+		var paint := StandardMaterial3D.new()
+		paint.albedo_color = parts[part_name][1]
+		box.material = paint
+		var mesh := MeshInstance3D.new()
+		mesh.name = part_name
+		mesh.mesh = box
+		# Standing on its origin.
+		mesh.position.y = MADE_SIZE.y * 0.5
+		root.add_child(mesh)
+		mesh.owner = root
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	var error := document.append_from_scene(root, state)
+	if error == OK:
+		error = document.write_to_filesystem(state, folder + "/model.glb")
+	root.free()
+	var file := FileAccess.open(folder + "/prize.json", FileAccess.WRITE)
+	file.store_string(JSON.stringify({"name": title, "model": "model.glb"}))
+	file.close()
+	return error == OK
+
+
+## Takes away a folder of the test's own home and what is in it.
+func _clear(folder: String) -> void:
+	if not DirAccess.dir_exists_absolute(folder):
+		return
+	for inner in DirAccess.get_directories_at(folder):
+		_clear(folder + "/" + inner)
+	for file in DirAccess.get_files_at(folder):
+		DirAccess.remove_absolute(folder + "/" + file)
+	DirAccess.remove_absolute(folder)
 
 
 ## Somebody to walk about with: a body on the layer of the players.

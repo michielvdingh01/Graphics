@@ -10,7 +10,9 @@ on the floor beside its stand.
     tools/prize_sheet.py --compose       the sheet again from the pictures of last time
 
 The sheet lands in assets/prizes/sheets/prizes.jpg (prizes_<name>.jpg for one
-alone, and with _run after it for the soldier in mid-stride). The pictures are taken in the hall of the factory by
+alone, and with _run after it for the soldier in mid-stride). A prize made on
+this machine (see scripts/prize.gd) is in it too, after those of the table;
+asked for alone, its sheet goes in its own folder, as sheet.jpg. The pictures are taken in the hall of the factory by
 tools/benchmark.sh, three runs to a prize, so it needs the GPU, which the
 benchmark takes its slot for, and ImageMagick. It does not start while
 somebody plays the game on this machine; --anyway starts it all the same.
@@ -37,6 +39,26 @@ COLUMNS = [
     ("dropped", (1130, 980, -30)),
 ]
 ROW_HEIGHT = 520
+# Where the game looks for the prizes made on this machine.
+MADE = os.path.expanduser("~/Library/Application Support/Godot/app_userdata/Graphics FPS/prizes")
+
+
+def made_prizes(table):
+    """The prizes made on this machine as the game finds them, by name, in
+    the order it lists them: each folder with a prize.json that names a model
+    that is there, and no name of the table."""
+    found = {}
+    for name in sorted(os.listdir(MADE)) if os.path.isdir(MADE) else []:
+        path = os.path.join(MADE, name, "prize.json")
+        try:
+            entry = json.load(open(path))
+        except (OSError, ValueError):
+            continue
+        if name in table or not os.path.isfile(os.path.join(MADE, name, str(entry.get("model", "")))):
+            continue
+        entry["folder"] = os.path.join(MADE, name)
+        found[name] = entry
+    return found
 
 
 def played():
@@ -67,6 +89,7 @@ def main():
     names = [a for a in sys.argv[1:] if not a.startswith("--")]
     options = [a for a in sys.argv[1:] if a.startswith("--")]
     table = json.load(open(os.path.join(ROOT, "assets/prizes.json")))["prizes"]
+    table.update(made_prizes(table))
     order = list(table)
     for name in names:
         if name not in table:
@@ -85,7 +108,8 @@ def main():
     for name in names or order:
         index = order.index(name)
         own, other = (1, 2) if index % 2 == 0 else (2, 1)
-        pose = lambda what, side: "%d.%d%d" % (what, index, side)
+        # Past the tenth prize the tens go in front of the pose: see preview() in scripts/prize.gd.
+        pose = lambda what, side: "%d.%d%d" % (what + index // 10 * 10, index % 10, side)
         # At home, one of each side, seen from where both the cloth of a flag
         # and the length of a banana show.
         if "--compose" in options:
@@ -131,6 +155,8 @@ def main():
     command += ["+append", header]
     subprocess.run(command, check=True)
     sheet = os.path.join(folder, "prizes%s%s.jpg" % ("".join("_" + name for name in names), "_run" if stance == 3 else ""))
+    if len(names) == 1 and "folder" in table[names[0]]:
+        sheet = os.path.join(table[names[0]]["folder"], "sheet_run.jpg" if stance == 3 else "sheet.jpg")
     subprocess.run(["magick", header] + rows + ["-background", "#1c1c1c", "-gravity", "west", "-append", "-quality", "88", sheet], check=True)
     print(sheet)
 

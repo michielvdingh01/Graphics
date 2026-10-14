@@ -356,11 +356,17 @@ func _run() -> void:
 		kinds_seen.append(kind.text)
 	_check("on which a button goes through the kinds, capture the flag among them", kinds_seen.has("Kind  ·  Capture the flag") and kinds_seen.has("Kind  ·  Free for all") and kinds_seen.has("Kind  ·  Team deathmatch"))
 	var prize_button: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Prize"))[0]
-	var prizes_seen := []
-	for i in 3:
-		prizes_seen.append(prize_button.text)
-		prize_button.pressed.emit()
-	_check("and another through what is fought over, when it is capture the flag", prize_button.visible and prizes_seen.has("Prize  ·  Flag") and prizes_seen.has("Prize  ·  Football") and prizes_seen.has("Prize  ·  Giant banana"))
+	var prize_was := Settings.prize
+	_check("and another for what is fought over, when it is capture the flag", prize_button.visible and prize_button.text == "Prize  ·  %s" % (load("res://scripts/prize.gd") as GDScript).spec(Settings.prize).get("name", "?"))
+	prize_button.pressed.emit()
+	var listed := _shown_buttons()
+	_check("which opens a list of every prize there is", ["Flag", "Football", "Giant banana", "Back"].all(func(text: String) -> bool: return listed.any(func(button: Button) -> bool: return button.text == text)))
+	(listed.filter(func(button: Button) -> bool: return button.text == "Football")[0] as Button).pressed.emit()
+	buttons = _shown_buttons()
+	prize_button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Prize"))[0]
+	_check("choosing one goes back with it chosen, and keeps it", prize_button.text == "Prize  ·  Football" and Settings.prize == "football" and Menu.MATCH_MENU.chosen.prize == "football")
+	Settings.prize = prize_was
+	kind = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Kind"))[0]
 	kind.pressed.emit()
 	_check("and back to the first", kind.text == was and not prize_button.visible)
 	var against: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Against"))[0]
@@ -502,3 +508,10 @@ func _until(done: Callable, seconds: float) -> void:
 	while not done.call() and waited < seconds:
 		await _wait(0.1)
 		waited += 0.1
+
+
+## The buttons the menu shows right now, also those in a list that scrolls,
+## and not those of the screen it showed before, which are only taken away
+## at the end of the frame.
+func _shown_buttons() -> Array:
+	return Menu._column.find_children("*", "Button", true, false).filter(func(button: Button) -> bool: return not button.is_queued_for_deletion() and not button.get_parent().is_queued_for_deletion())
