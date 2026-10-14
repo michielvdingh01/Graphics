@@ -11,16 +11,16 @@ extends "res://tools/kit.gd"
 ## takes the better part of an hour. Nobody is fought here; the way out is
 ## the far end of the south quay. See "De grachten" in PLAN.md.
 
-## The quay from west to east, and from north to south as a great canal of
-## the town has it: the fronts on the north side, the two edges of the
+## The quay from west to east, and from north to south as the Herengracht
+## has it on the map: the fronts on the north side, the two edges of the
 ## water, and the fronts on the south side.
 const LONG := 40.0
-const LINES: Array[float] = [0.0, 10.5, 36.5, 47.0]
+const LINES: Array[float] = [0.0, 10.6, 35.2, 45.4]
 ## Where the bridge crosses, and how wide it is.
 const BRIDGE_X := 6.0
 const BRIDGE_WIDE := 9.0
 ## How far from the edge of the water the trees and lanterns stand.
-const KERB := 1.4
+const KERB := 2.3
 
 
 func _level_name() -> String:
@@ -36,8 +36,8 @@ func _describe() -> void:
 	street_paving(Rect2(0, LINES[0], LONG, LINES[1] - LINES[0]))
 	street_paving(Rect2(0, LINES[2], LONG, LINES[3] - LINES[2]))
 	canal(Rect2(0, LINES[1], LONG, LINES[2] - LINES[1]), "we")
-	terrace(Vector2(0, LINES[0]), Vector2(LONG, LINES[0]), "grand")
-	terrace(Vector2(LONG, LINES[3]), Vector2(0, LINES[3]), "canal")
+	terrace(Vector2(0, LINES[0]), Vector2(LONG, LINES[0]), "canal")
+	terrace(Vector2(LONG, LINES[3]), Vector2(0, LINES[3]), "grand")
 	var from := Vector3(BRIDGE_X, 0, LINES[2] + 1.0)
 	var to := Vector3(BRIDGE_X, 0, LINES[1] - 1.0)
 	bridge(from, to, BRIDGE_WIDE, 1.5)

@@ -6,11 +6,17 @@ extends "res://tools/kit/water.gd"
 
 ## The houses of a row, by kind: how wide one is, how many storeys it has and
 ## how high a storey is, in metres. A canal house is a merchant's; a grand one
-## stands on a double lot, as on the bend of the Herengracht; a street house
-## is narrower and has a shop under it.
+## stands on a double lot, as on the bend of the Herengracht; a low one is
+## of the Prinsengracht and the streets behind it; a street house is narrow
+## and has a shop under it. Measured on the 3DBAG of 14 October 2026, the
+## middle half of the houses between the two axes: on the Gouden Bocht 14.6
+## to 18.9 m wide and 18.8 m to the eaves, on the south side of the
+## Keizersgracht 5.4 to 7.6 m and 17 m, on the Prinsengracht 4.2 to 9.8 m
+## and 12 to 13 m.
 const HOUSES := {
-	"canal": {"wide": Vector2(5.6, 8.4), "storeys": Vector2i(4, 5), "storey": 3.3},
-	"grand": {"wide": Vector2(11.5, 16.5), "storeys": Vector2i(4, 4), "storey": 4.1},
+	"canal": {"wide": Vector2(5.4, 7.8), "storeys": Vector2i(4, 5), "storey": 3.2},
+	"grand": {"wide": Vector2(13.5, 19.0), "storeys": Vector2i(4, 4), "storey": 4.2},
+	"low": {"wide": Vector2(4.2, 6.6), "storeys": Vector2i(3, 4), "storey": 3.0},
 	"street": {"wide": Vector2(4.6, 6.6), "storeys": Vector2i(3, 4), "storey": 3.0},
 	"block": {"wide": Vector2(18.0, 30.0), "storeys": Vector2i(6, 7), "storey": 3.6},
 }
@@ -58,7 +64,7 @@ func terrace(from: Vector2, to: Vector2, kind := "canal", deep := 12.0, fit := {
 		var storey: float = house.storey + _prop_rng.randf_range(-0.2, 0.2)
 		# The ground floor of a house on a canal stands half a storey over
 		# the street, on its basement.
-		var plinth := 1.2 if kind == "canal" or kind == "grand" else 0.0
+		var plinth := 1.2 if kind == "canal" or kind == "grand" else 0.9 if kind == "low" else 0.0
 		row.append({"at": done + wide * 0.5, "wide": wide, "storeys": storeys, "storey": storey, "plinth": plinth, "eaves": plinth + storeys * storey})
 		done += wide
 	_face_street(Vector3(from.x + right.x * length * 0.5 + out.x * 2.0, 1.0, from.y + right.y * length * 0.5 + out.y * 2.0))
@@ -92,7 +98,7 @@ func _row_house(frame: Transform3D, plan: Dictionary, beside: Vector2, deep: flo
 		wall_face(mat, frame * Transform3D(turn, Vector3(x, (eaves + neighbour) * 0.5, -deep * 0.5)), Vector2(deep, eaves - neighbour), 0 if neighbour == 0.0 else DETAIL)
 	# What stands on the cornice: a gable narrower than the house before a
 	# steep roof, or the attic of a grand one.
-	if kind == "canal" or kind == "street":
+	if kind == "canal" or kind == "low" or kind == "street":
 		var top := _prop_rng.randf_range(2.4, 4.2)
 		_local_box(mat, frame, Vector3(0, eaves + top * 0.5, -0.4), Vector3(wide * _prop_rng.randf_range(0.42, 0.6), top, 0.8), up_there)
 		_local_box("roof", frame, Vector3(0, eaves + top * 0.3, -deep * 0.5 - 0.4), Vector3(wide - 0.4, top * 0.6, deep - 1.0), up_there)

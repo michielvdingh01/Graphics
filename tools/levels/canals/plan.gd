@@ -29,9 +29,15 @@ extends "res://tools/kit.gd"
 ## south down the Vijzelstraat to the metro on the Vijzelgracht, which is the
 ## way out. The Kerkstraat and the Weteringdwarsstraat cut across.
 ##
-## How wide a canal and its quays are is as it is in the town, as near as
-## that is known without a map; how long a block is has been brought down to
-## two thirds. Every measure is here, so that a map changes this file alone.
+## How wide a canal, a quay and a street are is as it is in the town,
+## measured on the map (the BGT of 14 October 2026, between the two axes);
+## how deep a block is and how far the axes lie apart has been brought down
+## to two thirds. Every measure is here, so that a map changes this file
+## alone. Where the town is not as the plan has it: the canals bend at the
+## Nieuwe Spiegelstraat and run straight here; the Nieuwe Spiegelstraat
+## crosses them at 74 degrees and not square; the Lijnbaansgracht runs
+## askew to the south-east; and the Weteringbuurt has three cross streets
+## and the Weteringstraat where this has one.
 ## Every file of the level extends this one, and each builds one stretch:
 ## its paving, its water, the fronts that look out on it and what stands in
 ## it. See "De grachten" in PLAN.md.
@@ -39,38 +45,48 @@ extends "res://tools/kit.gd"
 ## The level from west to east and from north to south.
 const WEST_END := 0.0
 const EAST_END := 216.0
-const SOUTH_END := 440.0
+const SOUTH_END := 470.6
 ## A canal from north to south: the fronts on its north side, the two edges
-## of its water, and the fronts on its south side.
-const HEREN: Array[float] = [0.0, 10.5, 36.5, 47.0]
-const KEIZERS: Array[float] = [113.0, 123.5, 151.5, 162.0]
-const PRINSEN: Array[float] = [244.0, 253.5, 277.5, 287.0]
-## The Lijnbaansgracht, a narrow one: its south side is the Weteringschans,
-## as far as the level goes.
-const LIJNBAAN: Array[float] = [396.0, 404.0, 416.0, SOUTH_END]
+## of its water, and the fronts on its south side. On the map the
+## Herengracht has 24.6 m of water between quays of 10.6 and 10.2 m, the
+## Keizersgracht 27.4 m between 10.9 and 11.3 m, the Prinsengracht 24.5 m
+## between 10.1 and 10.1 m.
+const HEREN: Array[float] = [0.0, 10.6, 35.2, 45.4]
+const KEIZERS: Array[float] = [118.4, 129.3, 156.7, 168.0]
+const PRINSEN: Array[float] = [266.1, 276.2, 300.7, 310.8]
+## The Lijnbaansgracht: a quay of 8 m on its north side, 22 m of water, and
+## on its south side the Weteringschans, as far as the level goes.
+const LIJNBAAN: Array[float] = [416.6, 424.6, 446.6, SOUTH_END]
 ## The two streets that cut across from one axis to the other, each from its
-## north fronts to its south fronts.
-const KERK: Array[float] = [200.0, 208.0]
-const DWARS: Array[float] = [335.0, 342.0]
-## The Nieuwe Spiegelstraat from its west fronts to its east fronts, and the
-## Spiegelgracht it runs on as: fronts, water, water, fronts.
+## north fronts to its south fronts: the Kerkstraat is 10.7 m, the Tweede
+## Weteringdwarsstraat 8.6 m.
+const KERK: Array[float] = [211.7, 222.4]
+const DWARS: Array[float] = [359.4, 368.0]
+## The Nieuwe Spiegelstraat from its west fronts to its east fronts (10 to
+## 12.6 m on the map), and the Spiegelgracht it runs on as: fronts, water,
+## water, fronts (36 m, of which 15.3 m water).
 const SPIEGEL_X := 40.0
-const SPIEGELSTRAAT: Array[float] = [35.0, 45.0]
-const SPIEGELGRACHT: Array[float] = [25.5, 34.0, 46.0, 54.5]
-## The Vijzelstraat, and the Vijzelgracht it runs on as.
+const SPIEGELSTRAAT: Array[float] = [34.5, 45.5]
+const SPIEGELGRACHT: Array[float] = [22.0, 32.35, 47.65, 58.0]
+## The Vijzelstraat (23 to 25 m), and the Vijzelgracht it runs on as (35.6 m).
 const VIJZEL_X := 180.0
-const VIJZELSTRAAT: Array[float] = [169.0, 191.0]
-const VIJZELGRACHT: Array[float] = [162.0, 198.0]
-## Where the two axes cross a great canal: x, how wide the bridge is, and
-## how far its crown rises over the quays. High enough that whoever wades
-## through the canal walks upright under it: see bridge().
-const CROSSINGS: Array[Array] = [[SPIEGEL_X, 9.0, 1.5], [VIJZEL_X, 20.0, 1.2]]
+const VIJZELSTRAAT: Array[float] = [168.0, 192.0]
+const VIJZELGRACHT: Array[float] = [162.2, 197.8]
+## Where the axes cross each great canal: x, how wide the bridge is along
+## the canal, and how far its crown rises over the quays. High enough that
+## whoever wades through the canal walks upright under it: see bridge(). The
+## Nieuwe Spiegelstraat ends on the quay of the Herengracht: no bridge goes
+## over it there. Those of the Vijzelstraat are 26 m wide on the map, and
+## the one into the Vijzelgracht 38 m.
+const HEREN_CROSSINGS: Array[Array] = [[VIJZEL_X, 26.0, 1.2]]
+const KEIZERS_CROSSINGS: Array[Array] = [[SPIEGEL_X, 9.0, 1.5], [VIJZEL_X, 26.0, 1.2]]
+const PRINSEN_CROSSINGS: Array[Array] = [[SPIEGEL_X, 9.0, 1.5], [VIJZEL_X, 36.0, 1.2]]
 ## How deep a house is from front to back: on a canal, and on a side street.
 const DEEP := 12.0
 const DEEP_STREET := 10.0
 ## How far from the edge of the water the line of trees, lanterns and parked
-## cars runs.
-const KERB := 1.4
+## cars runs: on the map the lanterns and the elms stand 2 to 3 m from it.
+const KERB := 2.3
 ## From how far under the street to how far over it a zone reaches: over the
 ## lanterns, and under the roofs, so that no zone is seen over a row of
 ## houses by a builder that looks for lines of sight.
@@ -89,9 +105,17 @@ const SIGHT := 130.0
 ## The blocks of houses between the streets, x and z, from north to south
 ## and from west to east.
 const BLOCKS := {
-	"a_west": Rect2(0, 47, 35, 66), "a_mid": Rect2(45, 47, 124, 66), "a_east": Rect2(191, 47, 25, 66),
-	"b_west": Rect2(0, 162, 35, 82), "b_mid": Rect2(45, 162, 124, 38), "c_mid": Rect2(45, 208, 124, 36), "b_east": Rect2(191, 162, 25, 82),
-	"d_west": Rect2(0, 287, 25.5, 109), "d_mid": Rect2(54.5, 287, 107.5, 48), "e_mid": Rect2(54.5, 342, 107.5, 54), "d_east": Rect2(198, 287, 18, 109),
+	"a_west": Rect2(WEST_END, HEREN[3], SPIEGELSTRAAT[0] - WEST_END, KEIZERS[0] - HEREN[3]),
+	"a_mid": Rect2(SPIEGELSTRAAT[1], HEREN[3], VIJZELSTRAAT[0] - SPIEGELSTRAAT[1], KEIZERS[0] - HEREN[3]),
+	"a_east": Rect2(VIJZELSTRAAT[1], HEREN[3], EAST_END - VIJZELSTRAAT[1], KEIZERS[0] - HEREN[3]),
+	"b_west": Rect2(WEST_END, KEIZERS[3], SPIEGELSTRAAT[0] - WEST_END, PRINSEN[0] - KEIZERS[3]),
+	"b_mid": Rect2(SPIEGELSTRAAT[1], KEIZERS[3], VIJZELSTRAAT[0] - SPIEGELSTRAAT[1], KERK[0] - KEIZERS[3]),
+	"c_mid": Rect2(SPIEGELSTRAAT[1], KERK[1], VIJZELSTRAAT[0] - SPIEGELSTRAAT[1], PRINSEN[0] - KERK[1]),
+	"b_east": Rect2(VIJZELSTRAAT[1], KEIZERS[3], EAST_END - VIJZELSTRAAT[1], PRINSEN[0] - KEIZERS[3]),
+	"d_west": Rect2(WEST_END, PRINSEN[3], SPIEGELGRACHT[0] - WEST_END, LIJNBAAN[0] - PRINSEN[3]),
+	"d_mid": Rect2(SPIEGELGRACHT[3], PRINSEN[3], VIJZELGRACHT[0] - SPIEGELGRACHT[3], DWARS[0] - PRINSEN[3]),
+	"e_mid": Rect2(SPIEGELGRACHT[3], DWARS[1], VIJZELGRACHT[0] - SPIEGELGRACHT[3], LIJNBAAN[0] - DWARS[1]),
+	"d_east": Rect2(VIJZELGRACHT[1], PRINSEN[3], EAST_END - VIJZELGRACHT[1], LIJNBAAN[0] - PRINSEN[3]),
 }
 
 
@@ -180,9 +204,9 @@ func _quay(z0: float, z1: float, edge: float, mouths: Array) -> void:
 ## the quays, a bridge where the Spiegel axis crosses it and a wider one
 ## where the Vijzel axis does, lanterns on the corners of both, and along
 ## the water on either quay the trees, the lanterns and the parked cars.
-func great_canal(lines: Array[float], mouths: Array = []) -> void:
+func great_canal(lines: Array[float], crossings: Array[Array], mouths: Array = []) -> void:
 	long_canal(lines, mouths)
-	for crossing: Array in CROSSINGS:
+	for crossing: Array in crossings:
 		var from := Vector3(crossing[0], 0, lines[2] + 1.0)
 		var to := Vector3(crossing[0], 0, lines[1] - 1.0)
 		bridge(from, to, crossing[1], crossing[2])
@@ -192,17 +216,24 @@ func great_canal(lines: Array[float], mouths: Array = []) -> void:
 	# on either quay. Where they come up, nothing stands at the kerb.
 	var steps := PackedVector3Array()
 	var ends: Array[float] = [WEST_END]
-	for crossing: Array in CROSSINGS:
+	for crossing: Array in crossings:
 		ends.append_array([crossing[0] - crossing[1] * 0.5, crossing[0] + crossing[1] * 0.5])
 	ends.append(EAST_END)
 	for i in range(0, ends.size(), 2):
-		steps.append(Vector3(lerpf(ends[i], ends[i + 1], 0.35), 0, lines[1]))
-		steps.append(Vector3(lerpf(ends[i], ends[i + 1], 0.65), 0, lines[2]))
-	for spot in steps:
-		water_steps(spot, 0.0 if spot.z == lines[1] else 180.0)
+		# The water lies south of the north quay and north of the south one.
+		var north := Vector3(lerpf(ends[i], ends[i + 1], 0.35), 0, lines[1])
+		var south := Vector3(lerpf(ends[i], ends[i + 1], 0.65), 0, lines[2])
+		water_steps(north, 0.0)
+		water_steps(south, 180.0)
+		steps.append_array([north, south])
+	# The kerb stops short of every bridge, for the lanterns on its corners.
+	var stops: Array = []
+	for crossing: Array in crossings:
+		stops.append([crossing[0] - crossing[1] * 0.5 - 3.0, crossing[0] + crossing[1] * 0.5 + 3.0])
+	stops.append([EAST_END - 3.0, EAST_END])
 	for z: float in [lines[1] - KERB, lines[2] + KERB]:
 		var x := WEST_END + 3.0
-		for stop: Array in [[SPIEGEL_X - 7.5, SPIEGEL_X + 7.5], [VIJZEL_X - 13.0, VIJZEL_X + 13.0], [EAST_END - 3.0, EAST_END]]:
+		for stop: Array in stops:
 			var until: float = stop[0]
 			# A quay stops at the mouth of a canal that runs into it.
 			for mouth: Array in mouths:

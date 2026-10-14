@@ -6,7 +6,7 @@ extends "res://tools/levels/canals/plan.gd"
 
 ## The entrance to the metro, on the Vijzelgracht: where its shutter hangs,
 ## which faces north, and how wide and how deep the head of the stairs is.
-const METRO := Vector3(VIJZEL_X, 0, 356.0)
+const METRO := Vector3(VIJZEL_X, 0, PRINSEN[3] + (LIJNBAAN[0] - PRINSEN[3]) * 0.62)
 const METRO_WIDE := 8.0
 const METRO_DEEP := 8.0
 
@@ -49,8 +49,8 @@ func _gracht() -> void:
 	var from := PRINSEN[3]
 	var to := LIJNBAAN[0]
 	street_paving(Rect2(VIJZELGRACHT[0], from, VIJZELGRACHT[1] - VIJZELGRACHT[0], to - from))
-	front("d_mid", "e", "canal", {}, DEEP, DEEP_STREET)
-	front("e_mid", "e", "canal", {}, DEEP_STREET, DEEP)
+	front("d_mid", "e", "low", {}, DEEP, DEEP_STREET)
+	front("e_mid", "e", "low", {}, DEEP_STREET, DEEP)
 	front("d_east", "w", "canal")
 	lanterns(Vector3(VIJZELGRACHT[0] + 4.0, 0, from + 6.0), Vector3(VIJZELGRACHT[0] + 4.0, 0, to - 6.0), 26.0, "mast")
 	lanterns(Vector3(VIJZELGRACHT[1] - 4.0, 0, to - 6.0), Vector3(VIJZELGRACHT[1] - 4.0, 0, from + 6.0), 26.0, "mast")
@@ -82,28 +82,29 @@ func _metro() -> void:
 
 func _route_north() -> void:
 	route_checkpoint("vijzelstraat", "Vijzelstraat", Vector3(VIJZEL_X, 0, HEREN[3] + 2.5), Vector3(VIJZEL_X, 0, KEIZERS[0]),
-		AABB(Vector3(VIJZELSTRAAT[0], -1, HEREN[3]), Vector3(22, 4, 5)))
-	route_zone("vijzelstraat", "the Vijzelstraat", AABB(Vector3(VIJZELSTRAAT[0], -3, 52), Vector3(22, 10, 57)), [
-		["grunt", Vector3(172.5, 0, 78)], ["grunt", Vector3(187.5, 0, 92)], ["grunt", Vector3(186, 0, 70)],
-		["rusher", Vector3(180, 0, 104)],
+		AABB(Vector3(VIJZELSTRAAT[0], -1, HEREN[3]), Vector3(VIJZELSTRAAT[1] - VIJZELSTRAAT[0], 4, 5)))
+	# Between the cars that are parked along either kerb.
+	route_zone("vijzelstraat", "the Vijzelstraat", AABB(Vector3(VIJZELSTRAAT[0], -3, HEREN[3] + 5.0), Vector3(VIJZELSTRAAT[1] - VIJZELSTRAAT[0], 10, KEIZERS[0] - HEREN[3] - 9.0)), [
+		["grunt", Vector3(VIJZEL_X - 3.5, 0, HEREN[3] + 33.0)], ["grunt", Vector3(VIJZEL_X + 3.5, 0, HEREN[3] + 47.0)], ["grunt", Vector3(VIJZEL_X + 2.0, 0, HEREN[3] + 25.0)],
+		["rusher", Vector3(VIJZEL_X, 0, HEREN[3] + 59.0)],
 	])
 
 
 func _route_south() -> void:
 	route_checkpoint("kerkstraat", "Kerkstraat", Vector3(VIJZEL_X, 0, KEIZERS[3] + 2.2), Vector3(VIJZEL_X, 0, PRINSEN[0]),
-		AABB(Vector3(VIJZELSTRAAT[0], -1, KEIZERS[3]), Vector3(22, 4, 4.5)))
-	route_zone("kerkstraat", "the Kerkstraat corner", AABB(Vector3(VIJZELSTRAAT[0], -3, 167), Vector3(22, 10, 73)), [
-		["grunt", Vector3(173, 0, 192)], ["grunt", Vector3(183.5, 0, 216)], ["grunt", Vector3(175, 0, 233)],
-		["rusher", Vector3(152, 0, 204)],
+		AABB(Vector3(VIJZELSTRAAT[0], -1, KEIZERS[3]), Vector3(VIJZELSTRAAT[1] - VIJZELSTRAAT[0], 4, 4.5)))
+	route_zone("kerkstraat", "the Kerkstraat corner", AABB(Vector3(VIJZELSTRAAT[0], -3, KEIZERS[3] + 5.0), Vector3(VIJZELSTRAAT[1] - VIJZELSTRAAT[0], 10, PRINSEN[0] - KEIZERS[3] - 9.0)), [
+		["grunt", Vector3(VIJZEL_X - 3.5, 0, KERK[0] - 18.0)], ["grunt", Vector3(VIJZEL_X + 3.5, 0, KERK[1] + 6.0)], ["grunt", Vector3(VIJZEL_X - 2.0, 0, PRINSEN[0] - 12.0)],
+		["rusher", Vector3(VIJZELSTRAAT[0] - 16.0, 0, (KERK[0] + KERK[1]) * 0.5)],
 	])
 
 
 func _route_gracht() -> void:
 	route_checkpoint("vijzelgracht", "Vijzelgracht", Vector3(VIJZEL_X, 0, PRINSEN[3] + 2.5), Vector3(VIJZEL_X, 0, METRO.z),
-		AABB(Vector3(VIJZELGRACHT[0], -1, PRINSEN[3] + 0.5), Vector3(36, 4, 5)))
-	route_zone("vijzelgracht", "the Vijzelgracht", AABB(Vector3(VIJZELGRACHT[0], -3, 296), Vector3(36, 10, 96)), [
-		["grunt", Vector3(168, 0, 330)], ["grunt", Vector3(187.5, 0, 345)], ["grunt", Vector3(190, 0, 314)],
-		["rusher", Vector3(170, 0, 384)], ["heavy", Vector3(171, 0, 360)], ["heavy", Vector3(190, 0, 372)],
+		AABB(Vector3(VIJZELGRACHT[0], -1, PRINSEN[3] + 0.5), Vector3(VIJZELGRACHT[1] - VIJZELGRACHT[0], 4, 5)))
+	route_zone("vijzelgracht", "the Vijzelgracht", AABB(Vector3(VIJZELGRACHT[0], -3, PRINSEN[3] + 9.0), Vector3(VIJZELGRACHT[1] - VIJZELGRACHT[0], 10, LIJNBAAN[0] - PRINSEN[3] - 17.0)), [
+		["grunt", Vector3(VIJZEL_X - 6.0, 0, PRINSEN[3] + 22.0)], ["grunt", Vector3(VIJZEL_X + 6.0, 0, PRINSEN[3] + 36.0)], ["grunt", Vector3(VIJZEL_X + 6.0, 0, PRINSEN[3] + 14.0)],
+		["rusher", Vector3(VIJZEL_X - 5.0, 0, LIJNBAAN[0] - 18.0)], ["heavy", Vector3(METRO.x - METRO_WIDE * 0.5 - 3.0, 0, METRO.z + 4.0)], ["heavy", Vector3(METRO.x + METRO_WIDE * 0.5 + 3.0, 0, METRO.z + 4.0)],
 	])
 	route_exit("Leave by the metro", AABB(Vector3(METRO.x - 2.3, -0.1, METRO.z + 1.4), Vector3(4.6, 3.6, 3.0)), "",
 		Vector3(METRO.x, 3.55, METRO.z), Vector3.FORWARD)

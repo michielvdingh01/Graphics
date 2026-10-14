@@ -16,6 +16,7 @@ extends SceneTree
 const PLAN := preload("res://tools/levels/canals/plan.gd")
 const KIT := preload("res://tools/kit/water.gd")
 const LIJNBAAN := preload("res://tools/levels/canals/lijnbaan.gd")
+const VIJZEL := preload("res://tools/levels/canals/vijzel.gd")
 const QUAY := preload("res://tools/levels/quay.gd")
 ## The player as the game has him: see scenes/player.tscn and scripts/player.gd.
 const RADIUS := 0.35
@@ -46,6 +47,21 @@ func _run() -> void:
 	var bed := -KIT.CANAL_BED
 	var west: float = PLAN.WEST_END + 1.0
 	var east: float = PLAN.EAST_END - 1.0
+	var spiegel_west: float = (PLAN.SPIEGELGRACHT[0] + PLAN.SPIEGELGRACHT[1]) * 0.5
+	var spiegel_east: float = (PLAN.SPIEGELGRACHT[2] + PLAN.SPIEGELGRACHT[3]) * 0.5
+	# Along a canal: on its north quay, five metres from the fronts, and on
+	# its south quay, four to five from them.
+	var quays := func(lines: Array) -> Array: return [[Vector2(west + 2.0, lines[0] + 5.0), Vector2(east - 2.0, lines[0] + 5.0)], [Vector2(west + 2.0, lines[3] - 4.5), Vector2(east - 2.0, lines[3] - 4.5)]]
+	var over := func(x: float, lines: Array) -> Array: return [Vector2(x, lines[3] - 4.5), Vector2(x, lines[0] + 5.0)]
+	var bridges := []
+	for crossing: Array in PLAN.HEREN_CROSSINGS:
+		bridges.append(over.call(crossing[0], PLAN.HEREN))
+	for crossing: Array in PLAN.KEIZERS_CROSSINGS:
+		bridges.append(over.call(crossing[0], PLAN.KEIZERS))
+	for crossing: Array in PLAN.PRINSEN_CROSSINGS:
+		bridges.append(over.call(crossing[0], PLAN.PRINSEN))
+	bridges.append([Vector2(LIJNBAAN.START_X, PLAN.LIJNBAAN[3] - 9.0), Vector2(LIJNBAAN.START_X, PLAN.LIJNBAAN[0] - 4.0)])
+	bridges.append([Vector2(PLAN.VIJZEL_X, PLAN.LIJNBAAN[3] - 9.0), Vector2(PLAN.VIJZEL_X, PLAN.LIJNBAAN[0] - 22.0)])
 	await _level("res://scenes/levels/canals_level.tscn", "Canals", bed, [
 		["the Herengracht", Vector2(west, middle.call(PLAN.HEREN)), Vector2(east, middle.call(PLAN.HEREN))],
 		["the Keizersgracht", Vector2(west, middle.call(PLAN.KEIZERS)), Vector2(east, middle.call(PLAN.KEIZERS))],
@@ -54,25 +70,22 @@ func _run() -> void:
 		["the Spiegelgracht", Vector2(PLAN.SPIEGEL_X, middle.call(PLAN.PRINSEN)), Vector2(PLAN.SPIEGEL_X, middle.call(PLAN.LIJNBAAN))],
 	], [
 		["the round", [Vector2(LIJNBAAN.START_X, PLAN.SOUTH_END - 9.0), Vector2(LIJNBAAN.START_X, PLAN.PRINSEN[3] - 3.0), Vector2(PLAN.SPIEGEL_X, PLAN.PRINSEN[3] - 3.0),
-			Vector2(PLAN.SPIEGEL_X, PLAN.HEREN[3] - 5.0), Vector2(PLAN.VIJZEL_X, PLAN.HEREN[3] - 5.0), Vector2(PLAN.VIJZEL_X, 352.0)]],
-		["the quays of the Herengracht", [Vector2(west + 2.0, 5.0), Vector2(east - 2.0, 5.0)], [Vector2(west + 2.0, 42.0), Vector2(east - 2.0, 42.0)]],
-		["the quays of the Keizersgracht", [Vector2(west + 2.0, 118.0), Vector2(east - 2.0, 118.0)], [Vector2(west + 2.0, 157.0), Vector2(east - 2.0, 157.0)]],
-		["the quays of the Prinsengracht", [Vector2(west + 2.0, 249.0), Vector2(east - 2.0, 249.0)], [Vector2(west + 2.0, 283.5), Vector2(east - 2.0, 283.5)]],
-		["the Kerkstraat", [Vector2(PLAN.SPIEGEL_X - 4.0, 204.0), Vector2(PLAN.VIJZEL_X + 10.0, 204.0)]],
-		["the Weteringdwarsstraat", [Vector2(52.0, 338.5), Vector2(165.0, 338.5)]],
-		["the quays of the Spiegelgracht", [Vector2(29.5, 284.0), Vector2(29.5, 400.0)], [Vector2(50.25, 284.0), Vector2(50.25, 400.0)]],
-		["the quays of the Lijnbaansgracht", [Vector2(west + 2.0, 400.0), Vector2(east - 2.0, 400.0)], [Vector2(west + 2.0, 428.0), Vector2(east - 2.0, 428.0)]],
-		["every bridge", [Vector2(PLAN.SPIEGEL_X, 42.0), Vector2(PLAN.SPIEGEL_X, 5.0)], [Vector2(PLAN.VIJZEL_X, 42.0), Vector2(PLAN.VIJZEL_X, 5.0)],
-			[Vector2(PLAN.SPIEGEL_X, 157.0), Vector2(PLAN.SPIEGEL_X, 118.0)], [Vector2(PLAN.VIJZEL_X, 157.0), Vector2(PLAN.VIJZEL_X, 118.0)],
-			[Vector2(PLAN.SPIEGEL_X, 283.5), Vector2(PLAN.SPIEGEL_X, 249.0)], [Vector2(PLAN.VIJZEL_X, 283.5), Vector2(PLAN.VIJZEL_X, 249.0)],
-			[Vector2(LIJNBAAN.START_X, 428.0), Vector2(LIJNBAAN.START_X, 400.0)], [Vector2(PLAN.VIJZEL_X, 428.0), Vector2(PLAN.VIJZEL_X, 394.0)]],
+			Vector2(PLAN.SPIEGEL_X, PLAN.HEREN[3] - 4.5), Vector2(PLAN.VIJZEL_X, PLAN.HEREN[3] - 4.5), Vector2(PLAN.VIJZEL_X, VIJZEL.METRO.z - 4.0)]],
+		["the quays of the Herengracht"] + quays.call(PLAN.HEREN),
+		["the quays of the Keizersgracht"] + quays.call(PLAN.KEIZERS),
+		["the quays of the Prinsengracht"] + quays.call(PLAN.PRINSEN),
+		["the Kerkstraat", [Vector2(PLAN.SPIEGEL_X - 4.0, middle.call([0.0, PLAN.KERK[0], PLAN.KERK[1], 0.0])), Vector2(PLAN.VIJZEL_X + 10.0, middle.call([0.0, PLAN.KERK[0], PLAN.KERK[1], 0.0]))]],
+		["the Weteringdwarsstraat", [Vector2(PLAN.SPIEGELGRACHT[3] - 2.0, middle.call([0.0, PLAN.DWARS[0], PLAN.DWARS[1], 0.0])), Vector2(PLAN.VIJZELGRACHT[0] + 3.0, middle.call([0.0, PLAN.DWARS[0], PLAN.DWARS[1], 0.0]))]],
+		["the quays of the Spiegelgracht", [Vector2(spiegel_west, PLAN.PRINSEN[3] - 3.0), Vector2(spiegel_west, PLAN.LIJNBAAN[0] + 3.0)], [Vector2(spiegel_east, PLAN.PRINSEN[3] - 3.0), Vector2(spiegel_east, PLAN.LIJNBAAN[0] + 3.0)]],
+		["the quays of the Lijnbaansgracht", [Vector2(west + 2.0, PLAN.LIJNBAAN[0] + 4.0), Vector2(east - 2.0, PLAN.LIJNBAAN[0] + 4.0)], [Vector2(west + 2.0, PLAN.LIJNBAAN[3] - 12.0), Vector2(east - 2.0, PLAN.LIJNBAAN[3] - 12.0)]],
+		["every bridge"] + bridges,
 	])
 	var quay_middle := (QUAY.LINES[1] + QUAY.LINES[2]) * 0.5
 	await _level("res://scenes/levels/quay_level.tscn", "Quay", bed, [
 		["its canal", Vector2(1.0, quay_middle), Vector2(QUAY.LONG - 1.0, quay_middle)],
 	], [
-		["its quays and its bridge", [Vector2(1.5, 5.0), Vector2(QUAY.LONG - 1.5, 5.0)], [Vector2(1.5, 42.0), Vector2(QUAY.LONG - 1.5, 42.0)],
-			[Vector2(QUAY.BRIDGE_X, 42.0), Vector2(QUAY.BRIDGE_X, 5.0)]],
+		["its quays and its bridge", [Vector2(1.5, QUAY.LINES[0] + 5.0), Vector2(QUAY.LONG - 1.5, QUAY.LINES[0] + 5.0)], [Vector2(1.5, QUAY.LINES[3] - 4.5), Vector2(QUAY.LONG - 1.5, QUAY.LINES[3] - 4.5)],
+			[Vector2(QUAY.BRIDGE_X, QUAY.LINES[3] - 4.5), Vector2(QUAY.BRIDGE_X, QUAY.LINES[0] + 5.0)]],
 	])
 	print("test_canals: %d of %d checks passed" % [_checked - _failed, _checked])
 	quit(1 if _failed > 0 else 0)

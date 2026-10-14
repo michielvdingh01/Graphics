@@ -2794,6 +2794,8 @@ Nog niet gevraagd, en pas aan de orde bij stap 2 tot 4: baksteen, dakpannen en a
 | De proefkade bekijken, met iemand die voorbijloopt | `tools/benchmark.sh --quick --scene=res://scenes/quay.tscn --enemies=soldiers --spawn="res://scenes/enemy.tscn@24,0,41.5,-90,1,2"` |
 | Nagaan dat een wijziging aan een la geen ander level breekt | `tools/build_check.py factory works depot powerhouse wing dunes showroom` |
 | Nagaan dat de grachten te doorwaden zijn, de trapjes vrij en de kaden, straten en bruggen te belopen, na het bouwen | `tools/test_canals.sh` (een halve minuut, zonder GPU) |
+| Het blad met het plan en de stad van de kaart ernaast, na het bouwen | `tools/canals_sheet.py` |
+| De kaart opnieuw ophalen | `tools/fetch_map.py` (BGT en 3DBAG, buiten git) |
 | Van boven, zoals het gebouwd is | `tools/level_map.py canals` |
 | De zes vaste standpunten, alleen de beelden | `tools/benchmark.sh --quick --scene=res://scenes/canals.tscn` |
 | Meten zoals er gespeeld wordt, met wat schaduw, spiegeling en mist kosten | `tools/benchmark.sh --scene=res://scenes/canals.tscn --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=lamp_shadows,ssr,volumetric_fog` |
@@ -2822,6 +2824,35 @@ Een test die een lichaam van de maat van de speler door elke gracht laat waden, 
 - **De ronde was doorgesneden**: die kade had een leuning aan de kant van de Prinsengracht, precies waar de brug uit de Nieuwe Spiegelstraat neerkomt. De bouwer zag het niet, want om de Vijzelstraat heen was alles nog te bereiken.
 
 Nu staat er in elk stuk water tussen twee bruggen, of tussen een brug en de rand, op elke kade een trapje, 23 in de stad en 2 op de proefkade, en houdt de kade daarboven drie meter vrij (`kerb_line` neemt de plekken mee). Een brug rust op de kademuren en op niets in het water, met een dek van 0,4 m: de bruggen van de Nieuwe Spiegelstraat rijzen 1,5 m, die van de Vijzelstraat 1,2 m en die over de Lijnbaansgracht 1,0 m, zodat je onder de kruin rechtop waadt. De kaden over de twee mondingen van de Spiegelgracht liggen vlak, met alleen een leuning aan de kant van de Spiegelgracht; daaronder moet je bukken. Op de stand van nu slaagt de test, 18 van 18, en op die van 13 oktober faalt hij op alle vier.
+
+**De kaart: maten uit de BGT en de 3DBAG**, op 14 oktober
+
+Achterhaald in wat hierboven staat: "Tien bruggen" (het zijn er negen), "geschat uit het hoofd en niet van een kaart" (de maten zijn nu gemeten), "216 bij 440 meter" (nu 216 bij 471), "846 m" voor de ronde (nu 905), het ritme van één lantaarn en één iep op 1,4 m van het water, en de 138 lantaarns (nu 122).
+
+Opgehaald, op Michiels "download alles maar":
+
+| Wat | Gevraagd | Gekregen |
+|---|---|---|
+| Zes texturen op 2k en de rat, van Poly Haven (CC0), met hun checksum | 48 en 3,6 MB | 48 en 3,6 MB, in `assets/textures/` en `assets/models/street_rat/`, ingelezen in 12 s |
+| De BGT van het vak, via de API van PDOK | onder 10 MB, licentie na te lezen | **CC0 1.0**, zo staat het op de pagina van de API. **84 MB**, acht keer mijn schatting: de wegdelen alleen zijn 48 MB, met elk vlak tot op de stoeprand. Buiten git, in `assets/maps/.source/` |
+| De hoogtes uit de 3DBAG (CC BY 4.0, de 3D geoinformation research group van de TU Delft en 3DGI) | onder 20 MB | 11,7 MB, 4976 bouwdelen |
+| Mensen uit de Rocketbox-bibliotheek (MIT) | acht tot tien, 0,5 tot 0,7 GB | **acht**, 610 MB: een persoon is 73 tot 79 MB aan bron, niet de 60 tot 70 die ik schatte, dus om binnen de 0,7 GB te blijven acht van de kleinste: `Female_Adult_02`, `_06`, `_10`, `Business_Female_04`, `Male_Adult_11`, `_14`, `_17` en `Business_Male_05`. Buiten git, nog niet ingelezen: dat is stap 6. GitHub verbrak de verbinding vier keer; de download is opnieuw gestart tot alles er was |
+
+Wat de kaart zegt, gemeten tussen de twee assen:
+
+- **De grachten** hebben de dwarsmaten die ik schatte op een meter na: de Herengracht 24,6 m water tussen kaden van 10,6 en 10,2 m, de Keizersgracht 27,4 m tussen 10,9 en 11,3 m, de Prinsengracht 24,5 m tussen 10,1 en 10,1 m. De Lijnbaansgracht is geen 12 maar ruim 20 m breed en loopt schuin naar het zuidoosten; de Spiegelgracht is 36 m van gevel tot gevel, waarvan 15,3 m water. De Nieuwe Spiegelstraat is 10 tot 12,6 m, de Kerkstraat 10,7, de Tweede Weteringdwarsstraat 8,6, de Vijzelstraat 23 tot 25 en de Vijzelgracht 35,6.
+- **Over de Herengracht ligt bij de Nieuwe Spiegelstraat geen brug.** De straat houdt op aan de kade; in dit stuk gaat alleen de Vijzelstraat over de Herengracht, met een brug van 26 m breed. Die over de Prinsengracht naar de Vijzelgracht is 38 m breed.
+- **Op twee derde klopt de opzet.** Van as tot as langs de Keizersgracht is 205 m (in het level 140); van gracht tot gracht 157, 189 en 200 m (in het level 113 tot 148, nu op twee derde gezet).
+- **Wat het level anders doet**: de grachten buigen bij de Nieuwe Spiegelstraat, de Gouden Bocht zelf; de Nieuwe Spiegelstraat kruist ze onder 74 graden; de Weteringbuurt heeft drie dwarsstraten en de Weteringstraat waar het level er één heeft; de Lijnbaansgracht loopt schuin. Het level houdt de grachten recht en de assen haaks, en dat is mijn keuze: zones en lightmaps zijn dozen langs de assen, en een bocht is iets voor de rand van het level. Het blad laat het verschil zien.
+- **De lantaarns** staan op één rij langs het water, 2 tot 3 m van de rand en 18 tot 23 m uit elkaar; **de iepen** in dezelfde rij, om de 9 tot 14 m. 603 lichtmasten en 1124 bomen in het vak.
+- **De huizen** (3DBAG, de middelste helft tussen de assen): de Gouden Bocht ligt aan de zuidkant van de Herengracht, waar ik haar aan de noordkant had gezet, met huizen van 14,6 tot 18,9 m breed en 18,8 m tot de goot. Aan de zuidkant van de Keizersgracht 5,4 tot 7,6 m breed en 17 m hoog; aan de Prinsengracht 4,2 tot 9,8 m en 12 tot 13 m.
+- Er rijden trams over de Vijzelstraat, de Vijzelgracht en de Weteringschans, en er staan vijftien reclamezuilen.
+
+Wat er daarom in het level veranderd is: elke maat in `tools/levels/canals/plan.gd` komt van de kaart, de blokken op twee derde; geen brug meer over de Herengracht bij de Nieuwe Spiegelstraat; de bruggen van de Vijzelstraat 26 en 36 m breed; langs elke kade om de 7 m een iep of een lantaarn, een lantaarn per 21 m, op 2,3 m van het water (`kerb_line`); een soort huis erbij, laag, voor de Prinsengracht en de Weteringbuurt, en alle soorten op de maat van de 3DBAG. Posten, checkpoints, zones en de vaste standpunten worden nu uit het plan berekend: een maat veranderen is nu echt één bestand. De proefkade heeft het profiel van de Herengracht.
+
+Bij het overzetten vond `tools/test_canals.sh` dat de helft van de trapjes binnenstebuiten stond: het bordes onder de kade in plaats van in het water. Of een trapje op de noordkade stond, werd beslist door twee getallen op gelijkheid te vergelijken, en 10,6 is in een `Vector3` 10,6000004. Elk trapje krijgt nu zijn richting mee; de test slaagt weer, 18 van 18.
+
+`tools/fetch_map.py` haalt de kaart van een stuk stad op zoals `assets/manifest.json` hem onder `maps` noemt, en `tools/canals_sheet.py` tekent het blad `benchmark/sheets/canals_plan.png` uit het plan en het gebouwde level, met de stad van de kaart ernaast op dezelfde maat. Gecontroleerd: het level bouwt (12 zones, 6 checkpoints, elke post bereikbaar), het spel laadt het en de proefkade zonder fout, de andere zeven levels komen er gelijk uit, en de zes vaste standpunten tekenen. Het level is 216 bij 471 m, met 122 lantaarns en 21 trapjes.
 
 **Nog open**
 

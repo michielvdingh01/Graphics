@@ -80,24 +80,24 @@ mouse_filter = 2
 script = ExtResource("hud")
 
 [node name="Player" parent="." instance=ExtResource("player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.25, 0, 431)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52.825, 0, 461.6)
 
 [node name="BenchmarkViews" type="Node3D" parent="."]
 
 [node name="GoldenBend" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
-transform = Transform3D(0, 0.05233596, -0.9986295, 0, 0.9986295, 0.05233596, 1, 0, 0, 40, 2.6, 23.5)
+transform = Transform3D(-0.0348995, 0.03487824, -0.998782, 0, 0.9993908, 0.0348995, 0.9993908, 0.001217975, -0.03487824, 60, 1.7, 41.4)
 
 [node name="Spiegelgracht" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
-transform = Transform3D(1, 0, 0, 0, 0.9986295, 0.05233596, 0, -0.05233596, 0.9986295, 50.25, 2.4, 410)
+transform = Transform3D(1, 0, 0, 0, 0.9993908, 0.0348995, 0, -0.0348995, 0.9993908, 52.8, 1.7, 414)
 
 [node name="Spiegelstraat" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
-transform = Transform3D(1, 0, 0, 0, 0.9998477, 0.01745241, 0, -0.01745241, 0.9998477, 40, 1.7, 241)
+transform = Transform3D(1, 0, 0, 0, 0.9998477, 0.01745241, 0, -0.01745241, 0.9998477, 40, 1.7, 263)
 
 [node name="Keizersgracht" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
-transform = Transform3D(0.4694716, -0.03081443, 0.8824097, 0, 0.9993908, 0.0348995, -0.8829476, -0.01638432, 0.4691856, 104, 1.7, 158)
+transform = Transform3D(0.4694716, -0.03081443, 0.8824097, 0, 0.9993908, 0.0348995, -0.8829476, -0.01638432, 0.4691856, 104, 1.7, 163.5)
 
 [node name="Vijzelstraat" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 180, 1.7, 111)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 180, 1.7, 112)
 
 [node name="Vijzelgracht" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
-transform = Transform3D(-1, 0, 0, 0, 0.9993908, 0.0348995, 0, 0.0348995, -0.9993908, 180, 1.7, 292)
+transform = Transform3D(-1, 0, 0, 0, 0.9993908, 0.0348995, 0, 0.0348995, -0.9993908, 180, 1.7, 315)
