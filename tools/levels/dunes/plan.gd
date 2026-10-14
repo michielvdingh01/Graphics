@@ -27,7 +27,7 @@ const LAND := Rect2(0, 0, 340, 230)
 ## Where the sun stands, as scenes/dunes.tscn has it and the sky shows it:
 ## round from north by east, and over the horizon.
 const SUN_TURN := 214.1
-const SUN_RISE := 48.0
+const SUN_RISE := 28.6
 ## The track, from where the player comes out of the wood to the gate.
 const TRACK: Array[Vector2] = [
 	Vector2(2, 201), Vector2(22, 199), Vector2(48, 203), Vector2(72, 198), Vector2(96, 190), Vector2(118, 186),
