@@ -191,18 +191,23 @@ func _chainlink() -> void:
 				_image.set_pixel(x, y, Color(tone, tone * 1.02, tone * 1.04, cover))
 
 
-## The dark of a pine wood, as it is seen between the trunks of the trees at
-## its edge and behind their crowns: gloom under the canopy, the trunks that
-## stand further in as paler stripes in it, and a little light on its floor.
-## Its top is ragged and stays below the crowns that stand in front of it.
-## It tiles from left to right.
+## A pine wood as it is from outside it and far off: a line of crowns, flat
+## plates of needles one over the other and lighter on top, each tree its own
+## height with the sky between one top and the next; under them the trunks,
+## and the dark of the wood between those. The same picture stands behind the
+## trees at the edge of a wood, where only its lower half shows, and by itself
+## for a wood too far off to plant.
 func _treeline() -> void:
 	var wide := _image.get_width()
 	var high := float(_image.get_height())
 	var gloom := Color(0.03, 0.045, 0.036)
 	var floor_light := Color(0.1, 0.085, 0.06)
-	for y in range(int(high * 0.12), int(high)):
-		var down := (y / high - 0.12) / 0.88
+	var shade := Color(0.05, 0.075, 0.06)
+	var body := Color(0.105, 0.16, 0.11)
+	var lit := Color(0.19, 0.275, 0.175)
+	# The dark between the trunks, from where the crowns begin down.
+	for y in range(int(high * 0.34), int(high)):
+		var down := (y / high - 0.34) / 0.66
 		for x in wide:
 			_image.set_pixel(x, y, gloom.lerp(floor_light, pow(down, 5.0) * 0.8))
 	# The trunks further in: the deeper, the thinner and the nearer the gloom.
@@ -214,10 +219,26 @@ func _treeline() -> void:
 			var girth := high * _rng.randf_range(0.008, 0.013) * (1.0 - row * 0.25)
 			var bark := gloom.lerp(Color(0.14, 0.11, 0.085), (0.6 - row * 0.18) * _rng.randf_range(0.6, 1.0))
 			_stroke_round(Vector2(x, high), Vector2(x + _rng.randf_range(-10, 10), top), girth, bark)
-	# The undersides of the crowns close it off at the top.
-	for i in 150:
-		var at := Vector2(_rng.randf() * wide, high * _rng.randf_range(0.1, 0.32))
-		_cushion(at, Vector2(high * _rng.randf_range(0.1, 0.2), high * _rng.randf_range(0.04, 0.09)), gloom.lightened(_rng.randf() * 0.03))
+	# The crowns: a row further in, darker and closing what the row in front
+	# leaves open, and the row that stands at the edge.
+	for row in 2:
+		var trees := 17 if row == 0 else 14
+		for i in trees:
+			var x := (i + _rng.randf_range(0.15, 0.85)) * wide / trees
+			var top := high * (_rng.randf_range(0.1, 0.24) if row == 0 else _rng.randf_range(0.03, 0.2))
+			var reach := high * _rng.randf_range(0.13, 0.2)
+			var plates := _rng.randi_range(4, 6)
+			var foot := high * _rng.randf_range(0.4, 0.5)
+			var front := 1.0 if row == 1 else 0.55
+			# The trunk of a tree at the edge shows under its crown.
+			if row == 1:
+				_stroke_round(Vector2(x + _rng.randf_range(-6, 6), high), Vector2(x, top + high * 0.08), high * _rng.randf_range(0.014, 0.02), Color(0.2, 0.15, 0.115))
+			for plate in plates:
+				var share := (plate + 0.5) / plates
+				var at := Vector2(x + _rng.randf_range(-0.5, 0.5) * reach * (0.3 + share), lerpf(foot, top, share) + high * _rng.randf_range(-0.012, 0.012))
+				# Wide below and narrower to the top, where the sun is on it.
+				var radii := Vector2(reach * lerpf(1.0, 0.55, share) * _rng.randf_range(0.8, 1.1), high * _rng.randf_range(0.03, 0.05))
+				_cushion(at, radii, shade.lerp(body, share * front).lerp(lit, pow(share, 2.0) * 0.6 * front * _rng.randf_range(0.6, 1.0)))
 
 
 ## What an army paints on what it drives, sixteen marks on a sheet of four by
