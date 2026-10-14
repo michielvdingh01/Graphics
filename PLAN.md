@@ -3105,3 +3105,241 @@ Drie ronden, de trunk en de lage zon om en om, 14 oktober van 08:44 tot 08:49, a
 **Nog open**
 
 - **De lucht van 48 graden staat er nog** (`assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr`, 75 MB), door niets gebruikt. Terug naar die zon is de lucht, `SUN_RISE` en de zon in de scène terugzetten en de duinen bouwen; weg ermee is het bestand, zijn `.import` en zijn regel in het manifest.
+
+## De grachten: het zesde level, de voorbereiding
+
+Op 13 oktober 2026 gevraagd: de basis voor een nieuwe map in het centrum van Amsterdam, met de Herengracht, de Keizersgracht, de Spiegelgracht en de Vijzelgracht, bij nacht. De klassieke lantaarns moeten van iedereen die voorbijkomt een grote schaduw maken, zodat een onschuldige voetganger een vijand lijkt en andersom; er steken ratten over en er valt nu en dan een bui. Het moeten de beste graphics worden die we hebben, zo efficiënt mogelijk gebouwd, en gebouwd op de GPU van de ASUS. Dit hoofdstuk is de voorbereiding: wat er staat, wat er gemeten is, hoe het verder gebouwd wordt, en wat Michiel moet beslissen voor er verder gebouwd wordt. Het staat op de branch `grachten`, en is op 14 oktober op Michiels woord ("merge het maar, dan ga ik het spelen") in `fase-2-vertical-slice` gevoegd, met de trunk eerst in de branch gehaald; niet gepusht. Het zit niet in de levelkeuze van het spel, en er is niets gebakken. Het gebouwde level staat niet in git, want dat doet de ASUS straks met zijn lightmaps: in de hoofdcheckout is het daarom gebouwd met `tools/build_level.sh canals` en `quay`. Die bestanden (`scenes/levels/canals_*`, `scenes/levels/quay_*`, `scenes/canals_*.lmbake`, `scenes/quay_quay.lmbake`) moeten weg voor wat de ASUS gebouwd heeft binnenkomt, anders weigert git de merge.
+
+**Wat er staat**
+
+- **Het level `canals` als greybox** (`tools/levels/canals.gd`, `tools/levels/canals/`, `scenes/canals.tscn`): 216 bij 440 meter, het blad `benchmark/sheets/canals_plan.png` laat het van boven zien. Drie grachten van west naar oost, de Herengracht met de Gouden Bocht, de Keizersgracht en de Prinsengracht, en aan de zuidrand de Lijnbaansgracht met de Weteringschans. Twee assen die ze kruisen: in het westen de Nieuwe Spiegelstraat, die ten zuiden van de Prinsengracht de Spiegelgracht wordt, en in het oosten de Vijzelstraat, die daar de Vijzelgracht wordt. De Kerkstraat en een Weteringdwarsstraat snijden van de ene as naar de andere. Tien bruggen. De Prinsengracht is niet genoemd in de vraag en ligt ertussen: zonder haar hangen de vier niet aan elkaar.
+- **De maten.** Hoe breed een gracht en haar kaden zijn is zoals in de stad, geschat uit het hoofd en niet van een kaart: de Herengracht 26 m water tussen twee kaden van 10,5 m, de Keizersgracht 28 m, de Prinsengracht 24 m, de Spiegelgracht 12 m tussen kaden van 8,5 m, de Nieuwe Spiegelstraat 10 m van gevel tot gevel, de Vijzelstraat 22 m en de Vijzelgracht 36 m. De lengte van de blokken is op twee derde gebracht: van as tot as 140 m waar het er in de stad ruim 200 zijn. Elke maat staat in `tools/levels/canals/plan.gd` en nergens anders.
+- **De ronde.** De speler komt van het museum over de Lijnbaansgracht, gaat de Spiegelgracht en de Nieuwe Spiegelstraat op naar de Herengracht, oostwaarts langs de Gouden Bocht, en de Vijzelstraat af naar de metro op de Vijzelgracht. Het rolluik van de metro is de uitgang. 846 m, twaalf gevechten met samen 53 vijanden en zes checkpoints; de duinen zijn 852 m met 74 vijanden in veertien gevechten. De Kerkstraat en de Weteringdwarsstraat snijden de ronde af. De posten zijn met de hand neergezet om het level te kunnen lopen, niet om een gevecht goed te maken.
+- **Drie laden erbij in de bouwdoos**, vóór de plattegrond, één per soort werk zodat er drie tegelijk aan de stad kunnen bouwen zonder hetzelfde bestand aan te raken:
+  - `tools/kit/street.gd`: `street_paving`, `wall_face`, `lantern` in vier soorten (de ritter van de kaden, de kroon van de bruggen, een wandarm en een mast), `lanterns`, `elm`, `elms`, `parked_car`, `parked_cars` en `kerb_line`, dat langs een kade om en om een lantaarn en een iep zet met geparkeerde auto's ertussen.
+  - `tools/kit/water.gd`: `canal`, `quay_wall`, `water_steps` en `bridge`.
+  - `tools/kit/houses.gd`: `terrace`, een rij huizen schouder aan schouder, in vier soorten: grachtenhuis, dubbel huis, straathuis met een winkel eronder en een blok.
+
+  Alles is een doos op de plek en van de maat die het krijgt, met de botsvorm die het houdt. Een stuk wordt aangekleed door te herschrijven wat het tekent; wat het heet, wat het meekrijgt en waar je tegenaan loopt blijft, zodat het level dat nu met grijze stukken is neergelegd hetzelfde level is als ze af zijn.
+- **Een huis is een gevel.** In de weg staat het hele huis, als één doos; getekend worden alleen de voorgevel, een zijgevel waar het huis boven zijn buurman uitsteekt of de rij eindigt, de top en het dak. Kade en straat zijn alleen hun bovenkant, een kademuur alleen de kant van het water. Wat niemand ziet krijgt zo geen stuk lightmap: zie "Gemeten".
+- **De proefkade** (`tools/levels/quay.gd`, `scenes/quay.tscn`): veertig meter van zo'n gracht als level van één zone, met een brug, twee rijen huizen, en op elke kade een lantaarn, een iep en een paar auto's. Hier wordt straks elk stuk aangekleed en bekeken voor de stad ermee gebouwd wordt: ze bouwt in ruim een seconde en haar lightmap is een twintigste van die van de stad. Je kunt erover lopen; er is niemand om tegen te vechten.
+- **Twaalf zones**: elke gracht één van eind tot eind, met beide kaden en haar bruggen; elke straat één van gracht tot gracht. Een gevel hoort bij de zone van de straat waar hij op uitkijkt (`_face_street` in `houses.gd`), niet bij de plek waar hij staat.
+- **In de gracht val je.** Het water ligt 1,1 m onder de kade en de bodem 1,7 m: je waadt tot de knie. Eruit kom je bij een trapje, twee per kade, waarvan het bordes 60 cm onder de kade ligt: meer dan het navmesh klimt en minder dan de speler springt. Niemand wordt je achternagestuurd.
+- **De nacht** staat in de scène: geen zon en geen maan, een donkere lucht met de gloed van de stad aan de horizon, mist, en lantaarns die in die mist een hof hebben. Een lantaarn is een echt licht met een schaduw; hoe dat verder moet staat onder "Het licht".
+- **Twee dingen die een level nu zelf kan zeggen**, in `tools/level_builder.gd`: tot hoe ver zones elkaar zien (`_sight_reach`) en hoe groot een texel van zijn lightmap is (`_texel`). Zonder zeggen ze wat ze zeiden, en de andere levels komen er gelijk uit.
+
+**Gemeten** op 13 oktober 2026 tussen 22:15 en 22:45, M1 Pro aan de lader van 96 W (accu 72 tot 93%, ladend), load 3 tot 5 terwijl drie sessies aan de duinen om de beurt de GPU hadden; elke regel is één run, niets is om en om herhaald
+
+| | |
+|---|---|
+| Het level beschreven | 603 regels in negen bestanden; de drie laden zijn samen 408 regels, de proefkade 56 |
+| Gebouwd | 1890 nodes, 138 lantaarns (68 op de kaden, 28 op de bruggen, 20 aan de wand, 22 masten), 53 vijanden, 10 bruggen, 12 zones, 1,8 MB in 133 bestanden |
+| Bouwen | 37 s, waarvan 35 s de opmeting; de proefkade 1,3 s |
+| Zichtlijnen | 61 paren zonder grens: elke zone ziet elke andere. Met een grens van 130 m 40 paren |
+| Lightmap, als hij gebakken zou worden | 6,7 miljoen texels over twaalf zones; een gracht is 1,2 miljoen, zoveel als één hal van het fabrieksterrein. De proefkade: 0,3 miljoen |
+
+De zes vaste standpunten op de instelling waarop gespeeld wordt (3456×2160, Ultra, MetalFX, renderschaal vanzelf), zonder vijanden, 600 beelden per standpunt; de drie kolommen rechts zijn wat dat onderdeel van het beeld kost, binnen dezelfde run aan en uit gezet:
+
+| Standpunt | Fps | 1% low | Tekenopdrachten | Driehoeken | Het beeld | Schaduw van de lantaarns | Spiegeling | Mist |
+|---|---|---|---|---|---|---|---|---|
+| De Gouden Bocht, van de brug | 87,5 | 82 | 183 | 16 duizend | 11,4 ms | 0,93 ms | 1,47 ms | 0,46 ms |
+| De Spiegelgracht, van het begin | 83,3 | 78 | 221 | 39 duizend | 12,0 | 1,10 | 1,52 | 0,44 |
+| De Nieuwe Spiegelstraat | 87,4 | 83 | 280 | 106 duizend | 11,5 | 0,79 | 1,63 | 0,50 |
+| De Keizersgracht, langs de kade | 94,9 | 89 | 157 | 53 duizend | 10,5 | 0,49 | 1,44 | 0,47 |
+| De Vijzelstraat | 89,8 | 84 | 102 | 12 duizend | 11,1 | 0,70 | 1,58 | 0,47 |
+| De Vijzelgracht | 87,6 | 82 | 172 | 38 duizend | 11,4 | 0,77 | 1,55 | 0,46 |
+
+Drie standpunten met de 53 vijanden als soldaten, dezelfde instelling, drie runs achter elkaar met het GPU-slot vast: fps, tussen haakjes het traagste honderdste, en de tekenopdrachten.
+
+| | De Gouden Bocht | De Nieuwe Spiegelstraat | De Keizersgracht |
+|---|---|---|---|
+| Alle 53 stil op hun post | 84,7 (80) · 221 | 82,6 (77) · 139 | 92,9 (87) · 189 |
+| Alle 53 wakker, op weg naar de brug van de Herengracht en schietend | 78,3 (58) · 1370 | 71,7 (54) · 1971 | 80,2 (54) · 1421 |
+| Hetzelfde, en niets van het level werpt nog schaduw | 77,7 (59) · 824 | 72,7 (54) · 1170 | 80,1 (54) · 816 |
+
+- **De nacht kost in grijs 10,5 tot 12,0 ms per beeld**, bijna zonder meetkunde: 12 tot 106 duizend driehoeken en 102 tot 280 tekenopdrachten. Tot de 16,7 ms van zestig beelden is er dus 4,7 tot 6,1 ms over voor alles wat nog komt: gevels, bomen, auto's, water, regen en mensen. De levels van nu zitten op de speelinstelling op 15 tot 16,6 ms.
+- **De schaduw van de lantaarns kost 0,5 tot 1,1 ms** zolang er niets beweegt: minder dan de spiegeling in de natte straat (1,4 tot 1,6 ms), en twee keer de mist (0,4 tot 0,5 ms).
+- **Wie loopt, laat lantaarns hun schaduw opnieuw tekenen.** Met alle 53 vijanden tegelijk wakker, rennend naar één brug en schietend, zakt het gemiddelde 6 tot 11 beelden en het traagste honderdste tot 54: onder de zestig. De tekenopdrachten gaan van 140 tot 220 naar 1370 tot 1970. Dat is een plafond en geen gevecht: een gevecht is hier drie tot zes man. Wat twintig voetgangers en zes vechtenden kosten is niet gemeten.
+- **De schil van het level uit de schaduw halen scheelt in grijs niets.** Dezelfde run met alles van het level op "werpt geen schaduw": 40% minder tekenopdrachten (824 tot 1170) en dezelfde framerate. Wat overblijft zijn de soldaten zelf: hun schaduw in zes richtingen per lantaarn, hun schoten. Zodra de schil zwaar wordt, wordt dit wel een post: zie "Het licht".
+- **De lightmap was eerst dertien keer zo groot.** Met huizen als dichte dozen en de texel van de andere levels (8 cm): 89,6 miljoen texels, naar de maat van de bestaande levels (12 tot 24 bytes per texel op schijf) ruim een GiB per bake, waar GitHub er tien van bewaart. Alleen gevels: 31,7 miljoen. Ook kade en kademuur alleen waar je ze ziet, en een texel van 16 cm: 6,7 miljoen, naar schatting 80 tot 160 MB per volle bake. Of 16 cm genoeg is, is niet te zeggen zonder bake: het is het eerste wat de ASUS uitzoekt.
+
+**Wat de greybox leerde**
+
+- **Over een rechte as ziet elke zone elke andere.** Van de Herengracht kijk je de Nieuwe Spiegelstraat en de Spiegelgracht uit tot aan het museum, 400 m. De bouwer vond 61 paren op 61: alles zou altijd getekend worden. Een level kan nu zeggen tot hoe ver er iets te zien is; met 130 m blijven er 40 paren over. Dat mag alleen als de mist en het donker het waarmaken: voorbij die grens moet een straat alleen nog haar lichten tonen, en die moeten dan ergens anders vandaan komen dan uit de zone die uit staat. Dat is niet gebouwd.
+- **Midden in de stad staan er dan nog steeds tien zones tegelijk aan.** De Keizersgracht en het stuk Vijzelstraat ten zuiden ervan zien er elk negen; de Herengracht vijf en de Lijnbaansgracht vier. De renderer gebruikt acht lightmaps per beeld (zie "Zestig beelden"); de verste twee krijgen de hunne niet. De drie grote grachten bij het midden in tweeën knippen verlaagt dat; of het genoeg is, is niet uitgeprobeerd. Eerst moet gemeten worden wat een aangeklede gracht kost.
+- **Een huis telt niet als muur.** `scripts/zones.gd` maakt occluders van dunne botsvormen van baksteen, beton en pleister. Een huis is een doos van twaalf meter diep en verbergt dus niets voor de renderer, terwijl een huizenblok het beste scherm is dat een level kan hebben. Dat vraagt een regel erbij in `_wall_off()`.
+- **De controle van de selftest op zichtlijnen komt op zulke zones niet klaar.** Ze kijkt van elk oog naar punten door de hele zone, anderhalve meter uit elkaar: voor een gracht ruim vijftigduizend punten per zone. Voor de fabriek is dat een miljoen lijnen, hier naar schatting meer dan honderd miljoen. Voor het level de levelkeuze in kan, moet die controle dezelfde grens kennen als de bouwer, en de vlakken bekijken in plaats van de inhoud.
+- **De opmeting is bijna de hele bouwtijd**: 35 van de 37 seconden, en dat is met de grens al. Wie een lantaarn verzet wacht daar elke keer op.
+- **Een naam in de bouwdoos kan een level breken dat er niets mee te maken heeft.** Elk level breidt de hele bouwdoos uit, dus een functie die in een la `_house` heet, botst met de `_house` die het ketelhuis van de fabriek voor zichzelf had, en `paving` en `kerb` met die van het depot van de duinen. De fabriek en de duinen bouwden daardoor niet meer, zonder dat er aan een van beide iets veranderd was; `tools/build_check.py` over alle levels liet het zien, het bouwen van het nieuwe level niet. De drie heten nu `_row_house`, `street_paving` en `kerb_line`. Wie een la aanraakt, draait de controle over alle levels.
+- **`WEST` en `EAST` zijn al van de bouwdoos**, als zijden van een ruimte. Een level dat ze als maat gebruikt, laadt niet, en de bouwer zegt dan alleen dat hij het plan niet kent. De randen van dit level heten `WEST_END` en `EAST_END`.
+- **Een rij huizen van dozen heeft op de hoek twee gevels in één vlak.** De rijen langs de grachten lopen daarom van hoek tot hoek, en de rijen in de dwarsstraten beginnen waar die ophouden.
+- **De bronnen van de Rocketbox-mensen staan niet meer op de schijf.** `assets/characters/.source/` is 11 MB, twee gegenereerde modellen; er stond 1,4 GB. Voetgangers vragen dus een nieuwe download.
+- **De schijf is vol.** 4,4 GB vrij op 13 oktober, met 28 checkouts van elk ongeveer een GB. Een nieuwe worktree voor dit level kostte 968 MB.
+- **De Windows-kant bestaat nog niet.** Op origin staat op 13 oktober om 22:00 geen branch van de ASUS; de opdracht om het gereedschap daar te laten werken is die dag geschreven, en de sessie op de MacBook waar ze terechtkwam heeft haar niet uitgevoerd, omdat alles eraan op Windows getest moet worden. Alles hieronder over de ASUS wacht daarop.
+
+**Het licht: wat beweegt krijgt een echte schaduw, de rest wordt gebakken**
+
+Dit is de keuze waar de rest uit volgt, en ze is van mij: Michiel heeft er nog niets over gezegd.
+
+- **Een lantaarn is een echt licht met een schaduw.** Alleen zo werpt wie eronderdoor loopt een schaduw die meeloopt, en dat is waar de vraag om begon. Zijn directe licht wordt dus niet gebakken; wat de straat ervan terugkaatst wel (`BAKE_DYNAMIC`, zoals elke lamp in dit spel).
+- **Al het andere licht wordt gebakken en gaat uit het spel**: de ramen waar iemand thuis is, de etalages, de lampjes langs de bogen van de bruggen, de gloed van de lucht. Dat kost in het spel niets, hoeveel het er ook zijn (`scripts/bake_only.gd` bestaat al). Een raam is voor de bake een lamp achter het glas en niet het gloeiende vlak zelf: kleine felle vlakken geven een korrelige bake.
+- **Van ver werpt een lantaarn geen schaduw en van verder is hij geen licht.** Dat doet de engine zelf, per lantaarn (`distance_fade_*`): de schaduw tot 35 à 60 m van de camera, het licht tot 110 m en dan over dertig meter uit. Die getallen zijn niet op een beeld afgesteld.
+- **De schaduw wordt geworpen door wat op straat staat, niet door de stad.** Een lantaarn tekent zijn schaduw in zes richtingen, en elke keer met alles wat binnen zijn bereik ligt. De schil van een zone is één mesh; aangekleed is dat de hele gracht, zes keer per lantaarn waar iemand onder loopt. De schil krijgt daarom een eigen schaduwmodel van dozen, zoals de dennen van de duinen een eigen schaduwstam hebben: per rij huizen één doos, per kademuur één. Auto's, bomen, palen, stoepen, mensen en ratten werpen hun eigen schaduw. Niet gebouwd; in grijs scheelt het nog niets, zie "Gemeten".
+- **Grote schaduwen komen van lage lichten.** Een lantaarn hangt op 3,5 m en maakt van iemand op zes meter afstand een schaduw van zes meter op de grond; tegen een gevel komt die schaduw tot heuphoogte. Een schaduw die tegen de huizen aan de overkant opklimt komt van een licht op ooghoogte: een etalage in de Nieuwe Spiegelstraat, de koplampen van een auto, de lamp van een fiets. Een handvol daarvan langs de ronde wordt een echt licht.
+- **Donker is voor het spel wat schaduw in de duinen is.** De bouwer rekent uit waar het licht van een lantaarn komt, zoals hij voor de duinen uitrekende waar de zon niet komt (`_shade_land`), en een wacht ziet wie onder een lantaarn staat van ver en wie in het donker staat pas van dichtbij. Een lantaarn die kapotgeschoten wordt, maakt zijn plek donker: de lantaarn wordt een lamp die stuk kan (`scripts/breakables.gd`, `scripts/lamp.gd`).
+- **De begroting staat in wat op elke machine te tellen is.** De ASUS is sneller dan de MacBook, dus een framerate die daar gemeten is zegt niets over waar gespeeld wordt. Tekenopdrachten, driehoeken, lantaarns met schaduw in beeld, lichten per beeldpunt, lightmaps in beeld en pipelines die tijdens het tekenen gemaakt worden zijn op beide gelijk. De MacBook meet milliseconden bij elke samenvoeging.
+
+**Hoe het verder gebouwd wordt**
+
+Twee sporen naast elkaar. De hele stad staat in grijs en wordt op de MacBook gelopen, gespeeld en gemeten. Daarnaast staat de proefkade, veertig meter gracht als level van één zone. Elk stuk van de laden wordt daar mooi gemaakt en bekeken, droog en nat, met iemand die voorbijloopt. De proefkade bouwt in ruim een seconde en bakt naar verwachting in minder dan een minuut; de stad wordt pas gebakken als de stukken daar goed zijn. Zo gaat er geen baktijd naar een stad die nog verschuift, en geen oordeel over een stuk dat nog grijs is.
+
+| Stap | Wat | Waar | Klaar als |
+|---|---|---|---|
+| 0. Grijs | De stad als greybox, de zichtgrens, de eerste metingen | MacBook | Gedaan: dit hoofdstuk |
+| 1. De proefkade en het licht | De proefkade staat er in grijs. De lantaarn zoals hij is, de ritter en de kroon, in code getekend. Natte klinkers. Het schaduwmodel van dozen. Eén gevel helemaal af. De eerste bake: 8 tegen 16 cm, en hoe korrelig een nacht bakt | ASUS, de MacBook meet | Michiel zegt ja tegen één beeld van de proefkade, en de tabel met wat een lantaarn en een voorbijganger kosten staat er |
+| 2. De gevels | De huizenmaker: trap-, hals-, klok- en lijstgevels, ramen met een kamer erachter die licht geeft, stoepen met hekken, deuren, kroonlijsten, hijsbalken. Winkelpuien voor de Nieuwe Spiegelstraat, de grote blokken van de Vijzelstraat | ASUS | Een rij van twintig huizen waarin er geen twee gelijk zijn, binnen de telling van stap 1 |
+| 3. De kade | Brug met bogen en leuning, kademuur met deksteen, de iep (kaal, met de takkenroute van de duinen), auto's, fietsen aan het hek, Amsterdammertjes, vuilnis | ASUS, naast stap 2 | Elk stuk staat in de showroom en op de proefkade |
+| 4. Water en regen | Het water van de gracht, met wat erin spiegelt. De bui: nat worden en opdrogen als één getal dat elke shader leest, strepen in het licht van de lantaarns, kringen, druppels van de goot, geluid | ASUS, naast stap 2 en 3 | De proefkade droog, in de bui en erna op één blad |
+| 5. De stad | De stukken over de twaalf zones, alles gebakken, het contactblad en het keurmerk per zone | ASUS bakt, de MacBook meet | Elke zone haalt het keurmerk op de speelinstelling, met de mensen erin |
+| 6. Leven | Voetgangers, ratten, de wacht in het donker, lantaarns die stuk kunnen, het geluid van de stad | MacBook, naast stap 2 tot 5 | Een ronde gespeeld |
+| 7. In het spel | De levelkeuze na de duinen, de selftest met de zichtgrens, een wedstrijd erin, `VERSION` in `scripts/net.gd` | MacBook | `tools/selftest.sh` slaagt met het level erin |
+
+- **Stap 2, 3 en 4 kunnen naast elkaar**, elk door een eigen agent met een eigen la: daarom zijn het er drie, want twee agents in één bestand botsten bij de duinen drie keer op namen. Het weer krijgt een eigen script. Stap 6 raakt alleen scripts en kan intussen op de MacBook.
+- **Niet meer dan twee of drie agents tegelijk**, het duurste eerst en alleen. Bij de duinen was met vier agents en een vijfde erboven het tegoed in twee uur op.
+- **Wat elk van de vier wensen vraagt**
+  - *Lantaarns en schaduwen*: stap 1, en de lage lichten onder "Het licht".
+  - *Voetgangers*: mensen uit de Rocketbox-bibliotheek, opnieuw op te halen. Een voorbijganger is geen vijand die uit staat maar iemand die loopt: over de kade, een brug over, een deur in. Wie schoten hoort, rent weg of duikt weg; de paniek van de clowns doet dat al. Wie de vijand is en wat een schot op een onschuldige kost, is aan Michiel: zie "Te beslissen".
+  - *Ratten*: een handvol, niet honderd. Elk rent van de ene schuilplaats naar de andere als er iemand tussen acht en vijfentwintig meter is, langs de kademuur, onder een auto door, een put in. Eén mesh die één keer getekend wordt, zoals de meeuwen van de duinen, met een schaduw onder de lantaarn. Poly Haven heeft een rat (`street_rat`, CC0).
+  - *Een bui*: stap 4. Het weer is een toestand met een klok: droog, motregen, bui, nadruppelen, opdrogen. Eén getal voor hoe nat het is en één voor hoe hard het regent, als globale shaderparameters; de klinkers worden donker en gaan spiegelen, de plassen groeien uit de voegen, het water krijgt kringen, de voetgangers steken een paraplu op. Een paraplu is in een schaduw een heel ander silhouet: dat helpt de verwarring die gevraagd is.
+
+**Wat de ASUS doet**
+
+- **Bouwen en bakken**, de rol "Kit-ruimtes" uit `CLAUDE.md`. Alleen de ASUS commit de gebouwde bestanden van dit level (`scenes/levels/canals_*`), zijn lightmaps en `scenes/canals_bakes.json`: een lightmap past alleen op de meshes waarmee hij gebakken is, en die moeten dus van dezelfde machine komen. De MacBook bouwt het level om het te lopen en commit daar niets van.
+- **De beelden.** De agents van stap 1 tot 5 werken op de ASUS en maken daar hun bladen, zodat de GPU van de MacBook vrij blijft om te spelen en om milliseconden te meten.
+- **Wat een snelle kaart nog meer kan**, als Blender er staat: de takjes van de iep en de kamers achter de ramen renderen (bij de duinen een halve minuut per blad op de processor van de MacBook), en ornament van een zwaar model op een licht model bakken. Een model uit een beschrijving maken, wat nu één model per dag is op een gratis dienst, kan er alleen als de kaart het geheugen heeft: zie "Te beslissen".
+- **De weg heen en terug is GitHub.** De MacBook pusht wat het level beschrijft, de ASUS pusht wat ervan gebouwd en gebakken is. `CLAUDE.md` zegt nu "niet pushen", wat van één machine uitgaat; de opdracht voor de Windows-kant vraagt daar al een regel voor.
+- **Git LFS is de grens**: 10 GiB bij GitHub, waarvan op 11 oktober een halve gebruikt was; wat er sindsdien bij kwam heb ik niet geteld. Elke gewijzigde lightmap telt bij een push voor zijn hele grootte en blijft meetellen. Met 80 tot 160 MB per volle bake zijn dat zestig tot honderdtwintig bakes van de hele stad. De proefkade en elke bake die een proef is gaan daarom niet naar GitHub: van zo'n bake komt het blad terug, niet de lightmap.
+- **Wat er eerst moet**: de opdracht van 13 oktober om het gereedschap op Windows te laten werken, uitgevoerd op de ASUS zelf; daarna deze branch op GitHub.
+
+**Te beslissen door Michiel**
+
+1. **De schaal.** Bloklengtes op twee derde, zoals het er staat, of de stad op ware grootte (ruim 300 bij 620 m, een ronde van 1,2 km)? Ik raad twee derde aan: de dwarsmaten, waar het gevoel van een gracht in zit, zijn echt, en een gracht van 216 m is al langer dan er in de mist te zien is.
+2. **Wie de vijand is, en wat een onschuldige kost.** Mijn voorstel: de vijand draagt gewone kleren, dezelfde garderobe als de voetgangers, en is te herkennen aan wat hij in zijn handen heeft en aan wat hij doet. Wie een voetganger raakt, waarschuwt daarmee elke vijand in die straat, en het eindscherm telt het. Het alternatief is de soldaten van nu tussen burgers: eenvoudiger, en dan is er aan een silhouet niets te raden.
+3. **De gracht.** Waden en er bij een trapje uit, zoals het er staat, zwemmen, of verdrinken?
+4. **De mist.** De zichtgrens van 130 m bestaat alleen als er mist hangt, ook als het droog is. Is dat de nacht die bedoeld is, of moet een heldere nacht ook kunnen? Dan moeten de lichten van ver ergens anders vandaan komen dan uit de zones, en dat is werk.
+5. **De ASUS.** Welke kaart zit erin en met hoeveel geheugen, en is de opdracht voor Windows daar al gestart? Mag `grachten` naar GitHub, zodat de ASUS erbij kan?
+6. **De downloads hieronder.**
+
+**Waar ik om vraag**, en verder niets
+
+| Wat | Bron en licentie | Grootte |
+|---|---|---|
+| Zes texturen op 2k voor de proefkade: `floor_klinkers_04`, `floor_klinkers_01`, `cobblestone_floor_08`, `brick_wall_10`, `church_bricks_03`, `white_sandstone_blocks_02` | Poly Haven, CC0, via `assets/manifest.json` en `tools/fetch_assets.py` | 48 MB |
+| De rat, `street_rat`, op 1k | Poly Haven, CC0 | 3,6 MB |
+| De kaart van het gebied: water, wegen, panden, bruggen, lichtmasten en bomen | BGT via de API van PDOK; de licentie staat op de datasetpagina en heb ik niet kunnen bevestigen, PDOK noemt voor de meeste van zijn sets CC0. Ik lees haar na voor ik iets ophaal en meld het als het iets anders is | naar schatting onder 10 MB, voor een vak van 250 bij 650 m |
+| De hoogte van elk pand | 3DBAG van de TU Delft, CC BY 4.0: naamsvermelding | naar schatting onder 20 MB voor hetzelfde vak |
+| Acht tot tien mensen uit de Rocketbox-bibliotheek, als voetganger en als vijand | Microsoft, MIT, via `tools/characters/fetch_rocketbox.py` | naar schatting 60 tot 70 MB per persoon aan bron, dus 0,5 tot 0,7 GB (de 1,4 GB van eerder gedeeld door de bezetting; niet nagemeten). Die kan na het inlezen weer weg: in het spel is een persoon 2 MB |
+
+Nog niet gevraagd, en pas aan de orde bij stap 2 tot 4: baksteen, dakpannen en asfalt erbij (van wat ik bij Poly Haven heb uitgezocht nog een kleine 50 MB op 2k), geluid van regen en natte stappen, en Blender op de ASUS.
+
+**Buiten de bestanden van het level geraakt**
+
+- `tools/level_builder.gd`: `_sight_reach` en `_texel`, elk een variabele, een regel waar hij gebruikt wordt en, voor de zichtgrens, een regel die hem op het level zet. Zonder dat een level ze zet verandert er niets.
+- `tools/kit/rooms.gd` breidt nu `houses.gd` uit in plaats van `field.gd`, en heet in zijn eigen kop de veertiende la. `tools/kit.gd` noemt de drie nieuwe laden.
+- Nieuw: `tools/kit/street.gd`, `water.gd` en `houses.gd`, `tools/levels/quay.gd` met `scenes/quay.tscn`, `materials/canal_water.tres`, en in `benchmark/sheets/` de bladen `canals_plan.png` en `canals_first_night.jpg`.
+
+**Gecontroleerd, en wat niet**
+
+- Het level bouwt, en de bouwer vindt elke post en elk checkpoint bereikbaar vanaf het begin. Het spel laadt het en draait het 400 beelden zonder beeld en zonder fout, in een eigen thuismap.
+- `tools/build_check.py factory works depot powerhouse wing dunes showroom`: alle zeven komen er gelijk uit, met de drie laden in de ketting en de twee schakelaars in de bouwer. `git status` noemt daarna geen bestand van een level.
+- `tools/selftest.sh` slaagt, 401 controles. Dat zegt hier weinig: er is geen script van het spel aangeraakt en het level zit er niet in.
+- Het blad `benchmark/sheets/canals_first_night.jpg`: linksboven een soldaat in de loop onder een lantaarn aan de Herengracht, met zijn schaduw en die van zijn geweer over de natte straat; rechtsboven het begin van de ronde in het echte spel, zes seconden na het laden, met `Reach the Spiegelgracht` in beeld; eronder de zes vaste standpunten.
+- **Gespeeld is het niet, en gelopen ook niet.** De ronde is door de bouwer nagelopen op het navmesh, niet door de selftest: het level staat niet in de levelkeuze. Of een gracht van 47 m breed te bevechten is, of de bruggen de goede plek zijn om over te steken en of 53 de goede maat is, weet ik niet.
+- **De maten zijn uit het hoofd.** Of er over de Herengracht een brug ligt in het verlengde van de Nieuwe Spiegelstraat, zoals hier, weet ik niet zeker; hoe de Spiegelgracht bij de Lijnbaansgracht uitkomt heb ik vereenvoudigd. De kaart zegt het.
+- **Er is niets gebakken.** Wat de beelden laten zien is het echte licht van de lantaarns, de gloed van de ramen als vlak, en de mist. Hoe de stad eruitziet met wat de straat terugkaatst, is niet te zeggen.
+- Elke meting is één run, naast andere sessies. De tekenopdrachten en de driehoeken zijn te vertrouwen, de framerates op een paar beelden na.
+
+**Niet kunnen beoordelen**
+
+- Of dit de nacht is die bedoeld is. De eerste beelden (`benchmark/sheets/canals_first_night.jpg`) zijn oranje en mistig, met ramen die als lampen stralen: een stemming, geen stad. Aan de kleur van het licht, de dichtheid van de mist en de helderheid van de ramen is niets afgesteld.
+- Of twee derde aanvoelt als Amsterdam.
+- Niets is in beweging gezien.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| De stad of de proefkade bouwen (37 s en 1,3 s, zonder GPU; nodig voor wie ze wil zien, want het gebouwde staat niet in git) | `tools/build_level.sh canals`, `tools/build_level.sh quay` |
+| De proefkade bekijken, met iemand die voorbijloopt | `tools/benchmark.sh --quick --scene=res://scenes/quay.tscn --enemies=soldiers --spawn="res://scenes/enemy.tscn@24,0,41.5,-90,1,2"` |
+| Nagaan dat een wijziging aan een la geen ander level breekt | `tools/build_check.py factory works depot powerhouse wing dunes showroom` |
+| Nagaan dat de grachten te doorwaden zijn, de trapjes vrij en de kaden, straten en bruggen te belopen, na het bouwen | `tools/test_canals.sh` (een halve minuut, zonder GPU) |
+| Het blad met het plan en de stad van de kaart ernaast, na het bouwen | `tools/canals_sheet.py` |
+| De kaart opnieuw ophalen | `tools/fetch_map.py` (BGT en 3DBAG, buiten git) |
+| Van boven, zoals het gebouwd is | `tools/level_map.py canals` |
+| De zes vaste standpunten, alleen de beelden | `tools/benchmark.sh --quick --scene=res://scenes/canals.tscn` |
+| Meten zoals er gespeeld wordt, met wat schaduw, spiegeling en mist kosten | `tools/benchmark.sh --scene=res://scenes/canals.tscn --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=lamp_shadows,ssr,volumetric_fog` |
+| Hetzelfde met iedereen wakker en op weg naar de brug van de Herengracht | dezelfde opdracht met `--enemies=soldiers --awake=40,0.9,30 --warmup=600` in plaats van `--profile` |
+| De stad of de proefkade lopen in een venster | na het bouwen: `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/canals.tscn -- --play`, of `res://scenes/quay.tscn` |
+| Een maat van de stad veranderen | alleen in `tools/levels/canals/plan.gd` |
+
+**Besloten door Michiel**, op 14 oktober, na het lopen van de greybox
+
+1. De schaal blijft twee derde.
+2. De vijand draagt gewone kleren en is te herkennen aan wat hij draagt en doet. Een geraakte voetganger waarschuwt de straat en telt op het eindscherm.
+3. In de gracht waad je, en je komt er bij een trapje uit, zoals het er staat. Op een paar plekken kwam hij er niet uit: zie hieronder.
+4. De mist is goed zo.
+5. `grachten` mag naar GitHub.
+6. De downloads uit de tabel hierboven: allemaal.
+
+Over de ASUS zelf, de kaart, het geheugen en of de opdracht voor Windows daar loopt, staat nog niets.
+
+**De gracht uit: bruggen en trapjes**
+
+Een test die een lichaam van de maat van de speler door elke gracht laat waden, op elk trapje laat staan en over elke kade, straat en brug laat lopen (`tools/test_canals.sh`), vond op de stand van 13 oktober vier dingen:
+
+- **Negen van de veertien trapjes kwamen uit bij iets op de kade**: een geparkeerde auto, een lantaarn of een iep stond aan de rand, precies waar je eruit klimt. Dat is vermoedelijk waar Michiel niet uit kwam.
+- **Wie in een stuk water viel zonder trapje, kwam er niet meer uit**: de Lijnbaansgracht had er geen, en voorbij de bruggen aan de randen van het level evenmin. Bruggen waren te laag om onderdoor te waden: een dek van 0,6 m dat aan de uiteinden op kadehoogte ligt, laat boven de bodem 1,1 m over, en de speler is 1,8 m.
+- **Onder de kade over de monding van de Spiegelgracht kon je zelfs gebukt niet door.**
+- **De ronde was doorgesneden**: die kade had een leuning aan de kant van de Prinsengracht, precies waar de brug uit de Nieuwe Spiegelstraat neerkomt. De bouwer zag het niet, want om de Vijzelstraat heen was alles nog te bereiken.
+
+Nu staat er in elk stuk water tussen twee bruggen, of tussen een brug en de rand, op elke kade een trapje, 23 in de stad en 2 op de proefkade, en houdt de kade daarboven drie meter vrij (`kerb_line` neemt de plekken mee). Een brug rust op de kademuren en op niets in het water, met een dek van 0,4 m: de bruggen van de Nieuwe Spiegelstraat rijzen 1,5 m, die van de Vijzelstraat 1,2 m en die over de Lijnbaansgracht 1,0 m, zodat je onder de kruin rechtop waadt. De kaden over de twee mondingen van de Spiegelgracht liggen vlak, met alleen een leuning aan de kant van de Spiegelgracht; daaronder moet je bukken. Op de stand van nu slaagt de test, 18 van 18, en op die van 13 oktober faalt hij op alle vier.
+
+**De kaart: maten uit de BGT en de 3DBAG**, op 14 oktober
+
+Achterhaald in wat hierboven staat: "Tien bruggen" (het zijn er negen), "geschat uit het hoofd en niet van een kaart" (de maten zijn nu gemeten), "216 bij 440 meter" (nu 216 bij 471), "846 m" voor de ronde (nu 905), het ritme van één lantaarn en één iep op 1,4 m van het water, en de 138 lantaarns (nu 122).
+
+Opgehaald, op Michiels "download alles maar":
+
+| Wat | Gevraagd | Gekregen |
+|---|---|---|
+| Zes texturen op 2k en de rat, van Poly Haven (CC0), met hun checksum | 48 en 3,6 MB | 48 en 3,6 MB, in `assets/textures/` en `assets/models/street_rat/`, ingelezen in 12 s |
+| De BGT van het vak, via de API van PDOK | onder 10 MB, licentie na te lezen | **CC0 1.0**, zo staat het op de pagina van de API. **84 MB**, acht keer mijn schatting: de wegdelen alleen zijn 48 MB, met elk vlak tot op de stoeprand. Buiten git, in `assets/maps/.source/` |
+| De hoogtes uit de 3DBAG (CC BY 4.0, de 3D geoinformation research group van de TU Delft en 3DGI) | onder 20 MB | 11,7 MB, 4976 bouwdelen |
+| Mensen uit de Rocketbox-bibliotheek (MIT) | acht tot tien, 0,5 tot 0,7 GB | **acht**, 610 MB: een persoon is 73 tot 79 MB aan bron, niet de 60 tot 70 die ik schatte, dus om binnen de 0,7 GB te blijven acht van de kleinste: `Female_Adult_02`, `_06`, `_10`, `Business_Female_04`, `Male_Adult_11`, `_14`, `_17` en `Business_Male_05`. Buiten git, nog niet ingelezen: dat is stap 6. GitHub verbrak de verbinding vier keer; de download is opnieuw gestart tot alles er was |
+
+Wat de kaart zegt, gemeten tussen de twee assen:
+
+- **De grachten** hebben de dwarsmaten die ik schatte op een meter na: de Herengracht 24,6 m water tussen kaden van 10,6 en 10,2 m, de Keizersgracht 27,4 m tussen 10,9 en 11,3 m, de Prinsengracht 24,5 m tussen 10,1 en 10,1 m. De Lijnbaansgracht is geen 12 maar ruim 20 m breed en loopt schuin naar het zuidoosten; de Spiegelgracht is 36 m van gevel tot gevel, waarvan 15,3 m water. De Nieuwe Spiegelstraat is 10 tot 12,6 m, de Kerkstraat 10,7, de Tweede Weteringdwarsstraat 8,6, de Vijzelstraat 23 tot 25 en de Vijzelgracht 35,6.
+- **Over de Herengracht ligt bij de Nieuwe Spiegelstraat geen brug.** De straat houdt op aan de kade; in dit stuk gaat alleen de Vijzelstraat over de Herengracht, met een brug van 26 m breed. Die over de Prinsengracht naar de Vijzelgracht is 38 m breed.
+- **Op twee derde klopt de opzet.** Van as tot as langs de Keizersgracht is 205 m (in het level 140); van gracht tot gracht 157, 189 en 200 m (in het level 113 tot 148, nu op twee derde gezet).
+- **Wat het level anders doet**: de grachten buigen bij de Nieuwe Spiegelstraat, de Gouden Bocht zelf; de Nieuwe Spiegelstraat kruist ze onder 74 graden; de Weteringbuurt heeft drie dwarsstraten en de Weteringstraat waar het level er één heeft; de Lijnbaansgracht loopt schuin. Het level houdt de grachten recht en de assen haaks, en dat is mijn keuze: zones en lightmaps zijn dozen langs de assen, en een bocht is iets voor de rand van het level. Het blad laat het verschil zien.
+- **De lantaarns** staan op één rij langs het water, 2 tot 3 m van de rand en 18 tot 23 m uit elkaar; **de iepen** in dezelfde rij, om de 9 tot 14 m. 603 lichtmasten en 1124 bomen in het vak.
+- **De huizen** (3DBAG, de middelste helft tussen de assen): de Gouden Bocht ligt aan de zuidkant van de Herengracht, waar ik haar aan de noordkant had gezet, met huizen van 14,6 tot 18,9 m breed en 18,8 m tot de goot. Aan de zuidkant van de Keizersgracht 5,4 tot 7,6 m breed en 17 m hoog; aan de Prinsengracht 4,2 tot 9,8 m en 12 tot 13 m.
+- Er rijden trams over de Vijzelstraat, de Vijzelgracht en de Weteringschans, en er staan vijftien reclamezuilen.
+
+Wat er daarom in het level veranderd is: elke maat in `tools/levels/canals/plan.gd` komt van de kaart, de blokken op twee derde; geen brug meer over de Herengracht bij de Nieuwe Spiegelstraat; de bruggen van de Vijzelstraat 26 en 36 m breed; langs elke kade om de 7 m een iep of een lantaarn, een lantaarn per 21 m, op 2,3 m van het water (`kerb_line`); een soort huis erbij, laag, voor de Prinsengracht en de Weteringbuurt, en alle soorten op de maat van de 3DBAG. Posten, checkpoints, zones en de vaste standpunten worden nu uit het plan berekend: een maat veranderen is nu echt één bestand. De proefkade heeft het profiel van de Herengracht.
+
+Bij het overzetten vond `tools/test_canals.sh` dat de helft van de trapjes binnenstebuiten stond: het bordes onder de kade in plaats van in het water. Of een trapje op de noordkade stond, werd beslist door twee getallen op gelijkheid te vergelijken, en 10,6 is in een `Vector3` 10,6000004. Elk trapje krijgt nu zijn richting mee; de test slaagt weer, 18 van 18.
+
+`tools/fetch_map.py` haalt de kaart van een stuk stad op zoals `assets/manifest.json` hem onder `maps` noemt, en `tools/canals_sheet.py` tekent het blad `benchmark/sheets/canals_plan.png` uit het plan en het gebouwde level, met de stad van de kaart ernaast op dezelfde maat. Gecontroleerd: het level bouwt (12 zones, 6 checkpoints, elke post bereikbaar), het spel laadt het en de proefkade zonder fout, de andere zeven levels komen er gelijk uit, en de zes vaste standpunten tekenen. Het level is 216 bij 471 m, met 122 lantaarns en 21 trapjes.
+
+**Nog open**
+
+- Alles onder "Hoe het verder gebouwd wordt" vanaf stap 1.
+- De lichten van ver, de occluders van de huizenblokken, de zichtlijnen in de selftest en de grachten in tweeën: zie "Wat de greybox leerde".
+- De opmeting van 35 s per bouw. Een paar zones dat elkaar niet ziet blijft dat zolang er alleen iets bij komt (zie stap 2 van "Grotere levels bouwen"); dat is nog steeds niet gebouwd.
+- De randen van het level zijn golfplaten schotten van vier meter, dwars over kade en water. Wat de stad daarachter laat zien, een bocht in de gracht, de volgende brug, is er niet.
+- Het water is een zwart vlak zonder botsvorm: een schot gaat erdoor en slaat in op de bodem.
+- De ramen zijn gloeiende vlakken, de lantaarns gloeiende dozen, de auto's dozen, de iepen stammen zonder kroon.
+- De borden boven de deuren en de naam op de metro ontbreken: een opschrift vraagt een regel in het manifest.
+- `tools/level_map.py` tekent geen water: wat onder de vloer ligt slaat het over. Het blad met de plattegrond is daarom apart getekend, uit dezelfde maten, met een script dat niet in de repo staat.

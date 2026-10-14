@@ -1,0 +1,103 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://codrrw63bxvgr" path="res://scripts/game.gd" id="game"]
+[ext_resource type="Script" uid="uid://v3mx0n2xm2fi" path="res://scripts/hud.gd" id="hud"]
+[ext_resource type="PackedScene" path="res://scenes/levels/canals_level.tscn" id="level"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
+[ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
+
+[sub_resource type="NavigationMesh" id="navmesh"]
+geometry_parsed_geometry_type = 1
+geometry_collision_mask = 1
+geometry_source_geometry_mode = 1
+geometry_source_group_name = &"navigation_source"
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.02, 0.026, 0.045, 1)
+sky_horizon_color = Color(0.13, 0.095, 0.07, 1)
+sky_curve = 0.09
+ground_bottom_color = Color(0.012, 0.012, 0.014, 1)
+ground_horizon_color = Color(0.13, 0.095, 0.07, 1)
+ground_curve = 0.05
+sun_angle_max = 0.0
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+tonemap_mode = 4
+tonemap_exposure = 1.0
+tonemap_agx_contrast = 1.2
+ssr_enabled = true
+ssr_max_steps = 48
+ssao_enabled = true
+ssao_radius = 1.2
+ssao_intensity = 2.0
+glow_enabled = true
+glow_intensity = 0.8
+glow_bloom = 0.08
+glow_hdr_threshold = 1.0
+fog_enabled = true
+fog_light_color = Color(0.1, 0.085, 0.075, 1)
+fog_density = 0.004
+fog_sky_affect = 0.4
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.018
+volumetric_fog_albedo = Color(0.9, 0.88, 0.84, 1)
+volumetric_fog_anisotropy = 0.7
+volumetric_fog_length = 80.0
+volumetric_fog_ambient_inject = 0.2
+
+[sub_resource type="ShaderMaterial" id="post_mat"]
+shader = ExtResource("post")
+shader_parameter/vignette = 0.34
+shader_parameter/grain = 0.035
+
+[node name="Canals" type="Node3D" groups=["game"]]
+script = ExtResource("game")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
+
+[node name="Post" type="CanvasLayer" parent="."]
+layer = 0
+
+[node name="Lens" type="ColorRect" parent="Post" groups=["lens"]]
+material = SubResource("post_mat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="HUD" type="CanvasLayer" parent="." groups=["hud"]]
+script = ExtResource("hud")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52.825, 0, 461.6)
+
+[node name="BenchmarkViews" type="Node3D" parent="."]
+
+[node name="GoldenBend" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(-0.0348995, 0.03487824, -0.998782, 0, 0.9993908, 0.0348995, 0.9993908, 0.001217975, -0.03487824, 60, 1.7, 41.4)
+
+[node name="Spiegelgracht" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(1, 0, 0, 0, 0.9993908, 0.0348995, 0, -0.0348995, 0.9993908, 52.8, 1.7, 414)
+
+[node name="Spiegelstraat" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(1, 0, 0, 0, 0.9998477, 0.01745241, 0, -0.01745241, 0.9998477, 40, 1.7, 263)
+
+[node name="Keizersgracht" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(0.4694716, -0.03081443, 0.8824097, 0, 0.9993908, 0.0348995, -0.8829476, -0.01638432, 0.4691856, 104, 1.7, 163.5)
+
+[node name="Vijzelstraat" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 180, 1.7, 112)
+
+[node name="Vijzelgracht" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(-1, 0, 0, 0, 0.9993908, 0.0348995, 0, 0.0348995, -0.9993908, 180, 1.7, 315)
