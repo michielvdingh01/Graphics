@@ -18,6 +18,7 @@ var _theirs := Label.new()
 var _middle := Label.new()
 var _feed := Label.new()
 var _centre := Label.new()
+var _status := Label.new()
 var _board := Label.new()
 ## What the feed has to say: [text, seconds left].
 var _lines: Array[Array] = []
@@ -48,7 +49,7 @@ func _ready() -> void:
 	_feed.add_theme_constant_override("outline_size", 5)
 	_feed.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	# Under where the HUD of the game counts the player's kills.
-	_feed.position.y += 44
+	_feed.position.y += 80
 	add_child(_feed)
 	_centre.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	_centre.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -59,6 +60,15 @@ func _ready() -> void:
 	_centre.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	_centre.position.y += 90
 	add_child(_centre)
+	_status.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 20)
+	_status.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status.add_theme_font_size_override("font_size", 17)
+	_status.add_theme_constant_override("outline_size", 5)
+	_status.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	_status.position.y += 46
+	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_status)
 	_board.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	_board.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_board.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -70,6 +80,7 @@ func _ready() -> void:
 	for control: Control in [top, _ours, _middle, _theirs, _feed, _centre, _board]:
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Match.felled.connect(_on_felled)
+	Match.said.connect(_say)
 	Match.began.connect(func() -> void:
 		_lines.clear()
 		_by = "")
@@ -93,6 +104,7 @@ func _process(delta: float) -> void:
 
 	var me: RefCounted = Match.me()
 	var over: bool = Match.state == Match.State.OVER
+	_status.text = Match.mode.status(me)
 	var text := ""
 	if over:
 		if Match.won == Match.mode.DRAW:
@@ -121,11 +133,15 @@ func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
 	var text := "%s  ▸  %s" % [killer.title, who.title] if killer else "%s went down" % who.title
 	if with and killer:
 		text += "   (%s%s)" % [with, ", head" if head else ""]
+	_say(text)
+	if fallen == Net.id():
+		_by = "%s, %s" % [killer.title, with] if killer and with else killer.title if killer else ""
+
+
+func _say(text: String) -> void:
 	_lines.append([text, LINE_TIME])
 	if _lines.size() > LINES:
 		_lines.pop_front()
-	if fallen == Net.id():
-		_by = "%s, %s" % [killer.title, with] if killer and with else killer.title if killer else ""
 
 
 ## Everybody who plays, the best first, a side at a time.

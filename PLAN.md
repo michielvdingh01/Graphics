@@ -2480,7 +2480,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 ## Een ruw potje: stap 1 van de wedstrijden
 
-Op 13 oktober 2026 gevraagd: verder met de bouw van de wedstrijden. Dit is stap 1 uit "Wedstrijden: teams, bots en een buit (plan)": een wedstrijd die te spelen is, alleen tegen bots, in team deathmatch en ieder voor zich. Gebouwd op de branch `potje`, vanaf de trunk met de duinen erin. De uniformen (2e, branch `uniformen`) zijn er op 13 oktober bij gekomen, op Michiels woord samen met deze stap in de trunk gezet: de tweede kant draagt het woestijnuniform. De buit (2d, branch `buit`) zit er niet in: die branch is niet gemerged.
+Op 13 oktober 2026 gevraagd: verder met de bouw van de wedstrijden. Dit is stap 1 uit "Wedstrijden: teams, bots en een buit (plan)": een wedstrijd die te spelen is, alleen tegen bots, in team deathmatch en ieder voor zich. Gebouwd op de branch `potje`, vanaf de trunk met de duinen erin. De uniformen (2e, branch `uniformen`) zijn er op 13 oktober bij gekomen, op Michiels woord samen met deze stap in de trunk gezet: de tweede kant draagt het woestijnuniform. De buit (2d, branch `buit`) is er later die dag bij gekomen, toen capture the flag gebouwd werd.
 
 **Wat er nu is**
 
@@ -2524,7 +2524,6 @@ Op 13 oktober 2026 gevraagd: verder met de bouw van de wedstrijden. Dit is stap 
 - Een bot ziet door ruiten en struiken heen wat de speler niet ziet, en andersom: hij kijkt alleen naar de wereldlaag.
 - Een vat dat een bot of de speler raakt en dat iemand doodt, telt voor niemand.
 - Het `Kills`-tellertje van de gewone HUD telt in een wedstrijd de kills van de speler; het doel van de route blijft leeg.
-- `buit` voegt ook een sectie achteraan dit bestand toe: bij het mergen houden, achter die van de uniformen.
 
 **Wat Michiel bekijkt**
 
@@ -2626,6 +2625,486 @@ De donkere hoek is niet overal even donker. Door het raam in de zuidmuur valt ee
 - De twee teams met hun wapens: `assets/characters/sheets/uniforms_teams.jpg`.
 - De vijf in het gekozen uniform: `assets/characters/sheets/soldier_01_desert.jpg` tot en met `soldier_05_desert.jpg`, naast `soldier_01.jpg` tot en met `soldier_05.jpg`.
 - Ertegen spelen, om ze in beweging te zien: `GODOT_WINDOW=1 tools/godot.sh -- --play --enemies=soldiers_desert`. Dat commando heb ik niet kunnen proberen, want het opent een venster; `--enemies=soldiers_desert` zelf is zonder venster getest.
+
+## Het potje bijgesteld: wat Michiel er na het spelen van zei
+
+Op 13 oktober 2026 speelde Michiel het ruwe potje en gaf zeven punten door. Dit is wat er per punt gedaan is, op de branch `potje`. Capture the flag staat in de sectie hierna.
+
+**Wat er veranderd is**
+
+- **De moeilijkheid telt nu in een wedstrijd.** Dat deed ze niet: een wedstrijd had één stel regels, wat er ook was ingesteld. `assets/match.json` heeft er nu drie, en `Settings.rules()` geeft in een wedstrijd die van de ingestelde moeilijkheid:
+
+  | | Easy | Normal | Hard |
+  |---|---|---|---|
+  | Health komt vanzelf terug tot | 100 | 75 | 50 |
+  | Wat er overblijft van wat een bot een mens doet | 75% | 90% | alles |
+  | De bots | Recruit | Regular | Hardened |
+  | Van zien tot het eerste schot | 1,1 s | 0,55 s | 0,35 s |
+  | Hoe ver zijn richtpunt van het doel zwerft | 4,5° | 2° | 1,2° |
+  | Tijd waarin zijn richtpunt het doel inhaalt | 1,0 s | 0,6 s | 0,4 s |
+  | Blikveld | 90° | 110° | 120° |
+  | Vuurt zo lang, en laat dan zo lang los | 0,35 s, 1,2 tot 2 s | 1 s, 0,4 tot 0,7 s | 1,6 s, 0,2 tot 0,4 s |
+  | Bots die tegelijk op één mens schieten | 1 | 2 | allemaal |
+  | Health begint terug te komen na | 3 s | 5 s | 5 s |
+
+  Zo staat het na de tweede ronde hieronder; in de eerste was de Recruit 0,9 s, 3,5° en 0,9 s, en waren er geen stoten en geen grens aan wie tegelijk schiet.
+
+  De niveaus van de bots staan in `assets/bots.json`, met de vierde uit het plan (Veteran) erbij voor later. Bots komen zelf tot dezelfde grens terug als een mens.
+- **Twee schoten van een scherpschutter op easy.** Het geweer doet 70; op easy komt daarvan 52,5 aan, dus één treffer in het lijf laat je staan en de tweede niet; een schot in het hoofd (175, op easy 131) is er één. Dat gold op het lijf al, maar de bots richtten op de hals, 6 cm onder waar het hoofd begint, en hun richtpunt zwerft: een deel van hun schoten was dus een schot in het hoofd. Hoeveel is niet geteld. Ze richten nu op de borst, een halve meter onder de ogen.
+- **Tegen wie je speelt** is de instelling "Enemies" die er al was, en die deed in een wedstrijd niets: de ander was altijd een soldaat. Nu is de andere kant (bij ieder voor zich: iedereen behalve jij) wie daar gekozen is: soldaten in het woestijnuniform, zombies, clowns, de blokkige zombies of de paspoppen. Ze dragen een wapen van de speler en lopen en rennen zoals iedereen: een zombie is hier een bot met het lijf en de stem van een zombie, niet de trage van de route. Robots kunnen niet dragen wat een speler draagt; staat de instelling daarop, dan zijn het soldaten. De keuze staat ook op het scherm "Multiplayer", als "Against", naast "Difficulty": het zijn dezelfde twee instellingen als onder Settings.
+- **Sprinten gaat van 8,0 naar 7,2 m/s**, voor de speler overal in het spel, en voor de bots, die de snelheden van de speler nu uit `scripts/player.gd` lezen in plaats van ze over te schrijven. Lopen blijft 5,0.
+- **Cellen die 25 health geven liggen in de arena**, zuinig: één per 250 plekken, ten minste één en hooguit vier (fabriek 1, fabrieksterrein 1, centrale 1, duinen 2), halverwege de twee uiteinden en zo ver mogelijk uit elkaar. Een cel blijft liggen tot iemand hem pakt en ligt er 45 seconden later weer. Boven de grens waartot health vanzelf terugkomt is dit de enige manier om erbij te krijgen. Alleen de speler raapt op; een bot niet.
+- **De duinen zijn een arena.** De twee kanten beginnen 399 m lopen uit elkaar. Wat daarvoor nodig was: een arena houdt hooguit 500 plekken (in de duinen 491, om de drie; het opzoeken van de wegen kost daar 1,3 s bij het begin, tegen 6,5 s met alle 1 145), een bot die niemand kent loopt naar de helft van de ander in plaats van zomaar ergens heen, wie een vijand ziet zegt het zijn kant, een scherpschutter ziet 180 m ver (de anderen 40 tot 70), en in een arena langer dan 300 m draagt een kant twee scherpschuttersgeweren en één shotgun minder.
+- **Een bot die geen weg kreeg bleef staan** zonder dat het als vastlopen telde: op een stuk navmesh dat nergens aan vastzit geeft de wegzoeker de plek zelf terug. Hij loopt dan recht op zijn doel af, wat hem van dat stuk af brengt.
+
+**Tweede ronde, dezelfde dag.** Michiel speelde de bijgestelde stand: "heel vet", maar easy nog veel te moeilijk, en vijf tellen wegzijn te lang.
+
+- **Terugkomen na 2 seconden**, in alle drie de spelsoorten (het was 3, 2 en 5).
+- **Easy is op vier manieren zachter gemaakt**, omdat de schade niet verder omlaag kan zonder dat een scherpschutter drie treffers nodig heeft:
+  - **Een bot vuurt in stoten.** Hij schoot door zolang hij zijn doel had: tien schoten per seconde uit een karabijn. Nu vuurt een Recruit 0,35 s en laat dan 1,2 tot 2 s los; een Regular 1 s en 0,4 tot 0,7 s; een Hardened 1,6 s en 0,2 tot 0,4 s. Met een langzaam wapen is een stoot één schot.
+  - **Op een mens schieten er niet meer tegelijk dan de moeilijkheid toelaat**: één op easy, twee op normal, op hard iedereen die hem ziet. De anderen houden hun wapen op hem en wachten tot een van de schutters een seconde niet gevuurd heeft. Bots onderling kennen die grens niet.
+  - **De Recruit is trager en wijder**: 1,1 s van zien tot schieten (was 0,9), zijn richtpunt zwerft 4,5° (was 3,5°) en haalt het doel in 1 s in (was 0,9).
+  - **Health begint op easy na 3 s terug te komen**, niet na 5.
+- **Een lading hagel uit de handen van een bot telt in het hoofd als in het lijf.** Anders kon een shotgun van dichtbij op easy in één schot doden (88 in het lijf, 131 met de hagel in het hoofd), en dat mag daar alleen het scherpschuttersgeweer.
+
+Gemeten met de speler erin, stilstaand waar hij begon, drie tegen drie in de fabriek, negentig seconden, om en om met een kloon waarin easy stond zoals het was; de speler kan in die meting niet dood. Load 21 tijdens de laatste vier runs, alles zonder GPU:
+
+| | Schade per seconde | De snelste honderd |
+|---|---|---|
+| Easy zoals het was (twee keer) | 17,9 en 95,0 | 0,2 en 0,1 s |
+| Easy nu (vier keer, vóór de regel voor hagel) | 2,9 · 10,2 · 13,7 · 24,5 | 1,2 · 1,4 · 0,3 · 1,4 s |
+| Normal nu (twee keer) | 45,5 en 61,7 | 0,2 en 0,1 s |
+| Hard nu (twee keer) | 95,4 en 87,4 | 0,0 en 0,1 s |
+
+Het loopt ver uiteen van run tot run: het hangt af van hoeveel van de drie de speler bereiken voor zijn eigen kant ze neerhaalt. De ene keer van 0,3 s op easy is een shotgun van dichtbij geweest, de aanleiding voor de regel hierboven; na die regel is niet opnieuw gemeten. Op normal en hard is de snelste honderd één lading hagel.
+
+**Getest en gemeten**, alles zonder GPU, de laptop aan de lader, load 4 tot 8.
+
+- `tools/test_match.sh`, 47 controles. Nieuw: de drie stellen regels; op easy laat één schot van het scherpschuttersgeweer in het lijf de speler staan en het tweede niet, en één in het hoofd is genoeg; health komt terug tot 50, 75 en 100; er ligt een cel tussen de uiteinden die blijft liggen; tegen zombies is de andere kant zombies met een wapen in handen en de eigen kant soldaten, ze leggen 5,5 m per seconde af en vechten (7 neergehaald, 5 verloren in 34 s); het scherm gaat langs soldaten, zombies en clowns en biedt geen robots aan; de duinen staan in de lijst.
+- **Twaalf bots twee minuten in de duinen**, twee keer: 15 en 21 doden, geen noodspawn. Ze liepen 83 en 99 keer ergens tegenaan, zeven keer per bot: op het land klopt het navmesh niet overal met wat er staat. Ze komen er elke keer na anderhalve seconde uit, maar een tiende van hun tijd staan ze dus stil. Op het fabrieksterrein in twee minuten 38 doden en één keer vast.
+
+**Wat ik niet kon beoordelen**
+
+- **Of easy nu makkelijk genoeg is.** Na de tweede ronde krijgt een speler die stilstaat er gemiddeld een kwart van de schade van eerst en duurt de snelste dood een ruime seconde in plaats van een tiende; of dat genoeg is, zegt het spelen. Tussen easy en normal zit nu een factor vier tot vijf: normal en hard zijn op de stoten na niet zachter gemaakt.
+- **Of 7,2 de goede sprint is.** "Ietsje trager" is tien procent geworden.
+- **Zombies en clowns van dichtbij.** Op twee beelden van een potje in de fabriek staan drie zombies op twintig meter: ze rennen en richten als de anderen. Hoe een geweer in de handen van een zombie of een clown er van dichtbij uitziet heb ik niet gezien.
+- **De duinen op het oog.** Geen beeld van gemaakt, en niet gemeten wat twaalf figuren daar kosten.
+
+**Nog open**
+
+- De regel voor health geldt in een wedstrijd. Op de route komt health terug tot 50, 35 en 25: dat is niet aangeraakt.
+- Een bot ziet in de duinen door struiken en bomen heen.
+- Een clown die op de route in paniek raakt doet dat hier niet, en de zware van een bezetting is hier even groot en even sterk als de rest.
+
+## De buit: vlag, voetbal en banaan
+
+Op 12 oktober 2026 gebouwd op de branch `buit`: stap 2d van "Wedstrijden: teams, bots en een buit (plan)". Wat twee teams elkaar afpakken, waar het thuis op staat en hoe iemand het draagt. De regels van capture the flag horen hier niet bij; die komen in stap 3. Niet in de trunk gezet.
+
+**Wat er staat**
+
+- **Drie buiten, elk met zijn standaard**, in code gebouwd (`tools/models/prizes.gd`):
+  - een vlag op een mast van 1,95 m, met een doek van 90 bij 60 cm (1866 driehoeken), en een gegoten voet met een koker waar de mast 20 cm in staat (684);
+  - een voetbal van tweeëndertig vlakken, 22 cm, met het net waarin hij gedragen wordt (2700 driehoeken, en 2544 voor het net), op een mat met een rubberen ring (480);
+  - een banaan van 1,05 m met een lint en een strik (2164), op een kist van latten (300).
+- **De kleur van het team** zit in een onderdeel `Team` van elk model: het doek, de vijfhoeken van de bal, het lint van de banaan, een band om de voet en om de koker, de rand van de mat, een lat rondom de kist. Het materiaal daarvan heeft een shader met twee instance uniforms, `team` en `teamed` (`shaders/team.gdshader`, en voor het doek `shaders/prize_flag.gdshader`), zodat elk exemplaar zijn eigen kleur heeft op één materiaal. Van niemand is de bal zwart-wit, het doek grijs en het lint wit.
+- **Het doek beweegt in de shader**: golven die naar het uiteinde lopen en onderweg groter worden, en een wind van 0 (het hangt langs de mast) tot 1 (het staat recht uit). Thuis waait het 0,72; op iemands rug hangt het af van hoe hard hij loopt. Op het doek staat een lichte chevron en verder niets: het is de vlag van geen land.
+- **`assets/prizes.json`** noemt per buit het model, de standaard en drie manieren van zitten, elk als plek en draaiing: thuis op de standaard, op wie hem draagt, en op de grond. Daarbij hoe hij heet en hoe een zin hem noemt ("the banana"). **Een nieuwe buit is een model, een standaard en een regel in die tabel.**
+- **`scripts/prize.gd`** (`scenes/prize.tscn`) is het huis van één buit: het staat waar de buit thuishoort, met de standaard, en de buit zelf is thuis, gedragen of gevallen. Het kent geen regels. Het zegt wie de buit aanraakt (`touched`), wie bij de standaard komt (`reached`) en dat er iets veranderd is (`moved`), en doet wat het gezegd wordt: `take()`, `drop()`, `send_home()`. Wie de wedstrijd leidt vraagt verder waar de buit is (`where()`), wie er nu bij staat (`within_reach()`, `at_stand()`) en hoe lang hij al ligt (`down_for`).
+- **Dragen** doet de rig van de personages: `bear()` en `release()` in `scripts/humanoid_rig.gd`. Wat gedragen wordt hangt aan de heupen of aan de rug en gaat mee met dat bot, op zijn eigen maat, hoe groot het personage ook is. De banaan ligt schuin over de rug. De vlag en de bal hangen aan de heupen: wie aanlegt buigt zijn bovenlijf een graad of dertig voorover, en een mast die daaraan vastzit wijst dan naar voren over zijn hoofd. De heupen draaien bovendien mee met de benen, dus het doek wijst weg van waar hij heen loopt.
+- **De speler van deze machine heeft geen figuur** en draagt de buit op zijn eigen lijf. Zelf ziet hij er alleen de schaduw van.
+- **Wat onderweg mis kan gaan, gaat goed.** Een pop die van wapen wisselt wordt een nieuw figuur: de buit verhuist mee. Wie uit het level verdwijnt zonder los te laten: de buit komt neer waar hij stond.
+- **Waar hij staat of ligt gloeit hij zwak** in de kleur van zijn team, zoals wat je opraapt: een licht zonder schaduw van 2,2 m.
+- **De eerste keer.** Een buit laat alles wat hij kan worden één keer tekenen als hij in het level komt (`Fx.rehearse()`), dus bij het laden en niet als de eerste speler hem ziet.
+
+**Het blad** `assets/prizes/sheets/prizes.jpg`, gemaakt door `tools/prize_sheet.py`: per buit thuis in de kleur van beide kanten, op een soldaat van voren, van links en van achteren, en gevallen naast zijn standaard.
+
+**Getest.** `tools/test_prize.sh`, 86 controles, zonder venster: elke buit uit de tabel staat in de hal van de fabriek, in de kleur van zijn team; wie erheen loopt raakt hem aan en staat bij de standaard; hij is te pakken en gaat mee, op de rug, en is daar niet aan te raken; het doek staat verder uit naarmate de drager harder loopt; hij valt op de vloer waar de drager stond, telt hoe lang hij ligt en gaat naar huis; een pop draagt hem op zijn rig, op zijn eigen maat, houdt hem bij het wisselen van wapen, en laat hem achter als hij uit het level verdwijnt; de speler draagt hem op zijn eigen lijf. Daarnaast slagen `tools/selftest.sh`, `tools/test_humanoid.sh` en `tools/nettest.sh`.
+
+**Gemeten** op 12 oktober 2026, M1 Pro op de accu, in de fabriek, met de buit eerst achter de speler neergezet, die zich dan omdraait. Geteld zijn de pipelines die tijdens het tekenen gemaakt worden, en het langste beeld van elke stap.
+
+| | Vlag | Voetbal | Banaan |
+|---|---|---|---|
+| Zonder repetitie: bij het neerzetten, en bij de eerste aanblik | 0, 4 | 0, 2 | 0, 4 |
+| Met repetitie: bij het neerzetten, en bij de eerste aanblik | 4, 0 | 2, 0 | 4, 0 |
+| Gepakt, gevallen, weer thuis | 0 | 0 | 0 |
+| Langste beeld met repetitie | 51 ms, bij het neerzetten | 14 ms | 16 ms |
+
+- De repetitie doet wat ze moet doen: het werk verhuist naar het moment van neerzetten, en dat is in een wedstrijd het laden. Deze machine had alles al eens getekend; hoe lang het duurt op een machine die dat niet heeft, is niet gemeten.
+- **Een pop die voor het eerst in beeld komt kost drie pipelines**, met of zonder buit. Dat is van de pop en niet van dit werk; in een wedstrijd met elf bots hoort het bij stap 1.
+- Wat de buit per beeld kost is niet gemeten: een paar duizend driehoeken en één licht zonder schaduw.
+
+**Buiten de bestanden van de opdracht geraakt:** `scripts/humanoid_rig.gd`, 51 regels erbij voor `bear()` en `release()`. Aan wat de rig al deed is niets veranderd.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| De modellen opnieuw bouwen | `tools/build_model.sh prizes` |
+| De buit testen | `tools/test_prize.sh` |
+| Het blad opnieuw maken, of van één buit | `tools/prize_sheet.py [flag]` (`--run` voor een soldaat in de pas, `--compose` zonder opnieuw te fotograferen) |
+| Eén buit in een level bekijken: 1 thuis, 2 gedragen, 3 gedragen in de pas, 4 gevallen; het eerste cijfer achter de komma kiest de buit, het tweede de kant | `tools/benchmark.sh --quick --spawn="res://scenes/prize.tscn@1.6,0,-1.5,0,1,2.21" --at="4.8,1.35,0.1,90,-3"` |
+
+**Wat ik niet kon beoordelen**
+
+- **Alles is stilstaand bekeken.** Of het doek mooi beweegt, of de bal aan de heup niet raar meedeint en of de banaan over de rug blijft liggen als iemand rent, moet in beweging blijken.
+- Of een banaan van een meter grappig is of flauw.
+- Er klinkt niets: pakken, vallen en thuiskomen hebben geen geluid. Dat is stap 2c.
+
+**Nog open**
+
+- **Het gaat nog niet over de lijn.** Wie de buit heeft, weet alleen de machine waar het gebeurt. Dat wacht op het nummer dat elke deelnemer in stap 1 krijgt, en op stap 4.
+- **De vlag op de rug reikt bijna drie meter hoog.** Hij steekt door een deurpost en door het plafond van een gang. Hij botst nergens tegen, dus het is alleen te zien.
+- De standaard botst ook nergens tegen: je loopt door de kist heen. Met een botsvorm staat hij de bots in de weg, want het navmesh kent hem niet.
+- Wie zelf de buit draagt, ziet daar niets van in beeld.
+- De buit voelt wie op de botslaag van de spelers staat (laag 2). Krijgen de teams in stap 1 elk een eigen laag, dan horen die erbij: `PLAYERS` in `scripts/prize.gd`.
+- Wat valt, blijft liggen: een bal rolt niet.
+- Wie achteruit loopt met de vlag, heeft het doek naar voren: de heupen staan dan andersom.
+- Het net van de bal is alleen van dichtbij te zien, en de bal hangt links: van rechts gezien zit het lijf ervoor.
+
+## Capture the flag: de eerste versie
+
+Op 13 oktober 2026 zei Michiel dat capture the flag nog gebouwd moest worden. Het plan zette dat achter het brein van de bots (2a) en de arena (2b); dit is een eerste versie zonder die twee, op de branch `potje`, met de buit van 2d erin (de branch `buit` is daarvoor binnengehaald).
+
+**Wat er nu is**
+
+- **De regels** (`scripts/modes/ctf.gd`): elke kant heeft een buit op een standaard aan haar eigen uiteinde van de arena. Tegen de buit van de ander aan lopen is hem pakken. Wie hem draagt laat hem vallen waar hij neergaat; de kant van wie hij is brengt hem terug door hem aan te raken, en na twintig seconden gaat hij vanzelf. Een punt is de buit van de ander op je eigen standaard brengen terwijl de jouwe daar staat. Drie punten of twaalf minuten; een kill is geen punt; je bent vijf tellen weg en komt terug op de grond van je eigen basis, 6 tot 25 m lopen van je standaard.
+- **De buit kies je**: vlag, voetbal of banaan, op het scherm "Multiplayer" (de knop "Prize", die er alleen bij capture the flag staat) of als vierde deel van `--match=ctf:works:6:banana`. De lijst komt uit `assets/prizes.json`: een buit erbij staat er vanzelf tussen.
+- **De bots verdelen het werk**, in de volgorde waarin ze bij hun kant kwamen: halen, bewaken, halen, zwerven, halen, bewaken. Een haler loopt naar de buit van de ander, of met wie hem draagt mee. Een wachter staat op een vaste plek 4 tot 12 m van zijn standaard. Wie de buit heeft rent naar huis en vecht alleen met wie binnen 14 m komt. Ligt de eigen buit ergens, dan gaat de dichtstbijzijnde bot hem halen; loopt iemand ermee weg, dan gaan de wachters en de zwerver erachteraan. Wie ergens moet zijn, loopt door terwijl hij schiet in plaats van te blijven staan vechten: zonder dat stonden de halers van beide kanten halverwege tegenover elkaar tot er een viel.
+- **In beeld**: onder de stand twee regels, van hun buit en van de jouwe: thuis, bij wie, of op de grond met de tellen tot hij teruggaat, en hoe ver weg. Boven elke buit staat YOURS of THEIRS, door muren heen. Wie de buit pakt, laat vallen, terugbrengt of scoort staat bij wie-wie-neerhaalde.
+- **Een spelsoort kan nu meer dan tellen.** `scripts/modes/mode.gd` heeft er haken bij: wat er bij het begin in het level komt, wat er elke stap gebeurt, wat er gebeurt als iemand valt, waar iemand terugkomt, waar een bot heen moet, of hij haast heeft, en wat er onder de stand staat. `match.gd` weet niets van een buit; `Match.show_mode()` laat een spelsoort iets op elke machine doen. Een vierde spelsoort is weer één bestand.
+
+**Getest**, zonder GPU.
+
+- `tools/test_match.sh`, 75 controles na de tweede ronde (63 ervoor). Voor capture the flag: elke kant heeft een banaan aan haar eigen uiteinde in haar eigen kleur; je eigen buit thuis aanraken doet niets; tegen die van de ander aan lopen pakt hem; wie hem draagt laat hem vallen waar hij neergaat en die kill is geen punt; een eigen speler brengt hem terug door hem aan te raken; beide kunnen tegelijk weg zijn en dan scoort niemand; een buit die ligt gaat vanzelf naar huis, en wie daar met de andere stond te wachten scoort op dat moment; wie viel komt terug bij zijn eigen basis; het menu gaat langs de drie soorten en de drie soorten buit.
+- `tools/test_prize.sh` van de buit slaagt met de wedstrijd erbij.
+- **Bots onder elkaar.** In de fabriek, drie tegen drie: in vijf minuten is de buit 3 keer gepakt en één keer binnengebracht; in een andere run van tweeënhalve minuut 3 keer gepakt, 3 keer gevallen, 3 keer teruggebracht en niet gescoord; in een run van vier minuten is hij niet gepakt. Op het fabrieksterrein (zes tegen zes, vier minuten, 91 doden) en in de centrale (vier tegen vier, 69 doden) pakte geen bot de buit: de halers van beide kanten komen elkaar in het midden tegen. Het punt moet daar van de speler komen.
+
+**Een fout die Michiel bij het spelen vond: de vlag ging mee de dood in.** Wie neerging liet de buit vallen waar hij lag, maar de speler had hem weer op zijn rug op het moment dat hij bij zijn basis terugkwam. Een buit vraagt de physics wie er binnen bereik is, en dat antwoord loopt een stap achter: de speler, die dood naast de buit lag, stond er nog in terwijl hij al verplaatst was, en gold op dat moment weer als meespelend. Een bot had het niet, want die verliest zijn botslaag als hij valt. De spelsoort kijkt nu zelf of iemand werkelijk bij de buit of de standaard staat (1,7 m over de vloer). De test speelt het na en zakte op de oude stand op precies dit punt: de speler pakt de vlag, gaat halverwege neer, komt terug bij zijn basis en de vlag ligt nog waar hij viel; een teamgenoot pakt hem over; de andere kant stuurt hem naar huis door hem aan te raken.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het leuk is.** Niemand heeft het gespeeld. Ik heb één beeld gezien, van het begin: de stand, de twee regels over de buit, de banaan met het blauwe lint op zijn kist en YOURS erboven.
+- **Hoe de buit eruitziet op de rug van wie hem draagt in een wedstrijd.** De bladen van 2d laten dat zien op een pop die stilstaat; in een potje heb ik het niet in beeld gehad. Bij de speler zelf hangt hij op zijn eigen rug, waar hij hem niet ziet.
+- **De geluiden.** Pakken, terugbrengen en scoren lenen de geluiden van een granaat oprapen, munitie oprapen en een checkpoint. Eigen signalen, in twee of drie varianten om te kiezen, horen bij 2c.
+
+**Nog open**
+
+- De standaard staat op het uiteinde zelf, niet op "de meest beschutte plek met drie meter vrije vloer" uit het plan, en een basis heeft geen eigen grond buiten wat binnen 25 m lopen ligt.
+- Wat de speler doet verandert niets aan wie wat doet: blijf je thuis, dan gaat er geen bot meer halen.
+- De drager is voor iedereen altijd te vinden: de bots weten waar hij is, en de speler leest de afstand. Het plan wilde dat de tegenpartij hem alleen ziet als een van hen hem ziet.
+- Een wachter staat stil met zijn gezicht waar hij toevallig heen keek.
+- Op het fabrieksterrein is het één gang heen en dezelfde gang terug, zoals het plan al zei: een arena met drie wegen is stap 5.
+- Meer voorwerpen als buit, en ze laden van buiten de build zodat vrienden ze ook krijgen: Michiels vraag van 12 oktober. De tabel en het menu zijn erop gebouwd; het laden van buiten de build niet.
+- Over het net is niets hiervan gebouwd: stap 4.
+
+## De duinen: de dennen, de bosrand en de verte
+
+Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan het vijfde level bouwen, elk in een eigen worktree: alles wat hoog groeit en wat achter het land ligt. Gebouwd op de branch `duindennen`. Op 14 oktober op Michiels woord ("merge het maar in de trunk"), nadat hij het vanuit de worktree gespeeld had, in `fase-2-vertical-slice` gevoegd, als eerste van de drie; de dennen en de duinen zijn daarna in de hoofdcheckout gebouwd en meegecommit (de imports gekloond met `tools/clone_imports.py`). Niet gepusht. De andere twee zijn `duingrond` (grond en gras) en `duinkamp` (licht, kamp en complex); wie die samenvoegt bouwt daarna nog één keer, met `tools/build_model.sh trees` en dan `tools/build_level.sh dunes`. Ze raken `PLAN.md` en `_commit()` in `tools/kit/land.gd`, net als deze. De foto's van de dennen voor van ver zijn meegecommit; wie de dennen daarna nog verandert, maakt ze opnieuw (zie "Werkwijze").
+
+De sessie viel die dag drie keer stil (de gebruikslimiet, de slaapstand van de laptop, en twee keer was de GPU van Michiel, die speelde). Het werk is in zeven commits gedaan; elk ervan slaagt voor `tools/selftest.sh --level=dunes`.
+
+**Wat er staat**
+
+- **De naalden komen uit een scan** (`tools/gen_sprigs.py`, de soorten `scan_spray` en `scan_tuft`; `tools/fetch_scans.py`; `assets/foliage/pine_sprigs.*`). Op het takjesblad van de gescande den van Poly Haven staan twee uitgeknipte takjes, met naalden in paren en hier en daar een vergeelde. Die staan als kaarten op het hout dat hier gegroeid wordt, drie door elkaar om elk jong lot, in plaats van de naalden die een voor een gegroeid werden; daarna wordt een takje gefotografeerd zoals voorheen, van boven, van opzij en van voren. De scan is olijfkleurig, de kleur van een takje dat afgesneden is en plat ligt; een tint brengt de naalden terug naar het blauwgroen van een kruin in de zon en laat ze hun verschillen. De gereedschappen knippen de takjes zelf uit het blad, aan de hand van het masker dat erbij zit.
+- **De takeinden van een den zijn open.** Een kruin is van 21 m af gemaakt van plaatjes van een heel takeinde, drie millimeter per beeldpunt, waar een naald er twee breed is. Dichte kwasten liepen daarop dicht tot bollen, en een bol met een rafelrand, hard uitgeknipt, is een blad: dat is waarom de kruinen als loof lazen. Een takeinde heeft nu minder plukken, alleen op het hout van dit jaar, met het kale twijgje erachter zichtbaar.
+- **De rand van een gat in een kruin is gestippeld** (`shaders/crown.gdshader`: `soft`, `blur`). Waar de textuur kleiner gezien wordt dan ze gemaakt is, wordt het gat uit een vagere kopie gelezen, wat zijn rand breder maakt, en over die rand is het ene beeldpunt er wel en het volgende niet. Elk beeldpunt is er nog steeds wel of niet: de kruin blijft in de dieptepas vooraf. Zie "Gemeten" voor wat de andere weg kostte.
+- **De bosrand om het land is een bos en geen haag** (`tree_wall()` in `tools/kit/land.gd`). Het waren vier even rijen op een vaste hoogte: 864 bomen. Het zijn nu 675 bomen in opstanden, oud naast jong dat half zo hoog is, met open plekken ertussen; de rand is geen rij meer, want de voorste bomen staan tot acht meter voor de lijn, naar het land toe; en elke boom staat op de grond zoals die daar ligt (`beyond_height()`), niet op de hoogte van de lijn. Achter de laatste rij staat het donker van het bos, dat de grond en de hoogte van de opstand volgt.
+- **Achter het land ligt land** (`tools/levels/dunes/vista.gd`, nieuw; `shaders/beyond_ground.gdshader`). Het land hield op bij zijn rand, met daaronder een vlakke zandbak. Het gaat nu door op de hoogte van die rand en wordt binnen zeventig meter het land dat erachter ligt, tot 1,2 km ver: drie ringen van vierkanten om het land, van 10, 40 en 160 m, 6368 driehoeken samen. Landinwaarts, in het noorden, oosten en zuiden, staat het bos door en liggen verderop hoge duinen in rijen, tot dertig meter. In het westen ligt de kust: open lage duinen met duindoorn (470 struiken, één mesh), een zeereep van vijf tot negen meter met kerven erin, het strand en de zee, op 540 m van de westrand. Wat de grond is, zand, grijs duin, bosbodem of kruinen van ver, staat op twee kaarten die het materiaal over de grond legt (4 m per punt dichtbij, 16 m verder weg); binnen 34 m van het land is ze wat het land aan zijn rand is, naalden, mos of zand, zodat niemand ziet waar het ophoudt. Bossen ver weg zijn rijen van een getekende bosrand (`_treeline` in `tools/gen_foliage.gd`, opnieuw getekend: kruinen, stammen en het donker ertussen), elf achter elkaar tot een kilometer, lager waar het bos uitdunt.
+- **Ten noorden van waar de speler uit het bos komt staat aan de westkant geen bos meer achter het land** (`wood_kept()` in `vista.gd`): daar is de kust open. Ten zuiden van z = 150 staat het bos er nog: de speler komt daar uit het bos.
+- **Een boom van ver is één kaart** (`tools/gen_tree_cards.gd` en `.sh`, `shaders/tree_far.gdshader`, `materials/pine_far.tres`, `assets/foliage/pine_far.*`, `_far_card()` in `trees.gd`, `_merge_tree()` in `land.gd`). Het gereedschap fotografeert elke den van acht kanten, zonder licht: de kleur van elk punt, en op een tweede blad welke kant het op kijkt en of het hout is. Voorbij 62 m is een den één kaart die naar de kijker draait en de foto toont van het dichtst bij waar hij staat; de zon komt er in de shader op zoals op de boom zelf. Het was een stam en twaalf tot twintig kaarten. De achterste rijen van de bosrand zijn zulke kaarten vanaf de eerste meter.
+- **Een jonge den staat overeind vanaf 21 m.** Hij was daar een stapel liggende schijven, en hij stond van top tot voet in zijn eigen schaduw, krans over krans. Zijn takken zijn nu staande kaarten, alleen de onderste kransen liggen ook, en zijn schaduw wordt geworpen door om de andere krans, op 62% van de grootte. De schaduw die het spel kent (`crowns`) is niet veranderd.
+- **Een dode tak hangt** (`_dead_branch()` in `tools/models/trees.gd`): vier knikken, naar beneden en opzij, met een of twee sporen van wat eraan zat, grijsbruin en donkerder dan de stam. Het waren drie punten op een rechte lijn, lichter dan de stam. Met eigen dobbelstenen (`_more`), zodat elke boom verder de vorm houdt die hij had.
+- **Gevelde stammen hebben de schors van de dennen** (`materials/bark.tres`: grijs waar het roder was).
+
+**Van Poly Haven opgehaald** (CC0, 92,0 MB, op Michiels woord "ja, haal maar op", met de checksums van de site): van `pine_tree_01` het takjesblad op 4k (kleur, uitsnede, normal, arm, masker, hoogte), de schors op 2k en de drie stamstukken op 2k; van `pine_sapling_small` het model als glTF op 1k en zijn takjesblad op 2k. Het staat in `assets/scans/`, dat Godot niet importeert en git niet bewaart; `tools/fetch_scans.py --go` haalt het opnieuw op uit de regels in het manifest.
+
+- **Gebruikt**: de twee uitgeknipte takjes van `pine_tree_01`.
+- **Weggegooid, zoals aangekondigd**: de drie stamstukken (28 MB). Het zijn scans van de voet van die ene boom, uitgevouwen voor zijn model, en zonder dat model niets. Ze staan niet meer in het manifest.
+- **Niet gebruikt**: de schors (fijn en donker; de schors die er lag, `pine_bark`, is zelf een scan en leest beter als platen), en de jonge den. Diens takjesblad heeft geen uitgeknipte takjes, alleen losse naalden voor het zware model; er de kaarten van onze jonge dennen uit renderen is niet gedaan.
+
+**Gemeten**
+
+Alles op de speelinstelling (3456×2160, Ultra, MetalFX, renderschaal vanzelf), om en om met de trunk in een kopie ernaast.
+
+- **Met de 74 wachters als soldaten op hun post**, 13 oktober 21:41 tot 21:48, aan de lader van 61 W (accu 55%, ladend), load 6 tot 8 terwijl een andere sessie werkte, drie ronden:
+
+| Standpunt | Fps voor, 1% low | Fps na, 1% low | Verschil | Tekenopdrachten en driehoeken, voor en na |
+|---|---|---|---|---|
+| Het bos, 1 | 74,3 en 70,7 | 76,6 en 71,2 | +2,3 | 907 en 1,75 miljoen, 902 en 1,71 |
+| Het bos, 2 | 77,6 en 73,5 | 78,4 en 74,3 | +0,8 | 885 en 1,72, 883 en 1,69 |
+| De uitkijk, 6 | 84,8 en 80,0 | 87,2 en 75,4 | +2,4 | 451 en 1,11, 453 en 1,10 |
+| Het prikkeldraad, 14 | 94,6 en 89,1 | 96,9 en 90,3 | +2,3 | 792 en 1,73, 790 en 1,73 |
+| Het oostelijke duin, 21 | 69,4 en 65,2 | 70,9 en 67,5 | +1,6 | 1207 en 2,82, 1193 en 2,78 |
+
+  De drie ronden van een kant lagen nooit meer dan 0,7 fps uit elkaar, op één na: in de derde ronde van "na" stond het tweede bosstandpunt één beeld 290 ms stil en de uitkijk één beeld 52 ms (76,4 fps waar de andere twee ronden 79,9 en 79,0 gaven). Er werd daarbij geen pipeline gemaakt; wat het was weet ik niet.
+- **Wat het per beeld kost**, zonder wachters, `--profile`, twee ronden, 21:34 tot 21:41, zelfde lader, load 6 tot 11, in ms:
+
+| Standpunt | Heel beeld, voor en na | Bomen | Zonneschaduw | De bosrand voor; de bosrand en de verte na |
+|---|---|---|---|---|
+| Het bos, 1 | 13,1 en 12,6 | 2,0 en 1,9 | 1,95 en 1,7 | 0,45; 0,03 tot 0,24 en 0,02 tot 0,26 |
+| De uitkijk, 6 | 11,6 en 11,2 | 0,57 en 0,43 | 1,6 en 1,4 | 0,58; 0,5 en 0,0 |
+| Het prikkeldraad, 14 | 10,5 en 10,2 | 0,0 en 0,0 | 1,3 en 1,2 | 0,28; 0,09 en 0,03 |
+| Het oostelijke duin, 21 | 13,8 en 13,4 | 1,57 en 1,70 | 2,1 en 2,0 | 0,22; 0,06 en 0,02 tot 0,55 |
+
+  De bomen en de zonneschaduw van het eerste bosstandpunt zijn dus niet duurder geworden, en de bosrand met de verte kost op 6 en 14 minder dan de bosrand alleen kostte. Op 21 gaf de ene ronde 0,05 ms voor de twee samen en de andere 0,6: zo'n verschil tussen twee ronden is wat dit meten aan ruis heeft, en het hele beeld is er 0,4 ms sneller. De cijfers uit de opdracht (3,3 ms bomen, 3,6 ms zonneschaduw) zijn die middag niet teruggevonden: de trunk gaf 2,0 en 1,95.
+- **Een zachte rand via de doorzichtige pas kost het bos negen beelden per seconde.** Geprobeerd met `depth_prepass_alpha`: de kern van een kaart in de dieptepas, de rand gemengd. Om en om, twee ronden, zonder wachters, 14:40, aan een lader van 30 W, load 4 tot 7: het hele beeld ging in het bos van 13,7 naar 15,6 ms, omhoog gekeken van 12,2 naar 15,5 en op het oostelijke duin van 13,5 naar 17,1; de bomen van 2,2 tot 2,7 naar 3,4 tot 3,5, van 3,1 tot 3,5 naar 6,1 tot 7,0 en van 1,5 naar 3,7; de zonneschaduw werd op elk van de drie een milliseconde of meer duurder. De kern die in de dieptepas komt is te dun zodra de textuur klein gezien wordt, en alles ervoor wordt dan volledig belicht. De gestippelde rand doet dat niet.
+- **De laatste wijziging is niet gemeten**: de kleur van de grond vlak achter de rand van het land (de naad). Ze verandert een kaart, geen mesh. Nagelezen in de kaart: twee meter buiten de westrand ligt de kleur van naaldenbodem, dertig meter verder die van het duin.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh` slaagt (13 oktober, 21:57, vóór de laatste wijziging aan de kleur van de naad); `tools/selftest.sh --level=dunes` slaagt op de eindstand. De bouw zegt na afloop 17% schaduw, 14 zones en 6 checkpoints.
+- `tools/build_check.py factory works depot powerhouse wing` (13 oktober, 20:21, vóór de scan en de kaarten van ver, die geen van die levels raken): geen bestand van die vijf levels is veranderd. Veranderd zijn de duinen en de vijf dennen; de twee struiken kwamen er gelijk uit.
+- Het blad met voor en na vanaf tien plekken: `benchmark/sheets/dunes_dennen_before_after.jpg`.
+- **Niet nagekeken**: of elke botsvorm en elke boom van het land op zijn plek staat, regel voor regel naast de trunk. Geen functie die een boom op het land zet of een botsvorm maakt is aangeraakt; de bosrand en de grond erachter hebben er geen.
+
+**Onderweg gevonden**
+
+- **De kleur van een hoekpunt kwam niet aan in de shader van de grond achter het land.** De mesh had ze (nagekeken in het bestand: donkere bosbodem naast zand), de shader las overal wit, ook via een `varying` uit `vertex()`. De grond van het land zelf en de kruinen lezen hun hoekkleuren wel, met hetzelfde formaat. Niet opgelost; de kaarten zijn er de omweg voor, en ze zijn ook fijner dan vierkanten van 160 m.
+- **Een tijdslimiet kan het GPU-slot vasthouden.** `( sleep 240; kill $pid ) &` naast een run erft het slot (descriptor 9) en de uitvoer van die run: is de run klaar, dan houdt de `sleep` beide vast tot hij afloopt. Mijn eigen beelden hielden zo vier minuten het slot bezet na afloop, en die van een andere sessie zeven minuten na elke run, ook over een slaapstand van de laptop heen. De bewaker moet beide sluiten: `( exec 9>&- >/dev/null 2>&1; sleep 240; kill $pid ) &`. Wie lang wacht, ziet met `lsof` op het slotbestand wie het echt vasthoudt; de tekst erin noemt alleen wie het laatst nam.
+- **Een bestand van een level kan geen naam kiezen die de bouwdoos al heeft.** `_wooded`, `_corner`, `_around` en `_own_ground` bestonden al in `land.gd` en `field.gd`; de bouw meldt dan een parse error in het ene bestand, bouwt de rest en schrijft een level zonder dat deel. Het level dat dan op schijf staat is stuk tot de volgende bouw.
+- **Cycles laat een blik door acht gaten kijken en maakt hem dan zwart.** Het hart van een pluk van gescande takjes, kaart achter kaart, kwam er zwart uit; `transparent_max_bounces` staat nu op 96.
+- **Een plaatselijke variabele `dot` in een shader maakt de functie `dot()` onbruikbaar** ("Expected a function name"), en de bouw van de modellen ging gewoon door met een materiaal dat niet werkte.
+
+**Buiten de genoemde bestanden geraakt**
+
+- Nieuw: `tools/levels/dunes/vista.gd`, `tools/gen_tree_cards.gd` en `.sh`, `tools/fetch_scans.py`, `shaders/beyond_ground.gdshader`, `shaders/tree_far.gdshader`, `materials/beyond_ground.tres`, `materials/sea.tres`, `materials/pine_far.tres`, `assets/foliage/pine_far.png`, `pine_far_n.png` en `pine_far.json`, en `assets/scans/` met een `.gdignore` en een `.gitignore`.
+- `tools/levels/dunes.gd`: de ene regel `build("vista")`, vóór `build("outside")`, omdat de bosrand op de grond van de verte staat.
+- `tools/levels/dunes/outside.gd`: de vier vlakke zandbakken om het land zijn weg, en de twee masten van de lijn staan op de grond die er nu ligt.
+- In `tools/kit/land.gd`: `tree_wall()`, `beyond_height()`, `_wood_high()`, `_merge_tree()`, `_merged_arrays()` en de variabelen daarboven, en in `_commit()` de takken `beyond` en `vista`.
+- De meshes van de bosrand heten nu `Beyond<n>`, zodat `--profile --only=beyond` ze samen meet, zoals `scripts/benchmark.gd` het al beschreef; de grond erachter heet `Vista<n>`.
+- `assets/manifest.json`: de regel van `pine_sprigs`, en ervoor twee regels voor de scans.
+
+**Niet kunnen beoordelen**
+
+- **Niets in beweging.** De gestippelde rand staat stil op het scherm; of hij bij lopen over een kruin lijkt te schuiven is op een stilstaand beeld niet te zien. Hetzelfde geldt voor de overgang op 62 m naar de ene kaart (de foto verspringt elke 45 graden om een boom heen) en voor de wind, die de kaart van ver niet meer beweegt.
+- **Of de kruinen niet te donker zijn.** De gescande naalden zijn met een tint groener gemaakt, op mijn oog, en vallen nog steeds donkerder uit dan de gegroeide.
+- **Of de open westkant het level goed doet.** Waar een zwarte wand van bos stond, kijkt de speler vanaf de westelijke duin nu uit over open duin. Dat is een keuze van mij.
+
+**Nog open**
+
+- **De streep zee is smal en van weinig plekken te zien.** Uitgerekend vanaf de standpunten zelf (de hoogte van het land en de kruinen van de 699 bomen, per halve graad): vanaf 21 staat het oog op 13,7 m en is de westelijke duin 15 m hoog, en vanaf 6 kijkt de camera naar het zuidwesten, tegen de duin die het land afsluit. Het water ligt in het westen, waar het land het toelaat, en is te zien van de rug van de westelijke duin (rond x = 16, z = 110 tot 125) als een dunne lijn op de horizon. Vanaf standpunt 6 en 21 zelf is het niet te zien.
+- **Jonge dennen zijn van 21 tot 62 m nog donker en grof**: de staande kaarten zijn beter dan de schijven, maar het blijft een donkere vorm. De gescande jonge den ligt er om het beter te doen.
+- **De bosranden in de verte zijn één textuur**, zonder licht: ze worden niet donkerder als de zon dat wordt, en van boven zijn het heggen. Vanaf de grond staan ze achter elkaar en lezen ze als bos.
+- **Boven de muur van het complex staan nu weinig bomen** (standpunt 14): ongelijk is het, maar aan de linkerkant mag er een opstand bij.
+- **De schors van de scan en de jonge den zijn opgehaald en niet gebruikt.**
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| De scans ophalen (64 MB zonder de stamstukken) | `tools/fetch_scans.py` zegt wat en hoeveel, `--go` haalt het |
+| De takjes opnieuw renderen (Blender op de CPU, een minuut) | `tools/gen_sprigs.sh pine_sprigs`, dan `tools/build_model.sh trees` |
+| De dennen fotograferen voor de kaart van ver (GPU) | `tools/gen_tree_cards.sh`, dan nog eens `tools/build_model.sh trees` en het level |
+| De bosrand in de verte opnieuw tekenen | `tools/gen_foliage.sh tree_line` |
+| Wat de bomen, de bosrand en de verte kosten | `tools/benchmark.sh --scene=res://scenes/dunes.tscn --at="16,+1.6,199.5,-85,-3;226,+1.6,172.5,140,-8;60,+1.6,84,-25,-1;327.25,13.73,157.31,80.7,-3" --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=trees,sun_shadow,beyond,vista --warmup=60` |
+| Het land achter de rand van boven | `tools/benchmark.sh --quick --scene=res://scenes/dunes.tscn --at="170,130,115,90,-14"` (naar het westen; 180 is het zuiden) |
+| Naar zee kijken vanaf de westelijke duin | `tools/benchmark.sh --quick --scene=res://scenes/dunes.tscn --at="16,+1.6,120,90,-2"` |
+
+## De duinen: het licht, het kamp en het complex
+
+Op 13 oktober 2026 gevraagd, als een van drie opdrachten die tegelijk aan de duinen werken (de andere twee: de grond en het gras op `duingrond`, de dennen en de verte op `duindennen`): het licht en de lucht, en alles wat mensen er neerzetten. Gebouwd op de branch `duinkamp`, in een eigen worktree, vanaf de trunk van die middag (`bd441f1`). Op 14 oktober op Michiels woord ("merge het maar in de trunk") in `fase-2-vertical-slice` gevoegd, na `duindennen`; niet gepusht. Gebouwde bestanden (`scenes/levels/`, `scenes/models/*.scn`) zijn niet meegecommit: wie de drie samenvoegt bouwt één keer, met `tools/build_model.sh vehicles`, `tools/build_level.sh dunes` en `tools/build_level.sh showroom`.
+
+**Niet gedaan, en waarom**
+
+- **De soldaten aan de kaarttafel overleggen niet** (punt 5). Welke houding iemand in rust heeft, kiest `scripts/humanoid_rig.gd` uit de set van zijn thema, en wat een wachter doet leest `scripts/enemy.gd` uit wat het level hem meegeeft. Het level kan zeggen "sta hier en kijk daarheen", niet "praat". Zonder die twee bestanden gaat het niet, en die zijn van het wedstrijdwerk.
+
+**Het voorstel voor de zon** (punt 4, niet ingebouwd): `benchmark/sheets/dunes_sun_proposal.jpg`. De zon op 48 graden (nu), 30 en 20, elk vanaf het bos, de vallei, het bivak en de binnenplaats, het level telkens opnieuw gebouwd met de zon op die hoogte:
+
+| Zon | Land in de schaduw, volgens de bouwer | Lucht die erbij zou horen (Poly Haven, CC0) |
+|---|---|---|
+| 48 graden, nu | 17% | `kloofendal_48d_partly_cloudy_puresky`, die er is |
+| 30 graden | 24% | `kloofendal_28d_misty_puresky`: dezelfde plek, heiig; 56 MB op 8k |
+| 20 graden | 33% | `syferfontein_18d_clear_puresky`: helder; 55 MB op 8k |
+
+  Op het blad staat in alle drie de rijen de lucht van 48 graden: de andere twee zijn niet opgehaald (gevraagd, geen antwoord), dus de wolken en de plek van de zon in de lucht kloppen daar niet met de schaduwen. De kleur en de kracht van de zon zijn voor 30 en 20 graden met de hand warmer en zwakker gezet (1, 0,9, 0,74 op 3,5 en 1, 0,84, 0,64 op 3,0). Wat een lagere zon doet: langere schaduwen, meer reliëf in het zand en de ribbels, een donkerder bos, en twee keer zoveel plek om ongezien te staan. Dat laatste raakt het sluipen: een wachter ziet iemand in de schaduw pas op 7,5 m. Michiel kiest.
+
+**Wat er staat**
+
+- **De lucht op 8k** (punt 1), op 14 oktober op Michiels woord ("haal de lucht op 8k maar op") van Poly Haven gehaald: dezelfde lucht, `kloofendal_48d_partly_cloudy_puresky`, CC0, 74,8 MB, met de md5 die Poly Haven opgeeft. Ze vervangt het bestand van 4k onder dezelfde naam, dus niets anders verandert: 22,8 beeldpunten per graad waar het er 11,4 waren (het scherm toont er 27). Ingepakt is ze 44,7 MB videogeheugen waar het 11 was. Het bestand staat gewoon in git en niet in LFS; GitHub waarschuwt boven 50 MB per bestand en weigert boven 100. **Importeren duurt bijna vijf minuten** (283 s): wie samenvoegt kloont `.godot/imported/kloofendal_48d_partly_cloudy_puresky.hdr-076e20260abd913f1cc04c7a14686286.bptc.ctex` uit deze worktree mee, zoals `CLAUDE.md` zegt. Het verschil zit in de randen van de wolken en is klein: het beeld wordt op ongeveer de helft van de schermresolutie getekend en dan vergroot, en daar is de lucht op 8k ongeveer één beeldpunt per punt van de lucht. Zie `benchmark/sheets/dunes_sky_8k.jpg`.
+- **Oogaanpassing** (`scripts/eyes.gd`, de knoop `Eyes` in `scenes/dunes.tscn`). Wie uit de schaduw de zon in stapt, ziet het beeld even te licht, en andersom even te donker. Het meet het beeld niet: het leest het licht bij het oog af van de schaduwkaart die het level al heeft (`scripts/land.gd`), over de grond een paar passen om de kijker heen en over de grond waar hij op uitkijkt, en laat het oog daar traag achteraan komen (1,8 s naar het licht, 3 s naar het donker). Het beeld is zoveel over- of onderbelicht als het oog achterloopt, tot hoogstens één stop naar het licht en 0,6 naar het donker; de gloed groeit mee. **Een oog dat bij is verandert niets**: wie stilstaat ziet het level precies zoals zonder deze knoop, en een benchmark, die op een standpunt neergezet wordt, ook. Uit met één regel: `script = ExtResource("eyes")` onder `[node name="Eyes"` in `scenes/dunes.tscn`.
+- **Een wolk voor de zon** (`scripts/cloud.gd`, de knoop `Clouds`). Om de 45 tot 110 seconden schuift er in 4 tot 8 seconden een wolk voor de zon, blijft 14 tot 34 seconden en gaat weer; een op de drie is dun. Onder een volle wolk houdt de zon 30% van haar kracht en verliest ze haar warmte, het hemellicht houdt 84%. Alleen de zon en het hemellicht van de scène; geen shader weet ervan en de schaduw van de wolk trekt niet over het land. Een benchmark heeft er geen, zodat een beeld vanaf een standpunt elke keer hetzelfde is; `--cloud=0.7` houdt er een voor de zon. Uit met één regel: `script = ExtResource("cloud")`.
+- **Wind in doek en net** (`shaders/canvas.gdshader`, `shaders/camo_net.gdshader`, `tools/kit/field.gd`). Doek zegt per hoekpunt, in UV2, hoe ver het meegeeft en hoe licht het is; de shader beweegt het met dezelfde vlagen als het gras (`wind` 0,12 en 1,0). De wanden van de tent bollen tussen hun palen, het dak ademt waar het hangt, de volant fladdert, de schuiltenten trillen, de was waait uit, en een net tilt en zakt en zijn rafels bewegen. Wat vastzit (de nok, een paal, de zoom in het zand) beweegt niet. De rook van het bivak helde tegen de wind van het gras in en gaat nu mee.
+- **Een vlag** op de binnenplaats (`shaders/flag.gdshader`, `flag()`): 2,3 bij 1,45 m, olijfgroen met de witte ster van de voertuigen, die uitwaait in een vlaag en gaat hangen als de wind wegvalt, met golven die vanaf de mast breder worden.
+- **De netten** (`_net` en `_net_relief` in `tools/gen_foliage.gd`). Opnieuw getekend: stroken met de draad van hun stof erin, rafelig aan hun einden, krullend aan hun randen, en een normal map waarin elke strook rond is en over of onder de volgende ligt. De shader laat de zon door een strook heen: van de schaduwkant is een net een patroon van doorlichte stroken en lucht.
+- **Voertuigen** (`tools/models/vehicles.gd`, `vehicle()`). Elk voertuig wordt twee keer gebouwd uit dezelfde beschrijving: zoals het was, en als model voor veraf (vanaf 34 m) waarin alles wat klein is weggelaten en alles wat rond is grof gemaakt: 780 driehoeken voor de jeep waar 5276, ongeveer 1300 voor de vrachtwagen waar 7397, 2300 voor de tank waar 8762. Elk voertuig in een level heeft een eigen nummer (een kenteken op de motorkap en de bumper van jeep en vrachtwagen, twee cijfers groot op de koepel van een tank, uit losse cijfers op het blad met stencils) en een eigen lading: kisten, vaten, zakken of een opgevouwen zeil op een vrachtwagen, een plunjezak, een deken of een kist in een jeep, een zeil, een balk of een kist op een tank.
+- **Het hoofdgebouw** (`tools/levels/dunes/depot.gd`, `shaders/window_pane.gdshader`, `shaders/depot_room.gdshaderinc`). Achter het glas liggen kamers die alleen rekenwerk zijn: een travee breed, een verdieping hoog, zeven meter diep, met een plafond met balken en armaturen, een lambrisering, een deur in de achterwand, lichter bij het raam en donkerder naar achteren, elke kamer iets anders en een op de tien met de lampen aan. Het glas is glas en geen spiegel meer: het geeft een tiende van de lucht terug en laat de kamer door. **De ruiten breken** zoals in de andere levels: 168 ramen van samen 1216 ruiten. Een ruit is nu een doos van glas, de ruiten van één opening sluiten rand aan rand en zijn samen één raam, en waar een ruit weg is toont een vlak erachter dezelfde kamer.
+- **Een schot op een raam telt**, ook al stopt het op de botsvorm van de muur, die geen opening heeft en tot 24 cm vóór het glas ligt. De mesh van het glas zegt hoe diep het ligt (`reveal`), en `scripts/window.gd` maakt de botsvorm van een ruit zo dik. Zonder dat getal, in elk ander level, is er niets veranderd.
+- **Beton klinkt als beton.** De platen hebben nog steeds geen botsvorm. De grond weet nu waar ze liggen (`paved` op haar botsvorm, acht rechthoeken uit `paving()`), en `Fx.surface_of()` zegt daar "concrete": een stap klinkt als op beton en laat geen afdruk na, een schot geeft de inslag en het geluid van beton.
+- **Schaduw waar dingen elkaar raken.** Twee dingen. De occlusie van de scène stond zo zwak dat ze niet te zien was (straal 1,2, sterkte 1,6) en staat nu op 2,5 en 5: aan de voet van een muur, onder een pallet en onder een vrachtwagen ligt nu schaduw. En onder een dak dat de lucht weghoudt is het licht van rondom dat van dat dak en niet van de hele hemel (`shelter()`, een reflectieprobe met een eigen omgevingslicht): in de commandotent, onder de vijf netten, in de loods langs de noordmuur en achter de achterdeur. Het zijn er acht.
+- **Wat een schets was.** De bunker is gestort in een bekisting met afgeschuinde voorhoeken onder een dik dak dat rondom oversteekt, met een schietspleet in twee trappen, een loop erin, hijsogen, en de rest van zijn net over één hoek; zijn botsvorm is het blok dat het was. Het dak van de Nissenhut is rond (twintig stroken met vloeiende normalen, in vijf banen die over elkaar liggen) en zijn golf is die van de gescande plaat: 40 driehoeken waar het er ruim achtduizend waren. Op de binnenplaats staan twee doelen van palen op het appèlveld met een bal ertussen, hangt de was tussen de hutten en loopt de stroom voor de lichtmasten bovengronds van mast tot mast.
+
+**Gemeten**
+
+Drie ronden, de trunk en de branch om en om, op 13 oktober 2026 van 20:34 tot 20:39, aan een lader van 61 W (accu 43%, ladend), load 5 tot 8 terwijl twee andere sessies bouwden en testten, niemand anders op de GPU (met `ps` gekeken voor en na de reeks). 3456×2160, Ultra, MetalFX, renderschaal vanzelf, de 74 soldaten op hun post, 600 beelden per standpunt:
+
+| Standpunt | Trunk, fps en 1% low | Branch | Verschil | Tekenopdrachten en driehoeken, trunk en branch |
+|---|---|---|---|---|
+| Het bivak, 8 | 76,8 en 72,4 | 76,9 en 72,3 | +0,1 | 993 en 1,93 miljoen, 978 en 1,78 |
+| Het wagenpark, 10 | 83,9 en 79,3 | 84,6 en 79,1 | +0,6 | 941 en 2,37, 942 en 2,13 |
+| De binnenplaats, 16 | 88,6 en 82,8 | 87,9 en 83,0 | −0,7 | 664 en 1,41, 673 en 1,38 |
+| De achterdeur, 19 | 91,3 en 85,3 | 90,8 en 85,4 | −0,5 | 621 en 1,33, 619 en 1,27 |
+| Het oostelijke duin, 21 | 69,4 en 66,1 | 70,3 en 67,1 | +1,0 | 1202 en 2,83, 1172 en 2,64 |
+
+De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elkaar. Dat was met de lucht van 4k.
+
+- **De lucht op 8k**, apart gemeten: 14 oktober van 06:50 tot 06:54, aan de lader, load 4 (net na het importeren), twee ronden om en om tegen een kopie van de branch met de lucht van 4k. Het bivak −0,1, het wagenpark −0,2, de binnenplaats −0,1, de achterdeur −0,1, het oostelijke duin 0,0; tekenopdrachten en driehoeken gelijk. Een derde ronde is niet afgemaakt: de reeks hield zichzelf tegen toen Michiel om 06:55 de duinen ging spelen.
+
+- **Het budget is op drie van de vijf gehaald en op twee net niet.** De twee traagste standpunten, het oostelijke duin en het bivak, zijn gelijk of beter; het wagenpark, waar het model voor veraf voor bedoeld was, wint 0,6 en tekent een kwart miljoen driehoeken minder. De binnenplaats en de achterdeur, de twee snelste, verliezen 0,7 en 0,5: daar staat wat er het meest bij kwam (het glas met zijn kamers, de vlag, de was, de doelen, de sterkere occlusie). Wat daarvan hoeveel kost is niet uitgezocht.
+- **Een ronde eerder die middag** (18:33, op de accu, 59%, load 4,5) gaf hetzelfde beeld: +0,1, +0,6, −0,9, −0,9 en +0,9. Daarna zijn de doelen en de draden bij het kleine goed gezet, dat geen schaduw werpt.
+- **Een reeks van drie ronden daartussen is mislukt**: ze liep van 20:15 tot 20:27 naast het spel van Michiel, die om 20:13 de fabriek startte. Ik had met `ps` gekeken voor ik de reeks in de rij voor de GPU zette, en niet meer toen ze twee uur later begon. Alles halveerde, aan beide kanten (37 tegen 37, 40 tegen 42, 46 tegen 42, 47 tegen 46, 34 tegen 33). Niets waard, en het heeft hem tien minuten beeldsnelheid gekost.
+- **Pipelines tijdens het tekenen**: op het eerste standpunt, dat geen laadscherm heeft, 103 waar het er 97 waren; op de vier daarna geen. Een rondgang vanaf het titelscherm is niet gelopen.
+- **Niet gemeten**: aan de eigen lader en op een stille laptop, in beweging, in een gevecht, en wat de acht probes, het glas en de sterkere occlusie elk kosten.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/selftest.sh` slaagt op de eindstand, 401 controles; `tools/nettest.sh` (62) en `tools/test_sound.sh` (38) ook.
+- `tools/build_check.py factory works depot powerhouse wing`: geen bestand van die vijf levels komt er anders uit. Wat verandert zijn de duinen, de showroom en de vier voertuigmodellen.
+- **De drie branches samen**: `duinkamp` gaat zonder botsing samen met `duingrond` en met `duindennen`, op `PLAN.md` na, waar alle drie een hoofdstuk aan het eind zetten (droog geprobeerd met `git merge-tree`). Het keurmerk van het level (`tools/zone_sheet.py dunes --posted`) is op deze branch niet gedraaid.
+- **Wat staat, staat waar het stond.** Na de laatste bouw alle 780 botsvormen (vorm, maat, plek, richting, oppervlak), elk geplaatst model en voertuig, de bits van de schaduwkaart en elke area en marker naast die van de trunk gelegd: 1864 regels, geen verschil. De bouw zegt 17% schaduw, 14 zones en 6 checkpoints.
+- `tools/selftest.sh --level=dunes` slaagde (86 controles) voor elke commit.
+- `tools/test_effects.sh` slaagt, 259 controles, met de gewijzigde `scripts/window.gd`: de ramen van de fabriek, het fabrieksterrein, het depot en de centrale breken als voorheen. Daarbij een nieuw deel, `tools/effects/reveal.gd`, voor de duinen: elke ruit zit in een raam, de ruiten van een opening zijn één raam, een schot vanaf de grond dat op de muur stopt breekt de ruit erachter en geen andere, en een stap op een plaat is beton en ernaast zand.
+- **Niets in beweging gezien.** De wind, de vlag, de wolk en het oog zijn beoordeeld op stilstaande beelden en op getallen. Van het oog is een wandeling uitgerekend zonder beeld: langs het spoor door het bos blijft het binnen het dode gebied (het bos is daar half licht), bij de bosrand loopt het een tiende op.
+
+**Onderweg gevonden**
+
+- **De occlusie deed niets.** Wie in de schaduw stond, stond nergens op: straal 1,2 en sterkte 1,6 zijn op deze afstanden niet te zien. Dat was de helft van "alles in de schaduw krijgt dezelfde tint".
+- **Een probe geeft het dak terug.** De tent werd eerst fel oranje van binnen: de probe ving het doek waar de zon doorheen schijnt, en alles wat glimt gaf dat terug. Hij geeft nu een vijfde daarvan terug.
+- **Een schot op een raam kwam nooit bij het glas.** De muur van het hoofdgebouw is een dichte botsvorm op het vlak van de gevel, en het glas ligt 24 cm terug. Dat stond al als open punt in "De duinen: het beeld"; één oppervlak maken van het glas alleen was niet genoeg geweest.
+- **Ruiten met een roede ertussen zijn elk een eigen raam**: een raam is wat hoek aan hoek ligt. Het glas loopt daarom door achter de roeden.
+- **Mijn eigen tijdslimiet hield de GPU bezet.** Elke run die ik onder het GPU-slot startte had een bewaker ernaast (`( sleep 240; kill $pid ) &`). Die bewaker erft het slot, en zijn `sleep` leeft door als de run klaar is: na elke run van mij bleef het slot tot vier minuten dicht (na een meetrun zeven), en één keer negentien minuten, voor iedereen. De andere sessies gebruiken dezelfde regel. Zo'n bewaker moet het slot loslaten: `( sleep 240; kill $pid ) 9>&- &`. Gevonden met `lsof` op het slotbestand toen vier runs stonden te wachten op niemand.
+- **`out` is een woord van de shadertaal**, en een bouw zonder beeld merkt een shader die niet compileert wel op, maar bouwt door.
+- **Het blad met stencils had vier kentekens waar geen voertuig er een van droeg.** Ze zijn vervangen door de tien cijfers en de letters waar een kenteken mee begint.
+
+**Buiten de bestanden van de opdracht geraakt**
+
+- `tools/effects/reveal.gd`, nieuw: de controle hierboven. De effectentest laadt er de duinen voor en duurt daardoor enkele seconden langer.
+- `scripts/window.gd`: alleen het getal `reveal`. `scripts/fx.gd`: alleen `surface_of()`.
+- Nieuw: `scripts/eyes.gd`, `scripts/cloud.gd`, `shaders/flag.gdshader`, `shaders/camo_net.gdshader`, `shaders/depot_room.gdshader` en `.gdshaderinc`, `materials/flag.tres`, `materials/depot_room.tres`, `assets/foliage/camo_net_n.png`. `materials/camo_net.tres` is nu een shadermateriaal.
+- De showroom verandert mee, door de veldstukken en de voertuigen die erin staan, en heeft er een vlag bij.
+
+**Niet kunnen beoordelen**
+
+- **Alles wat beweegt**: of de wand van de tent bolt of klappert, of de vlag wappert of flappert, of de was natuurlijk hangt, of een wolk te vaak komt of te donker is, en of het oog helpt of hindert. De getallen staan bovenaan `scripts/eyes.gd` en `scripts/cloud.gd`.
+- **De tent van binnen.** Ze is donkerder en warmer geworden: het tafelblad ging op het beeld van 0,68, 0,48, 0,31 naar 0,62, 0,35, 0,10. Dat is het hout zonder het blauwe licht van een hemel die er onder een dak niet is, en zo hoort het; of het mooier is dan het was, weet ik niet. Van de zestien beelden op het blad met voor en na vind ik dit het minst, samen met het net van de schaduwkant (nog steeds donker), de bunker (het stuk net over zijn hoek hangt als een lap) en het appèlveld (de doelen zijn van veraf twee streepjes).
+- **Of de kamers achter het glas overtuigen**, van dichtbij en schuin van opzij. Van onderaf zie je vooral plafonds.
+- **Het model voor veraf op 34 m**: of de overgang te zien is als je op een voertuig af loopt.
+- **Het geluid** van een stap en een schot op de platen: getest is dat het spel "beton" zegt, niet hoe het klinkt.
+
+**Voor Michiel om te bekijken**
+
+- Voor en na, zestien plekken: `benchmark/sheets/dunes_kamp_before_after.jpg`. De na-kant is van 14 oktober, met de lucht op 8k; de voor-kant is de trunk.
+- De wolken op 4k en op 8k naast elkaar, op de grootte waarop het scherm ze toont: `benchmark/sheets/dunes_sky_8k.jpg`.
+- De zon op 48, 30 en 20 graden, om uit te kiezen: `benchmark/sheets/dunes_sun_proposal.jpg`.
+- Spelen, want de wind, de vlag, de wolk en het oog zijn alleen in beweging te beoordelen: `/Applications/Godot.app/Contents/MacOS/Godot --path /Users/michielvandeningh/dev/Graphics/.claude/worktrees/duinkamp res://scenes/dunes.tscn -- --play`. In die worktree staat het level gebouwd; de trunk is sinds het begin van deze branch niet veranderd.
+- Een wolk die blijft hangen, om te zien wat hij met het licht doet: hetzelfde commando met `--cloud=1` erachter.
+- Een stap en een schot op de betonplaten van de binnenplaats: te horen in het spel, op de weg achter het hoofdgebouw.
+
+**Nog open**
+
+- **Als Michiel een lagere zon kiest**: de lucht die erbij hoort, `SUN_RISE` in `tools/levels/dunes/plan.gd`, de stand en de kleur van de zon in `scenes/dunes.tscn`, en `sunward` in `materials/depot_concrete.tres`. Het blad is gemaakt met twee losse scripts in de scratchmap van deze sessie (een kopie van de worktree per zonnestand, gebouwd en gefotografeerd); dat is geen gereedschap geworden.
+- **De wolk is niet gelijk voor wie samen speelt**: elke speler heeft zijn eigen klok.
+- **Wie aan de tafel staat, overlegt niet**: zie bovenaan.
+- **De schaduw van de wolk trekt niet over het land**; dat vraagt de shader van de grond.
+- **Een voertuig heeft zijn nummer en lading alleen in een level met land**; in de showroom staan ze er ook, in de andere levels staan geen voertuigen.
+- **De bunker steekt met zijn afgeschuinde hoeken 30 cm binnen zijn botsvorm**: een schot op die hoek slaat in de lucht in.
+- **Het midden van de binnenplaats** heeft er weinig bij gekregen: wat er staat mag geen botsvorm hebben, en iets groots waar je doorheen loopt is erger dan niets.
+
+## Een buit uit een beschrijving
+
+Op 12 oktober 2026 vroeg Michiel om in het menu te kunnen kiezen uit allerlei voorwerpen als "vlag" van capture the flag, en om er een nieuw "makkelijk in te laden met een prompt" als hij met vrienden speelt. Op 14 oktober zei hij dat die prompt een opdracht aan Claude is, en dat het bovenop `potje` gebouwd mocht worden voordat dat in de trunk staat. Gebouwd op de branch `buitkeuze`, die van `potje` afstamt. Michiel speelde het op 14 oktober ("Het ziet er top uit") en liet het die dag in de trunk zetten en pushen. Daarmee kwamen ook `potje` en `buit` in de trunk: het bijgestelde potje, de buit en capture the flag uit de secties hierboven.
+
+**Wat er staat**
+
+- **Een buit kan gemaakt worden op de machine waarop gespeeld wordt.** Zo'n buit is een map in `user://prizes/<naam>/` met `model.glb` en `prize.json`, en daarnaast `build.py` (het script dat hem maakte), `preview.png` en eventueel `sheet.jpg`. `scripts/prize.gd` leest die mappen naast `assets/prizes.json`, en doet dat opnieuw elke keer dat het scherm "Multiplayer" opent (`reread()`): een buit die gemaakt wordt terwijl het spel draait, staat er dan bij, zonder herstart en zonder nieuwe build. Een map zonder model of met de naam van een buit uit de tabel wordt overgeslagen, met een waarschuwing.
+- **Het model is een `.glb`**, gelezen met `GLTFDocument` terwijl het spel draait, dus ook in de gebouwde versie. Een `.glb` kan geen code bevatten, een `.scn` wel. Dat telt zodra een host zijn buiten naar gasten stuurt.
+- **De kleur van het team** krijgt elke mesh waarvan de naam met Team begint, net als bij de drie buiten uit de tabel. Die mesh krijgt het materiaal van een team (`team_paint`, `team_ribbon` of `team_leather`, te kiezen in `prize.json`), zodat dezelfde instance uniforms hem kleuren.
+- **Hoe de buit zit, volgt uit zijn maat** voor zover `prize.json` het niet zegt. Thuis staat hij midden op zijn standaard en gevallen rechtop waar hij viel. Gedragen hangt hij als een rugzak: het midden 22 cm onder het borstbot, de voorkant 12 cm erachter, en wat dieper is dan breed wordt een kwartslag gedraaid zodat de brede kant tegen de rug ligt. `prize.json` mag ook alleen een draaiing geven; de plek wordt dan berekend met die draaiing erbij. De standaard is een van die uit de tabel, standaard de stip met de ring; een eigen standaard als `.glb` kan ook.
+- **Het scherm.** "Prize" op het scherm "Multiplayer" opent een lijst van alle buiten; achter die van deze machine staat "made here", en wie er een kiest gaat terug met die buit gekozen. De keuze blijft bewaard (`Settings.prize`). Hij staat op het scherm van de wedstrijd en niet onder Settings, waar Michiel hem eerst vroeg: daar staat ook de rest van wat bij een wedstrijd hoort, "Against" en "Difficulty" inbegrepen.
+- **Het maken.** `tools/prizes/kit.py` is een werkplaats in Blender, zonder venster. Een vorm is een afstandsveld (bollen, staven, blokken en ringen die in elkaar overlopen, zoals de handschoen van de schutter gemaakt is) of is gemaakt van gedraaide profielen, blokken, buizen en ringen. `save()` zet het voorwerp op de grond, exporteert het, schrijft `prize.json` en maakt op de processor een beeld naast een figuur van 1,8 m. `tools/make_prize.sh <script>` doet dat en controleert de buit daarna zoals het spel hem toont (`tools/prize_check.sh`). Het rekenen kost zo'n tien seconden en geen GPU, dus het kan terwijl Michiel speelt.
+- **`/buit`**, een skill in `.claude/skills/buit/SKILL.md`, beschrijft voor elke sessie in dit project de stappen, de maten en wanneer de GPU niet gebruikt mag worden. Michiel typt wat hij wil, de sessie schrijft het script, maakt de buit, bekijkt het beeld en zegt waar hij te kiezen is.
+- **`tools/prize_sheet.py`** neemt de gemaakte buiten mee. Het blad van één gemaakte buit komt als `sheet.jpg` in zijn eigen map. Voorbij de tiende buit staan de tientallen vóór de pose: `12.21` is de twaalfde op iemands rug.
+- **Drie voorbeelden**, gemaakt zoals de skill het zegt en neergezet in de `user://prizes/` van Michiel: een badeend van 83 cm met een kraag in de teamkleur, op de stip; een pylon van 75 cm met twee banden in de teamkleur; een beker van 67 cm met een band om de voet, op de kist. De scripts staan in `tools/prizes/`.
+
+**De bladen** `assets/prizes/sheets/made_prizes.jpg` en `made_prizes_run.jpg`: de drie voorbeelden in de hal van de fabriek, thuis in de kleur van beide kanten, gedragen door een soldaat die stilstaat of rent, en gevallen.
+
+**Gevonden onderweg: de wedstrijdtest schreef de instellingen van Michiel.** In de test gaan de knoppen "Against" en "Difficulty" langs hun keuzes, en `Settings.put()` slaat die op in `user://settings.cfg`. Alleen de selftest en de benchmark werden daarvan uitgezonderd. Na elke run van `tools/test_match.sh` stond de moeilijkheid in zijn bestand dus op Hard en zijn tegenstander op wat de test als laatste had gekozen. Nu slaat geen enkele test meer instellingen op (`Settings.testing()`). Tests lezen gemaakte buiten uit een map van hun eigen checkout (`user://selftest/<checkout>/prizes`), zodat de buiten van Michiel niets veranderen aan wat een test telt.
+
+**Twee shaders met dezelfde naam.** De trunk kreeg op 13 oktober een eigen `shaders/flag.gdshader` voor de vlag in het kamp van de duinen, en de buit van `potje` had er al een met die naam. Bij het binnenhalen van de trunk hield de trunk de zijne, en heet die van de buit nu `shaders/prize_flag.gdshader` (`materials/flag_cloth.tres` wijst ernaar). Wie `potje` zelf met de trunk samenvoegt, loopt tegen hetzelfde aan.
+
+**Getest**, zonder GPU, terwijl Michiel een deel van de tijd speelde. Load 3 tot 5.
+
+- `tools/test_prize.sh`: 122 controles, waarvan 36 nieuw. Een gemaakte buit staat na de drie uit de tabel in de lijst. Een met de naam van een buit uit de tabel en een zonder model blijven weg. Wat later gemaakt wordt, verschijnt pas als er opnieuw gekeken wordt. Een gemaakte krat met een band doorloopt alles wat de drie andere ook doorlopen: thuis staat hij precies op de standaard, met de band in het materiaal van een team; hij wordt gepakt en hangt 12 cm achter het borstbot; hij ligt op de vloer, niet erin; hij hangt op een pop, verhuist mee bij het wisselen van wapen en valt neer als die verdwijnt.
+- `tools/test_match.sh`: 77 controles, tegen 75 op `potje`. Nieuw: "Prize" opent een lijst met de vlag, de voetbal en de banaan, en wie er een kiest gaat terug met die buit gekozen en bewaard.
+- `tools/selftest.sh`: 401 controles, evenveel als op `potje`. `tools/nettest.sh`: geslaagd aan beide kanten.
+- De drie voorbeelden en een script van buiten het project door `tools/make_prize.sh`: per stuk tien seconden.
+- Het bestand met de instellingen van Michiel is na de wedstrijdtest niet veranderd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het snel genoeg gaat op een avond met vrienden.** Het rekenen kost tien seconden, maar eerst moet het script geschreven worden en het beeld bekeken. Voor de drie voorbeelden was dat een paar minuten per stuk, waarvan het meeste bij het eerste.
+- **Hoe ze er in beweging uitzien.** Op de bladen hangen de pylon en de beker rechtop op de rug van een soldaat die voorover rent, en van achteren zie je vooral de zwarte voet van de pylon. Of dat er gek uitziet of gewoon grappig, zie je pas in een potje.
+- **Wat de eerste keer tekenen kost.** Een gemaakte buit heeft eigen materialen. De buit laat ze bij het neerzetten één keer tekenen (`Fx.rehearse()`), zoals de drie uit de tabel, maar ik heb niet geteld hoeveel pipelines dat zijn.
+
+**Nog open**
+
+- **Vrienden krijgen een gemaakte buit nog niet.** Wedstrijden over het netwerk bestaan nog niet (stap 4). Als ze er zijn, moet de host bij het begin van een wedstrijd de map van de gekozen buit meesturen: een `.glb` van een paar honderd kB en een `prize.json`. Een gast bewaart die in een map van die host.
+- **Een gemaakte buit zit niet in git en niet in de build.** Wil Michiel er een voor iedereen, dan gaat het script naar `tools/prizes/` en is er nog een manier nodig om het model met het spel mee te leveren.
+- **Kantelen.** Het spel rekent de plek uit met de doos rond het model, niet met de vorm zelf. Een draaiing om de verticale as gaat goed, maar een gekantelde buit zweeft of zakt een stukje weg.
+
+**Werkwijze**
+
+| Stap | Commando |
+|---|---|
+| Een buit maken uit een script, en controleren | `tools/make_prize.sh <script.py>` |
+| Een buit controleren zoals het spel hem toont | `tools/prize_check.sh <naam>` of `tools/prize_check.sh <map>` |
+| Het blad in het spel, alleen als niemand speelt | `tools/prize_sheet.py <naam>` (`--run` voor een soldaat in de pas) |
+| De test | `tools/test_prize.sh` |
+
+## De duinen: een lagere zon
+
+Op 14 oktober 2026 gekozen uit het blad met de zonnestanden (`benchmark/sheets/dunes_sun_proposal.jpg`): "Ja doe een lagere zon", en daarna 30 graden met de heiige lucht van dezelfde plek. Gebouwd op de branch `duinzon`, vanaf de trunk met `duinkamp` erin (`e07fd22`). Dezelfde dag op Michiels woord ("merge het maar in de trunk") in `fase-2-vertical-slice` gevoegd; niet gepusht.
+
+**Wat er staat**
+
+- **De zon staat op 28,6 graden** waar ze op 48 stond, in dezelfde richting (214,1 graden van noord over oost): precies waar de nieuwe lucht haar zon heeft, en 1,4 graden onder de 30 van het blad. De stand is in de lucht zelf gemeten, als het midden van haar helderste punten; dezelfde meting gaf voor de oude lucht 47,96 graden. `SUN_RISE` in `tools/levels/dunes/plan.gd` en de stand van de zon in `scenes/dunes.tscn`.
+- **De lucht** is `kloofendal_28d_misty_puresky` op 8k, van Poly Haven (CC0, 56,3 MB, met de md5 die Poly Haven opgeeft): een heiige dag zonder wolken. In de scan staat de zon 45 graden verder om dan in de oude. `shaders/dune_sky.gdshader` kan de lucht nu ronddraaien (`turn`, hier 0,1253 van een slag); de mipmaps worden genomen alsof ze niet gedraaid is, zodat de naad niet als streep in de lucht komt.
+- **Zon en nevel**: de zon is warmer en zwakker (kleur 1, 0,9, 0,76 en kracht 3,4 waar 1, 0,94, 0,83 en 3,9), de nevel iets dikker (0,0013 waar 0,0009). Op het oog gezet.
+- **25% van het land ligt in de schaduw** waar het 17% was. Dat is wat een wachter ook ziet: wie in de schaduw staat wordt pas op 7,5 m gezien, dus er is meer plek om ongezien te komen.
+
+**Gemeten**
+
+Drie ronden, de trunk en de lage zon om en om, 14 oktober van 08:44 tot 08:49, aan de lader, load 3 tot 6, niemand anders op de GPU. 3456×2160, Ultra, MetalFX, renderschaal vanzelf, de soldaten op hun post:
+
+| Standpunt | Trunk, fps en 1% low | Lage zon | Verschil | Tekenopdrachten en driehoeken, trunk en lage zon |
+|---|---|---|---|---|
+| Het bivak, 8 | 77,3 en 69,3 | 77,5 en 69,6 | +0,3 | 979 en 1,77 miljoen, 1202 en 2,47 |
+| Het wagenpark, 10 | 88,3 en 79,4 | 89,2 en 83,7 | +0,9 | 935 en 2,11, 1039 en 2,24 |
+| De binnenplaats, 16 | 89,6 en 68,6 | 89,2 en 73,7 | −0,4 | 672 en 1,36, 830 en 1,68 |
+| De achterdeur, 19 | 87,1 en 77,7 | 91,4 en 77,1 | +4,2 | 621 en 1,27, 777 en 1,60 |
+| Het oostelijke duin, 21 | 71,5 en 64,1 | 71,8 en 67,5 | +0,3 | 1158 en 2,59, 1366 en 2,93 |
+
+- **Geen verschil in beelden per seconde dat groter is dan de ruis.** De +4,2 bij de achterdeur komt uit één trage ronde van de trunk (92, 90, 80). Wel tekent de lage zon 100 tot 220 tekenopdrachten en tot 0,7 miljoen driehoeken meer: langere schaduwen, en dus meer dat in de schaduwkaarten moet. Op deze laptop kost dat niets meetbaars; op een tragere wel.
+
+**Gecontroleerd**
+
+- `tools/selftest.sh --level=dunes` slaagt, 86 controles, ook die van de schaduw en het sluipen.
+- Elke botsvorm en elk geplaatst model staat waar het in de trunk stond; alleen de schaduwkaart verschilt (79.344 bits waar 53.840).
+- Gezien op acht beelden naast de trunk, met één recht naar de zon: de gloed in de lucht staat midden in beeld en de schaduwen vallen naar de camera.
+
+**Onderweg gevonden**
+
+- **Een nieuwe lucht krijgt van Godot de standaardinstellingen**: onverpakt en zonder mipmaps, 134 MB in het videogeheugen. Haar `.import` heeft nu de instellingen van de oude lucht, en ze is 44,7 MB. Importeren duurt vier minuten (248 s): wie samenvoegt kloont `.godot/imported/kloofendal_28d_misty_puresky.hdr-230abe7e25b767ca48038a9eaba81b20.*` uit deze worktree mee.
+
+**Achterhaald**: "De zon. Ze staat op 48 graden" in "De duinen: het vijfde level", en de 17% schaduw van alle hoofdstukken over de duinen.
+
+**Niet kunnen beoordelen**
+
+- **Of de heiige lucht mooier is dan zon en wolken.** De wereld is er bleker en vlakker door. De wolk voor de zon (`scripts/cloud.gd`) blijft komen, ook al zijn er geen wolken in de lucht te zien.
+- **Of het sluipen te makkelijk wordt** met een kwart meer schaduw.
+
+**Nog open**
+
+- **De lucht van 48 graden staat er nog** (`assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr`, 75 MB), door niets gebruikt. Terug naar die zon is de lucht, `SUN_RISE` en de zon in de scène terugzetten en de duinen bouwen; weg ermee is het bestand, zijn `.import` en zijn regel in het manifest.
 
 ## De grachten: het zesde level, de voorbereiding
 

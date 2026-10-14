@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/beyond_ground.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/dense_sand/dense_sand_diff.jpg" id="sand"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/grain_tex = ExtResource("sand")
+shader_parameter/grain_scale = 0.3
+shader_parameter/grain_mean = Color(0.58, 0.5, 0.39, 1)
+shader_parameter/grain_from = 60.0
+shader_parameter/grain_to = 260.0
+shader_parameter/roughness = 0.95

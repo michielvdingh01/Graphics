@@ -181,7 +181,7 @@ func _handling() -> void:
 	Input.action_press("move_forward")
 	Input.action_press("sprint")
 	await _wait(0.6)
-	_check("sprint reaches sprint speed", player.velocity.length() > 7.0)
+	_check("sprint reaches sprint speed", player.velocity.length() > player.SPRINT_SPEED - 0.5)
 	Input.action_press("crouch")
 	await _wait(0.1)
 	_check("crouch while sprinting slides", player.is_sliding() and player.velocity.length() > 9.0)

@@ -60,6 +60,10 @@ uniform float edge = 0.0;
 // needles then stay needles for longer, and a sprig does not close up into
 // the shape of its card.
 uniform float sharp = 0.0;
+// How wide the rim of a hole is, as a share of the cut, and how many steps
+// blurrier than the distance asks the hole is read for it: see fragment().
+uniform float soft : hint_range(0.0, 1.0) = 0.6;
+uniform float blur : hint_range(0.0, 3.0) = 1.0;
 
 varying vec3 own;
 // How much light a dot lets through from behind: none, for wood.
@@ -83,7 +87,19 @@ void fragment() {
 	if (IN_SHADOW_PASS) {
 		ALPHA_SCISSOR_THRESHOLD = cut_shadow;
 	} else {
-		ALPHA_SCISSOR_THRESHOLD = mix(cut, cut_far, smoothstep(8.0, 60.0, -VERTEX.z));
+		// The rim of a hole is not a line. Seen small, a brush of needles has
+		// no outline: it thins out into its tips. So where the texture is seen
+		// smaller than it was made, the hole is read from a blurred copy of it,
+		// which widens its rim, and over that rim one dot is there and the
+		// next is not, in a pattern without a direction. Each dot is still
+		// there or not: the crown stays in the depth pass, and only what shows
+		// is lit.
+		vec2 dots = fwidth(UV) * vec2(textureSize(leaf_tex, 0));
+		float small = smoothstep(1.0, 3.0, max(dots.x, dots.y));
+		float grain = fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
+		float at = mix(cut, cut_far, smoothstep(8.0, 60.0, -VERTEX.z));
+		ALPHA = mix(leaf.a, texture(leaf_tex, UV, blur).a, small * 0.75);
+		ALPHA_SCISSOR_THRESHOLD = clamp(at * (1.0 + soft * small * (grain * 2.0 - 1.0)), 0.02, 0.98);
 		float wood = 1.0 - abs(COLOR.a - 0.5) * 2.0;
 		float lies = max(COLOR.a * 2.0 - 1.0, 0.0);
 		// The normal it was handed, whichever side of the card is looked at.

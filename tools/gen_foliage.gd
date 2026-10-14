@@ -8,6 +8,7 @@ extends SceneTree
 ##
 ##   grass      a tuft of marram, blades fanning up from the foot of the card
 ##   net        a camouflage net: cord with scrim knotted into it; it tiles
+##   net_relief the same net as a normal map
 ##   concertina one turn of a coil of barbed wire, and two strands of it
 ##   stencils   a sheet of what an army paints on its vehicles
 ##   chainlink  wire mesh; it tiles
@@ -76,14 +77,40 @@ func _grass() -> void:
 ## A camouflage net: a mesh of knotted cord, garnished with strips of scrim
 ## that were threaded through it by hand, a foot or so long and every one a
 ## little different. The strips lie in drifts of one colour, the way the
-## pattern was laid out, and leave holes where the garnish has thinned. Two
-## metres of net; it tiles.
+## pattern was laid out, and leave holes where the garnish has thinned: more
+## than a third of a net is hole, and that is what the light comes through.
+## A strip is cloth: it has a grain along it, it curls at its edges, and its
+## ends, where it was torn off the roll, are frayed. Two metres of net; it
+## tiles.
 func _net() -> void:
+	_knot_net()
+
+
+## The same net as its relief, for a normal map: every strip is rounded
+## across its width and lies on or under the ones it crosses. Drawn with the
+## dice of the net itself, so the two fit.
+func _net_relief() -> void:
+	var heights := _knot_net()
+	var size := _image.get_width()
+	var steep := 5.0
+	for y in size:
+		for x in size:
+			var across := heights.get_pixel(posmod(x + 1, size), y).r - heights.get_pixel(posmod(x - 1, size), y).r
+			var down := heights.get_pixel(x, posmod(y + 1, size)).r - heights.get_pixel(x, posmod(y - 1, size)).r
+			var faces := Vector3(-across * steep, down * steep, 1.0).normalized()
+			_image.set_pixel(x, y, Color(faces.x * 0.5 + 0.5, faces.y * 0.5 + 0.5, faces.z * 0.5 + 0.5, 1.0))
+
+
+## Draws the net into the picture, and returns how high every dot of it
+## stands over the cord, 0 to 1.
+func _knot_net() -> Image:
 	var size := _image.get_width()
 	var unit := size / 1024.0
 	var shades := _tiling(0.006 / unit, 1)
 	var holes := _tiling(0.011 / unit, 3)
 	var sway := _tiling(0.02 / unit, 5)
+	var grain := _tiling(0.045 / unit, 7)
+	var heights := Image.create_empty(size, size, false, Image.FORMAT_RF)
 	# The cord: a square mesh, pulled a little out of true.
 	var mesh := size / 16.0
 	for y in size:
@@ -93,29 +120,72 @@ func _net() -> void:
 			var cover := clampf(1.9 * unit - off, 0.0, 1.0)
 			if cover > 0.0:
 				_image.set_pixel(x, y, Color(0.2, 0.17, 0.12, cover))
-	var scrim: Array[Color] = [Color(0.08, 0.1, 0.055), Color(0.14, 0.17, 0.085), Color(0.23, 0.185, 0.115), Color(0.18, 0.2, 0.1), Color(0.33, 0.29, 0.19)]
-	for i in 1150:
+				heights.set_pixel(x, y, Color(0.12 * cover, 0, 0))
+	var scrim: Array[Color] = [Color(0.085, 0.105, 0.055), Color(0.15, 0.18, 0.085), Color(0.25, 0.2, 0.12), Color(0.19, 0.215, 0.1), Color(0.36, 0.315, 0.2)]
+	for i in 1000:
 		var middle := Vector2(_rng.randf(), _rng.randf()) * size
 		var thin := holes.get_pixelv(Vector2i(middle)).r
-		if thin < 0.5 and _rng.randf() > (thin - 0.24) * 1.5:
+		if thin < 0.52 and _rng.randf() > (thin - 0.27) * 1.5:
 			continue
 		var drift := shades.get_pixelv(Vector2i(middle)).r
 		var tone := scrim[clampi(int((drift - 0.22) / 0.56 * 5.0 + _rng.randf_range(-0.7, 0.7)), 0, 4)]
 		tone = tone.darkened(_rng.randf() * 0.3).lightened(_rng.randf() * 0.08)
 		var way := Vector2.RIGHT.rotated(_rng.randf() * PI)
-		var length := _rng.randf_range(70.0, 170.0) * unit
-		var width := _rng.randf_range(16.0, 30.0) * unit
+		var length := _rng.randf_range(80.0, 170.0) * unit
+		var width := _rng.randf_range(17.0, 30.0) * unit
 		var bend := _rng.randf_range(-0.6, 0.6)
+		var lift := _rng.randf_range(0.18, 0.6)
 		var spots: Array[Vector2] = []
 		for step in 6:
 			var t := step / 5.0
 			spots.append(middle + way.rotated(bend * (t - 0.5)) * length * (t - 0.5))
-		# Dark along its edges, where it curls, and narrow at its ends, where
-		# it is knotted in.
-		for coat: Array in [[1.0, tone.darkened(0.22)], [0.8, tone], [0.3, tone.lightened(0.06)]]:
-			for step in 5:
-				var pinch := 1.0 - 0.5 * absf((step + 0.5) / 5.0 - 0.5) * 2.0
-				_stroke_tiled(spots[step], spots[step + 1], width * pinch * (coat[0] as float), coat[1])
+		_strip(spots, width, tone, lift, grain, heights, i)
+	return heights
+
+
+## A strip of scrim through `spots`, `width` across at its widest: narrow at
+## its ends, where it is knotted in, and frayed there; darker along its
+## edges, where it curls away; with the grain of its cloth along it. `lift`
+## is how high it lies, in `heights`; `mark` tells one strip from the next.
+func _strip(spots: Array[Vector2], width: float, tone: Color, lift: float, grain: Image, heights: Image, mark: int) -> void:
+	var size := _image.get_width()
+	var pieces := spots.size() - 1
+	for piece in pieces:
+		var from := spots[piece]
+		var to := spots[piece + 1]
+		var along := to - from
+		var long := maxf(along.length(), 0.001)
+		var way := along / long
+		var reach := width * 0.5 + 2.0
+		for y in range(int(minf(from.y, to.y) - reach), int(maxf(from.y, to.y) + reach) + 1):
+			for x in range(int(minf(from.x, to.x) - reach), int(maxf(from.x, to.x) + reach) + 1):
+				var at := Vector2(x + 0.5, y + 0.5) - from
+				# A piece runs a dot into the next, so that no gap opens on
+				# the outside of a bend; the strip itself ends square.
+				var share := at.dot(way) / long
+				var over := 1.5 / long
+				if share < (-over if piece > 0 else 0.0) or share > (1.0 + over if piece < pieces - 1 else 1.0):
+					continue
+				var t := (piece + share) / pieces
+				var half := width * 0.5 * (1.0 - 0.3 * pow(absf(t * 2.0 - 1.0), 3.0))
+				var off := at - way * share * long
+				var aside := off.length()
+				if aside > half + 0.5:
+					continue
+				var side := signf(way.x * off.y - way.y * off.x) * aside / maxf(half, 0.5)
+				# The threads of it: fine lines that run its whole length.
+				var thread := grain.get_pixel(posmod(int(side * half * 3.0) + mark * 37, size), posmod(int(t * long * pieces * 0.16) + mark * 91, size)).r
+				var cover := clampf(half + 0.5 - aside, 0.0, 1.0)
+				# Frayed where it was torn: single threads of it reach further.
+				var end := minf(t, 1.0 - t) * pieces * long
+				if end < 9.0 and thread < 0.5 - 0.03 * end:
+					continue
+				var wx := posmod(x, size)
+				var wy := posmod(y, size)
+				var shade := (0.74 + 0.5 * thread) * (1.0 - 0.34 * side * side) * (0.92 + 0.14 * sin(t * 5.0 + mark))
+				_dab(wx, wy, Color(tone.r * shade, tone.g * shade, tone.b * shade), cover)
+				if cover > 0.5:
+					heights.set_pixel(wx, wy, Color(lift + 0.4 * sqrt(maxf(1.0 - side * side, 0.0)), 0, 0))
 
 
 ## A stroke in an image that tiles both ways.
@@ -191,18 +261,23 @@ func _chainlink() -> void:
 				_image.set_pixel(x, y, Color(tone, tone * 1.02, tone * 1.04, cover))
 
 
-## The dark of a pine wood, as it is seen between the trunks of the trees at
-## its edge and behind their crowns: gloom under the canopy, the trunks that
-## stand further in as paler stripes in it, and a little light on its floor.
-## Its top is ragged and stays below the crowns that stand in front of it.
-## It tiles from left to right.
+## A pine wood as it is from outside it and far off: a line of crowns, flat
+## plates of needles one over the other and lighter on top, each tree its own
+## height with the sky between one top and the next; under them the trunks,
+## and the dark of the wood between those. The same picture stands behind the
+## trees at the edge of a wood, where only its lower half shows, and by itself
+## for a wood too far off to plant.
 func _treeline() -> void:
 	var wide := _image.get_width()
 	var high := float(_image.get_height())
 	var gloom := Color(0.03, 0.045, 0.036)
 	var floor_light := Color(0.1, 0.085, 0.06)
-	for y in range(int(high * 0.12), int(high)):
-		var down := (y / high - 0.12) / 0.88
+	var shade := Color(0.05, 0.075, 0.06)
+	var body := Color(0.105, 0.16, 0.11)
+	var lit := Color(0.19, 0.275, 0.175)
+	# The dark between the trunks, from where the crowns begin down.
+	for y in range(int(high * 0.34), int(high)):
+		var down := (y / high - 0.34) / 0.66
 		for x in wide:
 			_image.set_pixel(x, y, gloom.lerp(floor_light, pow(down, 5.0) * 0.8))
 	# The trunks further in: the deeper, the thinner and the nearer the gloom.
@@ -214,10 +289,26 @@ func _treeline() -> void:
 			var girth := high * _rng.randf_range(0.008, 0.013) * (1.0 - row * 0.25)
 			var bark := gloom.lerp(Color(0.14, 0.11, 0.085), (0.6 - row * 0.18) * _rng.randf_range(0.6, 1.0))
 			_stroke_round(Vector2(x, high), Vector2(x + _rng.randf_range(-10, 10), top), girth, bark)
-	# The undersides of the crowns close it off at the top.
-	for i in 150:
-		var at := Vector2(_rng.randf() * wide, high * _rng.randf_range(0.1, 0.32))
-		_cushion(at, Vector2(high * _rng.randf_range(0.1, 0.2), high * _rng.randf_range(0.04, 0.09)), gloom.lightened(_rng.randf() * 0.03))
+	# The crowns: a row further in, darker and closing what the row in front
+	# leaves open, and the row that stands at the edge.
+	for row in 2:
+		var trees := 17 if row == 0 else 14
+		for i in trees:
+			var x := (i + _rng.randf_range(0.15, 0.85)) * wide / trees
+			var top := high * (_rng.randf_range(0.1, 0.24) if row == 0 else _rng.randf_range(0.03, 0.2))
+			var reach := high * _rng.randf_range(0.13, 0.2)
+			var plates := _rng.randi_range(4, 6)
+			var foot := high * _rng.randf_range(0.4, 0.5)
+			var front := 1.0 if row == 1 else 0.55
+			# The trunk of a tree at the edge shows under its crown.
+			if row == 1:
+				_stroke_round(Vector2(x + _rng.randf_range(-6, 6), high), Vector2(x, top + high * 0.08), high * _rng.randf_range(0.014, 0.02), Color(0.2, 0.15, 0.115))
+			for plate in plates:
+				var share := (plate + 0.5) / plates
+				var at := Vector2(x + _rng.randf_range(-0.5, 0.5) * reach * (0.3 + share), lerpf(foot, top, share) + high * _rng.randf_range(-0.012, 0.012))
+				# Wide below and narrower to the top, where the sun is on it.
+				var radii := Vector2(reach * lerpf(1.0, 0.55, share) * _rng.randf_range(0.8, 1.1), high * _rng.randf_range(0.03, 0.05))
+				_cushion(at, radii, shade.lerp(body, share * front).lerp(lit, pow(share, 2.0) * 0.6 * front * _rng.randf_range(0.6, 1.0)))
 
 
 ## What an army paints on what it drives, sixteen marks on a sheet of four by
@@ -254,10 +345,19 @@ func _stencils() -> void:
 	_write("3", Rect2(sign.position + sign.size * 0.5, sign.size * 0.46), black)
 	var arrow := Rect2(cell * 3, cell, cell, cell).grow(-cell * 0.15)
 	_fill_shape(PackedVector2Array([Vector2(arrow.position.x, arrow.end.y), Vector2(arrow.get_center().x, arrow.position.y), arrow.end, Vector2(arrow.get_center().x, arrow.end.y - arrow.size.y * 0.3)]), white)
-	var lines: Array[String] = ["KN-45-12", "KN-45-27", "KP-63-08", "KZ-07-31", "TP 2.1", "MAX 60 KM", "NO STEP", "BENZINE"]
+	# What a number is put together from, so that every vehicle has its own:
+	# the ten figures side by side, and under them the letters a field car, a
+	# lorry and a tank begin theirs with, and the stroke between its parts.
+	# See _number() in tools/kit/field.gd.
+	for figure in 10:
+		_write(str(figure), Rect2(figure * cell * 0.4, cell * 2, cell * 0.4, cell * 0.5).grow(-cell * 0.03), white)
+	var letters: Array[String] = ["KN", "KP", "KZ", "-"]
+	for i in letters.size():
+		_write(letters[i], Rect2(i * cell, cell * 2.5, cell, cell * 0.5).grow(-cell * 0.03), white)
+	var lines: Array[String] = ["TP 2.1", "MAX 60 KM", "NO STEP", "BENZINE"]
 	for i in lines.size():
 		@warning_ignore("integer_division")
-		_write(lines[i], Rect2((i % 2) * cell * 2, cell * 2 + (i / 2) * cell * 0.5, cell * 2, cell * 0.5).grow(-cell * 0.04), white)
+		_write(lines[i], Rect2((i % 2) * cell * 2, cell * 3 + (i / 2) * cell * 0.5, cell * 2, cell * 0.5).grow(-cell * 0.04), white)
 	# Rubbed, and thin where the stencil was lifted too soon.
 	var worn := _tiling(0.012, 1)
 	var speck := _tiling(0.12, 2)

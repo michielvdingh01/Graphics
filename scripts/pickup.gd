@@ -45,6 +45,9 @@ const TURN := 0.9
 const WORLD := 1
 
 var kind := Kind.HEALTH
+## It lies there until it is taken: for what belongs to a place, as in a
+## match, and not to a fight.
+var stays := false
 
 var _age := 0.0
 var _from := Vector3.ZERO
@@ -90,6 +93,8 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_age += delta
+	if stays:
+		_age = minf(_age, LIFE - BLINK - 1.0)
 	if _age >= LIFE:
 		queue_free()
 		return

@@ -60,6 +60,9 @@ var _reports: Array[Array] = []
 var _label := Label3D.new()
 ## The layers it is on while it stands.
 var _layer := LAYER
+## Who it is in a match, if not a soldier: {character, voice, tint}, as
+## scripts/enemy_themes.gd casts one.
+var _look := {}
 
 
 func _ready() -> void:
@@ -104,7 +107,12 @@ func _dress() -> void:
 	var data: WeaponData = WEAPONS.LOADOUT[clampi(_weapon, 0, WEAPONS.LOADOUT.size() - 1)]
 	var rig := HUMANOID.new()
 	rig.name = "Model"
-	if not ResourceLoader.exists(path) or not rig.setup({"character": load(path), "weapon": data.resource_path.get_file().get_basename(), "moves": "default"}):
+	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "default"}
+	if _look.has("character"):
+		cast.merge(_look)
+	elif ResourceLoader.exists(path):
+		cast.character = load(path)
+	if not cast.has("character") or not rig.setup(cast):
 		rig.free()
 		return
 	add_child(rig)
@@ -252,9 +260,11 @@ func hurt(amount: float, at := Vector3.INF, direction := Vector3.ZERO) -> void:
 
 ## Puts it on a side: the layers that side is on, `foes` those of who it can
 ## walk into, and `friend` if that is the side of this machine's player, whose
-## own are marked and named through walls. `weapon` is what a bot carries.
-func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1) -> void:
+## own are marked and named through walls. `weapon` is what a bot carries, and
+## `look` who it is if not a soldier.
+func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1, look := {}) -> void:
 	team = side
+	_look = look
 	_layer = LAYER | layers
 	if driven:
 		collision_mask = 1 | foes

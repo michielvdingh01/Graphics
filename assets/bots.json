@@ -1,0 +1,8 @@
+{
+	"levels": {
+		"recruit": {"reaction": 1.1, "wander": 4.5, "aim_time": 1.0, "fov": 90.0, "burst": 0.35, "rest": [1.2, 2.0]},
+		"regular": {"reaction": 0.55, "wander": 2.0, "aim_time": 0.6, "fov": 110.0, "burst": 1.0, "rest": [0.4, 0.7]},
+		"hardened": {"reaction": 0.35, "wander": 1.2, "aim_time": 0.4, "fov": 120.0, "burst": 1.6, "rest": [0.2, 0.4]},
+		"veteran": {"reaction": 0.22, "wander": 0.6, "aim_time": 0.25, "fov": 140.0, "burst": 2.5, "rest": [0.15, 0.3]}
+	}
+}

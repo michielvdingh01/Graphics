@@ -21,7 +21,7 @@ const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "me
 const KEYS: Array[String] = [
 	"quality", "upscaler", "auto_scale", "render_scale", "vsync", "fullscreen", "show_fps",
 	"fov", "view_motion", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume", "music",
-	"enemy_theme", "difficulty",
+	"enemy_theme", "difficulty", "prize",
 ]
 const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
 ## What a difficulty changes, and nothing else does:
@@ -140,6 +140,10 @@ var volume := 0.8
 var music := 0.7
 ## 0 Easy, 1 Normal, 2 Hard: see RULES.
 var difficulty := 1
+## What the two sides fight over in capture the flag: a name from
+## assets/prizes.json, or of a prize made on this machine (scripts/prize.gd).
+## Chosen on the screen of a match.
+var prize := "flag"
 ## Who the enemies are: a theme from enemy_themes.gd, robots unless chosen
 ## otherwise here or with --enemies=<theme> on the command line. It holds for
 ## the enemies that spawn from then on.
@@ -199,8 +203,19 @@ func put(key: String, value: Variant) -> void:
 		return
 	set(key, value)
 	apply()
-	if not Benchmark.active and not SelfTest.active:
+	if not Benchmark.active and not testing():
 		_save()
+
+
+## Whether one of the tests of the game runs. A test changes settings to see
+## what comes of them, through the menu too, and the file it would save them
+## in is that of whoever plays on this machine.
+func testing() -> bool:
+	for test: String in ["SelfTest", "MatchTest", "NetTest", "HumanoidTest", "SandboxTest"]:
+		var node := get_node_or_null("/root/" + test)
+		if node and node.get(&"active"):
+			return true
+	return false
 
 
 func summary() -> Dictionary:

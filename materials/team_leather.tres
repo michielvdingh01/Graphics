@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/team.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="wear_mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/plain = Color(0.03, 0.03, 0.033, 1)
+shader_parameter/roughness = 0.42
+shader_parameter/fuzz = 0.0
+shader_parameter/wear = 0.2
+shader_parameter/mask_scale = 6.0
+shader_parameter/wear_mask = ExtResource("wear_mask")

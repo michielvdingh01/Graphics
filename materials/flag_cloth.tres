@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/prize_flag.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/masks/grain_weave.png" id="grain"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/plain = Color(0.6, 0.58, 0.53, 1)
+shader_parameter/mark = Color(0.9, 0.88, 0.82, 1)
+shader_parameter/roughness = 0.85
+shader_parameter/grain_scale = 30.0
+shader_parameter/grain_depth = 0.6
+shader_parameter/fly = 0.9
+shader_parameter/grain = ExtResource("grain")

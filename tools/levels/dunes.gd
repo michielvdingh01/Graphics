@@ -15,6 +15,7 @@ func _describe() -> void:
 	_grow()
 	for file in STRETCHES:
 		build(file)
+	build("vista")
 	build("outside")
 	for file in STRETCHES:
 		build(file, &"_route_through")
