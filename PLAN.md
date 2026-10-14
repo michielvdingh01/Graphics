@@ -3011,7 +3011,7 @@ De drie ronden van een kant lagen nooit meer dan één beeld per seconde uit elk
 
 ## Een buit uit een beschrijving
 
-Op 12 oktober 2026 vroeg Michiel om in het menu te kunnen kiezen uit allerlei voorwerpen als "vlag" van capture the flag, en om er een nieuw "makkelijk in te laden met een prompt" als hij met vrienden speelt. Op 14 oktober zei hij dat die prompt een opdracht aan Claude is, en dat het bovenop `potje` gebouwd mocht worden voordat dat in de trunk staat. Gebouwd op de branch `buitkeuze`, die van `potje` afstamt. **Niet in de trunk, en zonder `potje` kan het er niet in.**
+Op 12 oktober 2026 vroeg Michiel om in het menu te kunnen kiezen uit allerlei voorwerpen als "vlag" van capture the flag, en om er een nieuw "makkelijk in te laden met een prompt" als hij met vrienden speelt. Op 14 oktober zei hij dat die prompt een opdracht aan Claude is, en dat het bovenop `potje` gebouwd mocht worden voordat dat in de trunk staat. Gebouwd op de branch `buitkeuze`, die van `potje` afstamt. Michiel speelde het op 14 oktober ("Het ziet er top uit") en liet het die dag in de trunk zetten en pushen. Daarmee kwamen ook `potje` en `buit` in de trunk: het bijgestelde potje, de buit en capture the flag uit de secties hierboven.
 
 **Wat er staat**
 
