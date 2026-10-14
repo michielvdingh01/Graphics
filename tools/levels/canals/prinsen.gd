@@ -12,9 +12,10 @@ func _describe() -> void:
 	front("d_west", "n", "canal")
 	front("d_mid", "n", "canal")
 	front("d_east", "n", "canal")
-	# The south quay over the mouth of the Spiegelgracht.
+	# The south quay over the mouth of the Spiegelgracht, level: the bridge
+	# from the Nieuwe Spiegelstraat comes down on it.
 	var z := (PRINSEN[2] + PRINSEN[3]) * 0.5
-	bridge(Vector3(SPIEGELGRACHT[1] - 1.0, 0, z), Vector3(SPIEGELGRACHT[2] + 1.0, 0, z), PRINSEN[3] - PRINSEN[2] - 0.6, 0.45)
+	bridge(Vector3(SPIEGELGRACHT[1] - 1.0, 0, z), Vector3(SPIEGELGRACHT[2] + 1.0, 0, z), PRINSEN[3] - PRINSEN[2] - 0.6, 0.0, "brick", 0.4, [1.0])
 	by_position()
 
 

@@ -61,6 +61,10 @@ const SPIEGELGRACHT: Array[float] = [25.5, 34.0, 46.0, 54.5]
 const VIJZEL_X := 180.0
 const VIJZELSTRAAT: Array[float] = [169.0, 191.0]
 const VIJZELGRACHT: Array[float] = [162.0, 198.0]
+## Where the two axes cross a great canal: x, how wide the bridge is, and
+## how far its crown rises over the quays. High enough that whoever wades
+## through the canal walks upright under it: see bridge().
+const CROSSINGS: Array[Array] = [[SPIEGEL_X, 9.0, 1.5], [VIJZEL_X, 20.0, 1.2]]
 ## How deep a house is from front to back: on a canal, and on a side street.
 const DEEP := 12.0
 const DEEP_STREET := 10.0
@@ -178,12 +182,24 @@ func _quay(z0: float, z1: float, edge: float, mouths: Array) -> void:
 ## the water on either quay the trees, the lanterns and the parked cars.
 func great_canal(lines: Array[float], mouths: Array = []) -> void:
 	long_canal(lines, mouths)
-	var crossings := [[SPIEGEL_X, 9.0, 0.9], [VIJZEL_X, 20.0, 0.6]]
-	for crossing: Array in crossings:
+	for crossing: Array in CROSSINGS:
 		var from := Vector3(crossing[0], 0, lines[2] + 1.0)
 		var to := Vector3(crossing[0], 0, lines[1] - 1.0)
 		bridge(from, to, crossing[1], crossing[2])
 		bridge_lanterns(from, to, crossing[1])
+	# Steps down to the water, for whoever falls in: in every stretch of it
+	# between two bridges, or between a bridge and the end of the level, one
+	# on either quay. Where they come up, nothing stands at the kerb.
+	var steps := PackedVector3Array()
+	var ends: Array[float] = [WEST_END]
+	for crossing: Array in CROSSINGS:
+		ends.append_array([crossing[0] - crossing[1] * 0.5, crossing[0] + crossing[1] * 0.5])
+	ends.append(EAST_END)
+	for i in range(0, ends.size(), 2):
+		steps.append(Vector3(lerpf(ends[i], ends[i + 1], 0.35), 0, lines[1]))
+		steps.append(Vector3(lerpf(ends[i], ends[i + 1], 0.65), 0, lines[2]))
+	for spot in steps:
+		water_steps(spot, 0.0 if spot.z == lines[1] else 180.0)
 	for z: float in [lines[1] - KERB, lines[2] + KERB]:
 		var x := WEST_END + 3.0
 		for stop: Array in [[SPIEGEL_X - 7.5, SPIEGEL_X + 7.5], [VIJZEL_X - 13.0, VIJZEL_X + 13.0], [EAST_END - 3.0, EAST_END]]:
@@ -193,12 +209,8 @@ func great_canal(lines: Array[float], mouths: Array = []) -> void:
 				if z > lines[2] and mouth[0] < until and mouth[1] > x:
 					until = minf(until, mouth[0] - 1.0)
 			if until - x > 8.0:
-				kerb_line(Vector3(x, 0, z), Vector3(until, 0, z))
+				kerb_line(Vector3(x, 0, z), Vector3(until, 0, z), "ritter", 0.6, steps)
 			x = stop[1]
-	# Steps down to the water, for whoever falls in: two to a quay.
-	for x: float in [WEST_END + 70.0, EAST_END - 70.0]:
-		water_steps(Vector3(x, 0, lines[1]), 0.0)
-		water_steps(Vector3(x + 20.0, 0, lines[2]), 180.0)
 	# What the wet street mirrors, in three lengths.
 	var third := (EAST_END - WEST_END) / 3.0
 	for i in 3:

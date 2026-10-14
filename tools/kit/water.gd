@@ -58,9 +58,18 @@ func water_steps(at: Vector3, yaw_deg: float) -> void:
 
 
 ## A bridge over a canal from `from` to `to`, the middles of its two ends
-## where they meet the quays, `width` wide. Its deck rises to `rise` over the
-## quays at the crown, and it has a parapet along either side.
-func bridge(from: Vector3, to: Vector3, width: float, rise := 0.9, mat := "brick") -> void:
+## where they meet the quays, `width` wide. Its deck, `deck` thick, rises to
+## `rise` over the quays at the crown, and it has a parapet along either
+## side. It rests on the quay walls and on nothing in the water, so that
+## whoever wades through the canal can go under it: upright under the
+## crown wherever the underside is 0.2 m or more over the quays, since the
+## bed lies CANAL_BED down and the player stands 1.8 m tall, and stooped
+## nearer the ends. A bridge without a rise carries a quay over the mouth of
+## a canal; under that one only stooped. `parapets` are the sides that have
+## one: -1 for the left of somebody who walks from `from` to `to`, 1 for his
+## right. A quay carried over a mouth has one only on the side of the
+## canal that runs into it, so that another bridge can come down on it.
+func bridge(from: Vector3, to: Vector3, width: float, rise := 1.2, mat := "brick", deck := 0.4, parapets: Array[float] = [-1.0, 1.0]) -> void:
 	var along := (to - from).normalized()
 	var across := along.cross(Vector3.UP)
 	var span := from.distance_to(to)
@@ -73,10 +82,6 @@ func bridge(from: Vector3, to: Vector3, width: float, rise := 0.9, mat := "brick
 		var b := from + along * span * t1 + Vector3.UP * rise * (1.0 - pow(2.0 * t1 - 1.0, 2.0))
 		var lie := Basis.looking_at(b - a, Vector3.UP)
 		var middle := (a + b) * 0.5
-		_box("floor", Transform3D(lie, middle + lie.y * -0.3), Vector3(width, 0.6, a.distance_to(b) + 0.06), 0)
-		for side: float in [-1.0, 1.0]:
+		_box("floor", Transform3D(lie, middle + lie.y * -deck * 0.5), Vector3(width, deck, a.distance_to(b) + 0.06), 0)
+		for side: float in parapets:
 			_box(mat, Transform3D(lie, middle + across * side * (width * 0.5 - 0.2) + lie.y * 0.45), Vector3(0.4, 0.9, a.distance_to(b) + 0.06), 0)
-	# What carries it: a pier a third of the way in from either end.
-	for t: float in [0.3, 0.7]:
-		var foot := from + along * span * t
-		box(mat, Vector3(foot.x, -CANAL_BED * 0.5, foot.z), Vector3(absf(across.x) * width + absf(along.x) * 1.2, CANAL_BED + 1.0, absf(across.z) * width + absf(along.z) * 1.2), Vector3.ZERO, NO_COLLIDE)

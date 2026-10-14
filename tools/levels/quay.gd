@@ -40,13 +40,15 @@ func _describe() -> void:
 	terrace(Vector2(LONG, LINES[3]), Vector2(0, LINES[3]), "canal")
 	var from := Vector3(BRIDGE_X, 0, LINES[2] + 1.0)
 	var to := Vector3(BRIDGE_X, 0, LINES[1] - 1.0)
-	bridge(from, to, BRIDGE_WIDE)
+	bridge(from, to, BRIDGE_WIDE, 1.5)
 	for end: Vector3 in [from, to]:
 		for side: float in [-1.0, 1.0]:
 			lantern(Vector3(end.x + side * (BRIDGE_WIDE * 0.5 + 0.5), 0, end.z + signf(to.z - from.z) * (0.4 if end == from else -0.4)), "crown")
-	kerb_line(Vector3(BRIDGE_X + 7.0, 0, LINES[1] - KERB), Vector3(LONG - 1.0, 0, LINES[1] - KERB))
-	kerb_line(Vector3(BRIDGE_X + 7.0, 0, LINES[2] + KERB), Vector3(LONG - 1.0, 0, LINES[2] + KERB))
-	water_steps(Vector3(30.0, 0, LINES[2]), 180.0)
+	var steps := PackedVector3Array([Vector3(22.0, 0, LINES[1]), Vector3(30.0, 0, LINES[2])])
+	kerb_line(Vector3(BRIDGE_X + 7.0, 0, LINES[1] - KERB), Vector3(LONG - 1.0, 0, LINES[1] - KERB), "ritter", 0.6, steps)
+	kerb_line(Vector3(BRIDGE_X + 7.0, 0, LINES[2] + KERB), Vector3(LONG - 1.0, 0, LINES[2] + KERB), "ritter", 0.6, steps)
+	water_steps(steps[0], 0.0)
+	water_steps(steps[1], 180.0)
 	# Where the town would go on: a hoarding at either end, from the bed up.
 	for x: float in [-0.2, LONG + 0.2]:
 		box("roof", Vector3(x, 1.15, (LINES[0] + LINES[3]) * 0.5), Vector3(0.4, 5.7, LINES[3] - LINES[0]))

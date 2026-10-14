@@ -2793,12 +2793,35 @@ Nog niet gevraagd, en pas aan de orde bij stap 2 tot 4: baksteen, dakpannen en a
 | De stad of de proefkade bouwen (37 s en 1,3 s, zonder GPU; nodig voor wie ze wil zien, want het gebouwde staat niet in git) | `tools/build_level.sh canals`, `tools/build_level.sh quay` |
 | De proefkade bekijken, met iemand die voorbijloopt | `tools/benchmark.sh --quick --scene=res://scenes/quay.tscn --enemies=soldiers --spawn="res://scenes/enemy.tscn@24,0,41.5,-90,1,2"` |
 | Nagaan dat een wijziging aan een la geen ander level breekt | `tools/build_check.py factory works depot powerhouse wing dunes showroom` |
+| Nagaan dat de grachten te doorwaden zijn, de trapjes vrij en de kaden, straten en bruggen te belopen, na het bouwen | `tools/test_canals.sh` (een halve minuut, zonder GPU) |
 | Van boven, zoals het gebouwd is | `tools/level_map.py canals` |
 | De zes vaste standpunten, alleen de beelden | `tools/benchmark.sh --quick --scene=res://scenes/canals.tscn` |
 | Meten zoals er gespeeld wordt, met wat schaduw, spiegeling en mist kosten | `tools/benchmark.sh --scene=res://scenes/canals.tscn --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=lamp_shadows,ssr,volumetric_fog` |
 | Hetzelfde met iedereen wakker en op weg naar de brug van de Herengracht | dezelfde opdracht met `--enemies=soldiers --awake=40,0.9,30 --warmup=600` in plaats van `--profile` |
 | De stad of de proefkade lopen in een venster | na het bouwen: `/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/canals.tscn -- --play`, of `res://scenes/quay.tscn` |
 | Een maat van de stad veranderen | alleen in `tools/levels/canals/plan.gd` |
+
+**Besloten door Michiel**, op 14 oktober, na het lopen van de greybox
+
+1. De schaal blijft twee derde.
+2. De vijand draagt gewone kleren en is te herkennen aan wat hij draagt en doet. Een geraakte voetganger waarschuwt de straat en telt op het eindscherm.
+3. In de gracht waad je, en je komt er bij een trapje uit, zoals het er staat. Op een paar plekken kwam hij er niet uit: zie hieronder.
+4. De mist is goed zo.
+5. `grachten` mag naar GitHub.
+6. De downloads uit de tabel hierboven: allemaal.
+
+Over de ASUS zelf, de kaart, het geheugen en of de opdracht voor Windows daar loopt, staat nog niets.
+
+**De gracht uit: bruggen en trapjes**
+
+Een test die een lichaam van de maat van de speler door elke gracht laat waden, op elk trapje laat staan en over elke kade, straat en brug laat lopen (`tools/test_canals.sh`), vond op de stand van 13 oktober vier dingen:
+
+- **Negen van de veertien trapjes kwamen uit bij iets op de kade**: een geparkeerde auto, een lantaarn of een iep stond aan de rand, precies waar je eruit klimt. Dat is vermoedelijk waar Michiel niet uit kwam.
+- **Wie in een stuk water viel zonder trapje, kwam er niet meer uit**: de Lijnbaansgracht had er geen, en voorbij de bruggen aan de randen van het level evenmin. Bruggen waren te laag om onderdoor te waden: een dek van 0,6 m dat aan de uiteinden op kadehoogte ligt, laat boven de bodem 1,1 m over, en de speler is 1,8 m.
+- **Onder de kade over de monding van de Spiegelgracht kon je zelfs gebukt niet door.**
+- **De ronde was doorgesneden**: die kade had een leuning aan de kant van de Prinsengracht, precies waar de brug uit de Nieuwe Spiegelstraat neerkomt. De bouwer zag het niet, want om de Vijzelstraat heen was alles nog te bereiken.
+
+Nu staat er in elk stuk water tussen twee bruggen, of tussen een brug en de rand, op elke kade een trapje, 23 in de stad en 2 op de proefkade, en houdt de kade daarboven drie meter vrij (`kerb_line` neemt de plekken mee). Een brug rust op de kademuren en op niets in het water, met een dek van 0,4 m: de bruggen van de Nieuwe Spiegelstraat rijzen 1,5 m, die van de Vijzelstraat 1,2 m en die over de Lijnbaansgracht 1,0 m, zodat je onder de kruin rechtop waadt. De kaden over de twee mondingen van de Spiegelgracht liggen vlak, met alleen een leuning aan de kant van de Spiegelgracht; daaronder moet je bukken. Op de stand van nu slaagt de test, 18 van 18, en op die van 13 oktober faalt hij op alle vier.
 
 **Nog open**
 

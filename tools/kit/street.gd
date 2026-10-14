@@ -165,7 +165,9 @@ func parked_cars(from: Vector3, to: Vector3, filled := 0.7) -> void:
 ## What stands along the kerb of a quay, on the line from `from` to `to`: a
 ## lantern and an elm turn and turn about, some eleven metres apart, and
 ## between one and the next two places to park, of which `filled` are taken.
-func kerb_line(from: Vector3, to: Vector3, kind := "ritter", filled := 0.6) -> void:
+## Nothing stands within three metres of a spot in `clear`: where the steps
+## out of the water come up, say.
+func kerb_line(from: Vector3, to: Vector3, kind := "ritter", filled := 0.6, clear := PackedVector3Array()) -> void:
 	var length := from.distance_to(to)
 	var step := (to - from) / length
 	var yaw := rad_to_deg(atan2(step.x, step.z))
@@ -173,12 +175,22 @@ func kerb_line(from: Vector3, to: Vector3, kind := "ritter", filled := 0.6) -> v
 	var pitch := length / posts
 	for i in posts:
 		var at := from + step * pitch * (i + 0.5)
-		if i % 2 == 0:
-			lantern(at, kind)
-		else:
-			elm(at)
+		if _kerb_free(at, clear):
+			if i % 2 == 0:
+				lantern(at, kind)
+			else:
+				elm(at)
 		if i == posts - 1:
 			break
 		for place: float in [0.27, 0.73]:
-			if _prop_rng.randf() < filled:
+			if _prop_rng.randf() < filled and _kerb_free(at + step * pitch * place, clear):
 				parked_car(at + step * pitch * place, yaw)
+
+
+## Whether `spot` is three metres or more from every spot in `clear`, seen
+## from above.
+func _kerb_free(spot: Vector3, clear: PackedVector3Array) -> bool:
+	for kept in clear:
+		if Vector2(spot.x - kept.x, spot.z - kept.z).length() < 3.0:
+			return false
+	return true
