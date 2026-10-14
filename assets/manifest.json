@@ -43,7 +43,7 @@
 		{"id": "hessian_380", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "the jute of sandbags"},
 		{"id": "rough_linen", "type": "texture", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "the weave of tent canvas and of tarpaulins"},
 		{"id": "industrial_sunset_puresky", "type": "hdri", "source": "polyhaven", "license": "CC0", "resolution": "2k", "use": "sky and ambient light"},
-		{"id": "kloofendal_48d_partly_cloudy_puresky", "type": "hdri", "source": "polyhaven", "license": "CC0", "resolution": "4k", "use": "sky and ambient light of the dunes: a day of sun and cloud"},
+		{"id": "kloofendal_48d_partly_cloudy_puresky", "type": "hdri", "source": "polyhaven", "license": "CC0", "resolution": "8k", "use": "sky and ambient light of the dunes: a day of sun and cloud"},
 		{"id": "Barrel_01", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "barrels"},
 		{"id": "Barrel_02", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "barrels"},
 		{"id": "barrel_03", "type": "model", "source": "polyhaven", "license": "CC0", "resolution": "1k", "use": "barrels"},
