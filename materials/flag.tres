@@ -1,0 +1,20 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/flag.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/rough_linen/rough_linen_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/rough_linen/rough_linen_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/field = Color(0.24, 0.27, 0.13, 1)
+shader_parameter/device = Color(0.74, 0.73, 0.66, 1)
+shader_parameter/weave_tex = ExtResource("diff")
+shader_parameter/weave_normal = ExtResource("nor")
+shader_parameter/weave_value = 0.437
+shader_parameter/weave_scale = 5.0
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/through = 1.6
+shader_parameter/wind = Vector2(0.12, 1)
+shader_parameter/droop_lull = 0.17
+shader_parameter/droop_gust = 0.045

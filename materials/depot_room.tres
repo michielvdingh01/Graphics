@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/depot_room.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/room_corner = Vector2(300, 27)
+shader_parameter/room_bay = Vector2(8.2667, 7.2)
+shader_parameter/room_ground = 6.4
+shader_parameter/room_deep = 7.0
+shader_parameter/room_light = 0.2
+shader_parameter/room_grain = ExtResource("mask")

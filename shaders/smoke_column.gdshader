@@ -14,7 +14,7 @@ uniform float density : hint_range(0.0, 1.0) = 0.36;
 uniform float foot = 0.14;
 uniform float crown = 3.6;
 // Which way the wind takes it, and how far by the time it is at its top.
-uniform vec2 wind = vec2(0.8, -0.35);
+uniform vec2 wind = vec2(0.1, 0.86);
 uniform float drift = 9.0;
 uniform float rise = 0.045;
 

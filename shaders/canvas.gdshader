@@ -29,8 +29,33 @@ uniform sampler2D wear_mask : hint_default_black, filter_linear_mipmap, repeat_e
 uniform float strip = 0.9;
 uniform float through : hint_range(0.0, 4.0) = 1.1;
 uniform float roughness : hint_range(0.0, 1.0) = 0.93;
+// The way the wind blows (x and z), as the grass has it: the gusts that run
+// over the land bend the marram and fill the canvas at the same moment.
+uniform vec2 wind = vec2(0.12, 1.0);
 
 void vertex() {
+	// Cloth that moves says so in UV2: x is how far this corner of it gives
+	// in the wind, in metres, and nought where it is held; y is how light it
+	// is, nought for a wall of canvas that fills and sinks back and one for
+	// a shirt on a line, which is taken along by the wind and never still.
+	if (UV2.x > 0.0) {
+		vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		vec2 downwind = normalize(wind);
+		float run = dot(world.xz, downwind);
+		float gust = 0.5 + 0.5 * sin(run * 0.19 - TIME * 1.3 + sin(world.x * 0.07 + TIME * 0.21) * 2.0);
+		// It fills with a gust and empties after it, a swell runs along it,
+		// and what is light flutters.
+		float swell = sin(run * 0.9 + world.y * 0.6 - TIME * 1.7);
+		float flutter = sin(run * 4.3 + world.y * 2.9 - TIME * 6.1) * 0.6 + sin(dot(world.xz, vec2(-downwind.y, downwind.x)) * 3.1 + world.y * 1.7 - TIME * 4.3) * 0.4;
+		float moves = (gust - 0.4) * 0.8 + swell * (0.15 + 0.3 * gust) + flutter * UV2.y * (0.15 + 0.3 * gust);
+		// Cloth that is held all round moves in and out, the way it faces;
+		// cloth that hangs free goes with the wind.
+		mat3 turned = mat3(MODEL_MATRIX);
+		vec3 blows = normalize(vec3(downwind.x, 0.3, downwind.y));
+		vec3 faces = normalize(turned * NORMAL);
+		vec3 goes = mix(faces * (dot(faces, blows) < 0.0 ? -1.0 : 1.0), blows, UV2.y);
+		VERTEX += (goes * turned) * moves * UV2.x;
+	}
 	// The sun shines through one thickness of canvas: the inside of a roof
 	// is lit by what falls on its outside. Its own shadow would lie on it
 	// there, in the dots of the shadow map. The cloth therefore throws its

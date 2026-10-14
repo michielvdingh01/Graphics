@@ -32,7 +32,9 @@ const THICKEST := 0.03
 const EXACT := 0.001
 ## How far the collider of a pane reaches to either side of the glass, in
 ## metres. The leaf of a door is a collider too and thicker than its pane: a
-## shot that stops on it has to have got to the glass.
+## shot that stops on it has to have got to the glass. Glass that sits deep
+## in a wall says how deep, as "reveal" on its mesh: a shot at it stops on
+## the collider of that wall, which has no opening, and has to count.
 const PAD := 0.03
 ## How far in front of a pane a blast looks for it, in metres: clear of the
 ## wall or the leaf of the door that the pane sits in.
@@ -247,6 +249,8 @@ var _panes := PackedInt32Array()
 var _around := AABB()
 ## The shape of the pane it took on last, which the next is likely to share.
 var _box: BoxShape3D
+## How far the collider of each of its panes reaches to either side, see PAD.
+var _pad := PAD
 
 
 func _ready() -> void:
@@ -333,6 +337,7 @@ static func glaze(instance: MeshInstance3D, layer: int) -> Array[StaticBody3D]:
 	glazing.remake()
 	instance.mesh = glazing.mesh
 	var found := {}
+	var pad := maxf(PAD, float(instance.get_meta(&"reveal", 0.0)))
 	for pane in count:
 		var first := _first_of(group, pane)
 		var window: StaticBody3D = found.get(first)
@@ -341,6 +346,7 @@ static func glaze(instance: MeshInstance3D, layer: int) -> Array[StaticBody3D]:
 			window.collision_layer = layer
 			window.collision_mask = 0
 			window._glazing = glazing
+			window._pad = pad
 			found[first] = window
 			windows.append(window)
 		window._glaze(pane, frames[pane], sizes[pane])
@@ -441,7 +447,7 @@ func net_restore(state: int) -> void:
 ## the Z of that frame. Its collider is the pane and a little to either side
 ## of it.
 func _glaze(pane: int, frame: Transform3D, across: Vector3) -> void:
-	var wanted := across + Vector3(0.0, PAD * 2.0, 0.0)
+	var wanted := across + Vector3(0.0, _pad * 2.0, 0.0)
 	if _box == null or not _box.size.is_equal_approx(wanted):
 		_box = BoxShape3D.new()
 		_box.size = wanted

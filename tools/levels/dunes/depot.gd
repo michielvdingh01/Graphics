@@ -14,9 +14,12 @@ const WALL := CONCRETE
 const BRICK := "depot_brick"
 ## Paint on concrete, in the colour each point is given.
 const PAINT := "depot_paint"
-## The glass of a window by day, and the painted steel it sits in.
+## The glass of a window by day, the painted steel it sits in, and the room
+## that is seen where a pane is out. A pane is this thick.
 const PANE := "depot_glass"
 const FRAME := "depot_frame"
+const ROOM := "depot_room"
+const PANE_THICK := 0.008
 ## Slabs of concrete laid as a road.
 const SLAB := "depot_slab"
 ## Dark steel wire, seen from either side.
@@ -97,7 +100,7 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		_fine_tools[key] = st
-	return _fine_tools[key]
+	return _still(_fine_tools[key], mat)
 
 
 ## The new kinds of concrete and brick are concrete and brick to a bullet.
@@ -525,22 +528,52 @@ func pierced(mat: String, xf: Transform3D, area: Rect2, thick: float, openings: 
 ## One pane of glass: it lies in the XY of `xf` around its origin and is
 ## seen from its +Z. What has become of it the dice say, unless `kind` does:
 ## nought for glass, a half for painted over, one for gone.
+##
+## A pane is a box of glass, as the panes of every level are, and breaks as
+## they do: see scripts/window.gd. Panes that meet edge to edge are one
+## window there. One that is gone is not built: what shows in its place is
+## the room, see _room_behind().
 func pane(xf: Transform3D, size: Vector2, kind := -1.0) -> void:
 	var dice := _depot_rng.randf()
 	if kind < 0.0:
 		kind = 1.0 if dice < 0.025 else (0.5 if dice < 0.06 else 0.0)
 	var dirt := _depot_rng.randf()
 	var look := Color(_depot_rng.randf(), _depot_rng.randf(), dirt * dirt, kind)
-	var st := _tool(PANE, DETAIL | NO_COLLIDE, xf.origin)
-	var half := size * 0.5
-	var corners: Array[Vector3] = [Vector3(-half.x, -half.y, 0), Vector3(half.x, -half.y, 0), Vector3(half.x, half.y, 0), Vector3(-half.x, half.y, 0)]
-	var normal := xf.basis.z
+	if kind >= 0.75:
+		return
+	var st := _tool(PANE, GLASS | NO_COLLIDE, xf.origin)
+	var half := Vector3(size.x, size.y, PANE_THICK) * 0.5
 	var shift := Vector2(xf.origin.dot(xf.basis.x), xf.origin.dot(xf.basis.y))
+	# Side by side as _box() builds them, which is what a window is taken
+	# apart by; every corner carries what the pane looks like.
+	for n: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]:
+		var up := Vector3.FORWARD if absf(n.y) > 0.5 else Vector3.UP
+		var right := up.cross(n)
+		var c := n * absf(n.dot(half))
+		var r := right * absf(right.dot(half))
+		var u := up * absf(up.dot(half))
+		var corners: Array[Vector3] = [c - r - u, c + r - u, c + r + u, c - r + u]
+		var normal := xf.basis * n
+		for i: int in [0, 2, 1, 0, 3, 2]:
+			st.set_color(look)
+			st.set_normal(normal)
+			st.set_uv(Vector2(corners[i].dot(right) + shift.x, -corners[i].dot(up) - shift.y))
+			st.add_vertex(xf * corners[i])
+
+
+## What shows where a pane is out, and behind every pane once it is shot
+## out: the room, on a sheet just behind the glass of an opening `size`
+## large in the frame `glass`. See shaders/depot_room.gdshader.
+func _room_behind(glass: Transform3D, size: Vector2) -> void:
+	var st := _tool(ROOM, DETAIL | NO_COLLIDE, glass.origin)
+	var half := size * 0.5
+	var back := -0.05
+	var corners: Array[Vector3] = [Vector3(-half.x, -half.y, back), Vector3(half.x, -half.y, back), Vector3(half.x, half.y, back), Vector3(-half.x, half.y, back)]
 	for i: int in [0, 2, 1, 0, 3, 2]:
-		st.set_color(look)
-		st.set_normal(normal)
-		st.set_uv(Vector2(corners[i].x + shift.x, -corners[i].y - shift.y))
-		st.add_vertex(xf * corners[i])
+		st.set_color(Color.WHITE)
+		st.set_normal(glass.basis.z)
+		st.set_uv(Vector2(corners[i].x, -corners[i].y))
+		st.add_vertex(glass * corners[i])
 
 
 ## A steel window in an opening of a wall: `xf` stands in the middle of the
@@ -571,6 +604,9 @@ func steel_window(xf: Transform3D, size: Vector2, deep: float, lights: Vector2i,
 	for j in range(1, rows.size() - 1):
 		_local_box(FRAME, glass, Vector3(0, rows[j], 0.018), Vector3(size.x - bar * 2.0, slim, 0.054), SLIGHT)
 	refine(FAR)
+	_room_behind(glass, size)
+	# A shot at the glass stops on the wall it sits in, this far before it.
+	_glass_reveal = maxf(_glass_reveal, deep + 0.03)
 	for j in rows.size() - 1:
 		var high := rows[j + 1] - rows[j]
 		for i in lights.x:
@@ -588,7 +624,9 @@ func steel_window(xf: Transform3D, size: Vector2, deep: float, lights: Vector2i,
 				# What is seen past it is the room.
 				pane(glass * Transform3D(Basis(), Vector3(x, (rows[j] + rows[j + 1]) * 0.5, -0.02)), Vector2(wide - slim, high - slim), 1.0)
 			else:
-				pane(glass * Transform3D(Basis(), Vector3(x, (rows[j] + rows[j + 1]) * 0.5, 0.012)), Vector2(wide - slim, high - slim))
+				# The glass runs on behind the bars: the panes of an
+				# opening meet edge to edge, and are one window.
+				pane(glass * Transform3D(Basis(), Vector3(x, (rows[j] + rows[j + 1]) * 0.5, 0.012)), Vector2(wide, high))
 	coarse()
 
 
@@ -789,8 +827,15 @@ func fire_point(xf: Transform3D) -> void:
 ## Slabs of concrete over the ground of `area` (x and z), each about `slab`
 ## large: a road, an apron, the floor of a shed. None lies quite level with
 ## the next. They are laid on the ground and are in nobody's way: what is
-## walked on is still the ground under them.
+## walked on is still the ground under them, which knows that it is paved.
 func paving(area: Rect2, slab := Vector2(5.0, 3.5)) -> void:
+	# The game is told where they lie, on the ground itself: a step or a
+	# shot there is on concrete. See Fx.surface_of().
+	var land := _root.get_node_or_null("Ground/CollisionShape3D")
+	if land:
+		var paved: Array = land.get_meta(&"paved", [])
+		paved.append(area)
+		land.set_meta(&"paved", paved)
 	var across := maxi(1, roundi(area.size.x / slab.x))
 	var down := maxi(1, roundi(area.size.y / slab.y))
 	var size := area.size / Vector2(across, down)
