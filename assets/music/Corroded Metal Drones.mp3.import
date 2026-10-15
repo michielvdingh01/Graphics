@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://byyuhdq32ee5g"
+path="res://.godot/imported/Corroded Metal Drones.mp3-138f7ff7315617d408b25428ba80d1fd.mp3str"
+
+[deps]
+
+source_file="res://assets/music/Corroded Metal Drones.mp3"
+dest_files=["res://.godot/imported/Corroded Metal Drones.mp3-138f7ff7315617d408b25428ba80d1fd.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

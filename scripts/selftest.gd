@@ -126,7 +126,8 @@ func _run() -> void:
 		await _view()
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
-		_ran(["handling", "fights", "supplies", "view", "breakables"])
+		await _music_turns()
+		_ran(["handling", "fights", "supplies", "view", "breakables", "music"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -411,18 +412,43 @@ func _handling() -> void:
 	_check("music plays on its own bus", music_bus > 0 and Sfx._music.playing and Sfx._music.bus == Sfx.MUSIC and Sfx.music_playing() == &"test")
 	Settings.put("music", 0.5)
 	_check("and has a slider of its own", is_equal_approx(AudioServer.get_bus_volume_db(music_bus), linear_to_db(0.5)))
-	# From the title screen into a level the menu asks for the level's piece
+	# From the title screen into a level the menu asks for the level's music
 	# twice in a row, which once left the theme playing.
-	Sfx.music(Menu.THEME, 0.0)
-	Sfx.music(&"level1and2", 0.1, Menu.LEVEL_MUSIC_DB)
-	Sfx.music(&"level1and2", 0.1, Menu.LEVEL_MUSIC_DB)
+	Sfx.music([Menu.THEME], 0.0)
+	Sfx.music(Menu.LEVEL_MUSIC, 0.1, Menu.LEVEL_MUSIC_DB)
+	Sfx.music(Menu.LEVEL_MUSIC, 0.1, Menu.LEVEL_MUSIC_DB)
 	await _wait(Sfx.CHANGE_TIME + 0.6)
-	_check("the theme makes way for the music of the level", Sfx._music.playing and Sfx._music.stream.resource_path.contains("level1and2")
+	_check("the theme makes way for the music of the level", Sfx._music.playing and Sfx._music.stream.resource_path.contains(Menu.LEVEL_MUSIC[0])
 		and absf(Sfx._music.volume_db - Menu.LEVEL_MUSIC_DB) < 0.5)
-	Sfx.music(&"a piece nobody has written", 0.1)
+	Sfx.music([&"a piece nobody has written"], 0.1)
 	await _wait(0.5)
 	_check("a piece there is no file for is silence", not Sfx._music.playing and Sfx.music_playing() == &"")
 	_finished.append("handling")
+
+
+## Music that goes on by itself: the theme round and round, and the pieces of
+## a level one after the other. Apart from the handling and after the fights:
+## three seconds more in _handling() were enough for the cover in _fights()
+## to come out otherwise with a collider more (on 15 October 2026).
+func _music_turns() -> void:
+	# The theme is a piece on its own: at its end it starts again.
+	Sfx.music([Menu.THEME], 0.0)
+	await _wait(Sfx.CHANGE_TIME + 0.3)
+	Sfx._music.seek(Sfx._music.stream.get_length() - 0.2)
+	await _wait(0.6)
+	_check("the theme goes round on its own", Sfx._music.playing and Sfx.music_playing() == Menu.THEME and Sfx._music.get_playback_position() < 1.0)
+	# A level has more than one piece: at the end of one the next starts, as
+	# loud, and after the last the first comes round again.
+	Sfx.music(Menu.LEVEL_MUSIC, 0.1, Menu.LEVEL_MUSIC_DB)
+	await _wait(Sfx.CHANGE_TIME + 0.6)
+	for turn in Menu.LEVEL_MUSIC.size():
+		Sfx._music.seek(Sfx._music.stream.get_length() - 0.2)
+		await _wait(0.6)
+		var next := Menu.LEVEL_MUSIC[(turn + 1) % Menu.LEVEL_MUSIC.size()]
+		_check("at the end of %s the level plays %s" % [Menu.LEVEL_MUSIC[turn], next], Sfx._music.playing and Sfx.music_playing() == next
+			and Sfx._music.stream.resource_path.contains(next) and absf(Sfx._music.volume_db - Menu.LEVEL_MUSIC_DB) < 0.5)
+	Sfx.stop_music(0.0)
+	_finished.append("music")
 
 
 ## What the enemies do in a fight, tried out in the hall of the factory.
