@@ -1,6 +1,7 @@
 extends Node3D
 ## Owns the player's loadout: firing, recoil, aim down sights, reloading,
-## switching, throwing grenades and the animation of the weapon in view.
+## switching, throwing grenades, hitting with the weapon and the animation of
+## the weapon in view.
 ##
 ## A viewmodel is a scene built by tools/models/weapons.gd. Whatever moves on
 ## it is found by name, and a weapon without one of these simply skips that
@@ -43,9 +44,10 @@ const HIT_MASK := 0b100101  # world + enemy + breakable
 const HEARD := 100.0
 const SWITCH_TIME := 0.3
 const FIRE_BUFFER := 0.12
-## With nothing left to fire, the trigger swings the weapon instead: how long
-## that takes, the fraction of it after which the blow lands, how far it
-## reaches from the eye and what it does.
+## A blow with the weapon, on its own key whenever the hands are free, and on
+## the trigger once there is nothing left to fire: how long it takes, the
+## fraction of it after which it lands, how far it reaches from the eye and
+## what it does.
 const MELEE_TIME := 0.5
 const MELEE_LANDS := 0.34
 const MELEE_REACH := 2.1
@@ -538,12 +540,14 @@ func _process(delta: float) -> void:
 			elif _reserves[_index] > 0:
 				_start_reload()
 			elif _fire_buffer > 0.0:
-				_start_melee()
+				_start_melee(true)
 			_fire_buffer = 0.0
 		if Input.is_action_just_pressed("reload"):
 			_start_reload()
 		if Input.is_action_just_pressed("grenade"):
 			_start_throw()
+		if Input.is_action_just_pressed("melee"):
+			_start_melee()
 
 	_update_pump(data)
 	_heat = maxf(_heat - COOLING * delta, 0.0)
@@ -799,11 +803,16 @@ func _release_grenade() -> void:
 	Sfx.play(&"throw", -6.0)
 
 
-## Out of rounds altogether: the weapon itself is what is left to hit with.
-func _start_melee() -> void:
+## Hits with the weapon itself, which breaks off a reload as a throw does.
+## `dry` when the trigger was pulled on nothing: the click comes first.
+func _start_melee(dry := false) -> void:
+	if _melee_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0:
+		return
+	_reload_left = 0.0
 	_melee_left = MELEE_TIME
 	_landed = false
-	Sfx.play(&"dry_fire", -6.0)
+	if dry:
+		Sfx.play(&"dry_fire", -6.0)
 	Sfx.play(&"swing", -2.0)
 
 

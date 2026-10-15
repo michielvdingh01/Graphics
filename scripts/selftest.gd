@@ -774,6 +774,22 @@ func _supplies() -> void:
 	_check("out of rounds, the trigger swings the weapon", weapons._melee_left > 0.0 and dummy.health == dummy.max_health)
 	await _wait(0.6)
 	_check("and the blow lands on what stands in front of it", is_equal_approx(dummy.health, dummy.max_health - weapons.MELEE_DAMAGE))
+	# Its own key swings it at any time, rounds or none, and breaks off a reload.
+	dummy.health = dummy.max_health
+	weapons._mags[0] = 5
+	weapons._reserves[0] = rounds
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	var reloading: bool = weapons._reload_left > 0.0
+	Input.action_press("melee")
+	await _wait(0.1)
+	Input.action_release("melee")
+	_check("with rounds left, the melee key swings the weapon and breaks off a reload", reloading and weapons._melee_left > 0.0
+		and weapons._reload_left == 0.0 and weapons._mags[0] == 5)
+	await _wait(0.6)
+	_check("and that blow lands as well, without a shot", is_equal_approx(dummy.health, dummy.max_health - weapons.MELEE_DAMAGE)
+		and weapons._mags[0] == 5 and weapons._reserves[0] == rounds)
 	dummy.free()
 	weapons._mags[0] = rifle.mag_size
 	weapons._reserves[0] = rounds
