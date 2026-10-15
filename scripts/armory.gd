@@ -20,6 +20,7 @@ const ALL: Array[WeaponData] = [
 	preload("res://weapons/smg.tres"),
 	preload("res://weapons/marksman.tres"),
 	preload("res://weapons/minigun.tres"),
+	preload("res://weapons/rocket_launcher.tres"),
 ]
 const FILE := "res://assets/packs.json"
 const STANDARD := "standard"

@@ -170,7 +170,8 @@ func _run() -> void:
 			nearest = minf(nearest, one.global_position.distance_to(arena.spots[end]))
 		from_ends.append(snappedf(nearest, 0.1))
 	print("  the weapons of the arena: %s, %s m from the nearest end" % [stands.map(func(one: Node3D) -> String: return one.weapon.display_name), from_ends])
-	_check("the weapons of the arena stand away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun
+	var places_apart: bool = stands.size() == 2 and stands[0].global_position.distance_to(stands[1].global_position) > 15.0
+	_check("the minigun and the rocket launcher stand apart, away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun and places_apart
 		and from_ends.all(func(metres: float) -> bool: return metres > 15.0) and stands.all(func(one: Node3D) -> bool: return not one.is_up() and one.due() > 30.0))
 	var news := []
 	var listen := func(text: String) -> void: news.append(text)

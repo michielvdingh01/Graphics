@@ -906,6 +906,65 @@ func _minigun(weapons: Node3D) -> void:
 	_check("let go of, it says what it had left", dropped.size() == 2 and dropped[0] == minigun and dropped[1] == 100 and weapons.special() == null)
 	weapons.special_spent.disconnect(note)
 	await _wait(1.0)
+	await _rocket_launcher(weapons)
+
+
+## The other weapon of the arena: one round in the tube and two to come, each
+## a rocket that flies, goes off at what it meets and hurts what it hits square
+## besides; whoever fires it close to a wall is hurt by it too.
+func _rocket_launcher(weapons: Node3D) -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var launcher: WeaponData = ARMORY.named("rocket_launcher")
+	var blasts := []
+	var note := func(at: Vector3) -> void: blasts.append(at)
+	Blast.exploded.connect(note)
+	weapons.take_special(launcher, launcher.mag_size + launcher.reserve_ammo)
+	await _wait(launcher.switch_time + 0.2)
+	_check("the rocket launcher holds one round in the tube and two more", weapons.current() == launcher and weapons._mags[weapons._index] == 1
+		and weapons.special_rounds() == 3)
+	var dummy: CharacterBody3D = game.GRUNT.instantiate()
+	var ahead: Vector3 = -player.global_basis.z
+	ahead.y = 0.0
+	dummy.position = player.global_position + ahead.normalized() * 12.0
+	game.add_child(dummy)
+	dummy.set_physics_process(false)
+	await _wait(0.2)
+	await _aim(player, player.global_position, dummy.global_position + Vector3.UP * 1.1)
+	Input.action_press("fire")
+	await _wait(0.1)
+	Input.action_release("fire")
+	var flying := tree.get_nodes_in_group("rocket")
+	var warhead: Node3D = weapons._models[weapons._index].mag
+	_check("a shot sends a rocket on its way, and the round is gone from the tube", flying.size() == 1 and weapons._mags[weapons._index] == 0
+		and not warhead.visible)
+	await _wait(0.6)
+	print("    rocket: blasts %s, the grunt %s 12 m off has %.0f health left" % [blasts, "dead" if dummy.dead else "alive", dummy.health])
+	_check("it goes off at what it meets, and that is dead", tree.get_nodes_in_group("rocket").is_empty() and blasts.size() == 1
+		and blasts[0].distance_to(dummy.position + Vector3.UP * 1.1) < 1.0 and (not is_instance_valid(dummy) or dummy.dead))
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	await _wait(launcher.reload_time + 0.2)
+	_check("a reload puts the next round in the tube", weapons._mags[weapons._index] == 1 and weapons._reserves[weapons._index] == 1 and warhead.visible)
+	# Fired at a wall close by, it hurts whoever fired it.
+	player.health = player.MAX_HEALTH
+	await _aim(player, player.global_position, player.global_position + Vector3.DOWN * 3.0 + ahead * 2.0)
+	Input.action_press("fire")
+	await _wait(0.1)
+	Input.action_release("fire")
+	await _wait(0.5)
+	print("    rocket at the floor 2 m ahead: the player has %.0f health left" % player.health)
+	_check("one's own rocket hurts as anybody's", blasts.size() == 2 and player.health < player.MAX_HEALTH)
+	player.health = player.MAX_HEALTH
+	weapons.drop_special()
+	if is_instance_valid(dummy):
+		dummy.queue_free()
+	Blast.exploded.disconnect(note)
+	# The blast shook the view and knocked the head: let that settle before
+	# what comes next looks at how the view moves.
+	await _wait(3.0)
 
 
 ## How the view moves, tried out on the runway of the factory: the bob of a

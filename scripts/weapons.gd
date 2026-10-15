@@ -766,51 +766,54 @@ func _fire(data: WeaponData) -> void:
 	# In a match a shot also lands on whoever is on the other side.
 	var mask := HIT_MASK | (Match.foes_of(player) if Match.active else 0)
 
-	# A load of shot makes one sound per thing it lands on, not one per pellet.
-	var struck := {}
-	for i in data.pellets:
-		var angle := randf() * TAU
-		var radius := sqrt(randf()) * spread
-		var direction := camera.global_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)
-		direction = direction.normalized()
-		var end := origin + direction * data.max_range
-		var query := PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()])
-		var hit := space.intersect_ray(query)
-		if hit:
-			end = hit.position
-			var target: Object = hit.collider
-			# An enemy shows a hit itself; anything else is part of the level,
-			# even if it can be damaged, like a fuel barrel. Both sound like
-			# what they are made of.
-			var robot := target.has_method("is_headshot")
-			var surface := Fx.surface_of(hit)
-			if not robot:
-				Fx.strike(hit.position, hit.normal, direction, surface, data.pellets > 1)
-			# A weapon that fires thirty rounds a second is heard landing on every other.
-			if not struck.has(target) and (data.spin_up <= 0.0 or _rounds % 2 == 0):
-				struck[target] = true
-				Fx.thud(end, surface)
-			if target.has_method("take_damage"):
-				var distance := origin.distance_to(end)
-				var falloff := remap(distance, data.falloff_start, data.falloff_end, 1.0, data.min_damage_scale)
-				var amount := data.damage * clampf(falloff, data.min_damage_scale, 1.0)
-				var head: bool = robot and target.is_headshot(end)
-				if head:
-					amount *= data.headshot_multiplier
-				if Match.active:
-					# The match keeps count of who shot whom, and with what.
-					killed = Match.hit(player, target, amount, end, direction, ARMORY.index(data), head) or killed
-				else:
-					killed = Net.damage(target, amount, end, direction) or killed
-				# A shot that the plate on its arm stopped is no hit.
-				if robot and not target.deflected:
-					any_hit = true
-					headshot = headshot or head
-		ends.append(end)
-		# One pellet in three of a load of shot is enough to show where it
-		# went, and one round in three of barrels that spin.
-		if (i if data.pellets > 1 else _rounds) % 3 == 0 or (data.pellets == 1 and data.spin_up <= 0.0):
-			Fx.tracer(muzzle, end)
+	if data.projectile:
+		_launch(data, origin, spread)
+	else:
+		# A load of shot makes one sound per thing it lands on, not one per pellet.
+		var struck := {}
+		for i in data.pellets:
+			var angle := randf() * TAU
+			var radius := sqrt(randf()) * spread
+			var direction := camera.global_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)
+			direction = direction.normalized()
+			var end := origin + direction * data.max_range
+			var query := PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()])
+			var hit := space.intersect_ray(query)
+			if hit:
+				end = hit.position
+				var target: Object = hit.collider
+				# An enemy shows a hit itself; anything else is part of the level,
+				# even if it can be damaged, like a fuel barrel. Both sound like
+				# what they are made of.
+				var robot := target.has_method("is_headshot")
+				var surface := Fx.surface_of(hit)
+				if not robot:
+					Fx.strike(hit.position, hit.normal, direction, surface, data.pellets > 1)
+				# A weapon that fires thirty rounds a second is heard landing on every other.
+				if not struck.has(target) and (data.spin_up <= 0.0 or _rounds % 2 == 0):
+					struck[target] = true
+					Fx.thud(end, surface)
+				if target.has_method("take_damage"):
+					var distance := origin.distance_to(end)
+					var falloff := remap(distance, data.falloff_start, data.falloff_end, 1.0, data.min_damage_scale)
+					var amount := data.damage * clampf(falloff, data.min_damage_scale, 1.0)
+					var head: bool = robot and target.is_headshot(end)
+					if head:
+						amount *= data.headshot_multiplier
+					if Match.active:
+						# The match keeps count of who shot whom, and with what.
+						killed = Match.hit(player, target, amount, end, direction, ARMORY.index(data), head) or killed
+					else:
+						killed = Net.damage(target, amount, end, direction) or killed
+					# A shot that the plate on its arm stopped is no hit.
+					if robot and not target.deflected:
+						any_hit = true
+						headshot = headshot or head
+			ends.append(end)
+			# One pellet in three of a load of shot is enough to show where it
+			# went, and one round in three of barrels that spin.
+			if (i if data.pellets > 1 else _rounds) % 3 == 0 or (data.pellets == 1 and data.spin_up <= 0.0):
+				Fx.tracer(muzzle, end)
 	Net.player_did(&"fired", [ARMORY.index(data), ends])
 	if Match.active:
 		Match.fired(player, muzzle, data.flash_size * HEARD)
@@ -846,6 +849,34 @@ func _fire(data: WeaponData) -> void:
 		# there is to hear, and the HUD marks it.
 		hit_confirmed.emit(headshot, killed)
 	_emit_ammo()
+
+
+## Fires what the weapon fires instead of bullets: a rocket, which leaves
+## from in front of the eye along the aim, give or take the spread, unless a
+## wall is in the way of that, and a blast of smoke out of the back of the tube.
+func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
+	var angle := randf() * TAU
+	var off := sqrt(randf()) * spread
+	var direction := (camera.global_basis * Vector3(cos(angle) * off, sin(angle) * off, -1.0)).normalized()
+	var start := origin + camera.global_basis * Vector3(0.06, -0.05, -0.7)
+	var query := PhysicsRayQueryParameters3D.create(origin, start, HIT_MASK, [player.get_rid()])
+	if get_world_3d().direct_space_state.intersect_ray(query):
+		start = origin
+	var rocket: Node3D = data.projectile.instantiate()
+	rocket.velocity = direction * data.projectile_speed + player.velocity * 0.3
+	rocket.direct = data.damage
+	rocket.thrower = Match.number(player) if Match.active else 0
+	rocket.shooter = player
+	rocket.weapon = ARMORY.index(data)
+	get_tree().current_scene.add_child(rocket)
+	rocket.global_position = start
+	rocket.look_at(start + direction)
+	var back: Node3D = _models[_index].root.get_node_or_null("Back")
+	if back:
+		var behind := camera.global_basis.z
+		Fx.gun_smoke(back.global_position, behind, 1.0)
+		Fx.rocket_trail(back.global_position + behind * 0.4, -behind)
+		Fx.flash(back.global_position + behind * 0.3, Color(1.0, 0.7, 0.4), 3.0, 4.0, 0.08)
 
 
 ## Barrels that spin: they come up to speed while the trigger or the aim is
@@ -1324,6 +1355,10 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		turn.x -= 0.05 * back
 	if model.action:
 		model.action.position.z += model.travel * maxf(back, _locked)
+	if data.projectile and model.mag:
+		# The round sticks out of the tube until it is fired, and the next is
+		# there once the reload has brought it.
+		model.mag.visible = _mags[_index] > 0 or (_reload_left > 0.0 and fraction > MAG_OUT)
 	if model.barrels:
 		# They turn about the axis between them, and glow as they heat up.
 		model.barrels.rotate_object_local(Vector3.BACK, _turned)

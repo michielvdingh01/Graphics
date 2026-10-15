@@ -24,6 +24,8 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py minigun                 the motor coming up to speed, fire until it overheats,
                                           the tail, the steam and the motor running down;
     tools/hear.py minigun b b             the same with variant b of the roar and of the motor
+    tools/hear.py rocket                  the rocket launcher firing, the rocket going away and
+                                          going off 36 m further on
     tools/hear.py ambience boiler         twelve seconds of the bed of a kind of space (hall,
                                           room, yard, boiler, turbine), with what sounds in it
                                           now and then and three shots for scale
@@ -264,6 +266,16 @@ def minigun(fire: str, spin: str) -> list:
     return events + motor(end, down, False)
 
 
+def rocket() -> list:
+    """The rocket launcher: the launch at full level, the roar of the rocket
+    as it goes, fading over the 0.8 s it takes to fly 36 m at 45 m/s, and the
+    blast there, from that far off."""
+    flight = sorted((ROOT / "assets/audio/rocket_flight").glob("*.wav"))[0]
+    events = played("rocket_launch", [START])
+    events.append({"t": START + 0.05, "file": str(flight), "bus": "World", "db": -6.0, "until": START + 0.8, "fade": 0.5})
+    return events + placed(played("explosion", [START + 0.8]), 36.0)
+
+
 def burst(sound: str, rate: float, db: float = 0.0, start: float = START) -> list:
     shots = max(1, int(FIRE * rate / 60.0)) if rate else 1
     return played(sound, [start + i * 60.0 / rate if rate else start for i in range(shots)], db)
@@ -433,6 +445,8 @@ def main() -> None:
         name, events = f"casings_{args[1]}", casings(args[1])
     elif args[0] == "grenade":
         name, events = "grenade", grenade()
+    elif args[0] == "rocket":
+        name, events = "rocket", rocket()
     elif args[0] == "minigun":
         fire = "minigun_fire" + (f"_{args[1]}" if len(args) > 1 and args[1] != "a" else "")
         spin = "minigun_spin" + (f"_{args[2]}" if len(args) > 2 and args[2] != "a" else "")

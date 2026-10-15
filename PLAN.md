@@ -3526,3 +3526,19 @@ Stap 1 raakt de bestanden die elk wapen raakt (`weapons.gd`, `net.gd`, `puppet.g
 - **Hoe het klinkt.** Ik kan niet luisteren: de geluiden zijn gemaakt op wat de opnamen zijn en gemeten op niveau (de brul rond −11 dB RMS, zoals een salvo, pieken onder −3 dB). Of de brul een minigun is of een machinegeweer, en of de motor bij het opdraaien te horen is, hoor jij.
 - **Hoe het voelt.** 2 000 schoten per minuut met een kleine schok per schot en een beeld dat licht trilt: alleen bekeken als drie stilstaande beelden (koud, en heet met gloeiende lopen). Hoe het opdraaien en het stilvallen er in beweging uitzien, en of de handen goed zitten (ze vallen bij deze stand onder het beeld), heb ik niet gezien.
 - **Wat het kost.** Niet gemeten: dertig lichtsporen, inslagen en hulzen per seconde. Hulzen zijn begrensd op 24 tegelijk.
+
+### Stap 3: de raketwerper (gebouwd)
+
+- **Een RPG-7** (`weapons/rocket_launcher.tres`, het model `_rocket_launcher()` in `tools/models/weapons.gd`, 3 376 driehoeken zonder handen): een buis met een uitlopende mond achter, twee houten hitteschilden, een pistoolgreep onder het midden, vizier en korrel bovenop en een kijker links. De kop steekt voor uit de buis; na het schot is hij weg, en bij het herladen brengt de linkerhand de volgende van onder naar voren, zoals bij een ander wapen een magazijn. Gericht kijk je door de kijker, 40° beeld, zoals bij het scherpschuttersgeweer.
+- **De raket** (`scripts/rocket.gd`, `scenes/rocket.tscn`, het model `_rocket()`): vliegt recht, 45 m/s plus wat de schutter zelf beweegt, met een vlam, een licht en een rookspoor (`Fx.rocket_trail()`), en een brul die met hem meevliegt. Hij ontploft bij wat hij raakt, of na 3 s (135 m). Een voltreffer doet 150, de explosie daarbovenop 130 tot 1,5 m en minder tot 6 m, groter in beeld en geluid dan een vat (`Blast.explode`, maat 1,6). Achter de buis een steekvlam en rook.
+- **Drie raketten**: één in de buis, twee erbij, 2,6 s herladen. Lopen op 85%, wisselen 0,6 s.
+- **Je eigen raket raakt jou ook**, zoals de granaat: buiten een wedstrijd voor de helft (de regel van `blast.gd` voor de speler), in een wedstrijd helemaal.
+- **Geluid**: `rocket_launch` (de klap van het pompgeweer vertraagd tot een holle dreun, de motor van de raket die aanslaat en weggaat, een lage dreun en een rommel die naklinkt), `rocket_flight` (de motor die rondgaat, vanaf de raket zelf). De explosie is die van een vat. `tools/hear.py rocket` speelt het afvuren, de raket die weggaat en de knal 36 m verderop.
+- **`--give=rocket_launcher`** om hem te proberen.
+- **Getest**: de selftest kijkt of er één raket in de buis zit en twee erbij, of een schot een raket wegstuurt en de kop uit de buis verdwijnt, of de raket ontploft bij een robot op 12 m en die dood is, of herladen de volgende in de buis zet, en of een raket op de vloer 2 m voor de schutter hem raakt (hij hield 35 over). De wedstrijdtest kijkt of de minigun en de raketwerper elk op hun eigen plek staan, ver van de uiteinden en uit elkaar: in de fabriek 32 en 33 m van het dichtstbijzijnde uiteinde.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het klinkt**, en of de raket snel genoeg is om nog te ontwijken of te traag om iemand te raken: 45 m/s is een eerste gok.
+- **Het rookspoor en de vlam** heb ik niet in beeld gehad, alleen het wapen in rust, gericht en halverwege het herladen.
+- **De plekken in de andere arena's**: alleen in de fabriek bekeken, als getal. Op het fabrieksterrein, in de centrale en in de duinen niet, en geen beeld van een rek in een level.

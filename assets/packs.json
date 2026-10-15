@@ -27,10 +27,10 @@
 		"1944": {
 			"title": "1944",
 			"about": "Drum, bolt, trench gun and the Colt, as they sounded.",
-			"weapons": ["ppsh", "mosin", "trench_gun", "m1911"],
+			"weapons": ["ppsh", "mosin", "trench_gun", "colt"],
 			"bots": ["ppsh", "mosin", "ppsh", "trench_gun", "ppsh", "mosin"],
 			"far": ["mosin", "ppsh", "mosin", "ppsh", "trench_gun", "mosin"],
-			"sidearm": "m1911",
+			"sidearm": "colt",
 			"grenades": 2
 		},
 		"heavy": {
@@ -44,8 +44,8 @@
 		"pistols": {
 			"title": "Pistols only",
 			"about": "Four pistols and your fists.",
-			"weapons": ["pistol", "revolver", "machine_pistol", "m1911"],
-			"bots": ["m1911", "revolver", "pistol", "machine_pistol", "m1911", "revolver"],
+			"weapons": ["pistol", "revolver", "machine_pistol", "colt"],
+			"bots": ["colt", "revolver", "pistol", "machine_pistol", "colt", "revolver"],
 			"grenades": 1
 		}
 	}

@@ -13,7 +13,9 @@ was drawn from. A pack is drawn once the data of all its weapons is there,
 built into the game or not, so that a weapon can be weighed before it is
 modelled.
 
-How it is worked out, as scripts/weapons.gd fires: the damage of a hit falls
+How it is worked out, as scripts/weapons.gd fires: aimed, the time starts
+with bringing the sights up, which is what a rifle that kills in one shot
+pays for; from the hip it starts with the first shot. The damage of a hit falls
 off between falloff_start and falloff_end; the spread is spread evenly over a
 disc, of which the part that falls on a torso (taken as a disc of 0.27 m, as
 much as 45 by 60 cm) hits, for every pellet of a load. What is needed is the
@@ -97,7 +99,9 @@ def spread(w, aimed, moving):
 
 
 def ttk(w, distance, aimed, moving):
-    """Seconds from the first shot to the last that is needed, or None."""
+    """Seconds from the moment somebody is seen, the weapon at the hip, to the
+    last shot that is needed, or None: aimed, that begins with bringing the
+    sights up (ads_time)."""
     if distance > w["max_range"]:
         return None
     reach = max(w["falloff_end"] - w["falloff_start"], 1e-6)
@@ -112,7 +116,7 @@ def ttk(w, distance, aimed, moving):
     if shots > w["mag_size"] * 3:
         return None
     reloads = (shots - 1) // int(w["mag_size"])
-    return (shots - 1) * 60.0 / w["rounds_per_minute"] + reloads * w["reload_time"]
+    return (w["ads_time"] if aimed else 0.0) + (shots - 1) * 60.0 / w["rounds_per_minute"] + reloads * w["reload_time"]
 
 
 def verdict(weapons, sidearm):
