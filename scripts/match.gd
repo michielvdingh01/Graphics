@@ -83,7 +83,11 @@ const FAR := 300.0
 ## Which of the three figures of a theme the bots against the player are, in
 ## the order they join.
 const FIGURES: Array[String] = ["grunt", "grunt", "rusher", "grunt", "heavy", "grunt"]
-const NAMES: Array[String] = ["Alder", "Birch", "Cedar", "Dogwood", "Elm", "Fir", "Gorse", "Hazel", "Ivy", "Juniper", "Kapok", "Larch", "Maple", "Nettle"]
+## What the bots are called: as many as there can be, so that no two have one
+## name.
+const NAMES: Array[String] = ["Alder", "Birch", "Cedar", "Dogwood", "Elm", "Fir", "Gorse", "Hazel", "Ivy", "Juniper", "Kapok", "Larch", "Maple", "Nettle",
+	"Oak", "Poplar", "Quince", "Rowan", "Sorrel", "Thistle", "Umber", "Vetch", "Willow", "Yarrow", "Ash", "Beech", "Clover", "Dock", "Elder", "Fern",
+	"Ginkgo", "Heather", "Iris", "Jasmine", "Laurel", "Moss", "Nutmeg", "Olive", "Pine", "Reed", "Sage", "Tansy", "Wattle", "Yew"]
 ## Seconds between two reports of where the bots are, for the other machines.
 const TICK := 0.05
 
@@ -154,6 +158,10 @@ var _rules: Array[Dictionary] = []
 ## lies there now and the clock at which the next one does.
 var _cells: Array[Dictionary] = []
 var _cell_numbers := {}
+## What an arena that is big enough for more than a kind allows says of it,
+## by the name of its level: how many may play a side there (`most`) and how
+## many do when nothing else is asked for (`size`).
+var _arenas := {}
 ## True once the navmesh of the level is baked, and the corner of it that is
 ## furthest from the middle of the world: the arena is read once the server
 ## that finds the ways knows that corner.
@@ -184,6 +192,8 @@ func _ready() -> void:
 		_rules.append(one)
 	if parsed is Dictionary and parsed.get("cells") is Dictionary:
 		_cell_numbers = parsed.cells
+	if parsed is Dictionary and parsed.get("arenas") is Dictionary:
+		_arenas = parsed.arenas
 	var bots: Variant = JSON.parse_string(FileAccess.get_file_as_string(BOTS)) if FileAccess.file_exists(BOTS) else null
 	if bots is Dictionary and bots.get("levels") is Dictionary:
 		levels = bots.levels
@@ -221,14 +231,21 @@ func open(what: Dictionary) -> bool:
 	mode = MODES[kind].new()
 	mode.numbers = kinds[kind]
 	mode.host = self
+	var level_name := scene.get_file().get_basename()
 	var size := int(what.get("size", 0))
 	if size <= 0:
-		size = int(mode.numbers.size)
+		size = usual(kind, level_name)
+	size = clampi(size, int(mode.numbers.least), most(kind, level_name))
+	if mode.numbers.get("grows", false) and size > int(mode.numbers.size):
+		# More a side bring each other down that much more often, and play to
+		# a limit that is that much higher, in tens: 170 for twenty a side.
+		mode.numbers = mode.numbers.duplicate()
+		mode.numbers.limit = ceili(float(mode.numbers.limit) * size / float(mode.numbers.size) / 10.0) * 10
 	setup = {
 		"mode": kind,
-		"level": scene.get_file().get_basename(),
+		"level": level_name,
 		"scene": scene,
-		"size": clampi(size, int(mode.numbers.least), int(mode.numbers.most)),
+		"size": size,
 		"only_bots": bool(what.get("only_bots", false)),
 		"prize": str(what.get("prize", "flag")),
 	}
@@ -319,6 +336,30 @@ func judge() -> void:
 		var winner: int = mode.winner(entrants.values(), tally, false)
 		if winner != mode.NOBODY:
 			Net.show(self, &"_show_end", [winner])
+
+
+## How many may play a side in a match of the kind `kind` in the level named
+## `level`, or how many in all in a kind without sides: what the kind allows,
+## or more in an arena that is big enough for it.
+func most(kind: String, level: String) -> int:
+	var numbers: Dictionary = kinds.get(kind, {})
+	var arena: Dictionary = _arenas.get(level, {})
+	return maxi(int(numbers.get("most", 1)), int(arena.get("most", 0)) * _share(kind))
+
+
+## How many play a side there, or in all, when nothing else is asked for.
+func usual(kind: String, level: String) -> int:
+	var numbers: Dictionary = kinds.get(kind, {})
+	var arena: Dictionary = _arenas.get(level, {})
+	if arena.has("size"):
+		return clampi(int(arena.size) * _share(kind), int(numbers.get("least", 1)), most(kind, level))
+	return int(numbers.get("size", 1))
+
+
+## What the numbers of an arena, which are a side's, come to in a kind: as
+## they are where there are sides, twice that where everybody is on their own.
+func _share(kind: String) -> int:
+	return 1 if not MODES.has(kind) or (MODES[kind].new() as RefCounted).teams() else 2
 
 
 ## What the match is called, for a heading: "Team deathmatch".

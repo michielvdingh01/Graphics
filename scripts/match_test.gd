@@ -8,7 +8,9 @@ extends Node
 ## back, and it ends when a side has the points. Then it plays with the
 ## player in it: a kill counts for the player, the player's own side cannot
 ## be hurt, and a death is not the end of the level. It prints how often a
-## bot got stuck and how often nobody could come back anywhere safe.
+## bot got stuck and how often nobody could come back anywhere safe. Last it
+## has twenty a side play in the dunes, and looks at where those who fall
+## come back: near a friend and near the fight, not at the far end.
 
 ## True for a run of this test.
 var active := false
@@ -28,7 +30,7 @@ func _ready() -> void:
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
-	tree.create_timer(400.0, true, false, true).timeout.connect(
+	tree.create_timer(600.0, true, false, true).timeout.connect(
 		func() -> void:
 			print("MATCH TEST FAILED (timed out)")
 			tree.quit(1)
@@ -391,6 +393,19 @@ func _run() -> void:
 	_check("the dunes are among the arenas", places.has("Arena  ·  Dunes (large)") and arenas.text == places[0])
 	_check("and each says whether it is small, medium or large", places.all(func(text: String) -> bool:
 		return ["(small)", "(medium)", "(large)"].any(func(size: String) -> bool: return text.ends_with(size))))
+	var size: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Players"))[0]
+	var size_was := size.text
+	while not arenas.text.begins_with("Arena  ·  Dunes"):
+		arenas.pressed.emit()
+	var sizes := [size.text]
+	for i in 14:
+		size.pressed.emit()
+		sizes.append(size.text.get_slice("·", 1).strip_edges())
+	_check("there twenty a side play, and the button goes up to that in steps above twelve", sizes[0] == "Players a side  ·  20"
+		and sizes.slice(1) == ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "16", "20"])
+	while arenas.text != places[0]:
+		arenas.pressed.emit()
+	_check("and back in a hall, as many as play there", size.text == size_was)
 	(buttons.filter(func(button: Button) -> bool: return button.text == "Start")[0] as Button).pressed.emit()
 	await tree.scene_changed
 	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)
@@ -405,6 +420,55 @@ func _run() -> void:
 	print("  the works: %d spots, the ends %.0f m apart to walk, the nearest two of different sides %.0f m apart" % [Match.arena.spots.size(), Match.arena.walks[0][Match.arena.ends[1]], far])
 	Match.close()
 	_check("leaving it gives back the rules and what was saved", not Match.active and Settings.rules() == plain and Save.checkpoint == saved)
+
+	# A big arena: twenty a side in the dunes, coming back where the fight is.
+	_check("the dunes take twenty a side, forty each on their own; the halls six and twelve", Match.most("tdm", "dunes") == 20 and Match.usual("tdm", "dunes") == 20
+		and Match.most("ctf", "dunes") == 20 and Match.most("ffa", "dunes") == 40 and Match.most("tdm", "works") == 6 and Match.most("ffa", "works") == 12 and Match.usual("tdm", "works") == 6)
+	_check("a match there is twenty a side unless asked otherwise, played to a limit that grows with it", Match.open({"mode": "tdm", "level": "dunes", "only_bots": true})
+		and Match.setup.size == 20 and int(Match.mode.numbers.limit) == 170 and int(Match.kinds.tdm.limit) == 50)
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 90.0)
+	var crowd: Array = Match.entrants.values()
+	var titles := {}
+	for who: RefCounted in crowd:
+		titles[who.title] = true
+	_check("forty bots, twenty a side, no two of one name", crowd.size() == 40 and titles.size() == 40
+		and crowd.filter(func(who: RefCounted) -> bool: return who.team == 0).size() == 20)
+	var board: PackedStringArray = Match._hud._table()
+	_check("the table under Tab has a column for each side", board.size() == 2 and board[0].count("\n") == 20 and board[1].count("\n") == 20)
+	# Who comes back: how far the nearest enemy and the nearest friend are, and
+	# how far their own end.
+	var comebacks: Array[Vector3] = []
+	var gone := {}
+	clock = 0.0
+	Engine.time_scale = 3.0
+	# The sides meet half a minute in: until a dozen have come back.
+	while comebacks.size() < 12 and clock < 240.0:
+		await _wait(0.25)
+		clock += 0.25 * 3.0
+		for who: RefCounted in Match.entrants.values():
+			if who.out > 0.0:
+				gone[who.id] = true
+			elif gone.has(who.id):
+				gone.erase(who.id)
+				var near := Vector2(INF, INF)
+				for other: RefCounted in Match.entrants.values():
+					if other != who and other.out <= 0.0:
+						var gap: float = other.body.global_position.distance_to(who.body.global_position)
+						if other.team != who.team:
+							near.x = minf(near.x, gap)
+						else:
+							near.y = minf(near.y, gap)
+				comebacks.append(Vector3(near.x, near.y, who.body.global_position.distance_to(Match.arena.spots[Match.arena.ends[who.team]])))
+	Engine.time_scale = 1.0
+	comebacks.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.x < b.x)
+	@warning_ignore("integer_division")
+	var middle: Vector3 = comebacks[comebacks.size() / 2] if not comebacks.is_empty() else Vector3.INF
+	print("  the dunes, twenty a side: %d came back in %.0f s of match, %d times nowhere was safe; the nearest enemy then %.0f m off at the least and %.0f m in the middle, the nearest friend %.0f m in the middle, their own end %.0f m in the middle"
+		% [comebacks.size(), clock, Match.arena.emergencies, comebacks[0].x if not comebacks.is_empty() else INF, middle.x,
+			_middle_of(comebacks.map(func(one: Vector3) -> float: return one.y)), _middle_of(comebacks.map(func(one: Vector3) -> float: return one.z))])
+	_check("there, whoever comes back does so near the fight and near a friend: no enemy within twelve metres, half within ninety, a friend within twenty-five",
+		comebacks.size() >= 10 and comebacks[0].x >= 12.0 and middle.x < 90.0 and _middle_of(comebacks.map(func(one: Vector3) -> float: return one.y)) < 25.0)
+	Match.close()
 
 	print("MATCH TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)
@@ -492,6 +556,15 @@ func _soak(seconds: float) -> void:
 	print("MATCH SOAK %s in %s, %d playing, %.0f s in %.0f s: %d deaths, %d times nowhere was safe, %d times a bot got stuck; a physics step took %.2f ms on average, %.2f ms at the 95th of a hundred and %.2f ms at worst, %d steps a second"
 		% [Match.setup.mode, Match.setup.level, Match.entrants.size(), seconds, (Time.get_ticks_msec() - began) / 1000.0, deaths, Match.arena.emergencies, Match.stuck,
 			mean, physics[int(physics.size() * 0.95)], physics[-1], Engine.physics_ticks_per_second])
+
+
+func _middle_of(values: Array) -> float:
+	if values.is_empty():
+		return INF
+	var sorted := values.duplicate()
+	sorted.sort()
+	@warning_ignore("integer_division")
+	return sorted[sorted.size() / 2]
 
 
 func _check(label: String, ok: bool) -> void:
