@@ -3395,6 +3395,64 @@ Op 15 oktober 2026 gevraagd: het nummer dat Michiel in `assets/music/` zette, "C
 - Zien: "Multiplayer" op het titelscherm, en dan de knop Arena een paar keer indrukken: `GODOT_WINDOW=1 .claude/worktrees/muziekenmaat/tools/godot.sh`.
 - Het tweede nummer in het spel komt pas na de 3:34 van het eerste.
 
+## Drie foutjes uit de duinen: de slagboom, de bomen en de robots
+
+Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de slagboom kan je niet schieten, terwijl de soldaat erachter hem wel raakt; een kogel zou op de boom zelf moeten afketsen en eronder en erboven door moeten gaan; (2) bij bomen laden onderdelen flikkerend in, "een beetje GTA Vice City"; (3) in een wedstrijd worden robots soldaten: breng de robots terug als vijand. Gebouwd op de branch `duinfouten`, vanaf de trunk op `2558564`. Dezelfde dag op Michiels woord ("merge het maar in de trunk en herbouw de duinen") in `fase-2-vertical-slice` gevoegd, met de duinen herbouwd; niet gepusht.
+
+**1. Wat een schot tegenhoudt is wat er staat**
+
+- **De slagboom** (`barrier_pole()` in `tools/kit/field.gd`) had als botsvorm één plaat van de hele lengte van de boom, 1,6 m hoog en 14 cm dik, van de grond tot ruim boven de boom. De boom zelf ligt op een meter. Een schot van de speler op het lijf van de wachter erachter sloeg in de plaat; de wachter mikt op het hoofd van de speler, en zijn schot ging over de rand van de plaat heen. Nu hebben de boom, het contragewicht, de twee ijzers op de voet, het bord dat eraan hangt en de vork aan het eind elk een eigen doos, van staal. Gemeten in de herbouwde duinen, met stralen dwars over de pas en over het hek bij het complex: op 0,4, 0,75, 1,3 en 1,7 m boven de grond gaat een schot erdoor, op 1,0 m slaat het in op staal. Een geheven boom (`raised`) houdt nu ook een schot tegen langs zijn lengte. Lopen kan er niemand onderdoor of overheen: de onderkant ligt op 0,95 m, iemand die bukt is 1,1 m en springen haalt 0,90 m.
+- **De wachttoren** (`watch_tower()`) was tot aan zijn vloer één doos van 2,9 bij 2,9 m: geen schot ging tussen de poten door. Nu houden de poten (die hadden al een botsvorm), de schoren, de regels en de vloer een schot tegen, en de ruimte ertussen niet. Nagekeken op beide torens in de duinen: dwars erdoor gaat een straal tussen de schoren door, de dozen van poten, schoren en vloer staan waar het hout staat.
+- **Het werkt na het herbouwen** van een level met een slagboom of wachttoren. De duinen zijn op Michiels woord herbouwd en meegecommit: alleen de botsvormen en de schaduwkaart verschillen (de plaat en de doos wierpen schaduw op het land; de 25% schaduw bleef 25%). De showroom is niet herbouwd.
+
+**2. Bomen die in één keer van tekening wisselden**
+
+- **Wat er misging.** Een den is drie keer getekend (`tools/models/trees.gd`): van dichtbij met elke tak en een rand van takjes (Body), vanaf 21 m grover (Mid), vanaf 62 m als één kaart (Far). Welke je ziet, besliste de renderer per tekening, op de afstand tot het midden van het blok om die tekening. Die middens lagen 0,1 tot 1,7 m uit elkaar (pine_d: Mid en Far 1,65 m), dus de ene tekening ging uit voor de andere aan was. Op het blad staat het: wie naar een den toeloopt ziet hem op 17 m een ogenblik helemaal niet (`benchmark/sheets/dunes_bomen_overgang.jpg`, bovenste rij). Rond 60 m gebeurt hetzelfde, of er staan er even twee. En waar het wel goed ging, kwam de rand van takjes in één keer.
+- **De tekeningen van een boom meten nu vanaf dezelfde voet.** Elke tekening is voor de renderer één blok om de voet van de boom, zo breed als de breedste en zo diep onder de grond als hij hoog is (`_finish()` in `trees.gd`, met een haakje `_finish()` in `tools/model_builder.gd`). De ene tekening gaat dus uit op precies de afstand waarop de andere aan gaat.
+- **Ze lopen pluk voor pluk in elkaar over** (`shaders/tree_lod.gdshaderinc`, nieuw). Elke pluk naalden had al een eigen getal, de fase van zijn wiegen in de wind. Tussen 18 en 24 m gaat een pluk van de ene tekening uit en dezelfde pluk van de andere aan op de afstand die bij dat getal hoort; wat twee tekeningen gemeen hebben, de platen van naalden aan het eind van elke tak, is zo nooit dubbel en nooit weg. De rand van takjes verschijnt dus pluk voor pluk over zes meter. Bij de kaart van ver kan dat niet, die heeft niets gemeen met de takken: de kaart komt tussen 57 en 62 m en de grovere boom gaat pluk voor pluk tussen 62 en 67 m, zodat ze een stuk samen staan in plaats van geen van beide. De schors gaat over in het midden. Wat uit is, wordt in de vertex shader tot een punt gevouwen: daar wordt niets van getekend. De zon kijkt mee vanaf de camera, dus de schaduw van een struik verandert met de struik.
+- **Eerst geprobeerd: stip voor stip**, met een vast patroon over het scherm. Dat geeft zichtbare puntjes langs de kroon, want Michiel speelt met MetalFX Spatial (`upscaler=3` in zijn instellingen), dat niets over beelden heen middelt. Daarom pluk voor pluk.
+- **De schors is een eigen shader geworden** (`shaders/bark.gdshader`, `materials/pine_trunk.tres`), die doet wat het `ORMMaterial3D` deed, plus de overgang. Op een beeld naast het oude is er geen verschil te zien.
+- **Elke tekening heeft eigen kopieën van haar materialen** waarin staat over welke afstanden ze overgaat; de bouwer van de bomen maakt ze en bewaart ze in het model. Wie iets verandert in `materials/pine_needles.tres`, `thorn_scrub.tres`, `pine_trunk.tres` of `pine_far.tres` ziet dat op de bomen na `tools/build_model.sh trees`.
+- **Eerst stond dat in een `instance uniform`**, met een klein script per boom, zodat de materialen gedeeld bleven. Dat ging in de trunk, en Michiel zag in de uitvoer van zijn eerste spel honderden fouten (`instance_buffer_pos.has(p_instance)`, vanuit de lampen). Godot houdt zulke waarden van alle instanties in één buffer, die ik schat op 4096 instanties (65.536 plaatsen, 16 per instantie). De duinen hebben 2259 tekeningen van bomen. Bij het opnieuw laden, na een dood of een checkpoint, staan het oude en het nieuwe level even naast elkaar, en dan liep die buffer over. Nagespeeld zonder venster met `reload_current_scene()`: 762 van die fouten en 1665 keer "Too many instances using shader instance variables"; met de kopieën nul, en de trunk van daarvoor ook nul. Zonder herladen kwam het niet voor, en de tests herladen het level niet op de GPU.
+- **Wat er opnieuw gebouwd is**: de zeven modellen in `scenes/models/` (`tools/build_model.sh trees`, zonder GPU, twee seconden). Even veel driehoeken als voorheen. Het level hoeft er niet voor herbouwd te worden: het zet de modellen neer zoals ze zijn. De bosrand achter het land is één samengevoegde mesh per stuk en wisselt nog steeds in één keer, maar die staat aan de rand van het level.
+
+**Gemeten**, de bomen voor en na, om en om in twee kopieën naast elkaar, zes ronden, 15 oktober 14:21 tot 14:41, aan de lader. 3456×2160, Ultra, MetalFX, renderschaal vanzelf, de wachters op hun post, de vier standpunten van de dennen uit "De duinen: de dennen, de bosrand en de verte". Onrustig: tijdens de eerste twee ronden draaide mijn eigen selftest en daarna die van een andere sessie, load 3,5 tot 13,8; de GPU was tussen mijn runs ook van een andere sessie.
+
+| Standpunt | Voor, fps (laagste en hoogste) | Na | Verschil, gemiddeld over de paren | Tekenopdrachten en driehoeken, voor en na |
+|---|---|---|---|---|
+| Het bos, 1 | 74,2 (71,6 tot 76,7) | 72,8 (70,7 tot 75,0) | −1,4 | 1556 en 1,29 miljoen, 1556 en 1,33 |
+| De uitkijk, 6 | 83,8 (79,3 tot 86,1) | 84,4 (78,7 tot 87,2) | +0,6 | 940 en 0,81, 942 en 0,81 |
+| Het prikkeldraad, 14 | 92,5 (89,2 tot 96,6) | 89,5 (76,4 tot 93,6) | −3,0; zonder de ene trage run −0,4 | 1828 en 1,78, 1837 en 1,80 |
+| Het oostelijke duin, 21 | 70,9 (68,5 tot 73,4) | 68,2 (66,3 tot 70,3) | −2,7 | 2340 en 2,36, 2342 en 2,39 |
+
+- **Het kost waarschijnlijk 1 tot 3 fps waar veel bomen staan**, op de oostelijke duin vijf van de zes paren lager. De spreiding is even groot als het verschil. Waar het vandaan komt: tussen 18 en 24 m worden twee tekeningen doorgerekend, en de benchmark springt van ver naar zijn standpunt, zodat voorheen elke boom op 17 tot 25 m de grove tekening had. In het spel had een boom in dat stuk de ene of de andere, naar gelang van waar je vandaan kwam.
+- Tekenopdrachten 0 tot 9 meer, driehoeken 0,02 tot 0,04 miljoen meer: wat is opgevouwen telt nog mee als driehoek.
+
+**3. Robots in een wedstrijd**
+
+- **Met "Enemies" op robots was de andere kant van een wedstrijd soldaten**, ook "Against" op het scherm van de wedstrijd bood geen robots aan. Een bot is een pop (`scripts/puppet.gd`) met het lijf van een soldaat; een robot kon niet dragen wat een speler draagt. Nu is een bot tegen de speler een robot van de route: de grunt, en op de plek van de zware de heavy (`FIGURES` in `scripts/match.gd`). De rusher vecht op de route met messen en is hier een grunt. De robot vuurt zijn wapen uit de loadout uit zijn arm, met de schade, het tempo en het geluid van dat wapen, en met de rode lichtsporen en de mondingsvlam van de route.
+- **Wat een schot treft is wat je ziet**: de botsvorm, de ogen en waar het hoofd begint zijn die van de robot op de route (grunt 0,4 bij 1,8 m, ogen op 1,5 m, hoofd vanaf 1,36 m; heavy 0,46 bij 2,07 m, ogen op 1,72 m, hoofd vanaf 1,56 m), in `ROBOTS` in `puppet.gd`. De heavy is dus groter dan de rest, zoals op de route. Een treffer klinkt als staal en geeft vonken; wie valt, valt uit elkaar met het geluid van de route, en komt terug als nieuwe robot. De plaat op de arm van de grunt is thuisgelaten: niets wat een bot draagt houdt een schot tegen. Bij capture the flag hangt de buit aan het lijf van de robot, want een robot heeft geen handen voor `bear()`.
+- **"Against" biedt nu Robots** tussen Soldiers en Zombies. Wie "Enemies" nooit veranderde speelt dus tegen robots: dat is de standaard van het spel.
+- Over het net verandert niets: een wedstrijd met anderen is nog niet gebouwd (stap 4 van de wedstrijden), en in het spel met anderen blijven medespelers soldaten.
+
+**Getest**
+
+- `tools/test_match.sh` slaagt, met twee nieuwe controles en een bijgestelde: zes tegen zes in de fabriek tegen robots, de andere kant grunts en een heavy en de eigen kant soldaten; geen plaat, een treffer klinkt als staal, de heavy is groter; in 30 s (vier keer versneld) haalden ze er 15 neer en verloren ze er 17, en wie terugkwam was weer een robot. De eerste wedstrijd van de test speelt nu uitdrukkelijk soldaten tegen soldaten, omdat hij de uniformen controleert. Het scherm biedt Robots aan.
+- `tools/selftest.sh` slaagt (401), met de herbouwde duinen erin, voor en na de bomen, en opnieuw op de duinen zoals ze gecommit zijn.
+- **Gezien**: de robots op een beeld van een wedstrijd op het fabrieksterrein (een grunt met zijn geweerarm en rood vizier, daarachter een heavy met paars); de bomen op het blad hierboven, 25 standpunten op weg naar één den, voor en na.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe een robot met een wapen van de speler voelt.** Een grunt met een scherpschuttersgeweer ziet er hetzelfde uit als een met een shotgun: het wapen zit in zijn arm. Of de rode lichtsporen met het geluid van een gewoon wapen goed samengaan, hoor en zie je pas in het spel.
+- **Of robots van een kant herkenbaar genoeg zijn** in de fabriek, waar het licht van hun vizier het helderste aan hen is.
+- **De bomen in beweging.** Het blad is een rij stilstaande beelden. Of het pluk voor pluk aankomen tijdens het lopen rustig oogt of zelf weer als knipperen leest, ziet Michiel pas in het spel. Wordt het dat, dan kan de strook breder (`NEAR_BLEND`, nu 3 m) of de wissel verder weg.
+- **De slagboom in het spel.** Nagerekend met stralen in het herbouwde level, niet geschoten en niet gezien.
+
+**Nog open**
+
+- **Meer voorwerpen hebben een botsvorm die groter is dan wat je ziet.** In de duinen: de rollen prikkeldraad (een doos tot 1,15 m: een schot op de benen van iemand erachter blijft hangen), en de bovenkant van de poort van het complex, waar tralies staan. In de andere levels: tafels (een doos tot de vloer: niemand schiet onder een tafel door), rekken en hekken. Voor dingen waar je niet door kan lopen maar wel doorheen kan schieten bestaat nog geen soort botsvorm: dat vraagt een eigen laag die wel het lopen tegenhoudt en geen schot.
+- **De showroom heeft nog de oude slagboom en wachttoren**, tot hij herbouwd wordt: `tools/build_level.sh showroom`.
+
 ## Twintig tegen twintig: een veldslag in de duinen
 
 Op 15 oktober 2026 gevraagd: op grote maps veel meer bots kunnen instellen, voor een levendig potje in plaats van eindeloos rennen naar de andere kant; in de duinen bijvoorbeeld twintig tegen twintig. "Denk je dat dat goed gaat werken? Bouw het dan maar in." Gebouwd op de branch `veldslag`, vanaf de trunk met de muziek en de maat van de arena's erin.

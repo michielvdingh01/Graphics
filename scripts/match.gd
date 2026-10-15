@@ -727,14 +727,17 @@ func _show_roster(roster: Array) -> void:
 
 
 ## What the `place`th of those against the player looks and sounds like, as
-## the enemies that were chosen in the settings: {character, voice, tint}.
-## Empty for soldiers, who are the second side as it is, and for robots,
-## which cannot carry what a player carries. Whatever they are, they carry a
-## weapon of the loadout and move as everybody does.
+## the enemies that were chosen in the settings: {character, voice, tint}, or
+## {robot} with the kind of robot of scripts/puppet.gd. Empty for soldiers,
+## who are the second side as it is. Whatever they are, they carry a weapon
+## of the loadout and move as everybody does: a robot fires it from its arm,
+## and the one that fights with blades on the route is a grunt here.
 func _look(place: int) -> Dictionary:
 	var theme: String = Settings.enemy_theme
 	if theme == "soldiers" or theme == "soldiers_desert":
 		return {}
+	if theme == THEMES.ROBOTS:
+		return {"robot": "heavy" if FIGURES[place % FIGURES.size()] == "heavy" else "grunt"}
 	var found: Dictionary = THEMES.cast(theme, FIGURES[place % FIGURES.size()], place)
 	return {"character": found.character, "voice": found.voice, "tint": found.tint} if found else {}
 
