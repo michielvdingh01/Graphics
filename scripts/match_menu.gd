@@ -45,11 +45,11 @@ static func build(menu: Node) -> void:
 	var prize: Button = menu._button("", func() -> void: pass)
 	var enemies: Button = menu._button("", func() -> void: pass)
 	var difficulty: Button = menu._button("", func() -> void: pass)
-	# Who there is to play against: every theme that has people in it. Robots
-	# cannot carry what a player carries, and are soldiers here.
+	# Who there is to play against: the robots, and every theme that has
+	# people in it.
 	var themes: Array[String] = ["soldiers"]
 	for theme: String in Settings.enemy_themes:
-		if not themes.has(theme) and not NOT_OFFERED.has(theme) and not Match.THEMES.cast(theme, "grunt", 0).is_empty():
+		if not themes.has(theme) and not NOT_OFFERED.has(theme) and (theme == Match.THEMES.ROBOTS or not Match.THEMES.cast(theme, "grunt", 0).is_empty()):
 			themes.append(theme)
 	var refresh := func() -> void:
 		var numbers: Dictionary = Match.kinds[chosen.mode]

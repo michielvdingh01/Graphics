@@ -65,6 +65,8 @@ uniform float sharp = 0.0;
 uniform float soft : hint_range(0.0, 1.0) = 0.6;
 uniform float blur : hint_range(0.0, 3.0) = 1.0;
 
+#include "tree_lod.gdshaderinc"
+
 varying vec3 own;
 // How much light a dot lets through from behind: none, for wood.
 varying float lets;
@@ -79,6 +81,11 @@ void vertex() {
 	float warm = fract(sin(dot(stands, vec2(12.9898, 78.233))) * 43758.5453) * 2.0 - 1.0;
 	float light = fract(sin(dot(stands, vec2(39.346, 11.135))) * 24634.6345) * 2.0 - 1.0;
 	own = vec3(1.0 + vary * warm, 1.0 + vary * 0.35 * warm, 1.0 - vary * 0.8 * warm) * (1.0 + vary * light);
+	// Each tuft has a number of its own, the green of its corners; wood that
+	// is drawn with the needles goes along with the bark.
+	if (given_way(NODE_POSITION_WORLD, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, abs(COLOR.a - 0.5) < 0.25 ? 0.5 : COLOR.g)) {
+		VERTEX = vec3(0.0);
+	}
 }
 
 void fragment() {
