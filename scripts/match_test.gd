@@ -10,6 +10,8 @@ extends Node
 ## be hurt, and a death is not the end of the level. It prints how often a
 ## bot got stuck and how often nobody could come back anywhere safe.
 
+const ROBOT_RIG := preload("res://scripts/enemy_rig.gd")
+
 ## True for a run of this test.
 var active := false
 
@@ -41,6 +43,9 @@ func _run() -> void:
 			return
 	var saved: Dictionary = Save.checkpoint.duplicate()
 	var plain: Dictionary = Settings.rules()
+	# Soldiers on both sides, until it is played against others further on.
+	var theme: String = Settings.enemy_theme
+	Settings.enemy_theme = "soldiers"
 
 	# Bots among themselves.
 	_check("a match opens", Match.open({"mode": "tdm", "level": "factory", "size": 3, "only_bots": true}) and Match.active)
@@ -204,7 +209,6 @@ func _run() -> void:
 	Settings.difficulty = 1
 
 	# Against whoever the enemies were chosen to be.
-	var theme: String = Settings.enemy_theme
 	Settings.enemy_theme = "zombies"
 	_check("a match against zombies opens", Match.open({"mode": "tdm", "level": "factory", "size": 3}))
 	await tree.scene_changed
@@ -231,6 +235,40 @@ func _run() -> void:
 		zombie_kills += who.kills
 	print("  zombies: the fastest covered %.1f m a second on its way; in 34 s they brought down %d and lost %d" % [fastest, zombie_kills, Match.tally[me.team]])
 	_check("they run as fast as anybody, and fight", fastest > player.WALK_SPEED and others[0].brain.SPRINT == player.SPRINT_SPEED and zombie_kills + Match.tally[me.team] > 0)
+
+	# Against robots: those of the route, with a weapon of the loadout in
+	# their arm.
+	Settings.enemy_theme = "robots"
+	_check("a match against robots opens", Match.open({"mode": "tdm", "level": "factory", "size": 6}))
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	game = tree.current_scene
+	player = game.player
+	me = Match.me()
+	others = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team != me.team)
+	own = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team == me.team and who.bot)
+	var robot := func(who: RefCounted) -> bool: return who.body._rig is ROBOT_RIG and who.body._rig.scene_file_path.get_file() in ["grunt.scn", "heavy.scn"]
+	_check("the other side is grunts and a heavy, and the player's side soldiers", others.size() == 6 and others.all(robot)
+		and others.any(func(who: RefCounted) -> bool: return who.body._rig.scene_file_path.ends_with("heavy.scn"))
+		and own.all(func(who: RefCounted) -> bool: return who.body._rig._figure.scene_file_path.contains("soldier")))
+	var heavy: CharacterBody3D = others.filter(func(who: RefCounted) -> bool: return who.body._rig.scene_file_path.ends_with("heavy.scn"))[0].body
+	var grunt: CharacterBody3D = others.filter(func(who: RefCounted) -> bool: return who.body._rig.scene_file_path.ends_with("grunt.scn"))[0].body
+	_check("they carry no plate, a shot on one sounds of steel, and the heavy is taller to it than a grunt", others.all(func(who: RefCounted) -> bool: return not who.body._rig.has_shield)
+		and Fx.surface_of({"collider": grunt, "shape": 0}) == "metal" and heavy.is_headshot(heavy.global_position + Vector3.UP * 1.6) and not heavy.is_headshot(heavy.global_position + Vector3.UP * 1.5)
+		and grunt.is_headshot(grunt.global_position + Vector3.UP * 1.4))
+	player.invulnerable = true
+	Engine.time_scale = 4.0
+	await _wait(30.0)
+	Engine.time_scale = 1.0
+	var robot_kills := 0
+	var robot_deaths := 0
+	for who: RefCounted in others:
+		robot_kills += who.kills
+		robot_deaths += who.deaths
+	print("  robots: in 30 s they brought down %d and lost %d" % [robot_kills, robot_deaths])
+	var standing: Array = others.filter(func(who: RefCounted) -> bool: return who.out <= 0.0)
+	_check("they fight, fall apart, and come back as robots", robot_kills > 0 and robot_deaths > 0 and others.all(robot) and not standing.is_empty()
+		and standing.all(func(who: RefCounted) -> bool: return who.body._rig.find_children("*", "MeshInstance3D").size() > 10))
 	Settings.enemy_theme = theme
 
 	# Capture the flag, with a banana.
@@ -375,8 +413,8 @@ func _run() -> void:
 		against.pressed.emit()
 		if not seen.has(against.text):
 			seen.append(against.text)
-	_check("another goes through who to play against: soldiers, zombies and clowns among them, robots not", seen.has("Against  ·  Soldiers") and seen.has("Against  ·  Zombies") and seen.has("Against  ·  Clowns")
-		and not seen.any(func(text: String) -> bool: return text.contains("Robots") or text.contains("Desert")))
+	_check("another goes through who to play against: soldiers, robots, zombies and clowns among them", seen.has("Against  ·  Soldiers") and seen.has("Against  ·  Robots") and seen.has("Against  ·  Zombies") and seen.has("Against  ·  Clowns")
+		and not seen.any(func(text: String) -> bool: return text.contains("Desert")))
 	Settings.enemy_theme = theme
 	var level: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Difficulty"))[0]
 	level.pressed.emit()
