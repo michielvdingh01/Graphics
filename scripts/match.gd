@@ -5,7 +5,8 @@ extends Node
 ## from the title screen, or with --match=<kind>:<level>:<size> on the command
 ## line: tdm, ffa or ctf, the name of a level, and how many play a side, or in
 ## all where there are no sides; capture the flag takes :<prize> after that, a
-## name from assets/prizes.json. --only-bots leaves the player out of it, to
+## name from assets/prizes.json. --pack=<name> is what everybody carries, a
+## pack from assets/packs.json. --only-bots leaves the player out of it, to
 ## look on.
 ##
 ## It takes the level over the way the sandbox does: the route is off, no
@@ -40,6 +41,7 @@ signal said(text: String)
 enum State { NONE, LOADING, PLAYING, OVER }
 
 const ARENA := preload("res://scripts/arena.gd")
+const ARMORY := preload("res://scripts/armory.gd")
 const PICKUP := preload("res://scripts/pickup.gd")
 ## What knows of the match in its turn is loaded once the game runs, not as
 ## this is read: the brain of a bot, its body and what is on screen.
@@ -72,13 +74,10 @@ const BLAME := 10.0
 const LETS_UP := 1.0
 ## Seconds the can lies there that somebody who went down leaves.
 const CAN_LIES := 30.0
-## What the bots carry, in the order they join a side: the weapons of the
-## loadout by their place in it. Most carry the carbine.
-const ARMS: Array[int] = [0, 3, 0, 2, 0, 4]
-## The same where the ends of the arena are further apart than FAR metres to
-## walk: there the marksman's rifle comes first, and a second before the
-## shotgun.
-const ARMS_FAR: Array[int] = [4, 0, 0, 4, 3, 0]
+## Where the ends of the arena are further apart than this many metres to
+## walk, the bots carry what their pack gives them for far (assets/packs.json):
+## in the standard pack the marksman's rifle comes first, and a second one
+## before the shotgun.
 const FAR := 300.0
 ## Which of the three figures of a theme the bots against the player are, in
 ## the order they join.
@@ -200,11 +199,14 @@ func _ready() -> void:
 				what.size = asked[2].to_int()
 			if asked.size() > 3:
 				what.prize = asked[3]
+			for other in args:
+				if other.begins_with("--pack="):
+					what.pack = other.get_slice("=", 1)
 			open(what)
 
 
-## Opens a match and goes to its level: {mode, level, size, only_bots}, of
-## which all but the first may be left out. False if there is no such kind or
+## Opens a match and goes to its level: {mode, level, size, only_bots, prize,
+## pack}, of which all but the first may be left out. False if there is no such kind or
 ## no such level.
 func open(what: Dictionary) -> bool:
 	var kind := str(what.get("mode", "tdm"))
@@ -231,6 +233,7 @@ func open(what: Dictionary) -> bool:
 		"size": clampi(size, int(mode.numbers.least), int(mode.numbers.most)),
 		"only_bots": bool(what.get("only_bots", false)),
 		"prize": str(what.get("prize", "flag")),
+		"pack": str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
 	}
 	Save.set_aside(true)
 	# As the game starts its first level is still on its way in: that one
@@ -611,8 +614,9 @@ func _begin() -> void:
 			roster.append([Net.id(), Net.player_name, side, -1])
 		else:
 			# A bot has the number of its place, below nought.
+			var arms := ARMORY.bots(setup.pack, arena.length() > FAR)
 			@warning_ignore("integer_division")
-			var arm: int = (ARMS_FAR if arena.length() > FAR else ARMS)[(place / (2 if mode.teams() else 1)) % ARMS.size()]
+			var arm: int = arms[(place / (2 if mode.teams() else 1)) % arms.size()]
 			roster.append([-(place + 1), NAMES[named % NAMES.size()], side, arm])
 			named += 1
 	Net.show(self, &"_show_roster", [roster])

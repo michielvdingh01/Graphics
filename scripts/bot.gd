@@ -20,12 +20,11 @@ extends Node
 ## cover, fall back, throw grenades, jump or crouch.
 
 const WEAPONS := preload("res://scripts/weapons.gd")
+const ARMORY := preload("res://scripts/armory.gd")
 const PLAYER := preload("res://scripts/player.gd")
 const WORLD := 1
-## How far it sees with each weapon of the loadout in its hands, in metres:
-## through a telescopic sight a long way. And from how near it notices
-## somebody whichever way it looks.
-const SIGHTS: Array[float] = [70.0, 50.0, 40.0, 50.0, 180.0]
+## From how near it notices somebody whichever way it looks. How far it sees
+## ahead is up to the weapon in its hands (WeaponData.bot_sight).
 const AT_ITS_SHOULDER := 4.0
 ## Seconds between two looks around.
 const LOOK := 0.12
@@ -55,9 +54,6 @@ const WALK := PLAYER.WALK_SPEED
 const SPRINT := PLAYER.SPRINT_SPEED
 const ACCEL := 40.0
 const TURN := 9.0
-## The distance each weapon of the loadout is fought at, in metres: nearer it
-## stops closing in.
-const RANGES: Array[float] = [16.0, 10.0, 6.0, 10.0, 32.0]
 ## It has got nowhere if it moved less than this many metres in this many
 ## seconds while it meant to walk.
 const STUCK := Vector2(0.4, 1.5)
@@ -114,7 +110,7 @@ func _ready() -> void:
 	_agent.target_desired_distance = 1.0
 	_agent.radius = 0.4
 	_body.add_child.call_deferred(_agent)
-	_data = WEAPONS.LOADOUT[me.weapon]
+	_data = ARMORY.at(me.weapon)
 	begin()
 
 
@@ -244,7 +240,7 @@ func _look_around() -> void:
 	var space := _body.get_world_3d().direct_space_state
 	var eye: Vector3 = _body.head.global_position
 	var ahead := -_body.global_basis.z
-	var sight: float = SIGHTS[me.weapon]
+	var sight: float = _data.bot_sight
 	var sideways := cos(deg_to_rad(float(_level.fov) * 0.5))
 	var nearest := INF
 	var found: RefCounted = null
@@ -281,7 +277,7 @@ func _look_around() -> void:
 ## With somebody in sight: closes in to the distance its weapon is for, and
 ## steps from side to side there.
 func _fight(delta: float, distance: float) -> Vector3:
-	var reach: float = RANGES[me.weapon]
+	var reach: float = _data.bot_range
 	if distance > reach:
 		return _towards(_target.body.global_position, WALK)
 	_strafe_left -= delta

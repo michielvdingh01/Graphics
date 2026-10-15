@@ -1,0 +1,52 @@
+{
+	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start. A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox.",
+	"packs": {
+		"standard": {
+			"title": "Standard",
+			"about": "Something for every distance.",
+			"weapons": ["rifle", "pistol", "shotgun", "smg", "marksman"],
+			"bots": ["rifle", "smg", "rifle", "shotgun", "rifle", "marksman"],
+			"far": ["marksman", "rifle", "rifle", "marksman", "smg", "rifle"],
+			"sidearm": "pistol",
+			"grenades": 2
+		},
+		"close": {
+			"title": "Close quarters",
+			"about": "For halls and streets: short, loud and quick.",
+			"weapons": ["smg", "double_barrel", "machine_pistol", "revolver"],
+			"bots": ["smg", "double_barrel", "machine_pistol", "smg", "double_barrel", "smg"],
+			"grenades": 3
+		},
+		"far": {
+			"title": "Long range",
+			"about": "For the dunes and the yard: one shot, and make it count.",
+			"weapons": ["bolt_rifle", "battle_rifle", "revolver"],
+			"bots": ["battle_rifle", "bolt_rifle", "battle_rifle", "battle_rifle", "bolt_rifle", "battle_rifle"],
+			"grenades": 2
+		},
+		"1944": {
+			"title": "1944",
+			"about": "Drum, bolt, trench gun and the Colt, as they sounded.",
+			"weapons": ["ppsh", "mosin", "trench_gun", "m1911"],
+			"bots": ["ppsh", "mosin", "ppsh", "trench_gun", "ppsh", "mosin"],
+			"far": ["mosin", "ppsh", "mosin", "ppsh", "trench_gun", "mosin"],
+			"sidearm": "m1911",
+			"grenades": 2
+		},
+		"heavy": {
+			"title": "Heavy",
+			"about": "A machine gun, a pump gun and a revolver: slower on your feet.",
+			"weapons": ["lmg", "shotgun", "revolver"],
+			"bots": ["lmg", "shotgun", "lmg", "lmg", "shotgun", "lmg"],
+			"sidearm": "revolver",
+			"grenades": 2
+		},
+		"pistols": {
+			"title": "Pistols only",
+			"about": "Four pistols and your fists.",
+			"weapons": ["pistol", "revolver", "machine_pistol", "m1911"],
+			"bots": ["m1911", "revolver", "pistol", "machine_pistol", "m1911", "revolver"],
+			"grenades": 1
+		}
+	}
+}

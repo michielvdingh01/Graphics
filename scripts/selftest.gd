@@ -16,6 +16,7 @@ extends Node
 ## be seen, it looks for lines of sight into a zone from where that zone is
 ## switched off.
 
+const ARMORY := preload("res://scripts/armory.gd")
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
@@ -346,7 +347,7 @@ func _handling() -> void:
 	Input.action_release("grenade")
 	await _wait(0.5)
 	var thrown := tree.get_nodes_in_group("grenade")
-	_check("a grenade is thrown", weapons.grenades == weapons.START_GRENADES - 1 and thrown.size() == 1)
+	_check("a grenade is thrown", weapons.grenades == weapons.start_grenades - 1 and thrown.size() == 1)
 	if not thrown.is_empty():
 		_check("it flies ahead of the player", thrown[0].global_position.x < player.global_position.x - 2.0)
 	await _wait(2.4)
@@ -377,7 +378,7 @@ func _handling() -> void:
 	# A sound is found by its name, and that of an impact by what was hit, so a
 	# folder that is missing would only show up as an error in mid-fight.
 	var sounds: Array[StringName] = []
-	for data: WeaponData in weapons.LOADOUT:
+	for data: WeaponData in weapons.loadout:
 		sounds.append(data.shot_sound)
 	for surface: String in Fx.HOLE_VARIANTS:
 		sounds.append(StringName("impact_" + surface))
@@ -706,7 +707,7 @@ func _supplies() -> void:
 	key.action = "weapon_1"
 	Input.parse_input_event(key)
 	await _wait(0.5)
-	var rifle: WeaponData = weapons.LOADOUT[0]
+	var rifle: WeaponData = weapons.loadout[0]
 	weapons.resupply()
 	_check("a level starts with part of the reserve a weapon can hold", weapons._start_reserve(rifle) == rifle.mag_size * weapons.START_MAGS
 		and weapons._start_reserve(rifle) < rifle.reserve_ammo and weapons._reserves[0] >= weapons._start_reserve(rifle))
@@ -746,7 +747,7 @@ func _supplies() -> void:
 	await _wait(1.2)
 	_check("and a can fills the reserve, most of all that of the weapon in hand", not is_instance_valid(can) and notes.has("+AMMO")
 		and weapons._reserves[0] == rifle.mag_size
-		and weapons._reserves[2] == weapons._start_reserve(weapons.LOADOUT[2]) + ceili(weapons.LOADOUT[2].mag_size * weapons.CAN_MAGS_OTHERS))
+		and weapons._reserves[2] == weapons._start_reserve(weapons.loadout[2]) + ceili(weapons.loadout[2].mag_size * weapons.CAN_MAGS_OTHERS))
 	var grenade: Node3D = drop.call(game.PICKUP.Kind.GRENADE)
 	await _wait(1.2)
 	_check("and a grenade is one more to throw", not is_instance_valid(grenade) and weapons.grenades == 1)
@@ -804,7 +805,7 @@ func _supplies() -> void:
 	weapons.resupply()
 	player.heal(maxf(game.CHECKPOINT_HEALTH - player.health, 0.0))
 	_check("a checkpoint brings health and reserves back up, not to the full", player.health == game.CHECKPOINT_HEALTH
-		and weapons._reserves[0] == weapons._start_reserve(rifle) and weapons.grenades == weapons.START_GRENADES)
+		and weapons._reserves[0] == weapons._start_reserve(rifle) and weapons.grenades == weapons.start_grenades)
 	player.health = 1e6
 
 	# The difficulty is one table, and a run is measured.
@@ -820,6 +821,40 @@ func _supplies() -> void:
 	print("    the run so far: %s; the end screen would say: %s" % [run, " / ".join(summary)])
 	_check("a run is measured: time, shots, hits", run.seconds > 5.0 and run.shots > 0.0 and run.hits > 0.0 and run.hits <= run.shots)
 	_check("and summed up for the end screen", summary.size() == 2 and summary[0].begins_with("Time  12:34   ·   Deaths  2") and summary[1] == "Accuracy  41%   ·   Headshots  9")
+
+	# Packs: what everybody carries in a match, see scripts/ARMORY.gd.
+	var standard: Array[WeaponData] = ARMORY.weapons(ARMORY.STANDARD)
+	_check("on the route the standard pack is carried, in the order of the keys", weapons.loadout == standard
+		and standard.map(func(data: WeaponData) -> String: return data.display_name) == ["Rifle", "Pistol", "Shotgun", "SMG", "Marksman"])
+	var offered: PackedStringArray = ARMORY.names()
+	var misses := []
+	var file: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(ARMORY.FILE)).packs
+	for pack: String in file:
+		var built: bool = (file[pack].weapons as Array).all(func(weapon_name: String) -> bool: return ARMORY.named(weapon_name) != null)
+		var sizes_fit: bool = ARMORY.weapons(pack).size() in range(2, ARMORY.MOST + 1) and not ARMORY.bots(pack).is_empty()
+		if offered.has(pack) != built or (built and not sizes_fit):
+			misses.append(pack)
+	print("    packs on offer: %s of %s" % [", ".join(offered), ", ".join(file.keys())])
+	_check("a pack is on offer once all its weapons are built, with two to five of them", offered.has(ARMORY.STANDARD) and misses.is_empty())
+	var pair: Array[WeaponData] = [standard[2], standard[1]]
+	weapons.equip(pair, Vector2i(3, 4))
+	await _wait(0.1)
+	var two := InputEventAction.new()
+	two.action = "weapon_2"
+	two.pressed = true
+	Input.parse_input_event(two)
+	await _wait(0.5)
+	var on_two: String = weapons.current().display_name
+	var five := two.duplicate()
+	five.action = "weapon_5"
+	Input.parse_input_event(five)
+	await _wait(0.5)
+	_check("another pack is taken up whole: its weapons on its keys, nothing on the rest, its grenades", weapons.loadout.size() == 2
+		and on_two == "Pistol" and weapons.current().display_name == "Pistol" and weapons.grenades == 3 and weapons.most_grenades == 4
+		and weapons._rig.get_child_count() == 2)
+	_check("and what is fired goes by its place in the armory, not in the pack", ARMORY.index(weapons.current()) == 1 and ARMORY.index(pair[0]) == 2)
+	weapons.equip(standard, ARMORY.grenades(ARMORY.STANDARD))
+	await _wait(0.1)
 	_finished.append("supplies")
 
 
@@ -836,7 +871,7 @@ func _view() -> void:
 	var weapons: Node3D = player.weapons
 	var camera: Camera3D = player.camera
 	var hud: CanvasLayer = game.get_node("HUD")
-	var rifle: WeaponData = weapons.LOADOUT[0]
+	var rifle: WeaponData = weapons.loadout[0]
 	player.force_control = true
 	player.health = 1e6
 	for zone: RefCounted in game.zones:

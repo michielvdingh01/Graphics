@@ -31,7 +31,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 9
+const VERSION := 10
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -440,7 +440,7 @@ func _physics_process(delta: float) -> void:
 		doing |= SPRINTING
 	if player.dead:
 		doing |= DEAD
-	_state.rpc(player.global_position, player.rotation.y, player.head.rotation.x, player.velocity, doing, player.weapons.LOADOUT.find(player.weapons.current()))
+	_state.rpc(player.global_position, player.rotation.y, player.head.rotation.x, player.velocity, doing, player.weapons.ARMORY.index(player.weapons.current()))
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)

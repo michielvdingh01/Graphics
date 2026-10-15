@@ -3488,11 +3488,23 @@ Stap 1 raakt de bestanden die elk wapen raakt (`weapons.gd`, `net.gd`, `puppet.g
 | 5. Bots en de slag voor anderen | bots die een speciaal wapen gaan halen en ermee vechten (vanaf Hardened), bots die van dichtbij slaan, en de pop die zichtbaar slaat | 2, 3 | spelen op Hard |
 | 6. Afstellen | naar wat er na het spelen met vrienden van gezegd wordt | wat er dan staat | |
 
-**Te kiezen door Michiel**
+**Wat Michiel koos**, dezelfde dag:
 
-1. **Hetzelfde pakket voor iedereen** in een wedstrijd (mijn voorstel), of binnen het pakket zelf een hoofdwapen kiezen.
-2. **De slagtoets**: V en de rechterstick, of liever F, Q of een duimknop op de muis.
-3. **Wat een slag doet**: twee slagen om te doden zoals nu, of één slag in de rug.
-4. **Speciale wapens alleen waar je kunt lopen** (mijn voorstel, zodat bots erom vechten), of ook achter een sprong.
-5. **Welke pakketten eerst** na stap 1, 2 en 3.
-6. **Je eigen raket raakt jou ook** (mijn voorstel, zoals de granaat), of niet.
+1. Iedereen in een wedstrijd draagt hetzelfde pakket.
+2. De slagtoets blijft V.
+3. Twee slagen om te doden, ook in "Alleen pistolen": de regel dat daar één slag doodt is vervallen.
+4. Speciale wapens alleen waar je kunt lopen.
+5. Alle pakketten tegelijk: stap 4a, 4b en 4c worden één stap.
+6. Je eigen raket raakt jou ook.
+
+### Stap 1: de wapenkast en de pakketten (gebouwd)
+
+- **`scripts/armory.gd`** kent alle wapens (`ALL`), in een volgorde die alleen aan het eind groeit; de vijf die er waren hebben hun oude plaats, zodat een spel met anderen er niets van merkt. Een wapen heet naar zijn bestand in `weapons/`. Over de lijn, in de handen van een bot en in de regel van wie wie neerhaalde is een wapen zijn plaats in die lijst.
+- **`assets/packs.json`** heeft alle zes pakketten, met per pakket de wapens op 1 en verder, wat bots dragen (en in een arena van meer dan 300 m), het wapen voor als je magazijn leeg is (`sidearm`) en de granaten. Een pakket dat een wapen noemt dat nog niet gebouwd is, wordt niet aangeboden; nu is dat alleen Standaard.
+- **`scripts/weapons.gd`** draagt in een wedstrijd het pakket van de wedstrijd en elders Standaard, in dezelfde volgorde als altijd. `equip()` neemt een ander pakket in één keer op: modellen, magazijnen, reserves en granaten. Alleen de modellen van het pakket worden gemaakt, niet die van alle wapens.
+- **Het scherm "Multiplayer"** heeft een regel "Weapons", die langs de pakketten gaat en wordt onthouden (`Settings.pack`). Vanaf de opdrachtregel: `--pack=<naam>`. Bots krijgen hun wapen uit het pakket; hoe ver een bot ziet en op welke afstand hij vecht, staat nu bij het wapen (`bot_sight`, `bot_range`) in plaats van in twee lijsten in `bot.gd`.
+- **`Net.VERSION` is 10.**
+- **Het balansblad**, `tools/weapon_sheet.py`, zonder GPU: per pakket vier grafieken (gericht, vanaf de heup, en beide lopend) van de tijd tot de kill per afstand, de banden waar elk wapen het snelst is, en wat er mis is. Het weegt gericht tegen gericht en heup tegen heup; afstanden waar niemand binnen een seconde doodt tellen niet. Het werkt op de `.tres`-bestanden, dus een wapen kan gewogen worden voor het een model heeft. Het blad van Standaard: `benchmark/sheets/weapons_standard.png`.
+- **De pistoolmitrailleur doet 20 per kogel in plaats van 17.** Het blad liet zien dat hij nergens het snelst was: gericht won de karabijn, vanaf de heup het pistool. Met 20 is hij het snelst van 7 tot 12 m gericht en tot 20 m vanaf de heup (5 kogels, 0,27 s); de karabijn houdt 13 tot 32 m en het scherpschuttersgeweer alles daarboven. Bots met een pistoolmitrailleur doen daarmee ook 18% meer schade.
+- **Wat het blad nog over het pistool zegt**: vanaf de heup is het van 13 tot 20 m het snelst (34 per kogel en 1° spreiding). Als wapen voor als je magazijn leeg is, is dat te sterk volgens de regel; ik heb het gelaten, omdat het pistool zoals het is jouw keuze is.
+- **Getest**: `tools/selftest.sh` (407 controles), `tools/test_match.sh` (77) en `tools/nettest.sh` (62) slagen. De selftest kijkt nu ook of op de route het standaardpakket gedragen wordt in de volgorde van de toetsen, of een pakket aangeboden wordt precies als al zijn wapens er zijn, of een ander pakket helemaal wordt opgenomen (twee wapens op 1 en 2, niets op 5, zijn granaten) en of een schot met de plaats in de kast over de lijn gaat.

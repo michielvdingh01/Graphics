@@ -14,18 +14,9 @@ signal ammo_changed(weapon_name: String, mag: int, reserve: int)
 signal hit_confirmed(headshot: bool, killed: bool)
 signal grenades_changed(count: int)
 
-const LOADOUT: Array[WeaponData] = [
-	preload("res://weapons/rifle.tres"),
-	preload("res://weapons/pistol.tres"),
-	preload("res://weapons/shotgun.tres"),
-	preload("res://weapons/smg.tres"),
-	preload("res://weapons/marksman.tres"),
-]
+const ARMORY := preload("res://scripts/armory.gd")
 const GRENADE := preload("res://scenes/grenade.tscn")
 const SPRING := preload("res://scripts/spring.gd")
-## The most grenades that are carried, and how many a level starts with.
-const GRENADES := 3
-const START_GRENADES := 2
 ## The reserve a weapon starts a level with, in magazines. What it can hold
 ## is in its data; the difference has to be picked up off the floor.
 const START_MAGS := 2
@@ -250,7 +241,14 @@ class Viewmodel:
 
 ## 0 at the hip, 1 fully aimed down sights.
 var ads_blend := 0.0
-var grenades := START_GRENADES
+## The weapons in hand on 1 and on: those of the pack that is carried, see
+## equip().
+var loadout: Array[WeaponData] = []
+## The grenades carried, how many a level starts with and the most there can
+## be: the pack says.
+var grenades := 2
+var start_grenades := 2
+var most_grenades := 3
 
 var _index := 0
 var _pending := 0
@@ -314,7 +312,27 @@ var _smoke_due := false
 
 func _ready() -> void:
 	add_child(_rig)
-	for data in LOADOUT:
+	# In a match everybody carries the pack of the match, see scripts/armory.gd.
+	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else ARMORY.STANDARD
+	equip(ARMORY.weapons(pack), ARMORY.grenades(pack))
+	_build_fill()
+	player.hit_from.connect(_on_hit)
+	player.landed.connect(_on_landed)
+
+
+## Takes up `weapons` on 1 and on, each with a full magazine and the reserve a
+## level starts with, and as many grenades as `grenade_count` starts with, of
+## at most its second number. Whatever was in hand is put away; with nothing
+## to take up it is the standard pack.
+func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3)) -> void:
+	for model in _models:
+		_rig.remove_child(model.root)
+		model.root.queue_free()
+	_models.clear()
+	_mags.clear()
+	_reserves.clear()
+	loadout = weapons.duplicate() if not weapons.is_empty() else ARMORY.weapons(ARMORY.STANDARD)
+	for data in loadout:
 		var model: Node3D = data.viewmodel.instantiate()
 		model.visible = false
 		for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D"):
@@ -324,16 +342,27 @@ func _ready() -> void:
 		_models.append(Viewmodel.new(model))
 		_mags.append(data.mag_size)
 		_reserves.append(_start_reserve(data))
+	_index = 0
+	_pending = 0
+	_switch_left = 0.0
+	_reload_left = 0.0
+	_throw_left = 0.0
+	_thrown = true
+	_melee_left = 0.0
+	_landed = true
+	_pump_stage = 2
+	_locked = 0.0
 	_models[_index].root.visible = true
-	_build_fill()
-	player.hit_from.connect(_on_hit)
-	player.landed.connect(_on_landed)
+	start_grenades = grenade_count.x
+	most_grenades = grenade_count.y
+	grenades = start_grenades
+	grenades_changed.emit(grenades)
 	_settle()
 	_emit_ammo.call_deferred()
 
 
 func current() -> WeaponData:
-	return LOADOUT[_index]
+	return loadout[_index]
 
 
 func ads_fov() -> float:
@@ -393,9 +422,9 @@ func preview(index: int, aim := 0.0, reload := 0.0, blow := 0.0) -> void:
 ## Brings whatever has run low back up to what a level starts with: the
 ## reserve of every weapon and the grenades. What is over that is kept.
 func resupply() -> void:
-	for i in LOADOUT.size():
-		_reserves[i] = maxi(_reserves[i], _start_reserve(LOADOUT[i]))
-	grenades = maxi(grenades, START_GRENADES)
+	for i in loadout.size():
+		_reserves[i] = maxi(_reserves[i], _start_reserve(loadout[i]))
+	grenades = maxi(grenades, start_grenades)
 	grenades_changed.emit(grenades)
 	_emit_ammo()
 
@@ -403,10 +432,10 @@ func resupply() -> void:
 ## Everything as a level starts: full magazines, the reserve a weapon begins
 ## with and the grenades. For a fight that is fought again.
 func restock() -> void:
-	for i in LOADOUT.size():
-		_mags[i] = LOADOUT[i].mag_size
-		_reserves[i] = _start_reserve(LOADOUT[i])
-	grenades = START_GRENADES
+	for i in loadout.size():
+		_mags[i] = loadout[i].mag_size
+		_reserves[i] = _start_reserve(loadout[i])
+	grenades = start_grenades
 	grenades_changed.emit(grenades)
 	_emit_ammo()
 
@@ -415,8 +444,8 @@ func restock() -> void:
 ## for the others. False if nothing of it fitted.
 func add_ammo() -> bool:
 	var took := false
-	for i in LOADOUT.size():
-		var data := LOADOUT[i]
+	for i in loadout.size():
+		var data := loadout[i]
 		if data.bottomless:
 			continue
 		var rounds := ceili(data.mag_size * (CAN_MAGS if i == _pending else CAN_MAGS_OTHERS))
@@ -431,15 +460,15 @@ func add_ammo() -> bool:
 
 ## True if a can of ammunition would not be wasted: some weapon has room.
 func ammo_room() -> bool:
-	for i in LOADOUT.size():
-		if not LOADOUT[i].bottomless and _reserves[i] < LOADOUT[i].reserve_ammo:
+	for i in loadout.size():
+		if not loadout[i].bottomless and _reserves[i] < loadout[i].reserve_ammo:
 			return true
 	return false
 
 
 ## One more grenade. False if no more can be carried.
 func add_grenade() -> bool:
-	if grenades >= GRENADES:
+	if grenades >= most_grenades:
 		return false
 	grenades += 1
 	grenades_changed.emit(grenades)
@@ -449,7 +478,7 @@ func add_grenade() -> bool:
 ## How short of ammunition the weapon in hand is: 0 with the reserve a level
 ## starts with or more, 1 with none. One that never runs out is never short.
 func ammo_lack() -> float:
-	var data := LOADOUT[_pending]
+	var data := loadout[_pending]
 	if data.bottomless:
 		return 0.0
 	return clampf(1.0 - float(_reserves[_pending]) / _start_reserve(data), 0.0, 1.0)
@@ -484,13 +513,13 @@ func _mend_ctrl_click(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not player.has_control():
 		return
-	for i in LOADOUT.size():
+	for i in loadout.size():
 		if event.is_action_pressed("weapon_%d" % (i + 1)):
 			_switch_to(i)
 	if event.is_action_pressed("weapon_next"):
-		_switch_to((_pending + 1) % LOADOUT.size())
+		_switch_to((_pending + 1) % loadout.size())
 	elif event.is_action_pressed("weapon_prev"):
-		_switch_to((_pending - 1 + LOADOUT.size()) % LOADOUT.size())
+		_switch_to((_pending - 1 + loadout.size()) % loadout.size())
 
 
 func _process(delta: float) -> void:
@@ -606,7 +635,7 @@ func _fire(data: WeaponData) -> void:
 					amount *= data.headshot_multiplier
 				if Match.active:
 					# The match keeps count of who shot whom, and with what.
-					killed = Match.hit(player, target, amount, end, direction, _index, head) or killed
+					killed = Match.hit(player, target, amount, end, direction, ARMORY.index(data), head) or killed
 				else:
 					killed = Net.damage(target, amount, end, direction) or killed
 				# A shot that the plate on its arm stopped is no hit.
@@ -617,7 +646,7 @@ func _fire(data: WeaponData) -> void:
 		# One pellet in three of a load of shot is enough to show where it went.
 		if i % 3 == 0:
 			Fx.tracer(muzzle, end)
-	Net.player_did(&"fired", [_index, ends])
+	Net.player_did(&"fired", [ARMORY.index(data), ends])
 	if Match.active:
 		Match.fired(player, muzzle, data.flash_size * HEARD)
 

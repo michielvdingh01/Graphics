@@ -67,3 +67,10 @@ extends Resource
 @export var ads_offset := Vector3(0.0, -0.06, -0.3)
 ## How the weapon is turned at the hip, in degrees: muzzle up, to the left, and rolled.
 @export var hip_rotation_deg := Vector3.ZERO
+
+@export_group("Bots")
+## How far a bot with it in its hands sees, in metres: through a telescopic
+## sight a long way.
+@export var bot_sight := 50.0
+## The distance a bot fights at with it, in metres: nearer it stops closing in.
+@export var bot_range := 10.0

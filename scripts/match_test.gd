@@ -172,7 +172,7 @@ func _run() -> void:
 	# On easy it takes two shots of a marksman's rifle to the body, or one to
 	# the head.
 	Settings.difficulty = 0
-	var marksman: WeaponData = player.weapons.LOADOUT[4]
+	var marksman: WeaponData = player.weapons.loadout[4]
 	me.safe = 0.0
 	Match.harm(me.id, marksman.damage, player.global_position, Vector3.FORWARD, target.id, 4)
 	_check("on easy one shot of a marksman's rifle to the body leaves the player standing", not player.dead and player.health > 40.0 and player.health < 60.0)
@@ -183,7 +183,7 @@ func _run() -> void:
 	me.safe = 0.0
 	Match.harm(me.id, marksman.damage * marksman.headshot_multiplier, player.global_position, Vector3.FORWARD, target.id, 4, true)
 	_check("one to the head is enough, on easy too", player.dead)
-	var shotgun: WeaponData = player.weapons.LOADOUT[2]
+	var shotgun: WeaponData = player.weapons.loadout[2]
 	_check("a bot's whole load of shot is not, on easy: pellets to the head count as any other", shotgun.damage * shotgun.pellets * float(Match.rules.hurts) < player.MAX_HEALTH)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	Settings.difficulty = 2

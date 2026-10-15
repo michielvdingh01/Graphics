@@ -15,6 +15,7 @@ extends CharacterBody3D
 
 const HUMANOID := preload("res://scripts/humanoid_rig.gd")
 const WEAPONS := preload("res://scripts/weapons.gd")
+const ARMORY := preload("res://scripts/armory.gd")
 const GRENADE := preload("res://scenes/grenade.tscn")
 ## Who it can be: soldier_01 and up, one for every player by its id.
 const CHARACTER := "res://assets/characters/soldier_%02d/soldier_%02d.glb"
@@ -104,7 +105,7 @@ func _dress() -> void:
 	var path := CHARACTER % [number, number]
 	if team == 1 and ResourceLoader.exists(SECOND % [number, number]):
 		path = SECOND % [number, number]
-	var data: WeaponData = WEAPONS.LOADOUT[clampi(_weapon, 0, WEAPONS.LOADOUT.size() - 1)]
+	var data: WeaponData = ARMORY.at(_weapon)
 	var rig := HUMANOID.new()
 	rig.name = "Model"
 	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "default"}
@@ -205,11 +206,12 @@ func net_state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int
 	_label.visible = not dead and (not Match.active or _label.get_meta(&"friend", false))
 
 
-## It fired `weapon` of the loadout; `ends` is where each pellet ended up.
+## It fired `weapon`, a place in the armory; `ends` is where each pellet
+## ended up.
 func fired(weapon: int, ends: PackedVector3Array) -> void:
 	if _rig == null or dead:
 		return
-	var data: WeaponData = WEAPONS.LOADOUT[clampi(weapon, 0, WEAPONS.LOADOUT.size() - 1)]
+	var data: WeaponData = ARMORY.at(weapon)
 	_rig.fire()
 	var muzzle: Vector3 = _rig.muzzle()
 	var space := get_world_3d().direct_space_state
