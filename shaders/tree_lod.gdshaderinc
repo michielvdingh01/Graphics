@@ -15,11 +15,10 @@
 // `shown` says over which distances from the foot of the tree a drawing comes
 // in (x to y) and goes out again (z to w); one that does neither is all
 // noughts, as is whatever else is drawn with these shaders. Each drawing of a
-// tree says so in its meta "shown", which scripts/tree.gd hands to its
-// shaders. The renderer is told the same distances, as the visibility range
-// of the drawing, and measures them from the same foot: see _finish() in
-// tools/models/trees.gd.
-instance uniform vec4 shown = vec4(0.0);
+// tree has copies of its materials that say so. The renderer is told the
+// same distances, as the visibility range of the drawing, and measures them
+// from the same foot: see _finish() in tools/models/trees.gd.
+uniform vec4 shown = vec4(0.0);
 
 // True for what of this drawing is left to another one, at `node` the foot
 // of the tree, from `eye`. `tuft` is the number of the tuft it belongs to,
