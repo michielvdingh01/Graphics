@@ -74,9 +74,6 @@ const SHADE_LIMB := 0.68
 ## throws a shadow, and the other way: the shadow does not give way, it goes.
 const MARGIN := 4.0
 const FAR_END := 420.0
-## What a tree is in the game: it hands its drawings what they need to give
-## way to one another.
-const TREE := "res://scripts/tree.gd"
 ## What is to the right on a picture of a sprig, what is up and what comes
 ## towards whoever looks, for each side it was pictured from: in the frame of
 ## the sprig, which grows along X with Y up.
@@ -609,13 +606,22 @@ func _seen(from: float, to: float, shadow: GeometryInstance3D.ShadowCastingSetti
 	_shown[_current] = Vector4(coming.x, coming.y, going.x, going.y)
 
 
-## Before the tree is written out: its drawings say what scripts/tree.gd is to
-## hand their shaders, and all are, to the renderer, a box around the foot of
-## the tree. The renderer measures how far off a drawing is from the middle of
-## its box, and the shaders from the foot: in one box the two agree, and every
-## drawing changes over at the same distance. The box is as wide as the
-## widest of them, the card from afar turned any way, and reaches as far
-## under the ground as the tree stands over it.
+## Before the tree is written out: each of its drawings gets copies of its
+## materials that say over which distances it gives way, and all are, to the
+## renderer, a box around the foot of the tree. The renderer measures how far
+## off a drawing is from the middle of its box, and the shaders from the
+## foot: in one box the two agree, and every drawing changes over at the same
+## distance. The box is as wide as the widest of them, the card from afar
+## turned any way, and reaches as far under the ground as the tree stands
+## over it.
+##
+## The copies are made here and kept in the model, not in materials/: what is
+## changed in pine_needles.tres, thorn_scrub.tres, pine_trunk.tres or
+## pine_far.tres shows on the trees once they are built again. An instance
+## uniform would have kept one material for all, but Godot keeps those in one
+## buffer for about 4000 instances, and the dunes hold 2259 drawings of
+## trees: loaded a second time, after a death, the old level and the new one
+## did not fit in it together.
 func _finish() -> void:
 	if _shown.is_empty():
 		return
@@ -626,11 +632,21 @@ func _finish() -> void:
 		for corner: Vector3 in [box.position, box.end]:
 			reach = maxf(reach, maxf(absf(corner.x), absf(corner.z)))
 			high = maxf(high, absf(corner.y))
+	var copies := {}
 	for part: String in _shown:
 		var mesh := _parts[part].node as MeshInstance3D
 		mesh.custom_aabb = AABB(Vector3(-reach, -high, -reach), Vector3(reach, high, reach) * 2.0)
-		mesh.set_meta(&"shown", _shown[part])
-	_figure.set_script(load(TREE))
+		# On the node and not on the mesh: whoever puts trees together into
+		# one mesh, see _merge_tree() in tools/kit/land.gd, takes the mesh's
+		# own, which give way to nothing.
+		for surface in mesh.mesh.get_surface_count():
+			var own := mesh.mesh.surface_get_material(surface) as ShaderMaterial
+			var key := "%s %s" % [own.resource_path, _shown[part]]
+			if not copies.has(key):
+				var copy := own.duplicate() as ShaderMaterial
+				copy.set_shader_parameter("shown", _shown[part])
+				copies[key] = copy
+			mesh.set_surface_override_material(surface, copies[key])
 	_shown = {}
 
 
