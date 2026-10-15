@@ -90,6 +90,12 @@ func _collide(_shape: Shape3D, _xf: Transform3D, _made_of := "") -> void:
 	pass
 
 
+## Whatever a model still has to say of itself once its parts have their
+## meshes, before it is written out.
+func _finish() -> void:
+	pass
+
+
 ## Writes out the model that was being built, if any.
 func _save() -> void:
 	if _figure == null:
@@ -109,6 +115,7 @@ func _save() -> void:
 			st.commit(mesh)
 			triangles += mesh.surface_get_array_index_len(mesh.get_surface_count() - 1) / 3
 		(_parts[part_name].node as MeshInstance3D).mesh = mesh
+	_finish()
 	var scene := PackedScene.new()
 	scene.pack(_figure)
 	var path := MODEL_DIR + _figure.name.to_snake_case() + ".scn"

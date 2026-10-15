@@ -36,6 +36,8 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py music level1and2        the piece at the level of a game, a fight starting
                                           after 4 s and over after 12: its second layer comes
                                           and goes. --layer=<file> tries another file as that layer
+    tools/hear.py level_music             where the pieces of a level take turns: the last ten
+                                          seconds of each and the first ten of the one after it
 
 Only recorded sounds, those with a folder in assets/audio/.
 """
@@ -56,6 +58,7 @@ GODOT = os.environ.get("GODOT", "/Applications/Godot.app/Contents/MacOS/Godot")
 START = 0.1  # seconds of silence before the first shot
 TAIL = 2.5  # seconds rendered after the last one, for the reverb to die away
 FIRE = 1.5  # seconds a burst lasts
+SEAM = 10.0  # seconds of music heard on either side of where one piece makes way for the next
 SFX = (ROOT / "scripts/sfx.gd").read_text()
 MENU = (ROOT / "scripts/menu.gd").read_text()
 
@@ -362,12 +365,6 @@ def music(piece: str, layer: str) -> list:
     """Twenty seconds of a piece at the level the game plays it in a level,
     with a fight from 4 s to 12 s: the second layer comes in and goes as
     scripts/sfx.gd has it, and the rifle fires to hear it against."""
-    def found(name: str) -> pathlib.Path:
-        for kind in (".ogg", ".mp3"):
-            if (ROOT / "assets/music" / (name + kind)).exists():
-                return ROOT / "assets/music" / (name + kind)
-        raise SystemExit(f"no piece named {name} in assets/music/")
-
     db = constant("LEVEL_MUSIC_DB", MENU)
     rise, fall = constant("FIGHT_RISE"), constant("FIGHT_FALL")
     over = pathlib.Path(layer) if layer else found(piece + re.search(r'^const FIGHT_LAYER := "(\w+)"', SFX, re.M).group(1))
@@ -382,20 +379,47 @@ def music(piece: str, layer: str) -> list:
     return events + burst("rifle_shot", 620.0, 0.0, 6.0) + burst("rifle_shot", 620.0, 0.0, 9.0)
 
 
-def excerpt(source: pathlib.Path, seconds: float, level) -> str:
-    """The first `seconds` of a piece as a WAV, as loud at each moment as
+def level_music() -> tuple:
+    """Where the pieces of a level take turns, as scripts/sfx.gd plays them:
+    for each piece of LEVEL_MUSIC in scripts/menu.gd its last SEAM seconds
+    and straight after them the first SEAM of the next, at the level of a
+    game, with a moment of silence before the next seam."""
+    pieces = re.findall(r'&"([^"]+)"', re.search(r"^const LEVEL_MUSIC: .*$", MENU, re.M).group(0))
+    db = constant("LEVEL_MUSIC_DB", MENU)
+    events, at = [], START
+    for i, piece in enumerate(pieces):
+        after = pieces[(i + 1) % len(pieces)]
+        print(f"{at:4.0f} s  the end of {piece}, into {after}")
+        for t, name, start in ((at, piece, -SEAM), (at + SEAM, after, 0.0)):
+            events.append({"t": t, "file": excerpt(found(name), SEAM, lambda _: 1.0, start), "bus": "Music", "db": db, "pitch": 1.0})
+        at += 2 * SEAM + 2.0
+    return events, at - 2.0
+
+
+def found(name: str) -> pathlib.Path:
+    """The file of the piece of that name in assets/music/."""
+    for kind in (".ogg", ".mp3"):
+        if (ROOT / "assets/music" / (name + kind)).exists():
+            return ROOT / "assets/music" / (name + kind)
+    raise SystemExit(f"no piece named {name} in assets/music/")
+
+
+def excerpt(source: pathlib.Path, seconds: float, level, start: float = 0.0) -> str:
+    """`seconds` of a piece as a WAV, from `start` seconds in, or from that
+    far before its end if it is below nought, as loud at each moment as
     `level` says: the renderer plays a file at one level from start to end."""
     OUT.mkdir(parents=True, exist_ok=True)
     whole = OUT / f"{source.stem}.whole.wav"
     subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16@44100", "-c", "2", str(source), str(whole)], check=True)
     with wave.open(str(whole)) as reader:
+        reader.setpos(max(reader.getnframes() + int(start * 44100), 0) if start < 0.0 else int(start * 44100))
         frames = array.array("h", reader.readframes(int(seconds * 44100)))
     whole.unlink()
     for i in range(0, len(frames), 2):
         gain = level(i / 2 / 44100.0)
         frames[i] = int(frames[i] * gain)
         frames[i + 1] = int(frames[i + 1] * gain)
-    out = OUT / f"{source.stem}.excerpt.wav"
+    out = OUT / f"{source.stem}.{'excerpt' if start == 0.0 else f'from{start:+.0f}'}.wav"
     with wave.open(str(out), "wb") as writer:
         writer.setnchannels(2)
         writer.setsampwidth(2)
@@ -462,6 +486,9 @@ def main() -> None:
         name, events = "whiz", whiz()
     elif args[0] == "voice" and len(args) > 1:
         name, events = f"voice_{args[1]}", voice(args[1])
+    elif args[0] == "level_music":
+        name = "level_music"
+        events, length = level_music()
     elif args[0] == "music" and len(args) > 1:
         name, events, length = f"music_{args[1]}", music(args[1], options.get("layer", "")), 20.0
     else:

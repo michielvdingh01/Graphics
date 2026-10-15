@@ -1056,12 +1056,18 @@ func wire_coil(from: Vector2, to: Vector2) -> void:
 ## A round pole between two irons set in a block of concrete, banded in
 ## paint, with a disc hung from its middle for whoever drives up to it and
 ## a forked post to lie in.
+##
+## What stops a shot is what is there: the pole, its weight, the irons, the
+## disc and the fork, each in a box of its own. Over and under the pole a
+## shot goes through, both ways. Nobody walks under it, nor jumps over: it
+## lies at a metre, and a player who ducks is 1.1 m tall and jumps 0.9 m.
 func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
 	box("concrete", xf * Vector3(0, 0.25, 0), Vector3(0.5, 0.5, 0.5), Vector3(0, yaw_deg, 0))
 	for z: float in [-0.085, 0.085]:
 		_local_box("steel", xf, Vector3(0, 0.82, z), Vector3(0.11, 0.74, 0.012), SLIGHT)
 		_local_box("steel", xf, Vector3(0, 0.82, z * 1.3), Vector3(0.012, 0.74, 0.05), SLIGHT)
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, 0.82, 0)), Vector3(0.11, 0.74, 0.27), "metal")
 	var tilt := Basis(Vector3.BACK, deg_to_rad(78.0 if raised else 0.0))
 	var arm := xf * Transform3D(tilt, Vector3(0, 1.0, 0))
 	var lying := Basis(Vector3.BACK, -PI * 0.5)
@@ -1072,16 +1078,19 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 		_cylinder("enamel_red" if i % 2 == 0 else "paper", arm * Transform3D(lying, Vector3(i * 0.5, 0, 0)), thick, 0.5, SLIGHT, lerpf(0.055, 0.038, float(i + 1) / bands), 8)
 	_cylinder("steel", arm * Transform3D(lying, Vector3(-0.85, 0, 0)), 0.05, 0.85, SLIGHT, -1.0, 8)
 	_local_box("steel", arm, Vector3(-0.62, -0.02, 0), Vector3(0.44, 0.26, 0.15), SLIGHT)
+	_collide_box(arm * Transform3D(Basis(), Vector3(-0.62, -0.02, 0)), Vector3(0.44, 0.26, 0.15), "metal")
+	_collide_box(arm * Transform3D(Basis(), Vector3((bands * 0.5 - 0.85) * 0.5, 0, 0)), Vector3(bands * 0.5 + 0.85, 0.11, 0.11), "metal")
 	_cylinder("steel", arm * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0, -0.13)), 0.018, 0.26, SLIGHT, -1.0, 6)
 	if not raised:
-		_collide_box(xf * Transform3D(Basis(), Vector3(length * 0.5, 0.8, 0)), Vector3(length, 1.6, 0.14), "metal")
 		var rest := on_ground(xf * Vector3(length - 0.2, 0, 0))
 		cylinder("steel", rest, 0.025, 0.94, SLIGHT, Vector3.ZERO, -1.0, 6)
 		for z: float in [-0.05, 0.05]:
 			_local_box("steel", xf, Vector3(length - 0.2, 0.98, z), Vector3(0.04, 0.16, 0.008), SLIGHT)
+		_collide_box(Transform3D(xf.basis, rest + Vector3.UP * 0.53), Vector3(0.06, 1.06, 0.12), "metal")
 		# The disc, red with a white bar, on two links of chain.
 		var middle := Vector3(length * 0.5, -0.32, 0)
 		_cylinder("enamel_red", arm * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), middle + Vector3(0, 0, -0.006)), 0.21, 0.012, SLIGHT, -1.0, 16)
+		_collide_box(arm * Transform3D(Basis(), middle), Vector3(0.42, 0.42, 0.03), "metal")
 		for z: float in [-0.008, 0.008]:
 			_local_box("paper", arm, middle + Vector3(0, 0, z), Vector3(0.3, 0.065, 0.004), SLIGHT)
 		for x: float in [-0.1, 0.1]:
@@ -1233,6 +1242,8 @@ func pillbox(at: Vector2, yaw_deg: float) -> void:
 ## A watchtower of timber, `height` to its floor: four legs, braced both
 ## ways, a boarded cabin under a pitched roof of sheet, a rail, and a ladder
 ## up one side. Nobody is up there; it is what is seen of a camp from afar.
+## Its legs, braces and floor are in the way, and between them a shot goes
+## through.
 func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y, -0.3))
 	var turn := Vector3(0, yaw_deg, 0)
@@ -1248,15 +1259,15 @@ func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 		for side: Vector2 in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
 			var across := Vector3(side.y, 0, side.x)
 			var out := Vector3(side.x, 0, side.y)
-			beam("wood", xf * (out * wide_low + across * wide_low + Vector3.UP * (low + 0.3)), xf * (out * wide_high - across * wide_high + Vector3.UP * high), 0.08, SLIGHT)
-			beam("wood", xf * (out * wide_low - across * wide_low + Vector3.UP * (low + 0.3)), xf * (out * wide_high + across * wide_high + Vector3.UP * high), 0.08, SLIGHT)
+			beam("wood", xf * (out * wide_low + across * wide_low + Vector3.UP * (low + 0.3)), xf * (out * wide_high - across * wide_high + Vector3.UP * high), 0.08, DETAIL)
+			beam("wood", xf * (out * wide_low - across * wide_low + Vector3.UP * (low + 0.3)), xf * (out * wide_high + across * wide_high + Vector3.UP * high), 0.08, DETAIL)
 			# A girt from leg to leg where the braces meet the legs.
-			beam("wood", xf * (out * wide_high + across * wide_high + Vector3.UP * high), xf * (out * wide_high - across * wide_high + Vector3.UP * high), 0.1, SLIGHT)
+			beam("wood", xf * (out * wide_high + across * wide_high + Vector3.UP * high), xf * (out * wide_high - across * wide_high + Vector3.UP * high), 0.1, DETAIL)
 	# The floor on its joists, the boards of the cabin, its posts and the
 	# rail on them.
 	for z: float in [-1.0, 0.0, 1.0]:
 		_local_box("wood", xf, Vector3(0, height + 0.25, z), Vector3(3.2, 0.14, 0.09), SLIGHT)
-	box("wood", xf * Vector3(0, height + 0.36, 0), Vector3(3.1, 0.1, 3.1), turn, SLIGHT)
+	box("wood", xf * Vector3(0, height + 0.36, 0), Vector3(3.1, 0.1, 3.1), turn, DETAIL)
 	for side: Vector2 in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
 		_local_box("wood", xf, Vector3(side.x * 1.5, height + 0.95, side.y * 1.5), Vector3(0.06 if side.x != 0.0 else 3.06, 1.1, 0.06 if side.y != 0.0 else 3.06), SLIGHT)
 		_local_box("wood", xf, Vector3(side.x * 1.53, height + 1.52, side.y * 1.53), Vector3(0.09 if side.x != 0.0 else 3.16, 0.05, 0.09 if side.y != 0.0 else 3.16), SLIGHT)
@@ -1280,7 +1291,6 @@ func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 	var lamp := xf * Transform3D(Basis.from_euler(Vector3(deg_to_rad(70.0), deg_to_rad(45.0), 0)), Vector3(1.3, height + 1.72, 1.3))
 	_cylinder("dark_steel", lamp, 0.2, 0.3, SLIGHT, -1.0, 10)
 	_local_box("dark_steel", xf, Vector3(1.3, height + 1.56, 1.3), Vector3(0.05, 0.3, 0.05), SLIGHT)
-	_collide_box(xf * Transform3D(Basis(), Vector3(0, height * 0.5, 0)), Vector3(2.9, height, 2.9), "wood")
 
 
 ## A hut of corrugated sheet bent over hoops, `length` long along the X of

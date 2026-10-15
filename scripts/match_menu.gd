@@ -6,6 +6,10 @@ extends RefCounted
 
 ## The levels there are to play in: the name of each as Match.open() takes it.
 const ARENAS: Array[String] = ["works", "powerhouse", "factory", "depot", "dunes"]
+## How big each arena is, by the floor somebody can walk to: small is under
+## 1 000 m², large over 2 000 m². Measured on 15 October 2026, see PLAN.md
+## under "Een tweede nummer, en hoe groot een arena is".
+const SIZES := {"works": "large", "powerhouse": "medium", "factory": "small", "depot": "medium", "dunes": "large"}
 ## Themes of scripts/enemy_themes.gd that are not on offer as who to play
 ## against: the second uniform, which soldiers wear anyway, and those that
 ## look like another.
@@ -45,11 +49,11 @@ static func build(menu: Node) -> void:
 	var pack: Button = menu._button("", func() -> void: pass)
 	var enemies: Button = menu._button("", func() -> void: pass)
 	var difficulty: Button = menu._button("", func() -> void: pass)
-	# Who there is to play against: every theme that has people in it. Robots
-	# cannot carry what a player carries, and are soldiers here.
+	# Who there is to play against: the robots, and every theme that has
+	# people in it.
 	var themes: Array[String] = ["soldiers"]
 	for theme: String in Settings.enemy_themes:
-		if not themes.has(theme) and not NOT_OFFERED.has(theme) and not Match.THEMES.cast(theme, "grunt", 0).is_empty():
+		if not themes.has(theme) and not NOT_OFFERED.has(theme) and (theme == Match.THEMES.ROBOTS or not Match.THEMES.cast(theme, "grunt", 0).is_empty()):
 			themes.append(theme)
 	var refresh := func() -> void:
 		var numbers: Dictionary = Match.kinds[chosen.mode]
@@ -57,7 +61,7 @@ static func build(menu: Node) -> void:
 		if chosen.size < int(numbers.least) or chosen.size > int(numbers.most):
 			chosen.size = int(numbers.size)
 		kind.text = "Kind  ·  %s" % numbers.title
-		arena.text = "Arena  ·  %s" % (chosen.level as String).capitalize()
+		arena.text = "Arena  ·  %s (%s)" % [(chosen.level as String).capitalize(), SIZES.get(chosen.level, "?")]
 		size.text = ("Players a side  ·  %d" if teams else "Players  ·  %d") % chosen.size
 		prize.visible = chosen.mode == "ctf" and not prizes.is_empty()
 		prize.text = "Prize  ·  %s" % str(PRIZE.spec(chosen.prize).get("name", chosen.prize))

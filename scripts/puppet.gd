@@ -14,6 +14,7 @@ extends CharacterBody3D
 ## its brain (scripts/bot.gd) instead of by what is heard of it.
 
 const HUMANOID := preload("res://scripts/humanoid_rig.gd")
+const ROBOT := preload("res://scripts/enemy_rig.gd")
 const WEAPONS := preload("res://scripts/weapons.gd")
 const ARMORY := preload("res://scripts/armory.gd")
 const GRENADE := preload("res://scenes/grenade.tscn")
@@ -38,6 +39,17 @@ const HEAD_START := 1.36
 const CROUCH_DROP := 0.65
 ## What marks somebody on the side of this machine's player in a match.
 const FRIEND := Color(0.35, 0.65, 1.0, 0.9)
+## A robot of the route, for a bot in a match whose side is robots: its
+## model, how wide and tall its body is to a shot, where its eyes are and
+## where its head starts, and its visor. As scenes/enemy.tscn and
+## scenes/enemy_heavy.tscn have them, so that a shot lands where it would on
+## the route.
+const ROBOTS := {
+	"grunt": {"model": "res://scenes/models/grunt.scn", "radius": 0.4, "height": 1.8, "eye": 1.5, "head": 1.36, "visor": Color(1.0, 0.15, 0.1)},
+	"heavy": {"model": "res://scenes/models/heavy.scn", "radius": 0.46, "height": 2.07, "eye": 1.72, "head": 1.56, "visor": Color(0.7, 0.1, 1.0)},
+}
+## A soldier, to a shot.
+const SOLDIER := {"radius": 0.35, "height": 1.8, "eye": EYE, "head": HEAD_START}
 
 ## The player it stands for, and what that one is called.
 var id := 0
@@ -62,8 +74,11 @@ var _label := Label3D.new()
 ## The layers it is on while it stands.
 var _layer := LAYER
 ## Who it is in a match, if not a soldier: {character, voice, tint}, as
-## scripts/enemy_themes.gd casts one.
+## scripts/enemy_themes.gd casts one, or {robot} with a kind of ROBOTS.
 var _look := {}
+## What it is to a shot: SOLDIER or one of ROBOTS.
+var _build := SOLDIER
+var _collider := CollisionShape3D.new()
 
 
 func _ready() -> void:
@@ -72,17 +87,10 @@ func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	visible = false
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.35
-	capsule.height = 1.8
-	var collider := CollisionShape3D.new()
-	collider.shape = capsule
-	collider.position.y = 0.9
-	# What a shot sounds like on it, see Fx.surface_of().
-	collider.set_meta(&"surface", "flesh")
-	add_child(collider)
-	head.position.y = EYE
+	_collider.shape = CapsuleShape3D.new()
+	add_child(_collider)
 	add_child(head)
+	_fit(SOLDIER)
 	_label.text = title
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.pixel_size = 0.003
@@ -101,6 +109,10 @@ func _dress() -> void:
 		remove_child(_rig)
 		_rig.queue_free()
 		_rig = null
+	if _look.has("robot"):
+		_robot(ROBOTS[_look.robot])
+		return
+	_fit(SOLDIER)
 	var number := absi(id) % CHARACTERS + 1
 	var path := CHARACTER % [number, number]
 	if team == 1 and ResourceLoader.exists(SECOND % [number, number]):
@@ -118,6 +130,38 @@ func _dress() -> void:
 		return
 	add_child(rig)
 	_rig = rig
+
+
+## Becomes a robot of the route. Its weapon is its arm, whatever of the
+## loadout it fires; the plate the grunt holds up on the route it has left
+## behind, for nothing it carries stops a shot here.
+func _robot(robot: Dictionary) -> void:
+	var rig: Node3D = (load(robot.model) as PackedScene).instantiate()
+	rig.name = "Model"
+	rig.set_script(ROBOT)
+	add_child(rig)
+	rig.set_glow(robot.visor)
+	rig.drop_shield()
+	_rig = rig
+	_fit(robot)
+
+
+## Is as wide and tall to a shot as `build` says, with its eyes and the
+## start of its head where that has them, and sounds like what it is made
+## of when a shot lands, see Fx.surface_of().
+func _fit(build: Dictionary) -> void:
+	_build = build
+	var capsule := _collider.shape as CapsuleShape3D
+	capsule.radius = build.radius
+	capsule.height = build.height
+	_collider.position.y = capsule.height * 0.5
+	_collider.set_meta(&"surface", "metal" if build.has("model") else "flesh")
+	head.position.y = build.eye
+
+
+## Where its eyes are, standing or ducked down.
+func _eyes() -> float:
+	return float(_build.eye) - (EYE - CROUCH_EYE if _doing & Net.CROUCHED else 0.0)
 
 
 func _physics_process(_delta: float) -> void:
@@ -144,7 +188,7 @@ func _physics_process(_delta: float) -> void:
 		global_position = from[1] + from[4] * clampf(ahead, 0.0, COAST)
 		rotation.y = from[2]
 	head.rotation.x = pitch
-	head.position.y = CROUCH_EYE if _doing & Net.CROUCHED else EYE
+	head.position.y = _eyes()
 
 
 func _process(_delta: float) -> void:
@@ -198,7 +242,7 @@ func net_state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int
 	_weapon = weapon
 	if down and not dead:
 		if _rig:
-			_rig.collapse(global_basis.z)
+			_collapse(global_basis.z)
 	elif not down and (dead or rearmed):
 		_dress()
 	dead = down
@@ -214,6 +258,8 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 	var data: WeaponData = ARMORY.at(weapon)
 	_rig.fire()
 	var muzzle: Vector3 = _rig.muzzle()
+	# What a robot fires glows the colour it does on the route.
+	var robot := _rig is ROBOT
 	var space := get_world_3d().direct_space_state
 	for i in ends.size():
 		var end := ends[i]
@@ -224,9 +270,13 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 		var hit := space.intersect_ray(query)
 		if hit and not hit.collider.has_method("is_headshot"):
 			Fx.impact(hit, along, ends.size() > 1)
-		if i % 3 == 0:
+		if i % 3 == 0 and robot:
+			Fx.tracer(muzzle, end, _rig.tracer_tint)
+		elif i % 3 == 0:
 			Fx.tracer(muzzle, end)
-	if not ends.is_empty():
+	if not ends.is_empty() and robot:
+		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, _rig.flash_prongs, _rig.flash_tint)
+	elif not ends.is_empty():
 		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, data.flash_prongs)
 	Sfx.play_at(data.shot_sound, muzzle)
 	if Match.active and not ends.is_empty():
@@ -281,7 +331,7 @@ func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1, look 
 
 ## True if a shot that landed at `at` is one to the head.
 func is_headshot(at: Vector3) -> bool:
-	return at.y - global_position.y > HEAD_START - (CROUCH_DROP if _doing & Net.CROUCHED else 0.0)
+	return at.y - global_position.y > float(_build.head) - (CROUCH_DROP if _doing & Net.CROUCHED else 0.0)
 
 
 ## A bot goes down, pushed along `push`.
@@ -293,7 +343,15 @@ func fall(push: Vector3) -> void:
 	velocity = Vector3.ZERO
 	_label.visible = false
 	if _rig:
-		_rig.collapse(push)
+		_collapse(push)
+
+
+## Goes down as what it is: a robot falls apart, with the sound it makes on
+## the route.
+func _collapse(push: Vector3) -> void:
+	_rig.collapse(push)
+	if _rig is ROBOT:
+		Sfx.play_at(_rig.sounds[&"death"], global_position)
 
 
 ## A bot is back on its feet at `pose`, as good as new.
