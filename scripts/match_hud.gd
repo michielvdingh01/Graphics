@@ -14,6 +14,10 @@ const LINES := 5
 const LINE_TIME := 6.0
 ## The most of a side the table shows under each other, in one column.
 const TALL := 10
+## How high the table may be, in pixels of a screen 1080 high: from under the
+## score and the lines under it to above what is written in the middle. A
+## long one has smaller type.
+const ROOM := 440.0
 
 var _ours := Label.new()
 var _theirs := Label.new()
@@ -73,11 +77,10 @@ func _ready() -> void:
 	_status.position.y += 46
 	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_status)
-	_board.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	# Under the score, down to no further than what stands in the middle.
+	_board.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 124)
 	_board.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_board.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_board.add_theme_constant_override("separation", 64)
-	_board.position.y -= 120
 	add_child(_board)
 	for column in _columns:
 		column.add_theme_font_size_override("font_size", 20)
@@ -128,9 +131,14 @@ func _process(delta: float) -> void:
 	_board.visible = over or Input.is_action_pressed("scoreboard")
 	if _board.visible:
 		var table := _table()
+		var lines := 0
+		for column in table:
+			lines = maxi(lines, column.count("\n") + 1)
+		var font := clampi(int(ROOM / (lines * 1.4)), 13, 20)
 		for i in _columns.size():
 			_columns[i].text = table[i] if i < table.size() else ""
 			_columns[i].visible = i < table.size()
+			_columns[i].add_theme_font_size_override("font_size", font)
 
 
 func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
