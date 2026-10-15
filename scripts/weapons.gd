@@ -346,8 +346,12 @@ var _smoke_due := false
 
 func _ready() -> void:
 	add_child(_rig)
-	# In a match everybody carries the pack of the match, see scripts/armory.gd.
+	# In a match everybody carries the pack of the match, see scripts/armory.gd;
+	# elsewhere the standard pack, or the one --pack=<name> asks for.
 	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else ARMORY.STANDARD
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
+			pack = arg.get_slice("=", 1)
 	equip(ARMORY.weapons(pack), ARMORY.grenades(pack))
 	_build_fill()
 	player.hit_from.connect(_on_hit)

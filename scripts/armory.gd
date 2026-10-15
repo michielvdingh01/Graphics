@@ -21,6 +21,16 @@ const ALL: Array[WeaponData] = [
 	preload("res://weapons/marksman.tres"),
 	preload("res://weapons/minigun.tres"),
 	preload("res://weapons/rocket_launcher.tres"),
+	preload("res://weapons/revolver.tres"),
+	preload("res://weapons/double_barrel.tres"),
+	preload("res://weapons/machine_pistol.tres"),
+	preload("res://weapons/bolt_rifle.tres"),
+	preload("res://weapons/battle_rifle.tres"),
+	preload("res://weapons/lmg.tres"),
+	preload("res://weapons/ppsh.tres"),
+	preload("res://weapons/mosin.tres"),
+	preload("res://weapons/trench_gun.tres"),
+	preload("res://weapons/colt.tres"),
 ]
 const FILE := "res://assets/packs.json"
 const STANDARD := "standard"

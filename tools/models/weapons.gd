@@ -24,6 +24,7 @@ const RUBBER := "rubber"
 const LENS := "sight_lens"
 const OPTIC := "scope_glass"
 const GLOW := "tritium"
+const WALNUT := "gun_walnut"
 
 ## A profile drawn from the weapon's right-hand side is in (ahead, up).
 const SIDE := Basis(Vector3.FORWARD, Vector3.UP, Vector3.RIGHT)
@@ -411,7 +412,7 @@ func _colt() -> void:
 		Vector2(-0.07, -0.011), Vector2(-0.079, -0.02), Vector2(-0.07, -0.045), Vector2(-0.086, -0.125), Vector2(-0.032, -0.135),
 		Vector2(-0.006, -0.05), Vector2(-0.004, -0.026), Vector2(0.078, -0.026), Vector2(0.078, -0.011),
 	], 0.025, 0.003)
-	_side("wood", [Vector2(-0.068, -0.05), Vector2(-0.082, -0.118), Vector2(-0.036, -0.127), Vector2(-0.016, -0.055)], 0.029, 0.003)
+	_side(WALNUT, [Vector2(-0.068, -0.05), Vector2(-0.082, -0.118), Vector2(-0.036, -0.127), Vector2(-0.016, -0.055)], 0.029, 0.003)
 	for side: float in [-1.0, 1.0]:
 		for at: Vector2 in [Vector2(-0.058, -0.06), Vector2(-0.045, -0.115)]:
 			_bar(STEEL, _at(at.x, at.y, side * 0.0145), _at(at.x, at.y, side * 0.0152), 0.0035, 10)
@@ -522,7 +523,7 @@ func _shotgun() -> void:
 ## The trench gun of 1944: the same pump action, in wood, with a bead for a
 ## sight, a lug for a bayonet and no shells on its side.
 func _trench_gun() -> void:
-	_pump_gun("trench_gun", "wood", true)
+	_pump_gun("trench_gun", WALNUT, true)
 
 
 ## A pump-action shotgun, its stock and forend of `furniture`; `trench` for
@@ -870,7 +871,7 @@ func _mag_hold(at: Vector3, lean := Vector3(0, 0.988, 0.152), radii := Vector2(0
 
 ## A butt stock of wood behind a receiver that ends `from` ahead of the
 ## origin, with a plate of steel at its heel.
-func _wood_stock(from: float, material := "wood") -> void:
+func _wood_stock(from: float, material := WALNUT) -> void:
 	_side(material, _chamfer([
 		Vector2(from, 0.012), Vector2(from - 0.06, 0.016), Vector2(-0.36, 0.01), Vector2(-0.366, -0.118), Vector2(-0.334, -0.121),
 		Vector2(-0.25, -0.054), Vector2(from - 0.04, -0.044), Vector2(from, -0.042),
@@ -895,8 +896,8 @@ func _double_barrel() -> void:
 	# The lever that breaks it open, on top behind the barrels.
 	_side(STEEL, [Vector2(-0.1, 0.012), Vector2(-0.06, 0.012), Vector2(-0.07, 0.02), Vector2(-0.11, 0.018)], 0.01, 0.0015)
 	_line(STEEL, [_at(0.0, -0.05), _at(0.004, -0.07), _at(-0.02, -0.085), _at(-0.07, -0.08), _at(-0.085, -0.05)], 0.003)
-	_section("wood", _chamfer([Vector2(-0.024, -0.04), Vector2(0.024, -0.04), Vector2(0.026, -0.014), Vector2(0.022, -0.006), Vector2(-0.022, -0.006), Vector2(-0.026, -0.014)], 0.004), 0.08, 0.3, 0.004)
-	_grip("wood")
+	_section(WALNUT, _chamfer([Vector2(-0.024, -0.04), Vector2(0.024, -0.04), Vector2(0.026, -0.014), Vector2(0.022, -0.006), Vector2(-0.022, -0.006), Vector2(-0.026, -0.014)], 0.004), 0.08, 0.3, 0.004)
+	_grip(WALNUT)
 	_wood_stock(-0.13)
 	_trigger_hand()
 	_support_hand(0.2, 0.024, "", 0.024)
@@ -928,12 +929,12 @@ func _ppsh() -> void:
 	_block(STEEL, _at(0.31, 0.024), Vector3(0.004, 0.012, 0.006), 0.0006)
 	_ring(STEEL, _at(0.31, 0.03), Vector3.FORWARD, 0.007, 0.0012)
 	# The stock, and the trigger guard under the receiver.
-	_side("wood", _chamfer([
+	_side(WALNUT, _chamfer([
 		Vector2(0.06, -0.016), Vector2(-0.12, -0.016), Vector2(-0.16, 0.012), Vector2(-0.39, 0.004), Vector2(-0.396, -0.115), Vector2(-0.364, -0.118),
 		Vector2(-0.26, -0.06), Vector2(-0.12, -0.05), Vector2(0.06, -0.05),
 	], 0.004), 0.038, 0.008)
 	_side(STEEL, [Vector2(-0.388, 0.005), Vector2(-0.394, -0.117), Vector2(-0.4, -0.117), Vector2(-0.394, 0.005)], 0.039, 0.002)
-	_grip("wood")
+	_grip(WALNUT)
 
 	part("Bolt")
 	_bar(STEEL, _at(-0.02, 0.004, 0.019), _at(-0.02, 0.004, 0.03), 0.0045, 10)
@@ -963,11 +964,11 @@ func _mosin() -> void:
 	_bar(STEEL, _at(-0.13), _at(0.07), 0.016, 8)
 	_bar(STEEL, _at(0.07), _at(0.74), 0.0092, 16)
 	_bar(STEEL, _at(0.07), _at(0.16), 0.0125, 16)
-	_side("wood", _chamfer([
+	_side(WALNUT, _chamfer([
 		Vector2(0.62, -0.002), Vector2(0.07, -0.002), Vector2(0.03, -0.012), Vector2(-0.13, -0.012), Vector2(-0.18, 0.006), Vector2(-0.4, -0.004),
 		Vector2(-0.405, -0.12), Vector2(-0.372, -0.122), Vector2(-0.24, -0.058), Vector2(-0.12, -0.045), Vector2(0.06, -0.045), Vector2(0.1, -0.026), Vector2(0.62, -0.02),
 	], 0.004), 0.034, 0.007)
-	_side("wood", [Vector2(0.16, 0.0), Vector2(0.45, 0.0), Vector2(0.45, 0.014), Vector2(0.16, 0.014)], 0.026, 0.005)
+	_side(WALNUT, [Vector2(0.16, 0.0), Vector2(0.45, 0.0), Vector2(0.45, 0.014), Vector2(0.16, 0.014)], 0.026, 0.005)
 	for ahead: float in [0.3, 0.6]:
 		_section(STEEL, _chamfer([Vector2(-0.019, -0.024), Vector2(0.019, -0.024), Vector2(0.019, 0.017), Vector2(-0.019, 0.017)], 0.006), ahead - 0.007, ahead + 0.007, 0.001)
 	_side(STEEL, [Vector2(-0.04, -0.045), Vector2(0.04, -0.045), Vector2(0.03, -0.06), Vector2(-0.03, -0.06)], 0.028, 0.002)
@@ -977,7 +978,7 @@ func _mosin() -> void:
 	_side(STEEL, [Vector2(0.11, 0.02), Vector2(0.15, 0.022), Vector2(0.15, 0.026), Vector2(0.11, 0.026)], 0.012, 0.001)
 	_block(STEEL, _at(0.73, 0.019), Vector3(0.003, 0.016, 0.006), 0.0005)
 	_ring(STEEL, _at(0.73, 0.022), Vector3.FORWARD, 0.0085, 0.0013)
-	_grip("wood")
+	_grip(WALNUT)
 
 	part("Bolt")
 	_bar(STEEL, _at(-0.08, 0.006), _at(-0.16, 0.006), 0.013, 12)
@@ -1248,7 +1249,7 @@ func _rocket_launcher() -> void:
 	_turned(STEEL, _at(0.46), Vector3.FORWARD, PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.026, 0.0), Vector2(0.026, 0.018), Vector2(0.022, 0.022), Vector2(0.0, 0.022)]), 24)
 	# Heat shields of wood, one for each hand, held by bands.
 	for span: Vector2 in [Vector2(-0.2, -0.03), Vector2(0.06, 0.32)]:
-		_bar("wood", _at(span.x), _at(span.y), 0.033, 20)
+		_bar(WALNUT, _at(span.x), _at(span.y), 0.033, 20)
 		for end: float in [span.x, span.y]:
 			_bar(STEEL, _at(end - 0.006), _at(end + 0.006), 0.035, 20)
 	# The block under the tube that the grip and the trigger hang from.

@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/bolt_rifle.scn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Bolt-action rifle"
+viewmodel = ExtResource("2")
+shot_sound = &"bolt_rifle_shot"
+damage = 105.0
+headshot_multiplier = 2.0
+rounds_per_minute = 45.0
+automatic = false
+max_range = 400.0
+falloff_start = 100.0
+falloff_end = 200.0
+min_damage_scale = 0.8
+mag_size = 5
+reserve_ammo = 25
+reload_time = 2.8
+hip_spread_deg = 4.0
+ads_spread_deg = 0.02
+move_spread_deg = 3.5
+bloom_per_shot_deg = 2.0
+recoil_pitch_deg = 4.0
+recoil_yaw_deg = 0.6
+ads_recoil_scale = 0.8
+kick_back = 0.09
+kick_rotation = 0.12
+ads_fov = 22.0
+ads_time = 0.45
+ads_move_scale = 0.4
+scoped = true
+flash_size = 0.4
+flash_prongs = 2
+bot_sight = 200.0
+bot_range = 40.0
+hip_offset = Vector3(0.1, -0.115, -0.3)
+ads_offset = Vector3(0, -0.067, -0.19)
+hip_rotation_deg = Vector3(1.5, 2.5, -2)

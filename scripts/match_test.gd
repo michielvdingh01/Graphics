@@ -420,6 +420,17 @@ func _run() -> void:
 	level.pressed.emit()
 	_check("and another through the difficulty", level.text == "Difficulty  ·  Hard" and Settings.difficulty == 2)
 	Settings.difficulty = 1
+	var pack_was: String = Settings.pack
+	var weapons_button: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Weapons"))[0]
+	var packs_seen := [weapons_button.text]
+	for i in 6:
+		weapons_button.pressed.emit()
+		if not packs_seen.has(weapons_button.text):
+			packs_seen.append(weapons_button.text)
+	print("  the packs on the screen: %s" % [packs_seen])
+	_check("and another through the packs of weapons, all six of them", packs_seen.size() == 6 and packs_seen.has("Weapons  ·  1944") and packs_seen.has("Weapons  ·  Pistols only"))
+	Settings.pack = pack_was
+	Menu.MATCH_MENU.chosen.pack = pack_was
 	var arenas: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Arena"))[0]
 	var places := [arenas.text]
 	for i in 4:
@@ -441,6 +452,19 @@ func _run() -> void:
 	print("  the works: %d spots, the ends %.0f m apart to walk, the nearest two of different sides %.0f m apart" % [Match.arena.spots.size(), Match.arena.walks[0][Match.arena.ends[1]], far])
 	Match.close()
 	_check("leaving it gives back the rules and what was saved", not Match.active and Settings.rules() == plain and Save.checkpoint == saved)
+
+	# A match with another pack: everybody carries it, the player and the bots.
+	var armory: GDScript = load("res://scripts/armory.gd")
+	_check("a match opens with the pack of 1944", Match.open({"mode": "tdm", "level": "factory", "size": 3, "pack": "1944"}) and Match.setup.pack == "1944")
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	var carried: Array = tree.current_scene.player.weapons.loadout
+	var pack_bots: Array = armory.bots("1944")
+	var bot_arms := Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot).map(func(who: RefCounted) -> String: return armory.at(who.weapon).display_name)
+	print("  1944: the player carries %s; the bots %s" % [carried.map(func(data: WeaponData) -> String: return data.display_name), bot_arms])
+	_check("the player carries its weapons on their keys, and every bot one of them", carried == armory.weapons("1944")
+		and Match.entrants.values().all(func(who: RefCounted) -> bool: return not who.bot or pack_bots.has(who.weapon)))
+	Match.close()
 
 	print("MATCH TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)

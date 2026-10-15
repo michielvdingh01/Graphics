@@ -3542,3 +3542,43 @@ Stap 1 raakt de bestanden die elk wapen raakt (`weapons.gd`, `net.gd`, `puppet.g
 - **Hoe het klinkt**, en of de raket snel genoeg is om nog te ontwijken of te traag om iemand te raken: 45 m/s is een eerste gok.
 - **Het rookspoor en de vlam** heb ik niet in beeld gehad, alleen het wapen in rust, gericht en halverwege het herladen.
 - **De plekken in de andere arena's**: alleen in de fabriek bekeken, als getal. Op het fabrieksterrein, in de centrale en in de duinen niet, en geen beeld van een rek in een level.
+
+### Stap 4: tien wapens, en alle zes pakketten (gebouwd)
+
+Op Michiels woord alle pakketten tegelijk. Alle zes staan nu op het scherm "Multiplayer" en zijn ook buiten een wedstrijd te dragen met `--pack=<naam>`, op de route of in de sandbox.
+
+**De wapens**, elk een model in `tools/models/weapons.gd` (met handen, en een versie voor wie het een ander ziet dragen), cijfers in `weapons/<naam>.tres` en eigen geluiden:
+
+| Wapen | Per treffer | Per minuut | Magazijn | Herladen | Richten | Pakket | Model |
+|---|---|---|---|---|---|---|---|
+| Revolver | 60 | 150 | 6, patroon voor patroon | 2,2 s | 0,15 s | Van dichtbij, Ver weg, Zwaar, Alleen pistolen | .44 met loop van zes duim en een cilinder met groeven |
+| Dubbelloops | 11 × 12 | 400 | 2, patroon voor patroon | 2,2 s | 0,22 s | Van dichtbij | twee lopen naast elkaar met een rib, notenhout |
+| Machinepistool | 17 | 1 300 | 20 | 1,4 s | 0,11 s | Van dichtbij, Alleen pistolen | het pistool met een compensator, een keuzeschakelaar en een lang magazijn |
+| Grendelgeweer | 105 | 45 | 5 | 2,8 s | 0,45 s, door de kijker | Ver weg | ronde kast in een tan kolf met wangstuk, zware gecanneleerde loop, mondingsrem, tweepoot |
+| Gevechtsgeweer | 50 | 330 | 20 | 2,3 s | 0,24 s | Ver weg | lange stalen kast, handguard met ribben, gasbuis, vlamdemper met sleuven, diopter |
+| Lichte mitrailleur | 25 | 700 | 100 | 4,5 s | 0,3 s | Zwaar | vierkante kast met klep, draaghandgreep, tweepoot, kist met band aan de linkerkant |
+| PPSh-41 | 17 | 1 000 | 71 | 2,6 s | 0,16 s | 1944 | ronde kast, geperforeerde mantel schuin afgesneden, trommel, kolf van notenhout |
+| Mosin-Nagant | 100 | 50 | 5, patroon voor patroon | 3,0 s | 0,45 s | 1944 | lange loop in notenhout tot bijna de monding, twee banden, rechte grendel |
+| Trench gun | 13 × 8 | 110 | 6, patroon voor patroon | 2,6 s | 0,22 s | 1944 | het pompgeweer in notenhout, met een korrel en een bajonetnok |
+| M1911 | 45 | 330 | 7 | 1,5 s | 0,13 s | 1944, Alleen pistolen | slede met platte zijden, stalen frame, haan en greepveiligheid, houten greepplaten |
+
+- **Gedeeld waar het kon.** Het pistool en het pompgeweer zijn in stukken gesplitst die de nieuwe wapens hergebruiken: de handen om een pistoolgreep (`_handgun_hands()`), het frame en de slede van het pistool (`_polymer_pistol()`), het pompgeweer (`_pump_gun()`), de kijker van het scherpschuttersgeweer (`_telescope()`), de greep van de linkerhand op een magazijn (`_mag_hold()`) en een kolf van hout (`_wood_stock()`). Pistool, pompgeweer en scherpschuttersgeweer komen er met evenveel driehoeken uit als ervoor. Kolven zijn van een nieuw materiaal, notenhout (`materials/gun_walnut.tres`); de hitteschilden van de raketwerper ook.
+- **Geluid.** Tien schoten, zwaar gelaagd uit de opnamen die er waren: de M1911 uit de 1911, de revolver uit de 1911 vertraagd met de knal van de Mosin erover, het machinepistool uit de Walther, het dubbelloops uit de Mossberg en de Nova met de Model 12, de trench gun uit de Model 12, de PPSh uit de andere opname van de PPSh dan de pistoolmitrailleur, de Mosin uit de Mosin, het grendelgeweer uit de Mosin vertraagd met de lage kant van de Carl Gustav en een rommel van drie seconden, het gevechtsgeweer uit de SKS en de mitrailleur uit de andere opname van de AK-47. Herladen: eigen geluiden voor de pistolen, het laden van de revolver, de Mosin, de trench gun en het dubbelloops; de rest deelt die van de karabijn. Beluisteren: `tools/hear.py <naam>_shot 600`, of `tools/hear.py reload revolver`.
+- **De balans** (`tools/weapon_sheet.py`, de bladen `benchmark/sheets/weapons_<pakket>.png`) telt nu de tijd om te richten mee. Zonder dat wint een geweer dat met één schot doodt overal. Waar elk wapen het snelst is, gericht of vanaf de heup:
+  - **Van dichtbij**: dubbelloops tot 6 m, machinepistool tot 11 m, pistoolmitrailleur tot 22 m, revolver daarboven;
+  - **Ver weg**: gevechtsgeweer tot 50 m, grendelgeweer daarboven, revolver vanaf de heup van 11 tot 17 m;
+  - **1944**: trench gun tot 6 m, PPSh vanaf de heup tot 17 m, de Mosin gericht daarboven;
+  - **Zwaar**: pompgeweer tot 6 m, de mitrailleur daarboven;
+  - **Alleen pistolen**: machinepistool tot 11 m, pistool tot 20 m, M1911 tot 46 m, revolver daarboven.
+
+  Het blad noemt nog als opmerking dat in 1944 de M1911 en in Zwaar de revolver op sommige afstanden sneller zijn dan het hoofdwapen. Dat ligt deels aan het blad, dat terugslag niet telt.
+- **Getest**: de selftest kijkt of alle zes pakketten aangeboden worden (dat doen ze nu allemaal) met twee tot vijf wapens. De wedstrijdtest kijkt of het scherm alle zes laat kiezen, en of in een potje met 1944 de speler PPSh, Mosin, trench gun en M1911 draagt op 1 tot 4 en elke bot een wapen uit dat pakket.
+- **Gezien**: `benchmark/sheets/weapons_in_view.jpg`, elk van de tien vanaf de heup en gericht, in de fabriek. Bij de eerste versie keek het oog bij de shotguns, de PPSh en de Mosin tegen de kast aan; dat is rechtgezet door het oog hoger en verder naar achteren te zetten.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe ze klinken.** Elk schot is gemaakt en op niveau gebracht, niet beluisterd. Vooral de PPSh en de mitrailleur hebben staarten van anderhalf tot twee seconden: bij 1 000 schoten per minuut klinken er zo'n twintig tegelijk.
+- **Hoe ze herladen er in beweging uitzien.** De magazijnwissel van de nieuwe wapens gebruikt de beweging van de karabijn met de greep naar het nieuwe magazijn verplaatst; het laden patroon voor patroon die van het pompgeweer. Alleen als stilstaand beeld gecontroleerd, en niet halverwege het herladen.
+- **De revolver en de M1911 van achteren** lijken op het pistool: wat ze anders maakt (de cilinder, de haan) zie je gericht nauwelijks.
+- **De steelhandgranaat van 1944** is er niet: dat pakket gooit dezelfde granaat als de rest.
+- **Bots en speciale wapens, en de slag van een ander**: stap 5 is niet gebouwd.
