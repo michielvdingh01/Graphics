@@ -12,6 +12,7 @@ extends EditorPlugin
 func _enter_tree() -> void:
 	var scene_path := OS.get_environment("BAKE_LIGHTMAPS")
 	if scene_path:
+		_out_of_sight()
 		_bake.call_deferred(scene_path)
 
 
@@ -21,6 +22,7 @@ func _bake(scene_path: String) -> void:
 	while EditorInterface.get_resource_filesystem().is_scanning():
 		await tree.process_frame
 	await tree.create_timer(1.0).timeout
+	_out_of_sight()
 	EditorInterface.open_scene_from_path(scene_path)
 	# The bake button sits in the toolbar of the 3D view, which is not always
 	# the view the editor comes up in.
@@ -126,3 +128,16 @@ func _press_bake(lightmap: LightmapGI) -> bool:
 func _finish(message: String, code: int) -> void:
 	print("Lightmap bake: ", message)
 	get_tree().quit(code)
+
+
+## On Windows the editor of a bake has a window (see tools/godot.sh): off the
+## screen with it, where it goes on drawing. Once when the plugin is loaded and
+## once more when the editor is up, which puts its window back in its place.
+## The editor remembers that place: tools/bake_lightmaps.py puts back what it
+## remembered before.
+func _out_of_sight() -> void:
+	if not OS.get_environment("GODOT_OUT_OF_SIGHT"):
+		return
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_position(Vector2i(-20000, -20000))

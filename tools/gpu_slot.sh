@@ -22,6 +22,9 @@
 #
 #   GPU_SLOT        the file, when it is not the usual one
 #   GPU_SLOT_WAIT   seconds to wait for the slot before giving up, 1800 by default
+#
+# Windows has no lockf: there tools/gpu_slot.py takes the slot, in
+# %APPDATA%/Godot/gpu-slot, and works the same.
 if [ $# -eq 0 ]; then
 	echo "usage: tools/gpu_slot.sh command [arguments]" >&2
 	exit 64
@@ -29,6 +32,11 @@ fi
 if [ -n "$GPU_SLOT_HELD" ]; then
 	exec "$@"
 fi
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*)
+	exec python3 "$(dirname "$0")/gpu_slot.py" "$@"
+	;;
+esac
 SLOT="${GPU_SLOT:-$HOME/Library/Application Support/Godot/gpu-slot}"
 WAIT="${GPU_SLOT_WAIT:-1800}"
 mkdir -p "$(dirname "$SLOT")"

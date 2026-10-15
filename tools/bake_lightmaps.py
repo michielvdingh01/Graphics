@@ -40,6 +40,7 @@ import re
 import subprocess
 import sys
 
+import host
 from scene_text import Scene
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -144,8 +145,7 @@ def drawing_godots():
     # By the name of the program that runs, not by its command line: a run of
     # another checkout that waits for the GPU slot is a shell with Godot's path
     # among its arguments, and draws nothing yet.
-    for line in subprocess.run(["ps", "-axo", "pid=,ucomm=,args="], capture_output=True, text=True).stdout.splitlines():
-        pid, program, started = (line.split(None, 2) + ["", ""])[:3]
+    for pid, program, started in host.processes():
         if program in ("Godot", "(Godot)") and "--headless" not in started:
             found.append((pid, started[:90]))
     return found
@@ -197,7 +197,7 @@ def main():
         # From here on with the GPU slot, for as long as the bake lasts: the
         # same once more, started by what takes the slot.
         slot = os.path.join(ROOT, "tools/gpu_slot.sh")
-        os.execv(slot, [slot, sys.executable, os.path.abspath(__file__)] + sys.argv[1:])
+        host.replace_with([slot, sys.executable, os.path.abspath(__file__)] + sys.argv[1:])
     for zone in wanted:
         print("%s %s: %s" % (name, zone, stale(zone) or "up to date, baked all the same"))
     others = drawing_godots()
@@ -208,7 +208,18 @@ def main():
         print("Bake when it is gone, or pass --anyway.")
         return 2
     env = dict(os.environ, BAKE_LIGHTMAPS=scene, BAKE_ZONES=",".join(wanted) if zoned else "")
-    done = subprocess.run([os.path.join(ROOT, "tools/godot.sh"), "--editor"], env=env)
+    # On Windows the bake moves the editor's window off the screen (see
+    # tools/godot.sh), and the editor remembers where its window was: what it
+    # remembered before is put back.
+    layout = os.path.join(ROOT, ".godot/editor/editor_layout.cfg")
+    remembered = open(layout, "rb").read() if os.path.exists(layout) else None
+    done = subprocess.run(host.command([os.path.join(ROOT, "tools/godot.sh"), "--editor"]), env=env)
+    if host.WINDOWS:
+        if remembered is not None:
+            with open(layout, "wb") as out:
+                out.write(remembered)
+        elif os.path.exists(layout):
+            os.remove(layout)
     if done.returncode != 0:
         print("The bake did not finish: nothing is taken for baked.")
         return done.returncode

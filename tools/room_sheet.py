@@ -30,8 +30,10 @@ import re
 import subprocess
 import sys
 
+import host
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
+FONT = host.FONT
 # Darker than this counts as nearly black, as a share of white.
 NEARLY_BLACK = 6
 
@@ -40,7 +42,7 @@ def shoot(checkout, level, poses, extra):
     """Has the benchmark of a checkout look from those poses: the pictures, in order."""
     command = [os.path.join(checkout, "tools/benchmark.sh"), "--quick", "--scene=res://scenes/%s.tscn" % level, "--at=" + ";".join(poses)]
     command += extra if any(option.startswith("--res=") for option in extra) else ["--res=1280x720"] + extra
-    done = subprocess.run(command, capture_output=True, text=True)
+    done = subprocess.run(host.command(command), capture_output=True, text=True)
     saved = re.search(r"Saved to (.+)", done.stdout)
     if done.returncode != 0 or not saved:
         print(done.stdout[-2000:] + done.stderr[-2000:])

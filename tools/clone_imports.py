@@ -16,7 +16,7 @@ Of each imported file that is missing here, or that was made of another
 version of its source than the one this checkout has now, the copy of the
 other checkout is taken when that one was made of this version: the checksum
 Godot keeps next to an imported file says of what. The copies are clones
-(cp -c), which take no room on the disk.
+(cp -c), which take no room on the disk; on Windows they are plain copies.
 
 The editor keeps a list of its own, .godot/editor/filesystem_cache10, with of
 every source the checksum of its .import file as it was when it was imported.
@@ -32,6 +32,8 @@ import os
 import re
 import subprocess
 import sys
+
+import host
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = ".godot/imported"
@@ -71,7 +73,7 @@ def imports():
 def clone(source, target):
     if os.path.exists(target):
         os.remove(target)
-    subprocess.run(["cp", "-c", source, target], check=True)
+    host.clone(source, target)
 
 
 def editor_list(checkout):
@@ -92,16 +94,18 @@ def editor_list(checkout):
 
 def open_editor():
     """The editor that has this checkout open, as ps shows it, or None."""
-    said = subprocess.run(["ps", "-axo", "pid=,ucomm=,args="], capture_output=True, text=True).stdout
-    for line in said.splitlines():
-        pid, program, started = (line.split(None, 2) + ["", ""])[:3]
+    for pid, program, started in host.processes():
         # Not a tool's run (tools/godot.sh gives those no sound) and not the
         # game the editor started, which reports back to it.
         if program not in ("Godot", "(Godot)") or "--headless" in started or "--audio-driver Dummy" in started or "--remote-debug" in started:
             continue
-        at = subprocess.run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"], capture_output=True, text=True).stdout
-        places = [found[1:] for found in at.splitlines() if found.startswith("n")]
-        places += re.findall(r"--path\s+(\S+)", started)
+        places = []
+        if not host.WINDOWS:
+            at = subprocess.run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"], capture_output=True, text=True).stdout
+            places = [found[1:] for found in at.splitlines() if found.startswith("n")]
+        # Windows quotes a path, and an editor opened from its project.godot names that.
+        places += [a or b for a, b in re.findall(r'--path\s+(?:"([^"]+)"|(\S+))', started)]
+        places += [os.path.dirname(a or b) for a, b in re.findall(r'"([^"]*project\.godot)"|(\S*project\.godot)', started)]
         if any(os.path.isdir(place) and os.path.samefile(place, ROOT) for place in places):
             return "%s %s" % (pid, started[:80])
     return None

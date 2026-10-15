@@ -410,7 +410,11 @@ def main() -> None:
     out = mixed(name, events, tuning, length)
     print(out.relative_to(ROOT))
     if "quiet" not in options:
-        subprocess.run(["afplay", str(out)], check=True)
+        if os.name == "nt":
+            import winsound
+            winsound.PlaySound(str(out), winsound.SND_FILENAME)
+        else:
+            subprocess.run(["afplay", str(out)], check=True)
 
 
 if __name__ == "__main__":

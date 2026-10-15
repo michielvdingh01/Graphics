@@ -21,11 +21,12 @@ import re
 import subprocess
 import sys
 
+import host
 from scene_text import Scene
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCALE = 22.0  # pixels to a metre
-FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
+FONT = host.FONT
 
 
 def numbers(text):
