@@ -521,6 +521,12 @@ func _profile_targets() -> Dictionary:
 	for light: Light3D in scene.find_children("*", "Light3D", true, false):
 		var label := "sun_shadow" if light is DirectionalLight3D else "lamp_shadows"
 		targets[label].append([light, "shadow_enabled"])
+		# The street lanterns of a town, their light and all: see lantern()
+		# in tools/kit/street.gd.
+		if light.has_meta(&"lantern"):
+			if not targets.has("lanterns"):
+				targets["lanterns"] = []
+			targets["lanterns"].append([light, "visible"])
 	# The parts of a level the builder keeps apart, the dust in the air and the lens pass.
 	for part: String in ["Props", "Decals", "Glass", "Dust", "Post"]:
 		var node := scene.find_child(part, true, false)
@@ -543,6 +549,10 @@ func _profile_targets() -> Dictionary:
 				targets[kind].append([mesh, "visible"])
 	if level and "culling" in level:
 		targets["zones"] = [[level, "culling"]]
+		# Off, the shells cast their own shadow instead of the boxes that
+		# stand in for them: what it costs is then what the model saves.
+		if not get_tree().get_nodes_in_group(&"shadow_model").is_empty():
+			targets["shadow_model"] = [[level, "shadow_model"]]
 		for part: String in ["Props", "Decals", "Glass", "Dust"]:
 			targets[part.to_lower()] = []
 			for node in level.find_children(part, "Node3D", true, false):

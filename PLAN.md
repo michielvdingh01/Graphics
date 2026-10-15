@@ -2920,3 +2920,104 @@ Op 15 oktober 2026 gevraagd: de ASUS klaarzetten om de grachten verder te bouwen
 | De proefkade bouwen, bakken en bekijken | `tools/build_level.sh quay`, `tools/bake_lightmaps.sh res://scenes/quay.tscn`, `tools/zone_sheet.py quay` |
 | Meten zoals op de ASUS gespeeld wordt | `tools/benchmark.sh --scene=res://scenes/canals.tscn --res=1920x1080 --upscaler=fsr2 --quality=3 --scale=auto` |
 | Een worktree opzetten | zie "De ASUS" in `CLAUDE.md` |
+
+## De grachten: stap 1, de proefkade en het licht
+
+Op 15 oktober 2026 gevraagd: stap 1 van "Hoe het verder gebouwd wordt" in "De grachten: het zesde level", op de ASUS. De proefkade met de lantaarn zoals hij is, natte klinkers, het schaduwmodel van dozen voor de schil, één gevel helemaal af, en de eerste echte bake: 8 tegen 16 cm, en hoe korrelig een nacht bakt. Gebouwd en gemeten op de ASUS, op de branch `grachten`; niets gepusht. Het blad: `benchmark/sheets/quay_step1.jpg`.
+
+**Wat er staat**
+
+- **De lantaarn zoals hij is** (`lantern()` in `tools/kit/street.gd`). De ritter van de kaden: een gietijzeren paal op een voet van drie lijsten, een trommel waar het wapen van de stad op gegoten zou staan, een kroonlijst en een hals, een schacht die naar boven smaller wordt, een kraag met de ladderstang en een knop aan elk eind, en een dop waar de lantaarn in zit. De kop is vier ruiten die naar boven wijder worden, met een glazen bodem, in een frame van twee ringen en vier stijlen, onder een uitstekende rand, een schilddak en een ventiel met een knop. De kroon van de bruggen staat op een zwaardere voet, is een vijfde groter en draagt de vergulde keizerskroon van het wapen: een band, vier bogen en een rijksappel met een kruis. Het ijzer is bijna zwart groen (`materials/lantern_iron.tres`), het glas gloeit (`lantern_glass.tres`). Een ritter is 1230 driehoeken, een kroon 2882; ze gaan op in de meshes van het detail, dus een lantaarn is geen tekenopdracht erbij. De wandlantaarn heeft dezelfde kop aan zijn arm; de mast is nog de doos van de greybox.
+- **Wat van een lantaarn schaduw werpt**: de paal en de kap. De kap houdt het licht van de lucht en van de gevels hoog boven de straat; de paal werpt zijn schaduw onder de buurlantaarn, en onder zijn eigen licht een donkere plek van een halve meter om zijn voet. Het frame, het glas, de ladderstang en de kroon werpen er geen: zie "Wat de proefkade leerde".
+- **Natte klinkers** (`shaders/wet_klinkers.gdshader`, `materials/klinkers.tres`): `floor_klinkers_04`, een klinker van ruim 20 cm. De stenen zijn de helft donkerder en hebben een glans, in de voegen staat water, tot de rand waar de straat zakt, en in plassen waar ze verder zakt. Het water in de voegen en de plassen is vlak en spiegelt: de lange strepen licht onder elke lantaarn. Waar de voegen zitten leest de shader af aan de ambient occlusion van de scan. Hoe nat het is, is één getal (`wetness`) in het materiaal; het weer van stap 4 maakt daar een globale van. `street_paving()` legt nu klinkers, de brug ligt in kinderkopjes (`cobbles.tres`, dezelfde shader op `cobblestone_floor_08`), de kademuur is van `church_bricks_03` (`quay_brick.tres`).
+- **Het schaduwmodel van dozen** (`shadow_box()` in `tools/level_builder.gd`, `scripts/zones.gd`). Een level met `_shadow_model = true`, de proefkade en de stad, krijgt per zone een mesh van dozen die alleen schaduw werpt, in één materiaal, en de schil van de zone werpt in het spel geen schaduw meer: `scripts/zones.gd` zet die uit. Een doos per huis, van zijn eaves tot de straat en 30 cm achter zijn voorgevel (`HOUSE_SET_BACK`); een per kademuur, onder de rand van de kade; een per tree van een stoep, per stuk brugdek en borstwering en per trapje naar het water (de vlag `CASTS` op een doos van de schil). Wat op straat staat werpt zijn eigen schaduw: bomen, auto's, palen en mensen. Daarvoor zijn de iep en de auto uit de schil naar het detail gegaan, en heeft het detail een vlag `NO_SHADOW` gekregen voor wat het model vervangt: ramen, deuren, gevels boven de goot, daken. In de bake verandert niets: de editor kent `scripts/zones.gd` niet, dus de schil houdt daar haar schaduw, en het model zit niet in de bake en niet in de handtekening ervan. `--undo=shadow_model` laat de schil weer zelf schaduw werpen, en `--profile` meet het verschil (`shadow_model`) en wat de lantaarns kosten (`lanterns`).
+- **Eén gevel helemaal af** (`_canal_front()` in `tools/kit/houses.gd`): een grachtenhuis met een halsgevel, het vierde huis van de noordrij van de proefkade (`DRESSED` in `tools/levels/quay.gd`). Een plint van blauwe hardsteen met een kelderraam met spijlen; een stoep van vier treden en een bordes langs de gevel, met een smeedijzeren hek met balusters, en de deur aan het bordes: geschilderd groen met panelen, een knop en een brievenbus, een bovenlicht met vijf spijlen in een waaier, en een omlijsting van zandsteen met pilasters en een kroonlijstje. Op elke verdieping drie schuiframen, 10 cm in de baksteen teruggelegd, met witte kozijnen, een kalf, roeden en een zandstenen dorpel; achter het donkere glas spiegelt de straat, achter een verlicht raam brandt een kamer met gordijnen die half dicht zijn (`shaders/lit_window.gdshader`). Op de goot de schouders van zandsteen, en daarop de hals: een zolderluik van twee deuren, de hijsbalk met zijn haak, aan elke kant een klauwstuk van zandsteen, hoekblokken en een fronton. Erachter het zadeldak. Wat je raakt en waar je tegenaan loopt is hetzelfde als bij het grijze huis: de doos van het huis en de twee dozen van de grijze stoep. Het trapje van de noordkade is van x = 22 naar x = 36 verhuisd, zodat er een ritter voor het huis staat.
+- **De grijze huizen** blijven grijs, met twee dingen anders: een verlicht raam gloeit op 2 in plaats van 6 (`window_glow.tres`), en een donker raam is glas (`window_glass.tres`) in plaats van staal, dat de baksteen van de overkant spiegelde.
+- **De eerste bake van de proefkade**, op 16 cm. Hij staat niet in git, zoals "Wat de ASUS doet" zegt: `tools/build_level.sh quay` en `tools/bake_lightmaps.sh res://scenes/quay.tscn` maken hem in een halve minuut.
+
+**Achterhaald in "De grachten: het zesde level, de voorbereiding"**: "de lantaarns gloeiende dozen" (op de mast na), "Er is niets gebakken" (de proefkade wel, buiten git), en "Of 16 cm genoeg is, is niet te zeggen zonder bake".
+
+**Gemeten** op de ASUS op 15 oktober tussen 11:05 en 11:31, aan de lader met een volle accu, met niemand anders op de GPU en de processor op 1% voor de metingen begonnen.
+
+De bake van de proefkade, één zone, `BAKE_QUALITY_HIGH`, vier kaatsingen, de denoiser van Godot:
+
+| | 16 cm | 8 cm |
+|---|---|---|
+| Texels (de maat die de bouwer vraagt) | 550 × 554 | 1014 × 1022 |
+| Atlas, vier lagen (gericht licht) | 1024² | 2048² |
+| Op schijf, `.exr` en `.lmbake` | 2,8 en 0,8 MB | 7,6 en 0,8 MB |
+| In het geheugen van de kaart, BPTC, naar schatting | 4 MB | 16 MB |
+| Bakken | 3,5 s (de eerste keer 8,5 s, met het inlezen van de texturen) | 7,3 s |
+| Bakken met de editor erbij | 29 tot 34 s | 29 s |
+
+Wat een lantaarn en een voorbijganger kosten: 1920×1080, Ultra, FSR 2, renderschaal vanzelf (bleef 100%), 200 beelden aanloop en 600 gemeten per standpunt, vijf standen om en om, drie ronden. Standpunt A kijkt onder de ritter door naar het aangeklede huis, B langs de noordkade. Op de kade staan zes lantaarns: twee ritters en vier kronen, alle zes binnen bereik. De voorbijganger is een soldaat die op de plek loopt (`--spawn` met `--animate`), 1,9 m van de ritter en 11 m van een kroon: binnen het bereik van die twee.
+
+| Stand | A: ms (fps) | Tekenopdrachten | Driehoeken | B: ms (fps) | Tekenopdrachten | Driehoeken |
+|---|---|---|---|---|---|---|
+| Niemand | 3,91 (256) | 44 | 15 duizend | 4,21 (238) | 53 | 19 duizend |
+| De zes lantaarns uit | 3,42 (293) | 44 | 15 duizend | 3,59 (279) | 53 | 19 duizend |
+| Een voorbijganger die stilstaat | 4,02 (249) | 57 | 40 tot 42 duizend | 4,30 (233) | 66 | 44 tot 46 duizend |
+| Een voorbijganger die loopt | 4,14 (242) | 165 | 155 tot 164 duizend | 4,34 (230) | 188 | 176 tot 186 duizend |
+| Hetzelfde, en de schil werpt zelf schaduw | 4,08 (245) | 273 | 157 tot 167 duizend | 4,37 (229) | 296 | 179 tot 188 duizend |
+
+De drie ronden van een stand lagen nooit meer dan 0,12 ms uit elkaar; de driehoeken met iemand erbij verschillen per ronde met de stand van zijn benen.
+
+- **Een lantaarn kost 0,08 tot 0,10 ms per beeld** zolang er niets beweegt: de zes samen 0,49 en 0,62 ms, en geen tekenopdracht en geen driehoek, want een schaduw die niets nieuws te zien krijgt wordt niet opnieuw getekend. Wat hij aan meetkunde is, 1230 of 2882 driehoeken, valt weg tegen de rest.
+- **Een voorbijganger kost 121 tekenopdrachten en 140 duizend driehoeken**, en 0,13 tot 0,23 ms. Stilstaand is hij 13 tekenopdrachten en 26 duizend driehoeken; lopend tekenen de twee lantaarns binnen bereik hun schaduw elk beeld opnieuw, zes richtingen elk: 108 tekenopdrachten erbij.
+- **Het schaduwmodel scheelt dezelfde voorbijganger nog eens 108 tekenopdrachten**: 229 waar het er 121 zijn. In milliseconden is het in grijs niet te zien (4,08 tegen 4,14 en 4,37 tegen 4,34): de schil van de proefkade is nu 848 driehoeken in tien materialen. Hoe de schil zwaarder wordt, gevel na gevel, zo zwaar wordt elke lopende voorbijganger zonder het model: zes keer de materialen van de schil per lantaarn waar hij onder loopt.
+- **Het keurmerk** (`tools/zone_sheet.py quay`, op de begroting: 2560×1440, FSR 2, 67%): 58 tot 61 tekenopdrachten, 19 duizend driehoeken, 243 tot 263 fps, zes lantaarns met schaduw in beeld, lightmap bij. De proefkade valt erdoor op "no decal": er ligt nergens een decal, en ze is geen level om te spelen.
+- **Wat het kostte aan code**: 550 regels erbij in de drie laden, de bouwer en de twee levels, waarvan 334 in de huizen (bijna alles de ene gevel) en 160 in de straat (bijna alles de lantaarns); 42 in de scripts van het spel en het gereedschap; 83 regels shader.
+- **De stad met de nieuwe stukken**, ongebakken, de zes vaste standpunten op dezelfde instelling als de tabel: 162 tot 469 tekenopdrachten, 42 tot 174 duizend driehoeken, 202 tot 268 fps. Bouwen duurt 74 s, waarvan 62 s de opmeting; de proefkade 4,9 s.
+
+**Wat de proefkade leerde**
+
+- **16 cm is genoeg, bij nacht.** Met alleen het gebakken licht in beeld (de lantaarns en de volumetrische mist uit, het beeld vijf keer lichter gemaakt) is tussen 16 en 8 cm niets te zien: niet op de straat onder de ramen, niet op de stoep, niet in de neggen van de ramen. Wat gebakken wordt is wat de straat van een lantaarn terugkaatst en het licht van de ramen, en dat is zacht. 8 cm kost twee keer de baktijd, 2,7 keer de schijfruimte en vier keer het geheugen van de kaart: de 1014 × 1022 texels passen met hun randen net niet in een atlas van 1024.
+- **Een nacht bakt niet korrelig**, op `HIGH` met de denoiser. Vier bakes naast elkaar: de ramen van het aangeklede huis met een lamp in de kamer achter het glas, als gloeiend glas in de bake, en als glas dat zes keer zo fel gloeit, op 16 cm, en de lamp op 8 cm. In geen ervan korrel of vlekken. Het verschil zit in hoeveel licht er op straat komt: glas dat er in het spel goed uitziet geeft in de bake bijna niets, en zes keer zo fel nog altijd minder dan de lamp. De lamp erachter blijft dus, maar om een andere reden dan "Het licht" zei: met een lamp is het licht op straat los van hoe fel het glas is. Een lamp maakt de bake niet trager: 3,5 s met de drie lampen en 3,8 s met het glas. Of een stad met honderden lampen achter glas even snel bakt, is niet gemeten.
+- **Het frame van een lantaarn wierp harde vierkanten.** Met alles van de kop in de schaduw tekende de ring onder de ruiten een vierkant van drie meter om de voet, de dop eronder een donkere schijf, de ladderstang een streep van 2,5 m en de stijlen vier stralen. Een echte lantaarn heeft een bron van een hand breed, en wat zo dicht bij die bron zit vervaagt op straat tot niets. Nu werpen alleen de paal en de kap schaduw. Een zachte rand die met de afstand meegroeit (`light_size`) zou het eerlijker doen, en ook de schaduw van wie eronder loopt scherp bij zijn voeten en zacht verderop maken; dat is niet geprobeerd, en het opzoeken van de schaduw is al het duurste van een lamp (zie `scripts/settings.gd`).
+- **Een doos die gelijk ligt met de gevel zet het raam in zijn eigen schaduw.** Het glas staat 10 cm in de muur, dus binnen de doos van het huis. De doos staat nu 30 cm achter de gevel; wat ervoor uitsteekt, een dorpel, een kroonlijst, werpt daardoor ook geen schaduw op de gevel, alleen de stoep.
+- **De mist neemt de gevels weg.** Zonder volumetrische mist staan de halsgevel en de daklijn van de rij tegen de lucht; met de mist, zoals besloten, is vanaf de overkant boven de twaalf meter niets meer te zien dan de verlichte ramen. Wie de gevels wil laten spreken moet het daar zoeken: een lucht die lichter is dan de gevels, of mist die naar boven dunner wordt. Niet aangeraakt.
+- **De texturen van Poly Haven waren als plaatje ingelezen.** De zes van 14 oktober hadden nog nooit in 3D gestaan; de eerste keer dat de editor ze zag, bij de bake, las hij ze opnieuw in met mipmaps en compressie voor de kaart. Hun `.import`-bestanden zijn daardoor veranderd en meegecommit; wie ze in een andere checkout gebruikt, kloont de bestanden uit `.godot/imported/` van deze worktree mee. Wat de benchmark voor die bake tekende, tekende ze zonder mipmaps.
+- **Glas dat breekt is een doos per ruit.** `scripts/breakables.gd` maakt van het glas van een zone ruiten die stuk kunnen, en waarschuwde bij het glas van de lantaarns en de verlichte ramen. Die zijn nu detail zonder schaduw; breken kunnen ze niet.
+- **`tools/zone_sheet.py` telde de lampen achter het glas mee** voor de schaduwatlas, twee plaatsen elk, terwijl ze in het spel verdwijnen. Een lamp waarvan al het licht gebakken is, telt nu niet meer mee.
+
+**Buiten de bestanden van het level geraakt**
+
+- `tools/level_builder.gd`: de vlaggen `NO_SHADOW`, `CASTS` en `SHADOW_ONLY`, `_shadow_model`, `shadow_box()`, de soorten mesh "shadow" en "unshadowed" in `_tool()` en `_commit()`, en wat een schot vindt in de nieuwe materialen (`_surface()`). Zonder die vlaggen en zonder `_shadow_model` verandert er niets: zie "Gecontroleerd".
+- `scripts/zones.gd`: de schaduw van de schil uit waar een zone een schaduwmodel heeft, en `shadow_model` om dat terug te draaien. `scripts/settings.gd`: `shadow_model` in `UNDO`. `scripts/benchmark.gd`: `lanterns` en `shadow_model` in `--profile` en `--off`.
+- `tools/zone_sheet.py`: een gebakken lamp telt niet voor de schaduwatlas.
+- Nieuw: de shaders `wet_klinkers` en `lit_window`, en de materialen `klinkers`, `cobbles`, `quay_brick`, `canal_brick`, `sandstone`, `bluestone`, `lantern_iron`, `lantern_glass`, `window_paint`, `window_glass`, `window_lit`, `window_glow` en `front_door`.
+- `tools/levels/canals/plan.gd` zet het schaduwmodel aan voor de stad.
+
+**Gecontroleerd, en wat niet**
+
+- `tools/test_canals.sh`: 18 van 18, op de stad en de proefkade zoals ze nu bouwen.
+- **De andere levels komen er gelijk uit, op de ASUS.** `tools/build_check.py` vergelijkt met wat de MacBook bouwde en noemt hier dus alles veranderd. In plaats daarvan zijn de zeven andere levels en alle modellen hier twee keer gebouwd, met de bouwer en de laden zoals ze gecommit waren en zoals ze nu zijn, en naast elkaar gelegd: van de 858 bestanden verschilt er geen. De meshes zijn byte voor byte gelijk en de scènes op wat erin staat; 30 modellen, binaire scènes, verschilden byte voor byte en zijn als tekst gelijk, zoals `tools/build_check.py` ze vergelijkt. Twee keer bouwen kostte samen 7 minuten. Daarna is teruggezet wat de MacBook bouwde.
+- `tools/selftest.sh` slaagt, 399 van 399 in 411 s, na de laatste wijziging aan de code.
+- **De bake van de proefkade is bij** (`tools/bake_lightmaps.sh res://scenes/quay.tscn --list`), op de stand die gecommit is.
+- **Op de MacBook is niets hiervan gedraaid**, en daar zijn de milliseconden te meten die voor de begroting tellen.
+
+**Niet kunnen beoordelen**
+
+- **Niets in beweging gezien.** De voorbijganger loopt op de plek; door de straat lopen, onder een lantaarn door, en wat zijn schaduw dan doet tegen de gevel, is niet bekeken. Het is een soldaat en geen voetganger.
+- **Of de lantaarns het goede licht geven.** Kleur, sterkte en bereik zijn niet afgesteld (`LANTERNS` in `tools/kit/street.gd`); het glas gloeit zo fel dat het frame in de gloed verdwijnt.
+- **Of de halsgevel klopt.** Hij is uit mijn hoofd: de verhoudingen van de hals, de klauwstukken (een gebogen plaat, geen beeldhouwwerk), het fronton zonder versiering, de roeden. Het dak is van het golfplaat van de greybox, er is geen goot, geen huisnummer en geen bel.
+- **De plassen.** Op de beelden zijn er weinig; de klinkers zijn overal even nat.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| De proefkade bouwen en bakken (een halve minuut, buiten git) | `tools/build_level.sh quay`, `tools/bake_lightmaps.sh res://scenes/quay.tscn` |
+| Het aangeklede huis van dichtbij, met een voorbijganger | `tools/benchmark.sh --quick --scene=res://scenes/quay.tscn --res=1920x1080 --upscaler=fsr2 --quality=3 --scale=auto --enemies=soldiers --spawn="res://scenes/enemy.tscn@18.0,0,7.4,-90,1,2" --at="27,1.7,4.5,90,4"` |
+| Wat een lantaarn en een voorbijganger kosten | hetzelfde zonder `--quick`, met `--warmup=200`, en om en om: `--off=lanterns`, `--animate`, `--undo=shadow_model` |
+| Alleen het gebakken licht zien | `--off=lanterns,volumetric_fog` |
+| Een ander huis van de noordrij aankleden | `DRESSED` in `tools/levels/quay.gd` |
+| Hoe nat de straat is | `wetness` en `puddle_amount` in `materials/klinkers.tres` |
+| Het blad opnieuw | de beelden hierboven, samengezet; het script staat niet in de repo |
+
+**Nog open**
+
+- Stap 2 tot 7 van "Hoe het verder gebouwd wordt". De huizenmaker kan bij `_canal_front()` beginnen: dezelfde plattegrond van een huis, en wat erop staat hangt af van het soort gevel.
+- De mast is nog een doos, en de kroon van een brug staat naast de brug op de kade, niet op de borstwering.
+- Een bake van de stad. Met het schaduwmodel en de klinkers erin bouwt ze en loopt de test; ze is niet gebakken en niet gemeten met mensen erin.
+- `wetness` is een getal per materiaal en nog geen globale; de grijze huizen gloeien nog als vlak in de bake.

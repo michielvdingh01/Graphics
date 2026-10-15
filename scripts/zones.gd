@@ -11,7 +11,10 @@ extends Node3D
 ## The shell of a zone, its lightmapped walls, floor and roof, is never
 ## switched off but left to cast its shadow: without it the sun would shine
 ## into the zones next to it through the doorways. The same goes for what
-## moves in that shell, such as the shutter at an exit.
+## moves in that shell, such as the shutter at an exit. A level can have a
+## model of boxes cast that shadow instead, see shadow_box() in
+## tools/level_builder.gd: the shell then casts none, and the model is never
+## switched off either.
 ##
 ## The robots are not part of any zone, but one that stands in a zone that is
 ## switched off is behind the same walls, and is not drawn either.
@@ -88,6 +91,17 @@ var lamps_bound := true:
 				light.light_cull_mask = _held[light] if value else EVERY_LAYER
 				light.shadow_caster_mask = _held[light] if value else EVERY_LAYER
 
+## Switch off to have the shells of the zones cast their own shadow, as they
+## did before, instead of the model of boxes that stands in for them
+## (--undo=shadow_model).
+var shadow_model := true:
+	set(value):
+		shadow_model = value
+		_shown = {}
+		for zone in _zones:
+			for model: GeometryInstance3D in zone.shadow_models:
+				model.visible = value
+
 ## Switch off to draw whatever of a zone in sight is in view, behind a wall
 ## or not (--undo=occlusion).
 var occlusion := true:
@@ -124,6 +138,8 @@ func _ready() -> void:
 			"node": node,
 			"contents": node.get_node("Contents"),
 			"shells": _shells(node),
+			"shadow_models": _shadow_models(node),
+			"shell": node.get_node_or_null("Static"),
 			"lightmap": node.get_node_or_null("LightmapGI"),
 		})
 	# A benchmark can ask for either to be left as it was, see UNDO in
@@ -132,6 +148,7 @@ func _ready() -> void:
 	if settings:
 		lamps_bound = not settings.undone("lamps")
 		occlusion = not settings.undone("occlusion")
+		shadow_model = not settings.undone("shadow_model")
 	_wall_off()
 	_bind_lamps()
 
@@ -146,13 +163,22 @@ func _exit_tree() -> void:
 func _shells(zone: Node) -> Array[GeometryInstance3D]:
 	var shells: Array[GeometryInstance3D] = []
 	for child in zone.get_children():
-		if child.name == &"Contents" or child.is_in_group("bake_blocker"):
+		if child.name == &"Contents" or child.is_in_group("bake_blocker") or child.is_in_group("shadow_model"):
 			continue
 		if child is GeometryInstance3D:
 			shells.append(child)
 		for part: GeometryInstance3D in child.find_children("*", "GeometryInstance3D", true, false):
 			shells.append(part)
 	return shells
+
+
+## The boxes that cast the shadow of the shell of a zone, if it has them.
+func _shadow_models(zone: Node) -> Array[GeometryInstance3D]:
+	var models: Array[GeometryInstance3D] = []
+	for child in zone.get_children():
+		if child.is_in_group("shadow_model"):
+			models.append(child)
+	return models
 
 
 func _process(_delta: float) -> void:
@@ -184,9 +210,11 @@ func _process(_delta: float) -> void:
 	for zone in _zones:
 		var on: bool = shown.has(zone.name)
 		zone.contents.visible = on
+		var boxed: bool = shadow_model and not zone.shadow_models.is_empty()
 		for shell: GeometryInstance3D in zone.shells:
 			shell.cast_shadow = (
-				GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on
+				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if boxed and shell == zone.shell
+				else GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on
 				else GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 			)
 

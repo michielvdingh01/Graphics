@@ -1,0 +1,13 @@
+[gd_resource type="ORMMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/brick_wall_10/brick_wall_10_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/brick_wall_10/brick_wall_10_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/brick_wall_10/brick_wall_10_arm.jpg" id="arm"]
+
+[resource]
+albedo_texture = ExtResource("diff")
+orm_texture = ExtResource("arm")
+normal_enabled = true
+normal_texture = ExtResource("nor")
+ao_enabled = true
+uv1_scale = Vector3(0.6, 0.6, 0.6)

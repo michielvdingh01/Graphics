@@ -21,6 +21,8 @@ const BRIDGE_X := 6.0
 const BRIDGE_WIDE := 9.0
 ## How far from the edge of the water the trees and lanterns stand.
 const KERB := 2.3
+## The houses of the north row, counted from the west, that are dressed.
+const DRESSED: Array[int] = [3]
 
 
 func _level_name() -> String:
@@ -30,13 +32,15 @@ func _level_name() -> String:
 func _describe() -> void:
 	# As the town has them: see tools/levels/canals/plan.gd.
 	_texel = 0.16
+	_shadow_model = true
 	_detail_block = Vector3(36, 400, 36)
 	zone("quay", [AABB(Vector3(0, -4, LINES[0]), Vector3(LONG, 20, LINES[3] - LINES[0]))])
 	in_zone("quay")
 	street_paving(Rect2(0, LINES[0], LONG, LINES[1] - LINES[0]))
 	street_paving(Rect2(0, LINES[2], LONG, LINES[3] - LINES[2]))
 	canal(Rect2(0, LINES[1], LONG, LINES[2] - LINES[1]), "we")
-	terrace(Vector2(0, LINES[0]), Vector2(LONG, LINES[0]), "canal")
+	# One house of the row as they are all to be, see _canal_front().
+	terrace(Vector2(0, LINES[0]), Vector2(LONG, LINES[0]), "canal", 12.0, {"dressed": DRESSED})
 	terrace(Vector2(LONG, LINES[3]), Vector2(0, LINES[3]), "grand")
 	var from := Vector3(BRIDGE_X, 0, LINES[2] + 1.0)
 	var to := Vector3(BRIDGE_X, 0, LINES[1] - 1.0)
@@ -44,14 +48,16 @@ func _describe() -> void:
 	for end: Vector3 in [from, to]:
 		for side: float in [-1.0, 1.0]:
 			lantern(Vector3(end.x + side * (BRIDGE_WIDE * 0.5 + 0.5), 0, end.z + signf(to.z - from.z) * (0.4 if end == from else -0.4)), "crown")
-	var steps := PackedVector3Array([Vector3(22.0, 0, LINES[1]), Vector3(30.0, 0, LINES[2])])
+	# The steps of the north quay keep clear of the lantern before the
+	# dressed house.
+	var steps := PackedVector3Array([Vector3(36.0, 0, LINES[1]), Vector3(30.0, 0, LINES[2])])
 	kerb_line(Vector3(BRIDGE_X + 7.0, 0, LINES[1] - KERB), Vector3(LONG - 1.0, 0, LINES[1] - KERB), "ritter", 0.6, steps)
 	kerb_line(Vector3(BRIDGE_X + 7.0, 0, LINES[2] + KERB), Vector3(LONG - 1.0, 0, LINES[2] + KERB), "ritter", 0.6, steps)
 	water_steps(steps[0], 0.0)
 	water_steps(steps[1], 180.0)
 	# Where the town would go on: a hoarding at either end, from the bed up.
 	for x: float in [-0.2, LONG + 0.2]:
-		box("roof", Vector3(x, 1.15, (LINES[0] + LINES[3]) * 0.5), Vector3(0.4, 5.7, LINES[3] - LINES[0]))
+		box("roof", Vector3(x, 1.15, (LINES[0] + LINES[3]) * 0.5), Vector3(0.4, 5.7, LINES[3] - LINES[0]), Vector3.ZERO, CASTS)
 	probe("Quay", Vector3(LONG * 0.5, 7.0, (LINES[0] + LINES[3]) * 0.5), Vector3(LONG, 18.0, LINES[3] - LINES[0]), Vector3(0, -5.0, 0))
 	by_position()
 	route_start(Vector3(BRIDGE_X, 0, LINES[3] - 3.0), Vector3(LONG, 0, LINES[2] + 4.0))

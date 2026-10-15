@@ -87,7 +87,9 @@ def main():
                 numbers = [float(n) for n in found.group(1).split(",")]
                 views = [numbers[i:i + 5] for i in range(0, len(numbers), 5)]
         kinds = [level.nodes[p] for p in level.below(path)]
-        shadows = [n["kind"] for n in kinds if n["kind"] in ("OmniLight3D", "SpotLight3D") and "shadow_enabled = true" in n["lines"]]
+        # A lamp whose light is all in the lightmap is there for the bake
+        # alone, see scripts/bake_only.gd: in the game it takes no place.
+        shadows = [n["kind"] for n in kinds if n["kind"] in ("OmniLight3D", "SpotLight3D") and "shadow_enabled = true" in n["lines"] and "light_bake_mode = 1" not in n["lines"]]
         zones[zone] = {
             "views": views,
             "sees": sees,

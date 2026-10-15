@@ -33,8 +33,10 @@ func canal(area: Rect2, open := "") -> void:
 
 ## The wall a quay stands on, along the edge of the water from `from` to
 ## `to`, x and z, as somebody sees it who is on the water: `from` on his left
-## and `to` on his right. It is seen from the water alone, down to the bed.
-func quay_wall(from: Vector2, to: Vector2, mat := "brick") -> void:
+## and `to` on his right. It is seen from the water alone, down to the bed,
+## and throws its shadow as a box under the edge of the quay: without it, a
+## lantern on the quay would light the water at the foot of the wall.
+func quay_wall(from: Vector2, to: Vector2, mat := "quay_brick") -> void:
 	var right := (to - from).normalized()
 	var out := Vector2(-right.y, right.x)
 	var length := from.distance_to(to)
@@ -44,6 +46,7 @@ func quay_wall(from: Vector2, to: Vector2, mat := "brick") -> void:
 	var high := CANAL_BED - 0.02
 	wall_face(mat, frame * Transform3D(Basis(), Vector3(0, -0.02 - high * 0.5, 0)), Vector2(length, high))
 	_collide_box(frame * Transform3D(Basis(), Vector3(0, -CANAL_BED * 0.5 - 0.25, -0.3)), Vector3(length, CANAL_BED + 0.5, 0.6), _surface(mat))
+	shadow_box(frame * Transform3D(Basis(), Vector3(0, -CANAL_BED * 0.5 - 0.25, -0.3)), Vector3(length, CANAL_BED + 0.5, 0.6))
 
 
 ## Steps down to the water at `at` on the edge of a quay, the water lying the
@@ -52,9 +55,9 @@ func quay_wall(from: Vector2, to: Vector2, mat := "brick") -> void:
 func water_steps(at: Vector3, yaw_deg: float) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), at)
 	var run := (CANAL_BED - LANDING_BELOW) / tan(deg_to_rad(28.0))
-	_local_box("concrete", frame, Vector3(0, -LANDING_BELOW - 0.15, 0.7), Vector3(2.2, 0.3, 1.4))
+	_local_box("concrete", frame, Vector3(0, -LANDING_BELOW - 0.15, 0.7), Vector3(2.2, 0.3, 1.4), CASTS)
 	var slope := Transform3D(Basis(Vector3.BACK, deg_to_rad(-28.0)), Vector3(1.1 + run * 0.5, -(CANAL_BED + LANDING_BELOW) * 0.5 - 0.13, 0.7))
-	_box("concrete", frame * slope, Vector3(run / cos(deg_to_rad(28.0)), 0.3, 1.4), 0)
+	_box("concrete", frame * slope, Vector3(run / cos(deg_to_rad(28.0)), 0.3, 1.4), CASTS)
 
 
 ## A bridge over a canal from `from` to `to`, the middles of its two ends
@@ -69,7 +72,7 @@ func water_steps(at: Vector3, yaw_deg: float) -> void:
 ## one: -1 for the left of somebody who walks from `from` to `to`, 1 for his
 ## right. A quay carried over a mouth has one only on the side of the
 ## canal that runs into it, so that another bridge can come down on it.
-func bridge(from: Vector3, to: Vector3, width: float, rise := 1.2, mat := "brick", deck := 0.4, parapets: Array[float] = [-1.0, 1.0]) -> void:
+func bridge(from: Vector3, to: Vector3, width: float, rise := 1.2, mat := "quay_brick", deck := 0.4, parapets: Array[float] = [-1.0, 1.0]) -> void:
 	var along := (to - from).normalized()
 	var across := along.cross(Vector3.UP)
 	var span := from.distance_to(to)
@@ -82,6 +85,6 @@ func bridge(from: Vector3, to: Vector3, width: float, rise := 1.2, mat := "brick
 		var b := from + along * span * t1 + Vector3.UP * rise * (1.0 - pow(2.0 * t1 - 1.0, 2.0))
 		var lie := Basis.looking_at(b - a, Vector3.UP)
 		var middle := (a + b) * 0.5
-		_box("floor", Transform3D(lie, middle + lie.y * -deck * 0.5), Vector3(width, deck, a.distance_to(b) + 0.06), 0)
+		_box("cobbles", Transform3D(lie, middle + lie.y * -deck * 0.5), Vector3(width, deck, a.distance_to(b) + 0.06), CASTS)
 		for side: float in parapets:
-			_box(mat, Transform3D(lie, middle + across * side * (width * 0.5 - 0.2) + lie.y * 0.45), Vector3(0.4, 0.9, a.distance_to(b) + 0.06), 0)
+			_box(mat, Transform3D(lie, middle + across * side * (width * 0.5 - 0.2) + lie.y * 0.45), Vector3(0.4, 0.9, a.distance_to(b) + 0.06), CASTS)

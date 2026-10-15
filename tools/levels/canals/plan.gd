@@ -132,6 +132,9 @@ func _plan() -> void:
 	# what the street throws back will do for a block of it.
 	_detail_block = Vector3(36, 400, 36)
 	_texel = TEXEL_NIGHT
+	# Under a lantern the houses and the quays throw the shadow of a box, see
+	# shadow_box() in tools/level_builder.gd.
+	_shadow_model = true
 	_zone("heren", Rect2(WEST_END, HEREN[0], EAST_END - WEST_END, HEREN[3] - HEREN[0]))
 	_zone("spiegelstraat_north", Rect2(SPIEGELSTRAAT[0], HEREN[3], SPIEGELSTRAAT[1] - SPIEGELSTRAAT[0], KEIZERS[0] - HEREN[3]))
 	_zone("vijzelstraat_north", Rect2(VIJZELSTRAAT[0], HEREN[3], VIJZELSTRAAT[1] - VIJZELSTRAAT[0], KEIZERS[0] - HEREN[3]))

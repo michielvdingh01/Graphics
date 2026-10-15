@@ -55,6 +55,14 @@ const EXPLOSIVE_LAYERS := 0b10001
 const DETAIL := 1  # thin or far geometry: no lightmap, lit by probes instead
 const NO_COLLIDE := 2
 const GLASS := 4  # transparent: no lightmap, no shadow
+## Detail that casts no shadow of its own, where the shadow model of the level
+## stands in for it: the frames of a window, a gable. See shadow_box().
+const NO_SHADOW := 8
+## A box of the shell that casts its shadow all the same, in a level whose
+## shell casts none: it goes into the shadow model as well. See shadow_box().
+const CASTS := 16
+## What the shadow model is made of, see shadow_box(): it is never seen.
+const SHADOW_ONLY := 32
 ## Vertex colour of a point that is nowhere near an edge, see _edge().
 const NO_EDGE := Color(0.5, 0.5, 1.0, 1.0)
 ## Floor paint: its resolution in pixels per metre, and the colours in use.
@@ -146,6 +154,9 @@ var _sight_reach := INF
 ## The size of a texel of the lightmaps of this level, in metres: TEXEL
 ## unless a level says otherwise.
 var _texel := TEXEL
+## Whether the shell of every zone casts its shadow in the game itself, or a
+## model of boxes does it in its stead, see shadow_box().
+var _shadow_model := false
 
 
 func _init() -> void:
@@ -1912,6 +1923,8 @@ func beam(mat: String, from: Vector3, to: Vector3, width: float, flags := 0, hei
 
 
 func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
+	if flags & CASTS:
+		shadow_box(xf, size)
 	var st := _tool(mat, flags, xf.origin)
 	var half := size * 0.5
 	for n: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]:
@@ -1934,6 +1947,24 @@ func _box(mat: String, xf: Transform3D, size: Vector3, flags: int) -> void:
 			[_edge(Vector2(0, 0), face), _edge(Vector2(1, 0), face), _edge(Vector2(1, 1), face), _edge(Vector2(0, 1), face)])
 	if not flags & NO_COLLIDE:
 		_collide_box(xf, size, _surface(mat))
+
+
+## A box of the shadow model of the level, in a level that has one: it casts
+## the shadow of what the shell of the zone has there, and is never seen.
+##
+## A lamp that throws a shadow draws it in six directions, each time with all
+## that lies within its reach, and draws it anew whenever something moves in
+## that reach: whoever walks under it. The shell of a zone is one mesh, and
+## dressed it is a whole stretch of canal, each of its materials one more
+## draw. So in a level that says so, the shell throws no shadow in the game
+## and a box for each house, quay wall and stoop throws it instead, all of
+## them one mesh in one material: scripts/zones.gd switches the shadow of the
+## shell off. What stands about, the cars, the trees, the posts, throws its
+## own, and so does the shell in the bake.
+func shadow_box(xf: Transform3D, size: Vector3) -> void:
+	# A part that the game moves throws its own.
+	if _shadow_model and _moving == null:
+		_box("concrete", xf, size, SHADOW_ONLY | NO_COLLIDE)
 
 
 ## Box whose edges and corners are rounded off over `radius`, for anything
@@ -2399,6 +2430,8 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 		return _tool_named("%s|%s/%s" % [_movers[_moving][0], _movers[_moving][1], mat])
 	var zone_name := _zone_at(at)
 	var kind := "glass" if flags & GLASS else ("detail" if flags & DETAIL else "static")
+	if flags & SHADOW_ONLY:
+		return _tool_named("%s|shadow/%s" % [zone_name, mat])
 	if kind == "detail":
 		# A mesh without a lightmap takes its indirect light from the probes at
 		# one point, its middle. Detail is therefore cut into blocks, so that
@@ -2409,9 +2442,9 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 			# What sits in or on a wall belongs to the block on the inside of it.
 			at = at.clamp(_detail_inside.position + Vector3.ONE, _detail_inside.end - Vector3.ONE)
 		elif zone_name == "":
-			return _tool_named("|detail far/" + mat)
+			return _tool_named("|%s far/%s" % ["unshadowed" if flags & NO_SHADOW else "detail", mat])
 		var block := Vector3i((at / _detail_block + Vector3(0.5, 0, 0)).floor())
-		kind = "detail %d %d %d" % [block.x, block.y, block.z]
+		kind = "%s %d %d %d" % ["unshadowed" if flags & NO_SHADOW else "detail", block.x, block.y, block.z]
 	return _tool_named("%s|%s/%s" % [zone_name, kind, mat])
 
 
@@ -2445,10 +2478,14 @@ func _material(mat: String) -> Material:
 ## unmarked.
 func _surface(mat: String) -> String:
 	match mat:
-		"concrete", "plaster", "plaster_dado", "floor":
+		"concrete", "plaster", "plaster_dado", "floor", "klinkers", "cobbles", "sandstone", "bluestone":
 			return ""
 		"brick", "wood":
 			return mat
+		"canal_brick", "quay_brick":
+			return "brick"
+		"front_door", "window_paint":
+			return "wood"
 		"rubber":
 			return "soft"
 	return "metal"
@@ -2522,8 +2559,14 @@ func _commit(zone_name: String, kind: String) -> void:
 		"glass":
 			instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		"shadow":
+			instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			instance.add_to_group(&"shadow_model", true)
 		_:
 			instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+			if kind.begins_with("unshadowed"):
+				instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if mover:
 		instance.name = "Mesh"
 		instance.gi_mode = GeometryInstance3D.GI_MODE_STATIC
@@ -2532,8 +2575,9 @@ func _commit(zone_name: String, kind: String) -> void:
 	elif zone_name == "":
 		_add(instance, _root)
 		_root.move_child(instance, 0)
-	elif kind == "static":
-		# The shell stays beside the rest of the zone, see zone().
+	elif kind == "static" or kind == "shadow":
+		# The shell stays beside the rest of the zone, see zone(), and so does
+		# what throws its shadow for it.
 		_add(instance, _zones[zone_name].node)
 		_zones[zone_name].node.move_child(instance, 0)
 	else:

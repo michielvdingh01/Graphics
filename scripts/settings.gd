@@ -91,8 +91,10 @@ const SUN_ATLAS_BEFORE: Array[int] = [2048, 4096, 4096, 8192]
 ## - ssao: SSAO at medium quality, as project.godot had them: it now asks for
 ##   a linear filter and low quality, 0.2 ms each and nothing to be seen;
 ## - lamps: every lamp lights whatever is in its range, see scripts/zones.gd;
-## - occlusion: what a wall hides is drawn all the same, see scripts/zones.gd.
-const UNDO: Array[String] = ["ssil", "lamp_filter", "sun_atlas", "fringe", "glow", "ssao", "lamps", "occlusion"]
+## - occlusion: what a wall hides is drawn all the same, see scripts/zones.gd;
+## - shadow_model: the shell of a zone casts its own shadow, where the level
+##   has a model of boxes do it, see scripts/zones.gd.
+const UNDO: Array[String] = ["ssil", "lamp_filter", "sun_atlas", "fringe", "glow", "ssao", "lamps", "occlusion", "shadow_model"]
 const LENS := preload("res://shaders/post.gdshader")
 const LENS_ABERRATION := preload("res://shaders/post_aberration.gdshader")
 const FRINGE := preload("res://scripts/lens_fringe.gd")

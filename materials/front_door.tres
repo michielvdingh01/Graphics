@@ -1,0 +1,10 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/wood_planks/wood_planks_nor_gl.jpg" id="nor"]
+
+[resource]
+albedo_color = Color(0.03, 0.065, 0.05, 1)
+roughness = 0.28
+normal_enabled = true
+normal_scale = 0.3
+normal_texture = ExtResource("nor")

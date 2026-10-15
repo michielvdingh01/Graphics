@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/lit_window.gdshader" id="shader"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("shader")
+shader_parameter/room = Color(1, 0.68, 0.4, 1)
+shader_parameter/energy = 1.6
