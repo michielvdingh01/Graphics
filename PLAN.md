@@ -2864,3 +2864,59 @@ Bij het overzetten vond `tools/test_canals.sh` dat de helft van de trapjes binne
 - De ramen zijn gloeiende vlakken, de lantaarns gloeiende dozen, de auto's dozen, de iepen stammen zonder kroon.
 - De borden boven de deuren en de naam op de metro ontbreken: een opschrift vraagt een regel in het manifest.
 - `tools/level_map.py` tekent geen water: wat onder de vloer ligt slaat het over. Het blad met de plattegrond is daarom apart getekend, uit dezelfde maten, met een script dat niet in de repo staat.
+
+## De ASUS: het gereedschap op Windows
+
+Op 15 oktober 2026 gevraagd: de ASUS klaarzetten om de grachten verder te bouwen. Dat is de opdracht van 13 oktober uit "Wat de ASUS doet", uitgevoerd op de ASUS zelf. Achterhaald hierboven: "De Windows-kant bestaat nog niet", en vraag 5 over de kaart.
+
+**De machine.** Windows 11, AMD Ryzen 7 7435HS, 16 GB geheugen, NVIDIA GeForce RTX 4060 Laptop GPU met 8 GB (driver 566.26), een scherm van 1920×1080 en 289 GB vrij op de schijf. Godot draait er op Vulkan, op de RTX en niet op de geïntegreerde kaart.
+
+**Wat er staat**
+
+- De hoofdcheckout `C:\dev\Graphics` op de trunk, en daarin de worktree `.claude/worktrees/grachten` op deze branch. Die stond eerst in OneDrive; daar hoort een checkout van een paar GB niet.
+- Godot 4.7.2 in `C:\dev\tools\godot\`, met `GODOT` naar de console-versie; Python 3.14 met `python3` en `PYTHONUTF8=1`; ImageMagick 7.1.2 met librsvg; Git LFS. Git commit als Michiel.
+- In de branch `windows`, vanaf het punt waar de trunk en `grachten` uiteengingen zodat hij in beide past: wat er op Windows anders moet. `CLAUDE.md` zegt het onder "De ASUS".
+  - `tools/gpu_slot.sh` laat op Windows het slot nemen door `tools/gpu_slot.py`: een lock van Windows zelf, die vrijkomt als het proces weg is.
+  - `tools/godot.sh` start op Windows een gewoon venster, want de embedded modus is er niet. `scripts/benchmark.gd` en `addons/bake_cli/plugin.gd` maken het onzichtbaar en zetten het buiten beeld (`GODOT_OUT_OF_SIGHT`). De benchmark tekent daar op de maat van `--res`, ook al heeft het venster die van het scherm.
+  - `tools/host.py`: wat de Python-tools op beide machines anders moeten. Een shellscript gaat op Windows via sh, processen komen van PowerShell in plaats van `ps`, een kloon wordt een kopie en het lettertype staat op een andere plek. `bake_lightmaps.py`, `build_check.py`, `clone_imports.py`, `zone_sheet.py`, `room_sheet.py` en `level_map.py` gebruiken het.
+  - `tools/match_times.py` doet de `touch -r`-lus voor een nieuwe worktree in acht seconden. `tools/shots.sh` roept `magick montage` aan, `tools/hear.py` speelt af met `winsound` en `.gitattributes` houdt tekst op LF.
+- Hier op `grachten` zelf: `tools/canals_sheet.py` vraagt ImageMagick om librsvg als `rsvg-convert` er niet is.
+
+**Gemeten** op 15 oktober tussen 9:30 en 10:15, aan de lader met een volle accu en met niemand anders op de GPU. Elke regel is één run.
+
+| | ASUS | MacBook (hierboven) |
+|---|---|---|
+| Alles importeren, de trunk met 44 lightmaps | 1680 s | zes minuten |
+| Wat `grachten` anders heeft, met een gekopieerde cache | 50 s | |
+| Bouwen: de proefkade en de stad | 4,6 s en 51 s | 1,3 s en 37 s |
+| `tools/test_canals.sh` | 18 van 18 | 18 van 18 |
+| De proefkade bakken, de eerste keer en daarna | 10,8 s en 3,5 s bakken; 62 s en 25 s met de editor erbij | |
+| `tools/zone_sheet.py quay` op de begroting (2560×1440, FSR 2, 67%) | 229 tot 276 fps, 29 tot 33 tekenopdrachten | |
+| `tools/selftest.sh` op de trunk, en hier met de wijzigingen | 399 van 399 in 357 s, en 399 van 399 in 344 s | |
+| De zes standpunten van de stad, 1920×1080, Ultra, FSR 2, renderschaal vanzelf (bleef 100%), zonder vijanden | 209 tot 252 fps, het traagste honderdste 170 tot 212 | 83 tot 95 fps op 3456×2160 met MetalFX |
+
+**Wat de ASUS leerde**
+
+- **Wat de ASUS bouwt is niet wat de MacBook bouwt.** De meshes van de vleugel, op de ASUS herbouwd, verschillen byte voor byte van die in git (de bestanden zijn gecomprimeerd en een paar bytes langer of korter); twee keer bouwen op de ASUS geeft wel dezelfde. Vermoedelijk rondt de x86 een float anders af dan de M1, maar dat is niet nagegaan. Wat hierboven onder "Wat de ASUS doet" staat, klopt dus: een level wordt op één machine gebouwd en gebakken. `tools/build_check.py` noemt op de ASUS elk level van de MacBook veranderd.
+- **Godot op Windows legt het venster zelf neer.** `--position` buiten het scherm negeert hij, en een verplaatsing vanuit de eerste autoload draait hij terug zodra hij het venster laat zien. Pas vanaf het eerste beeld blijft ze staan. Daardoor staat het venster vijf seconden in beeld bij een run en zes bij een bake, zonder de focus te nemen; daarna is het onzichtbaar en ook niet in de taakbalk te zien. `DisplayServer.window_get_position()` zegt intussen al waar het naartoe moest, dus nagaan kan alleen met Windows zelf.
+- **De editor onthoudt waar zijn venster stond**, in `.godot/editor/editor_layout.cfg`. Na de eerste bake stond daar -20000, -20000; nu zet de bake dat bestand terug.
+- **Een venster dat niet de verhouding van `--res` heeft**, leverde beelden van 1954×1080 op in plaats van 1920×1080, door `stretch/aspect="expand"`.
+- **De tests en de bladen werken zonder meer**, zodra `GODOT` goed staat: de shellscripts draaien in Git Bash met CRLF of LF.
+
+**Niet gedaan, en niet gecontroleerd**
+
+- **Op de MacBook is niets hiervan gedraaid.** Elke wijziging doet op macOS wat er stond: de nieuwe takken in de shellscripts kijken naar `uname`, die in de spelscripts naar `GODOT_OUT_OF_SIGHT`, en `tools/host.py` geeft op macOS dezelfde aanroepen door. Toch moet de MacBook na het samenvoegen `tools/selftest.sh`, `tools/benchmark.sh --quick` en `tools/bake_lightmaps.sh --list` draaien.
+- De kaart van de BGT en de 3DBAG staat nog niet op de ASUS: `tools/fetch_map.py`, ongeveer 96 MB. Zonder kaart tekent `tools/canals_sheet.py` alleen het level.
+- Blender staat er niet op, en het gereedschap voor personages en de prijzen van de trunk is niet nagelopen. Dat gebruikt nog `metalfx` en macOS-lettertypen.
+- `tools/level_cost.sh` en andere `--script`-runs zonder spel blijven in beeld.
+- Er is niets gepusht en niets in de trunk gezet. `CLAUDE.md` zegt nog "niet pushen", terwijl de ASUS volgens het plan gebouwde en gebakken grachten pusht: die regel is aan Michiel.
+- De gebakken proefkade (`scenes/quay_quay.exr`, `.lmbake` en `quay_bakes.json`) is een proef en staat niet in git.
+
+**Werkwijze op de ASUS**
+
+| Stap | Hoe |
+|---|---|
+| Kijken of de ASUS vrij is | `ps -W \| grep -i '[g]odot'` |
+| De proefkade bouwen, bakken en bekijken | `tools/build_level.sh quay`, `tools/bake_lightmaps.sh res://scenes/quay.tscn`, `tools/zone_sheet.py quay` |
+| Meten zoals op de ASUS gespeeld wordt | `tools/benchmark.sh --scene=res://scenes/canals.tscn --res=1920x1080 --upscaler=fsr2 --quality=3 --scale=auto` |
+| Een worktree opzetten | zie "De ASUS" in `CLAUDE.md` |

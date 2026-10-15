@@ -9,12 +9,14 @@ there (tools/fetch_map.py): where the level is drawn after.
     tools/canals_sheet.py            benchmark/sheets/canals_plan.png
 
 Build the level first (tools/build_level.sh canals). It needs rsvg-convert:
-ImageMagick's own SVG renderer drops dashes and turned text.
+ImageMagick's own SVG renderer drops dashes and turned text. Without it, as on
+the ASUS, ImageMagick is asked for librsvg, which its Windows build has.
 """
 import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -190,7 +192,10 @@ def main():
     svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" font-family="Arial">' % (width, bottom + M), '<rect width="100%" height="100%" fill="#f3f0e8"/>'] + parts + ["</svg>"]
     path = OUT[:-4] + ".svg"
     open(path, "w").write("\n".join(svg))
-    subprocess.run(["rsvg-convert", "-o", OUT, path], check=True)
+    if shutil.which("rsvg-convert"):
+        subprocess.run(["rsvg-convert", "-o", OUT, path], check=True)
+    else:
+        subprocess.run(["magick", "rsvg:" + path, OUT], check=True)
     os.remove(path)
     print(OUT)
 
