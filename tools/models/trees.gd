@@ -51,21 +51,32 @@ const SHEETS := {NEEDLES: "res://assets/foliage/pine_sprigs.json", LEAVES: "res:
 ## tree is drawn from afar as it was before there were pictures.
 const FAR_PICTURE := "pine_far"
 const FAR_SHEET := "res://assets/foliage/pine_far.json"
-## From how far off a tree is its Mid and its Far, how much further it has to
-## go before it changes back, and how far its Far carries. A bush, which is
-## small, is itself up to FAR. SHADE_END is how far off a tree still throws
-## a shadow: as far as the sun's shadow reaches in the dunes, 110 m.
+## From how far off a tree is its Mid and its Far, and how far its Far
+## carries. A bush, which is small, is itself up to FAR. SHADE_END is how far
+## off a tree still throws a shadow: as far as the sun's shadow reaches in the
+## dunes, 110 m.
 const NEAR := 21.0
 const FAR := 62.0
 const SHADE_END := 112.0
+## Over how many metres either side of NEAR one drawing gives way to the
+## next a tuft at a time, see shaders/tree_lod.gdshaderinc, and over how
+## many before and beyond FAR. Wider is smoother and costs more, for in
+## between the tree is drawn twice over.
+const NEAR_BLEND := 3.0
+const FAR_BLEND := 5.0
 ## How much thinner than the limb itself the limb is that throws its shadow:
 ## it has fewer sides, and its corners would stand out of the limb that is
 ## seen and stripe it with their own shadow, a seam of saw-teeth down every
 ## trunk.
 const SHADE_TRUNK := 0.8
 const SHADE_LIMB := 0.68
+## How much further than SHADE_END a tree has to be before it no longer
+## throws a shadow, and the other way: the shadow does not give way, it goes.
 const MARGIN := 4.0
 const FAR_END := 420.0
+## What a tree is in the game: it hands its drawings what they need to give
+## way to one another.
+const TREE := "res://scripts/tree.gd"
 ## What is to the right on a picture of a sprig, what is up and what comes
 ## towards whoever looks, for each side it was pictured from: in the frame of
 ## the sprig, which grows along X with Y up.
@@ -124,6 +135,9 @@ var _ends := 0
 var _young := false
 ## What the bark of this tree is tinted with, over what all bark is.
 var _bark_cast := Color.WHITE
+## The drawings of the tree that give way to one another, by part: over
+## which distances each comes in and goes out, see _seen().
+var _shown := {}
 
 
 func _describe() -> void:
@@ -551,9 +565,6 @@ func _far_card(picture: Dictionary) -> void:
 		st.set_uv(uvs[i])
 		st.set_uv2(Vector2(points[i].x, 0.0))
 		st.add_vertex(points[i])
-	# What is drawn reaches as far before and behind the stem as the card
-	# does to its sides, which the mesh does not say.
-	(_parts[_current].node as MeshInstance3D).extra_cull_margin = size.x * 0.5
 
 
 ## The tufts of the tree by what they have in common: the bough they are on
@@ -568,14 +579,59 @@ func _grouped(by: String) -> Dictionary:
 
 
 ## Says of the part that is being built from how far off it is seen, and
-## whether it throws a shadow.
+## whether it throws a shadow. At NEAR and at FAR it gives way to the next
+## drawing, or that to it. Near, it does so over NEAR_BLEND metres either
+## side of NEAR, a tuft of the one where the same tuft of the other is not.
+## Far, the one card comes in over FAR_BLEND metres before FAR and the
+## nearer drawing goes over as many beyond it: a card and the limbs it is a
+## picture of have nothing in common, and so they are both there for a
+## while rather than neither. A part that only throws a shadow is there or
+## not.
 func _seen(from: float, to: float, shadow: GeometryInstance3D.ShadowCastingSetting) -> void:
 	var mesh := _parts[_current].node as MeshInstance3D
-	mesh.visibility_range_begin = from
-	mesh.visibility_range_begin_margin = MARGIN if from > 0.0 else 0.0
-	mesh.visibility_range_end = to
-	mesh.visibility_range_end_margin = MARGIN
 	mesh.cast_shadow = shadow
+	if shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+		mesh.visibility_range_end = to
+		mesh.visibility_range_end_margin = MARGIN
+		return
+	var coming := Vector2.ZERO
+	if from == NEAR:
+		coming = Vector2(NEAR - NEAR_BLEND, NEAR + NEAR_BLEND)
+	elif from == FAR:
+		coming = Vector2(FAR - FAR_BLEND, FAR)
+	var going := Vector2.ZERO
+	if to == NEAR:
+		going = Vector2(NEAR - NEAR_BLEND, NEAR + NEAR_BLEND)
+	elif to == FAR:
+		going = Vector2(FAR, FAR + FAR_BLEND)
+	mesh.visibility_range_begin = coming.x
+	mesh.visibility_range_end = going.y if going.y > 0.0 else to
+	_shown[_current] = Vector4(coming.x, coming.y, going.x, going.y)
+
+
+## Before the tree is written out: its drawings say what scripts/tree.gd is to
+## hand their shaders, and all are, to the renderer, a box around the foot of
+## the tree. The renderer measures how far off a drawing is from the middle of
+## its box, and the shaders from the foot: in one box the two agree, and every
+## drawing changes over at the same distance. The box is as wide as the
+## widest of them, the card from afar turned any way, and reaches as far
+## under the ground as the tree stands over it.
+func _finish() -> void:
+	if _shown.is_empty():
+		return
+	var reach := 0.0
+	var high := 0.0
+	for part: String in _shown:
+		var box := (_parts[part].node as MeshInstance3D).get_aabb()
+		for corner: Vector3 in [box.position, box.end]:
+			reach = maxf(reach, maxf(absf(corner.x), absf(corner.z)))
+			high = maxf(high, absf(corner.y))
+	for part: String in _shown:
+		var mesh := _parts[part].node as MeshInstance3D
+		mesh.custom_aabb = AABB(Vector3(-reach, -high, -reach), Vector3(reach, high, reach) * 2.0)
+		mesh.set_meta(&"shown", _shown[part])
+	_figure.set_script(load(TREE))
+	_shown = {}
 
 
 ## One tint, `count` times over: for a limb that is the same colour all along.
