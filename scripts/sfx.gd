@@ -586,6 +586,22 @@ func has(sound: StringName) -> bool:
 	return _streams.has(sound)
 
 
+## A take of `sound` that goes round for as long as it is played, for
+## something that runs: a motor, a roar of fire. Null if there is no such sound.
+func loop_of(sound: StringName) -> AudioStream:
+	if not _streams.has(sound):
+		return null
+	var take: AudioStream = (_streams[sound] as Array)[0].duplicate()
+	if take is AudioStreamWAV:
+		var wav := take as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_begin = 0
+		wav.loop_end = int(wav.get_length() * wav.mix_rate)
+	elif take is AudioStreamOggVorbis:
+		(take as AudioStreamOggVorbis).loop = true
+	return take
+
+
 func play(sound: StringName, volume_db := 0.0) -> void:
 	var player := AudioStreamPlayer.new()
 	player.volume_db = volume_db

@@ -78,6 +78,9 @@ func _describe() -> void:
 	_shotgun()
 	_smg()
 	_marksman()
+	_minigun()
+	_rocket_launcher()
+	_rocket()
 
 
 # --- Rifle ---------------------------------------------------------------------
@@ -683,6 +686,164 @@ func _marksman() -> void:
 
 
 ## Point `ahead` of the origin along the barrel, `up` above it and `right` of it.
+# --- Minigun -------------------------------------------------------------------
+
+
+## Six barrels that a motor turns, carried at the hip: an M134 made into
+## something one person can hold, with a carry handle on top, a pistol grip
+## at the back, a bar under the barrels for the other hand and a box of
+## rounds at the left that feeds it by a belt. The barrels are one part,
+## Barrels, that scripts/weapons.gd turns about the axis between them and
+## makes glow as they heat up; the belt is another, Belt, that shakes as it
+## is drawn in.
+func _minigun() -> void:
+	model("minigun")
+
+	# Housing around the rotor, its corners cut off, with a plate at the back
+	# and the clamp in front that the barrels come out of.
+	_section(STEEL, _chamfer([Vector2(-0.06, -0.066), Vector2(0.06, -0.066), Vector2(0.06, 0.062), Vector2(-0.06, 0.062)], 0.02), -0.16, 0.12, 0.003)
+	_section(STEEL, _chamfer([Vector2(-0.065, -0.071), Vector2(0.065, -0.071), Vector2(0.065, 0.067), Vector2(-0.065, 0.067)], 0.022), -0.175, -0.16, 0.002)
+	_turned(STEEL, _at(0.12), Vector3.FORWARD, PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.064, 0.0), Vector2(0.068, 0.004), Vector2(0.068, 0.028), Vector2(0.06, 0.034), Vector2(0.0, 0.034)]), 32)
+	for side: float in [-1.0, 1.0]:
+		for ahead: float in [-0.13, -0.03, 0.08]:
+			for up: float in [-0.04, 0.035]:
+				_bar(STEEL, _at(ahead, up, side * 0.06), _at(ahead, up, side * 0.0645), 0.0045, 8)
+	# The motor under its right, ribbed for the heat, and its cable.
+	_bar(ALU, _at(-0.015, -0.086, 0.034), _at(0.11, -0.086, 0.034), 0.027, 20)
+	for i in 5:
+		_bar(ALU, _at(0.0 + i * 0.024, -0.086, 0.034), _at(0.008 + i * 0.024, -0.086, 0.034), 0.031, 20)
+	_bar(STEEL, _at(-0.025, -0.086, 0.034), _at(-0.015, -0.086, 0.034), 0.02, 16)
+	_line(RUBBER, [_at(-0.025, -0.086, 0.034), _at(-0.06, -0.098, 0.02), _at(-0.09, -0.105, -0.03), _at(-0.08, -0.105, -0.1)], 0.005)
+	# A carry handle over the top.
+	for ahead: float in [-0.1, 0.07]:
+		_block(STEEL, _at(ahead, 0.07), Vector3(0.018, 0.02, 0.02), 0.004)
+		_bar(STEEL, _at(ahead, 0.076), _at(ahead, 0.104), 0.007, 10)
+	_bar(STEEL, _at(-0.11, 0.106), _at(0.08, 0.106), 0.008, 12)
+	_bar(RUBBER, _at(-0.07, 0.106), _at(0.04, 0.106), 0.011, 14)
+	# The bar the other hand holds, hung from the front of the housing below
+	# the barrels, clear of them as they turn.
+	_block(STEEL, _at(0.14, -0.082), Vector3(0.036, 0.04, 0.05), 0.006)
+	_bar(STEEL, _at(0.14, -0.1), _at(0.33, -0.1), 0.011, 12)
+	_bar(RUBBER, _at(0.18, -0.1), _at(0.31, -0.1), 0.017, 16)
+	_bar(STEEL, _at(0.33, -0.1), _at(0.336, -0.1), 0.019, 16)
+
+	# The box of rounds on the left, and the chute the belt comes up in.
+	_block("robot_olive", _at(-0.03, -0.12, -0.135), Vector3(0.085, 0.13, 0.19), 0.006)
+	_block("robot_olive", _at(-0.03, -0.052, -0.135), Vector3(0.091, 0.012, 0.196), 0.003)
+	_bar(STEEL, _at(-0.1, -0.04, -0.135), _at(0.04, -0.04, -0.135), 0.004, 8)
+	for ahead: float in [-0.1, 0.04]:
+		_bar(STEEL, _at(ahead, -0.04, -0.135), _at(ahead, -0.047, -0.135), 0.004, 8)
+	_block(STEEL, _at(-0.03, -0.01, -0.07), Vector3(0.016, 0.05, 0.075), 0.004)
+
+	# Pistol grip and trigger under the back of the housing.
+	var held := _m
+	_m = held * Transform3D(Basis(), _at(-0.035, -0.012))
+	_grip()
+	_trigger_hand()
+	_m = held
+
+	part("Belt")
+	for i in 9:
+		var t := i / 8.0
+		var at := _at(-0.03, lerpf(-0.05, -0.004, t) + sin(t * PI) * 0.016, lerpf(-0.122, -0.072, t))
+		_bar(BRASS, at + _at(-0.026), at + _at(0.016), 0.0052, 8)
+		_bar(STEEL, at + _at(0.016), at + _at(0.03), 0.0035, 6)
+		_block(STEEL, at + _at(-0.005, 0.0, 0.0), Vector3(0.012, 0.004, 0.006), 0.001)
+
+	part("Barrels", Transform3D(Basis(), _at(0.15)))
+	_bar(STEEL, _at(0.15), _at(0.2), 0.058, 32)
+	_bar(STEEL, _at(0.2), _at(0.68), 0.011, 10)
+	for i in 6:
+		var angle := TAU * i / 6.0
+		var off := Vector2(cos(angle), sin(angle)) * 0.04
+		_bar(STEEL, _at(0.2, off.y, off.x), _at(0.7, off.y, off.x), 0.0125, 12)
+		_bar(BARE, _at(0.7, off.y, off.x), _at(0.704, off.y, off.x), 0.0095, 12)
+	for ahead: float in [0.43, 0.655]:
+		_turned(STEEL, _at(ahead), Vector3.FORWARD, PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.058, 0.0), Vector2(0.06, 0.003), Vector2(0.06, 0.017), Vector2(0.058, 0.02), Vector2(0.0, 0.02)]), 32)
+
+	_support_hand(0.245, 0.017, "", 0.1)
+
+	marker("Muzzle", Transform3D(Basis(), _at(0.71)))
+	marker("Eject", Transform3D(Basis(), _at(0.04, -0.066, 0.03)))
+
+
+# --- Rocket launcher -----------------------------------------------------------
+
+
+## An RPG-7: a tube with a pistol grip under its middle, wooden heat shields
+## where the hands are, a flared nozzle at the back and an optic on its left.
+## The round sticks out of the front, a cone on a body with its fins folded
+## in the tube: the part Mag, so that a reload takes it out and puts the next
+## one in where the magazine of another weapon goes, and scripts/weapons.gd
+## hides it once it has been fired. The marker Back is where the blast leaves
+## the tube behind.
+func _rocket_launcher() -> void:
+	model("rocket_launcher")
+
+	# The tube, the nozzle behind and the ring at the muzzle.
+	_bar(STEEL, _at(-0.42), _at(0.46), 0.0215, 20)
+	_turned(STEEL, _at(-0.42), Vector3.BACK, PackedVector2Array([Vector2(0.0215, 0.0), Vector2(0.026, 0.02), Vector2(0.034, 0.08), Vector2(0.046, 0.15), Vector2(0.05, 0.16), Vector2(0.044, 0.16)]), 24)
+	_turned(STEEL, _at(0.46), Vector3.FORWARD, PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.026, 0.0), Vector2(0.026, 0.018), Vector2(0.022, 0.022), Vector2(0.0, 0.022)]), 24)
+	# Heat shields of wood, one for each hand, held by bands.
+	for span: Vector2 in [Vector2(-0.2, -0.03), Vector2(0.06, 0.32)]:
+		_bar("wood", _at(span.x), _at(span.y), 0.033, 20)
+		for end: float in [span.x, span.y]:
+			_bar(STEEL, _at(end - 0.006), _at(end + 0.006), 0.035, 20)
+	# The block under the tube that the grip and the trigger hang from.
+	_block(STEEL, _at(-0.01, -0.035), Vector3(0.024, 0.03, 0.12), 0.004)
+	_grip(GRIP)
+	_trigger_hand()
+
+	# Iron sights on top: a post in front, a notch behind with its range drum.
+	_block(STEEL, _at(0.3, 0.036), Vector3(0.004, 0.026, 0.006), 0.001)
+	_block(STEEL, _at(-0.02, 0.03), Vector3(0.022, 0.016, 0.03), 0.002)
+	_bar(STEEL, _at(-0.02, 0.03, -0.012), _at(-0.02, 0.03, -0.02), 0.009, 12)
+	# The optic on its left, on a bracket, with a rubber eyecup towards the eye.
+	_block(STEEL, _at(-0.02, 0.012, -0.03), Vector3(0.016, 0.02, 0.05), 0.003)
+	_block(GRIP, _at(-0.03, 0.05, -0.05), Vector3(0.038, 0.06, 0.13), 0.008)
+	_bar(STEEL, _at(0.035, 0.06, -0.05), _at(0.05, 0.06, -0.05), 0.016, 16)
+	_bar(OPTIC, _at(0.05, 0.06, -0.05), _at(0.051, 0.06, -0.05), 0.013, 16)
+	_bar(RUBBER, _at(-0.095, 0.06, -0.05), _at(-0.125, 0.06, -0.05), 0.018, 16)
+	_bar(LENS, _at(-0.096, 0.06, -0.05), _at(-0.097, 0.06, -0.05), 0.011, 16)
+	# A sling swivel under the front shield.
+	_ring(STEEL, _at(0.2, -0.04), Vector3.RIGHT, 0.008, 0.002)
+
+	part("Mag", Transform3D(Basis(), _at(0.48)))
+	# The round: the body that leaves the tube and the cone of the warhead.
+	_bar("gun_tan", _at(0.46), _at(0.6), 0.04, 24)
+	_turned("gun_tan", _at(0.6), Vector3.FORWARD, PackedVector2Array([Vector2(0.04, 0.0), Vector2(0.042, 0.005), Vector2(0.03, 0.06), Vector2(0.014, 0.13), Vector2(0.009, 0.17), Vector2(0.0, 0.175)]), 24)
+	_bar(STEEL, _at(0.775), _at(0.8), 0.006, 10)
+	_bar("enamel_red", _at(0.58), _at(0.6), 0.041, 24)
+
+	_support_hand(0.19, 0.033)
+	# Reloading, the same hand takes the round by its body, as it holds the shield.
+	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), _at(0.53)), Vector2(0.04, 0.04), -104.0,
+		_at(0.46, -0.02, -0.085), 0.028, 0.0, _at(0.155, -0.3, -0.22))
+
+	marker("Muzzle", Transform3D(Basis(), _at(0.48)))
+	marker("Back", Transform3D(Basis(), _at(-0.58)))
+	marker("MagHold", Transform3D(Basis(), _at(0.56)))
+
+
+## The round of the rocket launcher in flight, pointing along -Z: the warhead
+## that sticks out of the tube, and behind it the motor with its fins out.
+## scenes/rocket.tscn carries it.
+func _rocket() -> void:
+	model("rocket")
+	_m = Transform3D(Basis(), _at(-0.56))
+	_bar("gun_tan", _at(0.46), _at(0.6), 0.04, 24)
+	_turned("gun_tan", _at(0.6), Vector3.FORWARD, PackedVector2Array([Vector2(0.04, 0.0), Vector2(0.042, 0.005), Vector2(0.03, 0.06), Vector2(0.014, 0.13), Vector2(0.009, 0.17), Vector2(0.0, 0.175)]), 24)
+	_bar(STEEL, _at(0.775), _at(0.8), 0.006, 10)
+	_bar("enamel_red", _at(0.58), _at(0.6), 0.041, 24)
+	_bar(STEEL, _at(0.2), _at(0.46), 0.021, 16)
+	_turned(STEEL, _at(0.2), Vector3.BACK, PackedVector2Array([Vector2(0.021, 0.0), Vector2(0.026, 0.03), Vector2(0.026, 0.045), Vector2(0.0, 0.045)]), 16)
+	for i in 4:
+		var angle := TAU * (i + 0.5) / 4.0
+		var out := Vector3(cos(angle), sin(angle), 0.0)
+		_block(STEEL, _at(0.24) + out * 0.04, Vector3(0.04, 0.003, 0.07), 0.001, Vector3(0.0, 0.0, rad_to_deg(angle)))
+	_m = Transform3D()
+
+
 func _at(ahead: float, up := 0.0, right := 0.0) -> Vector3:
 	return Vector3(right, up, -ahead)
 

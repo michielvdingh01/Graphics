@@ -13,6 +13,7 @@
 		{"regen_to": 50.0, "hurts": 1.0, "focus": 0, "bots": "hardened"}
 	],
 	"cells": {"spots_for_one": 250, "most": 4, "back": 45.0},
+	"specials": {"first": 60.0, "back": 90.0},
 	"modes": {
 		"tdm": {"title": "Team deathmatch", "limit": 50, "minutes": 10, "respawn": 2.0, "least": 1, "most": 6, "size": 6},
 		"ffa": {"title": "Free for all", "limit": 25, "minutes": 10, "respawn": 2.0, "least": 2, "most": 12, "size": 8},

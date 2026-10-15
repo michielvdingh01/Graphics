@@ -855,7 +855,57 @@ func _supplies() -> void:
 	_check("and what is fired goes by its place in the armory, not in the pack", ARMORY.index(weapons.current()) == 1 and ARMORY.index(pair[0]) == 2)
 	weapons.equip(standard, ARMORY.grenades(ARMORY.STANDARD))
 	await _wait(0.1)
+	await _minigun(weapons)
 	_finished.append("supplies")
+
+
+## A weapon of the arena with barrels that spin: taken up on a key of its own,
+## slow to start, fast once it has, overheating after a few seconds of fire and
+## cooling after a few more; heavy to carry, not filled up by a can, and
+## thrown away once it is fired empty.
+func _minigun(weapons: Node3D) -> void:
+	var minigun: WeaponData = ARMORY.named("minigun")
+	var spent := []
+	var note := func(data: WeaponData) -> void: spent.append(data)
+	weapons.special_spent.connect(note)
+	var before: WeaponData = weapons.current()
+	weapons.take_special(minigun, 450)
+	await _wait(1.0)
+	_check("a weapon of the arena is taken up after the pack, and brought up", weapons.loadout.size() == 6 and weapons.current() == minigun
+		and weapons.special() == minigun and weapons.special_rounds() == 450)
+	_check("it is heavy: slower on foot, and no running with it", is_equal_approx(weapons.move_speed_scale(), minigun.move_scale) and weapons.blocks_sprint())
+	_check("a can of ammunition does not fill it", not weapons.add_ammo() or weapons.special_rounds() == 450)
+	Input.action_press("fire")
+	await _wait(minigun.spin_up * 0.6)
+	var while_spinning: int = weapons.special_rounds()
+	await _wait(minigun.spin_up * 0.4 + minigun.spin_ramp + 0.15)
+	var counted: int = weapons.special_rounds()
+	await _wait(1.0)
+	var a_second: int = counted - weapons.special_rounds()
+	print("    minigun: %d rounds out while it spun up, %d in a second at full speed" % [450 - while_spinning, a_second])
+	_check("it spins up before the first round, then fires about as fast as its data says", while_spinning == 450
+		and a_second > minigun.rounds_per_minute / 60.0 * 0.8 and a_second <= ceili(minigun.rounds_per_minute / 60.0) + 1)
+	await _wait(minigun.overheat_after - minigun.spin_ramp - 1.0 + 0.2)
+	var at_heat: int = weapons.special_rounds()
+	await _wait(1.0)
+	_check("after %d seconds of fire it overheats and stops" % minigun.overheat_after, weapons.overheated() and weapons.special_rounds() == at_heat)
+	Input.action_release("fire")
+	await _wait(minigun.overheat_time)
+	_check("and %d seconds later it can fire again" % minigun.overheat_time, not weapons.overheated() and weapons.heat() < 0.1)
+	# Fired empty, it is thrown away and what was in hand before comes up.
+	weapons._mags[weapons._index] = 5
+	weapons.add_ammo()
+	Input.action_press("fire")
+	await _wait(minigun.spin_up + 0.8)
+	Input.action_release("fire")
+	await _wait(0.5)
+	_check("fired empty, it is thrown away, said so, and the weapon before is in hand", weapons.special() == null and spent == [minigun]
+		and weapons.loadout.size() == 5 and weapons.current() == before)
+	weapons.take_special(minigun, 100)
+	var dropped: Array = weapons.drop_special()
+	_check("let go of, it says what it had left", dropped.size() == 2 and dropped[0] == minigun and dropped[1] == 100 and weapons.special() == null)
+	weapons.special_spent.disconnect(note)
+	await _wait(1.0)
 
 
 ## How the view moves, tried out on the runway of the factory: the bob of a

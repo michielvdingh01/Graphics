@@ -74,3 +74,46 @@ extends Resource
 @export var bot_sight := 50.0
 ## The distance a bot fights at with it, in metres: nearer it stops closing in.
 @export var bot_range := 10.0
+
+@export_group("Carrying")
+## How fast whoever carries it walks and runs, next to how fast without it.
+@export var move_scale := 1.0
+## Too heavy to run with.
+@export var no_sprint := false
+## Seconds to put the weapon in hand away and bring this one up: the longer
+## of the two weapons' times.
+@export var switch_time := 0.3
+
+@export_group("Spinning barrels")
+## Seconds the barrels take to come up to speed from standing still, and
+## before that nothing is fired; and to run down once let go. 0 for a weapon
+## with no barrels to spin.
+@export var spin_up := 0.0
+@export var spin_down := 1.0
+## Rounds a minute at the first shot, which come up to rounds_per_minute over
+## spin_ramp seconds of firing, with ramp_spread_deg more spread until then.
+@export var rounds_per_minute_start := 1200.0
+@export var spin_ramp := 0.5
+@export var ramp_spread_deg := 0.6
+## Holding the aim spins the barrels instead of aiming down sights, and its
+## carrier then walks at spun_move_scale of the speed it has with it.
+@export var aim_spins := false
+@export var spun_move_scale := 0.5
+
+@export_group("Heat")
+## Seconds of fire that overheat it, 0 for never; the seconds it then cannot
+## fire, while the heat goes out of it; and the share of its heat it loses a
+## second while it is not fired.
+@export var overheat_after := 0.0
+@export var overheat_time := 3.0
+@export var cooling := 0.25
+
+@export_group("Special")
+## In no pack: it lies in the arena (scripts/stash.gd) and is carried on a
+## key of its own, with what it held when it was found and nothing more. Once
+## it is empty it is thrown away.
+@export var special := false
+## What it fires instead of bullets, a scene with scripts/rocket.gd, and how
+## fast that leaves the muzzle in m/s.
+@export var projectile: PackedScene
+@export var projectile_speed := 45.0
