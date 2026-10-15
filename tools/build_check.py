@@ -26,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 
+import host
 from scene_text import Scene
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,7 +39,7 @@ NOISE = re.compile(r"RID allocations|Leaked instance|^ *at: |resources still in 
 
 def run(command):
     """Runs a builder and passes on what it has to say about itself."""
-    done = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    done = subprocess.run(host.command(command), cwd=ROOT, capture_output=True, text=True)
     for line in (done.stdout + done.stderr).splitlines():
         if re.search(r"ERROR|WARNING|error", line) and not NOISE.search(line):
             print("  " + line)

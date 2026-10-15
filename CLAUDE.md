@@ -1,6 +1,6 @@
 # Graphics FPS
 
-Een first-person shooter in Godot 4.7, gebouwd door meerdere agents tegelijk. `PLAN.md` is het logboek: wat er gebouwd is, wat het kostte en wat nog open staat. De trunk is `fase-2-vertical-slice`, niet `main`.
+Een first-person shooter in Godot 4.7, gebouwd door meerdere agents tegelijk. `PLAN.md` is het logboek: wat er gebouwd is, wat het kostte en wat nog open staat. De trunk is `fase-2-vertical-slice`, niet `main`. Er wordt gewerkt op een MacBook en op een ASUS met Windows; wat op de ASUS anders gaat, staat onder "De ASUS".
 
 ## Werkafspraken
 
@@ -64,3 +64,28 @@ De tests draaien zonder GPU en kunnen naast die van een andere checkout lopen. D
 - **Een bake wil de GPU voor zichzelf.** Naast een andere Godot zijn beide vastgelopen, en elke Godot daarna. De bake houdt het GPU-slot vast zolang hij duurt, en weigert bovendien zolang er een Godot buiten het slot tekent, tenzij met `--anyway`. Gebruik dat niet naast het spel van Michiel.
 - **Bak een zone die nog nooit gebakken is eerst alleen**, en geef elke bake een tijdslimiet. Een bake die blijft herhalen `Inconsistency found in triangulation while building BSP` komt niet klaar: zet de probes verder uit elkaar. Na een afgebroken bake is de `.exr` nieuw en de `.lmbake` oud: die zone moet opnieuw voor iemand ernaar kijkt.
 - **Lightmaps staan in Git LFS** (`scenes/*.exr`, `scenes/*.lmbake`). Elke gewijzigde lightmap telt bij een push voor zijn hele grootte mee in de opslag bij GitHub; een account heeft 10 GiB. Faalt een push met grote bestanden op HTTP 400: `git -c http.postBuffer=524288000 push`.
+
+## De ASUS
+
+De ASUS draait Windows 11 met een RTX 4060 Laptop (8 GB) en 16 GB geheugen. Het gereedschap is hetzelfde en draait vanuit Git Bash; de shellscripts en `tools/*.py` start je zoals hierboven. Wat er anders is:
+
+- **Waar het staat.** De hoofdcheckout is `C:\dev\Graphics`, de worktrees staan in `C:\dev\Graphics\.claude\worktrees\<naam>`. Godot 4.7.2 staat in `C:\dev\tools\godot\`, en de omgevingsvariabele `GODOT` wijst naar `Godot_v4.7.2-stable_win64_console.exe`: de console-versie geeft uitvoer en exitcode door. Verder Python 3.14 als `python3`, met `PYTHONUTF8=1`, ImageMagick 7 als `magick` (met librsvg voor SVG) en Git LFS.
+- **Een worktree opzetten** gaat zonder `cp -c`, en de `touch -r`-lus doet `tools/match_times.py` in seconden in plaats van minuten:
+
+  ```sh
+  M=/c/dev/Graphics
+  git -C $M worktree add $M/.claude/worktrees/<naam> -b <naam> fase-2-vertical-slice
+  cd $M/.claude/worktrees/<naam>
+  cp -R $M/.godot .godot
+  tools/match_times.py $M
+  ```
+
+  De importcache is ongeveer een GB en wordt echt gekopieerd; er is ruimte genoeg.
+- **Een venster, maar buiten beeld.** Windows kent de embedded modus niet. `tools/godot.sh` start Godot met een gewoon venster, en `GODOT_OUT_OF_SIGHT` laat dat onzichtbaar worden en van het scherm verdwijnen zodra het spel draait (`scripts/benchmark.gd`) of de editor bakt (`addons/bake_cli/plugin.gd`). De eerste vijf seconden of zo staat het wel in beeld, zonder de focus te nemen. Een schermafbeelding heeft de maat van `--res`. Een `--script` zonder spel erachter (`tools/level_cost.sh`) blijft in beeld. Na een bake zet `tools/bake_lightmaps.py` de layout van de editor terug (`.godot/editor/editor_layout.cfg`), zodat die niet onthoudt dat zijn venster buiten beeld stond.
+- **Het GPU-slot** neemt `tools/gpu_slot.py`, want Windows heeft geen `lockf`. Het slot staat in `%APPDATA%\Godot\gpu-slot` en werkt verder hetzelfde.
+- **Kijken wie de GPU gebruikt** gaat met `ps -W | grep -i '[g]odot'` in plaats van `ps -axo`. Een eigen proces stop je op PID met `taskkill //PID <pid>`, nooit op naam.
+- **MetalFX bestaat er niet**: meet met `--upscaler=fsr2`. Het scherm is 1920×1080.
+- **Wat de ASUS bouwt is niet wat de MacBook bouwt.** De meshes van een level dat op de ASUS gebouwd is, verschillen byte voor byte van die van de MacBook; twee keer bouwen op de ASUS geeft wel hetzelfde. Een lightmap past alleen op de meshes waarmee hij gebakken is, dus een level wordt op één machine gebouwd én gebakken. Commit op de ASUS geen herbouwde levels die op de MacBook gebakken zijn. `tools/build_check.py` meldt op de ASUS elk level van de MacBook als veranderd: vergelijk daar met een eigen bouw van vóór je wijziging.
+- **`user://`** is `%APPDATA%\Godot\app_userdata\Graphics FPS\`.
+- **Geluid** speelt `tools/hear.py` af met Windows zelf.
+- **Tekst blijft LF** (`.gitattributes`), ook wat Python op Windows schrijft.

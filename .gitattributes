@@ -1,5 +1,11 @@
+# Text is kept with LF in Git and in every checkout, Windows included, so that
+# the ASUS writes what the MacBook would: Python on Windows writes CRLF unless
+# told otherwise.
+* text=auto eol=lf
+
 # Lightmaps are large and change as a whole with every bake: they are kept
 # with Git LFS, so that the history holds a pointer to each instead of the
-# file. Needs git-lfs (brew install git-lfs, then git lfs install --local).
+# file. Needs git-lfs (brew install git-lfs, then git lfs install --local; Git for
+# Windows has it).
 scenes/*.exr filter=lfs diff=lfs merge=lfs -text
 scenes/*.lmbake filter=lfs diff=lfs merge=lfs -text

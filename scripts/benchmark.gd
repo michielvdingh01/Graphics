@@ -73,6 +73,8 @@ const PROFILE_FRAMES := 150
 const SETTLE_FRAMES := 20
 ## Seconds to wait for a window that is not being drawn before giving up.
 const COVERED_TIMEOUT := 60.0
+## Where the window of a tool run on Windows goes: off every screen.
+const OUT_OF_SIGHT := Vector2i(-20000, -20000)
 
 ## True for a benchmark run; gameplay systems check this and stay out of the way.
 var active := false
@@ -107,6 +109,16 @@ var _eval := PackedStringArray()
 var _posted := false
 var _exit := false
 var _awake := PackedFloat64Array()
+
+
+func _enter_tree() -> void:
+	# Windows has no embedded display server, so a run of tools/godot.sh gets a
+	# window there: off the screen with it, where it goes on drawing. Godot
+	# puts the window in its place when it shows it, after the autoloads, so
+	# it is moved on the first frame. It shows for the seconds before that.
+	if OS.get_environment("GODOT_OUT_OF_SIGHT") and DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+		get_tree().process_frame.connect(DisplayServer.window_set_position.bind(OUT_OF_SIGHT), CONNECT_ONE_SHOT)
 
 
 func _ready() -> void:
@@ -199,10 +211,10 @@ func _run() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	# Render at a fixed resolution regardless of the window size macOS gives us.
-	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-	get_window().content_scale_size = _resolution
+	_render_at_resolution()
 	# macOS stops presenting frames to a covered window, which stalls the run.
-	get_window().always_on_top = true
+	# Windows goes on drawing one, and there it would cover the screen.
+	get_window().always_on_top = OS.get_name() == "macOS"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var player: Node3D = tree.get_first_node_in_group("player")
 	if player:
@@ -389,6 +401,17 @@ func _run() -> void:
 	tree.quit()
 
 
+## Renders at --res whatever the size of the window. Out of sight on Windows
+## the window has the size of the screen, not that of --res: the picture is
+## stretched to fit it, which nobody sees, so that a screenshot has the size
+## that was asked for.
+func _render_at_resolution() -> void:
+	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+	get_window().content_scale_size = _resolution
+	if OS.get_environment("GODOT_OUT_OF_SIGHT"):
+		get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
+
+
 ## Lets the game run for a moment and saves what is on screen then.
 func _snapshot() -> void:
 	var tree := get_tree()
@@ -396,8 +419,7 @@ func _snapshot() -> void:
 	if _scene:
 		tree.change_scene_to_file(_scene)
 		await tree.scene_changed
-	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-	get_window().content_scale_size = _resolution
+	_render_at_resolution()
 	var player: Node3D = tree.get_first_node_in_group("player")
 	if not _at.is_empty():
 		var numbers := _at[0].split_floats(",")

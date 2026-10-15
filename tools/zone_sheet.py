@@ -39,6 +39,7 @@ import re
 import subprocess
 import sys
 
+import host
 from bake_lightmaps import units_of
 from scene_text import Scene
 
@@ -49,7 +50,7 @@ FPS = 60.0
 # Three quarters of the atlas are cut into sixteen, see project.godot.
 SLOTS = 48
 BUDGET = ["--res=2560x1440", "--upscaler=fsr2", "--scale=0.67"]
-FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
+FONT = host.FONT
 
 
 def main():
@@ -126,7 +127,7 @@ def main():
         def look(from_where):
             """Has the benchmark look from those poses: its folder, and what it measured."""
             command = ["tools/benchmark.sh", "--quick", "--scene=" + scene, "--at=" + ";".join(from_where)] + settings
-            done = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+            done = subprocess.run(host.command(command), cwd=ROOT, capture_output=True, text=True)
             saved = re.search(r"Saved to (.+)", done.stdout)
             if done.returncode != 0 or not saved:
                 print(done.stdout[-2000:] + done.stderr[-2000:])

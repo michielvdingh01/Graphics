@@ -15,6 +15,20 @@ if [ -n "$GODOT_WINDOW" ]; then
 	exec tools/gpu_slot.sh "$GODOT" --path . "$@"
 fi
 
+# Windows has no embedded display server, so there a run gets a window.
+# GODOT_OUT_OF_SIGHT hides it and moves it off the screen once the game is up
+# (scripts/benchmark.gd), or the editor once it bakes (addons/bake_cli/plugin.gd);
+# it goes on drawing. Until then, the first five seconds or so, it is on the
+# screen, without taking the focus. A minimized window would stop drawing.
+# --single-window keeps the dialogs of the editor inside its window instead of
+# in the middle of the screen.
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*)
+	export GODOT_OUT_OF_SIGHT=1
+	exec tools/gpu_slot.sh "$GODOT" --single-window --audio-driver Dummy --path . "$@" </dev/null
+	;;
+esac
+
 # Embedded mode reports to a debugger and crashes without one, so --debug hands
 # it the local one; --ignore-error-breaks and the empty stdin keep that one from
 # stopping at a prompt on a script error. A run nobody is watching should not
