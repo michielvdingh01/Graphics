@@ -1,6 +1,7 @@
 #!/bin/sh
 # Builds the game for friends to download: build/GraphicsFPS-windows.zip and
-# build/GraphicsFPS-macos.zip, each with tools/LEESMIJ.txt in it. The presets
+# build/GraphicsFPS-macos.zip, each with tools/LEESMIJ.txt in it, or only one
+# of the two with tools/export.sh windows or tools/export.sh macos. The presets
 # are in export_presets.cfg. Needs the export templates of this version of
 # Godot for Windows and macOS, in
 # ~/Library/Application Support/Godot/export_templates/<version>/.
@@ -18,9 +19,20 @@
 # copied, which takes minutes and all the cores there are.
 GODOT="${GODOT:-/Applications/Godot.app/Contents/MacOS/Godot}"
 cd "$(dirname "$0")/.." || exit 1
-rm -rf build/windows build/macos build/GraphicsFPS-windows.zip build/GraphicsFPS-macos.zip
-mkdir -p build/windows build/macos
+platforms="${1:-windows macos}"
+case " $platforms " in
+*" windows "*) ;;
+*" macos "*) ;;
+*)
+	echo "Usage: tools/export.sh [windows|macos]"
+	exit 1
+	;;
+esac
+built=""
 
+case " $platforms " in *" windows "*)
+rm -rf build/windows build/GraphicsFPS-windows.zip
+mkdir -p build/windows
 "$GODOT" --headless --path . --export-release "Windows" build/windows/GraphicsFPS.exe >build/export_windows.log 2>&1
 if [ ! -f build/windows/GraphicsFPS.pck ]; then
 	echo "The Windows export failed, see build/export_windows.log"
@@ -28,7 +40,12 @@ if [ ! -f build/windows/GraphicsFPS.pck ]; then
 fi
 cp tools/LEESMIJ.txt build/windows/
 (cd build/windows && zip -q ../GraphicsFPS-windows.zip GraphicsFPS.exe GraphicsFPS.pck LEESMIJ.txt) || exit 1
+built="$built build/GraphicsFPS-windows.zip"
+;; esac
 
+case " $platforms " in *" macos "*)
+rm -rf build/macos build/GraphicsFPS-macos.zip
+mkdir -p build/macos
 if [ ! -d build/src ]; then
 	# A clone where the disk can make one: done at once, and it takes no room
 	# until something in it changes.
@@ -56,5 +73,7 @@ if [ ! -f build/macos/GraphicsFPS.zip ]; then
 fi
 cp tools/LEESMIJ.txt build/macos/
 (cd build/macos && zip -q GraphicsFPS.zip LEESMIJ.txt && mv GraphicsFPS.zip ../GraphicsFPS-macos.zip) || exit 1
+built="$built build/GraphicsFPS-macos.zip"
+;; esac
 
-ls -lh build/GraphicsFPS-windows.zip build/GraphicsFPS-macos.zip
+ls -lh $built

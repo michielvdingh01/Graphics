@@ -3452,3 +3452,31 @@ Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de
 
 - **Meer voorwerpen hebben een botsvorm die groter is dan wat je ziet.** In de duinen: de rollen prikkeldraad (een doos tot 1,15 m: een schot op de benen van iemand erachter blijft hangen), en de bovenkant van de poort van het complex, waar tralies staan. In de andere levels: tafels (een doos tot de vloer: niemand schiet onder een tafel door), rekken en hekken. Voor dingen waar je niet door kan lopen maar wel doorheen kan schieten bestaat nog geen soort botsvorm: dat vraagt een eigen laag die wel het lopen tegenhoudt en geen schot.
 - **De showroom heeft nog de oude slagboom en wachttoren**, tot hij herbouwd wordt: `tools/build_level.sh showroom`.
+
+## Een Mac-build voor vrienden
+
+Op 15 oktober 2026 gevraagd: een actuele versie van het spel om naar vrienden met een MacBook te sturen, om samen spelen over het netwerk uit te proberen. Gebouwd op de branch `vriendenbuild`, vanaf de trunk op `8adccf2`. Wat op dat moment nog op `killfeedback`, `veldslag`, `wapenpakketten` en `duingrond` stond, zit er niet in.
+
+**Wat er is**
+
+- `tools/export.sh macos` bouwt alleen de Mac-zip, `tools/export.sh windows` alleen die voor Windows; zonder argument allebei, zoals eerst.
+- `tools/LEESMIJ.txt` zegt nu ook wat een Mac kan vragen bij samen spelen (apparaten in het lokale netwerk vinden, inkomende verbindingen accepteren) en waar je dat terugzet. En dat samen spelen de route door de levels is: een wedstrijd met bots speel je nog alleen (stap 4 van de wedstrijden).
+- `build/GraphicsFPS-macos.zip` in de worktree: 873 MB, uitgepakt een app van 1,3 GB, voor Intel en Apple Silicon, ad-hoc ondertekend. `VERSION` in `scripts/net.gd` is 9; wie host en wie meedoet, spelen deze zelfde build.
+
+**Wat het kostte**
+
+- 79 minuten, op lage prioriteit (`nice`) naast de tests van andere sessies, load 4 tot 7. Bijna alles daarvan was de eerste import in een nieuwe `build/src`: 374 bestanden opnieuw, ook als ETC2/ASTC, waarvan de 44 lightmaps (426 MB) een uur kostten, zo'n 6 MB per minuut. De vorige keer, met minder levels, was het 20 minuten voor beide builds.
+- `build/src` blijft in de worktree staan, met zijn importcache: een volgende export uit deze worktree hoeft alleen te importeren wat veranderd is. Hoe lang die dan duurt is niet gemeten.
+- Het pakket bevat alleen de texturen voor de desktop (288 keer S3TC, 36 keer BPTC, geen ETC2/ASTC). De ETC2/ASTC-import is er alleen om Godot voor Apple Silicon te laten exporteren.
+
+**Getest**
+
+- Uitgepakt zoals een vriend hem krijgt (`ditto -x -k`): `codesign --verify --deep --strict` geeft een geldige handtekening.
+- De gebouwde app zelf, zonder venster en in een eigen thuismap: de netwerktest (host en gast, elk 31 controles) en de wedstrijdtest slagen.
+- Op de GPU: een release-template kan niet zonder venster tekenen ("Embedded mode is not supported in release builds"), de debug-template ook niet. De editor kan het pakket van de build wel laden: `Godot --main-pack <pck> --embedded --debug ... res://scenes/dunes.tscn -- --play --snap=14`. Zo getekend zijn de fabriek en de duinen er met texturen, gebakken licht en HUD. Het is dezelfde engine, maar een andere binary dan vrienden krijgen. Het beeld komt in `benchmark/results/` van de map waarin je het start.
+- De export meldt dat `scenes/levels/canals_level.tscn` en `quay_level.tscn` ontbreken: die staan niet in git. De grachten staan niet in de levellijst, dus in het spel komt niemand ze tegen.
+
+**Niet beoordeeld**
+
+- Met twee Macs over een echt netwerk is het nog nooit gespeeld, en de release-app heeft hier nooit een venster geopend.
+- Of macOS bij deze app om het lokale netwerk vraagt: de app heeft geen `NSLocalNetworkUsageDescription` in zijn `Info.plist`. De LEESMIJ zegt wat je doet als het gebeurt.

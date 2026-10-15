@@ -6,6 +6,14 @@ Starten
   Mac: pak de zip uit en open Graphics FPS. De Mac weigert dat de eerste
   keer. Ga naar Systeeminstellingen > Privacy en beveiliging, scrol naar
   beneden en kies "Open toch".
+  Vraagt de Mac of het spel apparaten in je lokale netwerk mag vinden, of
+  inkomende verbindingen mag accepteren: kies "Sta toe". Anders kun je
+  niet samen spelen. Per ongeluk geweigerd: Systeeminstellingen > Privacy
+  en beveiliging > Lokaal netwerk, en zet Graphics FPS aan.
+
+Wat je samen speelt
+  De route door de levels, samen tegen de robots, van de start naar de
+  uitgang. Wedstrijden ("Match", met bots) zijn er nog alleen voor jezelf.
 
 Meedoen met een spel
   Kies "Play together", vul het adres in dat je van de host hebt gekregen
@@ -13,7 +21,7 @@ Meedoen met een spel
 
 Zelf een spel hosten
   Kies "Play together", dan "Host a game" en een level. Vraagt Windows of
-  het spel door de firewall mag, sta dat dan toe.
+  de Mac of het spel door de firewall mag, sta dat dan toe.
   - Op hetzelfde netwerk (dezelfde wifi): de anderen gebruiken het adres
     dat in je pauzemenu staat (Esc).
   - Via internet: laat je router UDP-poort 24565 doorsturen naar jouw
