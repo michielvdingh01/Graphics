@@ -388,7 +388,9 @@ func _run() -> void:
 		arenas.pressed.emit()
 		places.append(arenas.text)
 	arenas.pressed.emit()
-	_check("the dunes are among the arenas", places.has("Arena  ·  Dunes") and arenas.text == places[0])
+	_check("the dunes are among the arenas", places.has("Arena  ·  Dunes (large)") and arenas.text == places[0])
+	_check("and each says whether it is small, medium or large", places.all(func(text: String) -> bool:
+		return ["(small)", "(medium)", "(large)"].any(func(size: String) -> bool: return text.ends_with(size))))
 	(buttons.filter(func(button: Button) -> bool: return button.text == "Start")[0] as Button).pressed.emit()
 	await tree.scene_changed
 	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)

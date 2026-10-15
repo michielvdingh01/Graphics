@@ -23,9 +23,9 @@ extends Node
 ## _lay_beds(). So is what the level does by itself: the door of the exit
 ## rolling up, see _watch_doors().
 ##
-## Music is a piece in assets/music/, played from disk as it goes, on the
-## Music bus: see music(). A piece may come with a second layer that swells
-## while there is a fight on.
+## Music is a piece in assets/music/, or a few that take turns, played from
+## disk as it goes, on the Music bus: see music(). A piece may come with a
+## second layer that swells while there is a fight on.
 
 const SAMPLES := "res://assets/audio/"
 const RATE := 22050
@@ -166,6 +166,9 @@ var _unknown := {}
 var _fade: Tween
 var _music: AudioStreamPlayer
 var _piece := &""
+## The pieces that take turns, as music() was given them last, each with its
+## stream: _piece is one of them.
+var _turns := {}
 var _music_fade: Tween
 ## True while the piece that plays is dying away to make room for _piece.
 var _changing := false
@@ -456,40 +459,50 @@ func _watch_doors(delta: float) -> void:
 			seen.player = null
 
 
-## Plays the piece of music of that name round and round: assets/music/ holds
-## it as <piece>.ogg or <piece>.mp3. If it is the one that is playing, it
-## carries on where it is. A piece there is no file for is silence, so the
-## game can ask for one that has yet to be made.
-## `db` is how loud it plays: music behind a fight wants to be well under it.
+## Plays the pieces of music of those names one after the other, round and
+## round; a piece on its own goes round by itself. assets/music/ holds each
+## as <piece>.ogg or <piece>.mp3. If one of them is playing, it carries on
+## where it is and the others follow it. A piece there is no file for is
+## left out, and if that is all of them it is silence, so the game can ask
+## for one that has yet to be made.
+## `db` is how loud they play: music behind a fight wants to be well under it.
 ## Another piece that is playing dies away first.
-## A file <piece>_fight next to it is its second layer: it plays along from
-## the start and is heard while the level says there is a fight on.
-func music(piece: StringName, seconds := 0.5, db := 0.0) -> void:
+## A file <piece>_fight next to a piece is its second layer: it plays along
+## from the start and is heard while the level says there is a fight on.
+func music(pieces: Array[StringName], seconds := 0.5, db := 0.0) -> void:
+	# All of them loaded now, while a level loads, and not when one ends in
+	# the middle of a fight.
+	var turns := {}
+	for piece in pieces:
+		var path := _file(piece)
+		if path:
+			turns[piece] = _turns[piece] if _turns.has(piece) else load(path)
+	_turns = turns
 	var busy := _music != null and _music.playing
-	if busy and piece == _piece:
+	if busy and _turns.has(_piece):
+		_loop(_music.stream)
 		# Asked for again while the piece before it is still dying away: it
 		# is on its way, and a fade started now would call that off.
 		if not _changing:
 			_swell(db, seconds)
 		return
-	for kind in PIECE_KINDS:
-		var path := PIECES + String(piece) + kind
-		if not ResourceLoader.exists(path):
-			continue
-		if busy:
-			_piece = piece
-			_swell(-60.0, CHANGE_TIME)
-			_changing = true
-			_music_fade.tween_callback(_start_music.bind(piece, load(path), seconds, db))
-		else:
-			_start_music(piece, load(path), seconds, db)
+	if _turns.is_empty():
+		stop_music(seconds)
 		return
-	stop_music(seconds)
+	var first: StringName = _turns.keys()[0]
+	if busy:
+		_piece = first
+		_swell(-60.0, CHANGE_TIME)
+		_changing = true
+		_music_fade.tween_callback(_start_music.bind(first, _turns[first], seconds, db))
+	else:
+		_start_music(first, _turns[first], seconds, db)
 
 
 ## Lets the music die away over that many seconds.
 func stop_music(seconds := 1.5) -> void:
 	_piece = &""
+	_turns = {}
 	_changing = false
 	if _music == null or not _music.playing:
 		return
@@ -505,9 +518,10 @@ func music_playing() -> StringName:
 func _start_music(piece: StringName, stream: AudioStream, seconds := 0.0, db := 0.0) -> void:
 	if _music == null:
 		_music = _music_player()
+		_music.finished.connect(_next_piece)
 	_piece = piece
 	_changing = false
-	_music.stream = _round(stream)
+	_music.stream = _loop(stream)
 	_layer(piece)
 	_set_music_db(-60.0 if seconds > 0.0 else db)
 	# Both in the same frame, and so in the same block of the mix: the layer
@@ -527,11 +541,31 @@ func _music_player() -> AudioStreamPlayer:
 	return player
 
 
-## A stream set to go round and round, if it is of a kind that can.
-func _round(stream: AudioStream) -> AudioStream:
+## Where the piece of that name is, or nothing if it has yet to be made.
+func _file(piece: StringName) -> String:
+	for kind in PIECE_KINDS:
+		var path := PIECES + String(piece) + kind
+		if ResourceLoader.exists(path):
+			return path
+	return ""
+
+
+## A stream set to go round and round if its piece plays on its own, and to
+## end if another follows it, if it is of a kind that can.
+func _loop(stream: AudioStream) -> AudioStream:
 	if stream.get(&"loop") != null:
-		stream.set(&"loop", true)
+		stream.set(&"loop", _turns.size() < 2)
 	return stream
+
+
+## The piece that played has come to its end: the next one starts straight
+## after it, as loud.
+func _next_piece() -> void:
+	if _changing or _turns.size() < 2 or not _turns.has(_piece):
+		return
+	var pieces: Array = _turns.keys()
+	var next: StringName = pieces[(pieces.find(_piece) + 1) % pieces.size()]
+	_start_music(next, _turns[next], 0.0, _music_db)
 
 
 ## Gets the second layer of `piece` ready to start with it, if it has one,
@@ -541,12 +575,10 @@ func _layer(piece: StringName) -> void:
 		_music_over.queue_free()
 	_music_over = null
 	_heat = 0.0
-	for kind in PIECE_KINDS:
-		var path := PIECES + String(piece) + FIGHT_LAYER + kind
-		if ResourceLoader.exists(path):
-			_music_over = _music_player()
-			_music_over.stream = _round(load(path))
-			return
+	var path := _file(StringName(String(piece) + FIGHT_LAYER))
+	if path:
+		_music_over = _music_player()
+		_music_over.stream = _loop(load(path))
 
 
 func _hush_music() -> void:

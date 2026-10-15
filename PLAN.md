@@ -3343,3 +3343,54 @@ Bij het overzetten vond `tools/test_canals.sh` dat de helft van de trapjes binne
 - De ramen zijn gloeiende vlakken, de lantaarns gloeiende dozen, de auto's dozen, de iepen stammen zonder kroon.
 - De borden boven de deuren en de naam op de metro ontbreken: een opschrift vraagt een regel in het manifest.
 - `tools/level_map.py` tekent geen water: wat onder de vloer ligt slaat het over. Het blad met de plattegrond is daarom apart getekend, uit dezelfde maten, met een script dat niet in de repo staat.
+
+## Een tweede nummer, en hoe groot een arena is
+
+Op 15 oktober 2026 gevraagd: het nummer dat Michiel in `assets/music/` zette, "Corroded Metal Drones", kan na het eerste afgespeeld worden; en bij het instellen van een multiplayer-potje wil hij per map zien of hij small, medium of large is. Gebouwd op de branch `muziekenmaat`, vanaf de trunk met de grachten erin.
+
+**Wat er nu is**
+
+- **Een level speelt zijn nummers om de beurt.** `Sfx.music()` krijgt een lijst nummers in plaats van één (`scripts/sfx.gd`); `Menu.LEVEL_MUSIC` is die lijst voor elk level: `level1and2`, dan `Corroded Metal Drones`, dan weer `level1and2`, en zo verder. Is een nummer uit, dan begint het volgende meteen, even hard; het thema op het titelscherm is een lijst van één en gaat zoals vroeger naadloos rond. Wie van het ene level naar het volgende gaat, hoort het nummer dat speelde gewoon doorlopen, welk van de twee het ook is. Van het titelscherm in een level begint het altijd bij `level1and2`.
+- **Beide nummers worden geladen als de muziek van het level begint**, niet op het moment dat het eerste uit is: dat is midden in het spel.
+- **Het nummer staat erin zoals het aangeleverd is**, als mp3 van 5,3 MB, 3:48, 48 kHz. Het is gemiddeld 2 dB zachter dan `level1and2` en in de luide stukken ruim 1 dB (gemeten als RMS over het hele nummer en het 90e percentiel van stukken van 3 s: −14,2 tegen −12,1 dBFS, en −11,7 tegen −10,5). Dat heb ik zo gelaten. Beide nummers lopen zelf uit en in (de laatste vier seconden van −20 naar −63 dB, de eerste twee van −65 naar −20), dus er zit geen overvloeier tussen.
+- **De bestandsnaam heeft spaties**, zoals Michiel hem neerzette. Dat werkt in Godot; ik heb hem niet hernoemd, zodat er bij het mergen geen tweede kopie naast blijft staan.
+- **`tools/hear.py level_music`** laat horen waar de nummers van een level elkaar afwisselen: de laatste tien seconden van elk nummer en meteen daarachter de eerste tien van het volgende, op de sterkte van het spel (9 dB onder de rest). Het neemt de lijst uit `scripts/menu.gd`, dus een derde nummer erbij hoort hij vanzelf.
+- **Het scherm Multiplayer zegt bij de arena hoe groot die is**: "Arena · Works (large)". Klein is onder de 1 000 m² vloer waar je kunt komen, groot boven de 2 000 m². De indeling staat als tabel naast de lijst van arena's in `scripts/match_menu.gd`, gemeten op de stand van vandaag:
+
+| Arena | Vloer waar je kunt komen | Van eind tot eind lopen | Op het scherm |
+|---|---|---|---|
+| Factory | 764 m² | 65 m | small |
+| Powerhouse | 1 610 m² | 177 m | medium |
+| Depot | 1 691 m² | 74 m | medium |
+| Works | 2 697 m² | 219 m | large |
+| Dunes | 61 760 m² | 399 m | large |
+
+  De vloer is het navmesh dat vanaf het begin van het level te belopen is, voor zover het vlak genoeg is om op te staan, van boven gezien; het lopen is dat van de wedstrijd zelf (`Arena.length()`). Gemeten in het geladen spel, zonder venster, met een tijdelijke haak in `scripts/match_test.gd` die weer weg is. De eerste vier komen op twee vierkante meter na overeen met de tabel onder "Wedstrijden: teams, bots en een buit (plan)". De duinen zijn dus 23 keer het fabrieksterrein en heten allebei large: drie maten was de vraag.
+
+- **De selftest** kijkt nu ook of het thema alleen rondgaat, of na het eind van `level1and2` het tweede nummer komt, even hard, en na het eind daarvan weer het eerste (door vlak voor het eind te springen). **De wedstrijdtest** kijkt of elke arena op het scherm zegt of hij small, medium of large is.
+
+**Getest en gemeten**
+
+15 oktober 2026, M1 Pro aan de lader, load 5 tot 7, terwijl andere sessies op de GPU maten en hun eigen tests draaiden. Alles zonder GPU.
+
+- `tools/selftest.sh`: 404 controles, geslaagd. `tools/test_match.sh`: 78 controles, geslaagd.
+- **De eerste keer faalde de selftest op twee controles die niet over muziek gaan**: "a collider more, far from the fight, changes none of it" en "nor do the same colliders in another order" (348 plekken in plaats van 350). Toen stonden de nieuwe muziekcontroles nog aan het eind van `_handling()`, en die wachten samen ruim drie seconden. De trunk slaagt op die twee, in de hele selftest (350, ook met een botsvorm erbij), en mijn branch slaagt erop met `--fights` alleen, dat `_handling()` overslaat (353). De dekking in de hal hangt dus af van hoe lang het deel ervoor duurt: iets wat `_handling()` in de hal achterlaat verandert in de tiende seconde tussen de twee metingen. De nieuwe muziekcontroles staan nu in een eigen deel, `_music_turns()`, na `_breakables()`; daarmee duurt alles vóór de gevechten weer even lang als in de trunk, en slaagt de test. Wat er in de hal verandert, heb ik niet uitgezocht.
+- `tools/hear.py level_music` maakt 42 s: het eind van `level1and2` in het begin van het nieuwe nummer, en het eind daarvan weer in `level1and2`.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het nummer bij het spel past, en de overgang.** Ik heb de sterkte gemeten, niet geluisterd. De naad in `tools/hear.py level_music` is gemaakt met de mp3-decoder van macOS; het spel decodeert zelf, en of daar een fractie stilte meer of minder tussen zit, heb ik niet gehoord.
+- **Of de grenzen van small, medium en large kloppen met wat hij bedoelt.** Ik heb ze op vloer gelegd. Op spelers gelegd zou het depot klein zijn: het plan zegt dat de fabriek en het depot te klein en te open zijn voor meer dan drie tegen drie, en de centrale en het fabrieksterrein zes tegen zes dragen.
+
+**Nog open**
+
+- De indeling wordt niet uit het level berekend: wordt een arena verbouwd, dan moet de tabel met de hand mee. De meting staat hierboven.
+- Waar het nummer vandaan komt en onder welke licentie staat niet in het manifest, net als bij de eerste twee.
+- Het scherm "Play together" (een level kiezen om samen te spelen) zegt niets over grootte; dat is de campagne en geen wedstrijd.
+- De dekkingscontroles in `_fights()` hangen aan de tijd die de selftest ervoor neemt (zie hierboven). Wie iets aan `_handling()` toevoegt dat wacht, kan ze zien omvallen zonder dat de dekking zelf stuk is.
+
+**Wat Michiel bekijkt**
+
+- Beluisteren waar de twee nummers elkaar afwisselen: `.claude/worktrees/muziekenmaat/tools/hear.py level_music`, na het mergen `tools/hear.py level_music`.
+- Zien: "Multiplayer" op het titelscherm, en dan de knop Arena een paar keer indrukken: `GODOT_WINDOW=1 .claude/worktrees/muziekenmaat/tools/godot.sh`.
+- Het tweede nummer in het spel komt pas na de 3:34 van het eerste.
