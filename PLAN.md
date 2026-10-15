@@ -3346,13 +3346,13 @@ Bij het overzetten vond `tools/test_canals.sh` dat de helft van de trapjes binne
 
 ## Drie foutjes uit de duinen: de slagboom, de bomen en de robots
 
-Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de slagboom kan je niet schieten, terwijl de soldaat erachter hem wel raakt; een kogel zou op de boom zelf moeten afketsen en eronder en erboven door moeten gaan; (2) bij bomen laden onderdelen flikkerend in, "een beetje GTA Vice City"; (3) in een wedstrijd worden robots soldaten: breng de robots terug als vijand. Gebouwd op de branch `duinfouten`, vanaf de trunk op `2558564`.
+Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de slagboom kan je niet schieten, terwijl de soldaat erachter hem wel raakt; een kogel zou op de boom zelf moeten afketsen en eronder en erboven door moeten gaan; (2) bij bomen laden onderdelen flikkerend in, "een beetje GTA Vice City"; (3) in een wedstrijd worden robots soldaten: breng de robots terug als vijand. Gebouwd op de branch `duinfouten`, vanaf de trunk op `2558564`. Dezelfde dag op Michiels woord ("merge het maar in de trunk en herbouw de duinen") in `fase-2-vertical-slice` gevoegd, met de duinen herbouwd; niet gepusht.
 
 **1. Wat een schot tegenhoudt is wat er staat**
 
 - **De slagboom** (`barrier_pole()` in `tools/kit/field.gd`) had als botsvorm één plaat van de hele lengte van de boom, 1,6 m hoog en 14 cm dik, van de grond tot ruim boven de boom. De boom zelf ligt op een meter. Een schot van de speler op het lijf van de wachter erachter sloeg in de plaat; de wachter mikt op het hoofd van de speler, en zijn schot ging over de rand van de plaat heen. Nu hebben de boom, het contragewicht, de twee ijzers op de voet, het bord dat eraan hangt en de vork aan het eind elk een eigen doos, van staal. Gemeten in de herbouwde duinen, met stralen dwars over de pas en over het hek bij het complex: op 0,4, 0,75, 1,3 en 1,7 m boven de grond gaat een schot erdoor, op 1,0 m slaat het in op staal. Een geheven boom (`raised`) houdt nu ook een schot tegen langs zijn lengte. Lopen kan er niemand onderdoor of overheen: de onderkant ligt op 0,95 m, iemand die bukt is 1,1 m en springen haalt 0,90 m.
 - **De wachttoren** (`watch_tower()`) was tot aan zijn vloer één doos van 2,9 bij 2,9 m: geen schot ging tussen de poten door. Nu houden de poten (die hadden al een botsvorm), de schoren, de regels en de vloer een schot tegen, en de ruimte ertussen niet. Nagekeken op beide torens in de duinen: dwars erdoor gaat een straal tussen de schoren door, de dozen van poten, schoren en vloer staan waar het hout staat.
-- **Dit werkt pas na het herbouwen** van de levels met een slagboom of wachttoren: de duinen en de showroom. In mijn worktree zijn de duinen herbouwd om het te testen (alleen botsvormen en de schaduwkaart verschillen: de plaat en de doos wierpen schaduw op het land, en de 25% schaduw bleef 25%); die bestanden zijn niet gecommit, zoals `CLAUDE.md` vraagt.
+- **Het werkt na het herbouwen** van een level met een slagboom of wachttoren. De duinen zijn op Michiels woord herbouwd en meegecommit: alleen de botsvormen en de schaduwkaart verschillen (de plaat en de doos wierpen schaduw op het land; de 25% schaduw bleef 25%). De showroom is niet herbouwd.
 
 **2. Bomen die in één keer van tekening wisselden**
 
@@ -3386,7 +3386,7 @@ Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de
 **Getest**
 
 - `tools/test_match.sh` slaagt, met twee nieuwe controles en een bijgestelde: zes tegen zes in de fabriek tegen robots, de andere kant grunts en een heavy en de eigen kant soldaten; geen plaat, een treffer klinkt als staal, de heavy is groter; in 30 s (vier keer versneld) haalden ze er 15 neer en verloren ze er 17, en wie terugkwam was weer een robot. De eerste wedstrijd van de test speelt nu uitdrukkelijk soldaten tegen soldaten, omdat hij de uniformen controleert. Het scherm biedt Robots aan.
-- `tools/selftest.sh` slaagt (401), met de herbouwde duinen erin, voor en na de bomen.
+- `tools/selftest.sh` slaagt (401), met de herbouwde duinen erin, voor en na de bomen, en opnieuw op de duinen zoals ze gecommit zijn.
 - **Gezien**: de robots op een beeld van een wedstrijd op het fabrieksterrein (een grunt met zijn geweerarm en rood vizier, daarachter een heavy met paars); de bomen op het blad hierboven, 25 standpunten op weg naar één den, voor en na.
 
 **Wat ik niet kon beoordelen**
@@ -3399,4 +3399,4 @@ Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de
 **Nog open**
 
 - **Meer voorwerpen hebben een botsvorm die groter is dan wat je ziet.** In de duinen: de rollen prikkeldraad (een doos tot 1,15 m: een schot op de benen van iemand erachter blijft hangen), en de bovenkant van de poort van het complex, waar tralies staan. In de andere levels: tafels (een doos tot de vloer: niemand schiet onder een tafel door), rekken en hekken. Voor dingen waar je niet door kan lopen maar wel doorheen kan schieten bestaat nog geen soort botsvorm: dat vraagt een eigen laag die wel het lopen tegenhoudt en geen schot.
-- **De levels met een slagboom of wachttoren moeten herbouwd worden**: `tools/build_level.sh dunes` en `tools/build_level.sh showroom`. Dat is aan de agent van "Kit-ruimtes", of aan wie Michiel het vraagt.
+- **De showroom heeft nog de oude slagboom en wachttoren**, tot hij herbouwd wordt: `tools/build_level.sh showroom`.
