@@ -16,12 +16,15 @@ enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER, SAN
 ## What the screen of a match has on it: see scripts/match_menu.gd.
 const MATCH_MENU := preload("res://scripts/match_menu.gd")
 
+## The music of a level: these pieces one after the other, round and round,
+## see Sfx.music().
+const LEVEL_MUSIC: Array[StringName] = [&"level1and2", &"Corroded Metal Drones"]
 const LEVELS: Array[Dictionary] = [
-	{"name": "Factory", "scene": "res://scenes/factory.tscn", "music": &"level1and2"},
-	{"name": "Works", "scene": "res://scenes/works.tscn", "music": &"level1and2"},
-	{"name": "Depot", "scene": "res://scenes/depot.tscn", "music": &"level1and2"},
-	{"name": "Powerhouse", "scene": "res://scenes/powerhouse.tscn", "music": &"level1and2"},
-	{"name": "Dunes", "scene": "res://scenes/dunes.tscn", "music": &"level1and2"},
+	{"name": "Factory", "scene": "res://scenes/factory.tscn", "music": LEVEL_MUSIC},
+	{"name": "Works", "scene": "res://scenes/works.tscn", "music": LEVEL_MUSIC},
+	{"name": "Depot", "scene": "res://scenes/depot.tscn", "music": LEVEL_MUSIC},
+	{"name": "Powerhouse", "scene": "res://scenes/powerhouse.tscn", "music": LEVEL_MUSIC},
+	{"name": "Dunes", "scene": "res://scenes/dunes.tscn", "music": LEVEL_MUSIC},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it
 ## cannot hold a right click and click at once, and its scroll is not a wheel.
@@ -389,10 +392,10 @@ func _company() -> String:
 ## Plays what belongs to where the player is: the theme on the title screen
 ## and whatever is opened from it, and in a game the music of the level,
 ## `scene` or else the one that is loaded. Two levels that name the same
-## piece play it through from the one into the other.
+## pieces play the one that is on through from the one into the other.
 func _score(scene := "") -> void:
 	if at_title():
-		Sfx.music(THEME)
+		Sfx.music([THEME])
 		return
 	if scene == "" and get_tree().current_scene:
 		scene = get_tree().current_scene.scene_file_path
