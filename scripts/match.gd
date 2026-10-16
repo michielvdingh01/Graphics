@@ -752,6 +752,11 @@ func _set_out_specials() -> void:
 	var weapons_in_hand: Node3D = _game.player.weapons
 	if not weapons_in_hand.special_spent.is_connected(special_spent):
 		weapons_in_hand.special_spent.connect(special_spent)
+	# Drawn once now, rather than the first time one comes into view.
+	var looks: Array[MeshInstance3D] = []
+	for data in weapons:
+		looks.append_array(STASH.looks(data))
+	Fx.rehearse(looks)
 
 
 ## Somebody took a weapon of the arena up, from its stand or from where it

@@ -557,6 +557,10 @@ func _run() -> void:
 		titles[who.title] = true
 	_check("forty bots, twenty a side, no two of one name", crowd.size() == 40 and titles.size() == 40
 		and crowd.filter(func(who: RefCounted) -> bool: return who.team == 0).size() == 20)
+	var said_spot: Array = (JSON.parse_string(FileAccess.get_file_as_string(Match.ARENAS)) as Dictionary).dunes.specials.minigun
+	var minigun_stand: Array = tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.weapon.resource_path.ends_with("minigun.tres"))
+	_check("there the minigun stands where assets/arenas.json says, and not where it is worked out", minigun_stand.size() == 1
+		and minigun_stand[0].global_position.distance_to(Vector3(said_spot[0], said_spot[1], said_spot[2])) < 0.01)
 	var board: PackedStringArray = Match._hud._table()
 	_check("the table under Tab has a column for each side", board.size() == 2 and board[0].count("\n") == 20 and board[1].count("\n") == 20)
 	# Who comes back: how far the nearest enemy and the nearest friend are, and

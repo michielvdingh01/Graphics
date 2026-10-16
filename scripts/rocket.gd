@@ -44,6 +44,21 @@ func _ready() -> void:
 	_flame.light_bake_mode = Light3D.BAKE_DISABLED
 	_flame.position = Vector3(0, 0, 0.35)
 	add_child(_flame)
+	add_child(_tail())
+	_hiss.stream = Sfx.loop_of(&"rocket_flight")
+	_hiss.bus = Sfx.WORLD
+	_hiss.unit_size = 6.0
+	_hiss.max_distance = 90.0
+	_hiss.attenuation_filter_db = -6.0
+	add_child(_hiss)
+	if _hiss.stream:
+		_hiss.play()
+	if velocity != Vector3.ZERO:
+		look_at(global_position + velocity)
+
+
+## The flame at its tail.
+func _tail() -> MeshInstance3D:
 	var tail := MeshInstance3D.new()
 	var glow := SphereMesh.new()
 	glow.radius = 0.05
@@ -61,17 +76,19 @@ func _ready() -> void:
 	hot.emission = Color(1.0, 0.5, 0.15)
 	hot.emission_energy_multiplier = 4.0
 	tail.material_override = hot
-	add_child(tail)
-	_hiss.stream = Sfx.loop_of(&"rocket_flight")
-	_hiss.bus = Sfx.WORLD
-	_hiss.unit_size = 6.0
-	_hiss.max_distance = 90.0
-	_hiss.attenuation_filter_db = -6.0
-	add_child(_hiss)
-	if _hiss.stream:
-		_hiss.play()
-	if velocity != Vector3.ZERO:
-		look_at(global_position + velocity)
+	return tail
+
+
+## What it is drawn with, for Fx.rehearse(): its model and the flame at its
+## tail. Its smoke is a burst, which Fx rehearses anyway.
+func looks() -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = [_tail()]
+	for mesh: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		var copy := MeshInstance3D.new()
+		copy.mesh = mesh.mesh
+		copy.material_override = mesh.material_override
+		found.append(copy)
+	return found
 
 
 func _physics_process(delta: float) -> void:

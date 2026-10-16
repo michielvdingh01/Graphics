@@ -3885,3 +3885,48 @@ Geen wapen haalt meer dan twee keer zijn deel. Wat opvalt: de shotguns blijven o
 - **Hoe hij vliegt.** Hij tolt zoals de ronde, om zijn zwaartepunt; een echte steelhandgranaat vliegt verder en stabieler, met de bus voorop. Niet in beweging gezien.
 - **Het geluid** van stuiteren is dat van de ronde, een tik van staal; hout klinkt doffer.
 - **De worp in beeld**: de speler gooit met de linkerhand buiten beeld, dus wat hij gooit zie je pas als het vliegt.
+
+### Onderdeel 5: kijken en meten (gebouwd)
+
+**De rekken in elke arena.** Per arena een beeld van elk rek, van de weg ernaartoe (20 m ervoor, langs het navmesh vanaf de dichtstbijzijnde basis), van dichtbij (5 m) en vanaf het rek terug, op 1920×1080 in een potje van drie tegen drie: `benchmark/sheets/stands_<arena>.jpg`.
+
+| Arena | Minigun | Raketwerper | Oordeel |
+|---|---|---|---|
+| Fabrieksterrein (`works`) | in een kantine aan een gang, 121 en 138 m lopen van de bases | in een hoek van een binnenplaats tussen containers en vuilnisbakken, 100 en 126 m | goed |
+| Centrale (`powerhouse`) | in een zaal met tanks en kratten, half achter een tank, 106 en 109 m | tussen de ketels van het ketelhuis, 82 en 101 m | goed; van dichtbij zie je hem pas om de ketel heen |
+| Depot | op het laadperron onder het afdak, via de oprit, 42 en 50 m; daar is het donker | tussen de containers op het terrein, 36 en 38 m | goed |
+| Duinen | **niet goed**: 330 en 349 m lopen, diep in het bos en ver van waar gevochten wordt | boven op een duin, 181 en 227 m | minigun verplaatst |
+| Fabriek (`factory`) | op de vloer van de hal, 33 en 42 m | naast een tank in de hal, 35 en 41 m | goed |
+
+- **Waarom de duinen misgingen.** `Arena.hideouts()` geeft een omweg van 15 m of meer punten, maar boven 37,5 m allemaal evenveel, en neemt dan de eerste. In een arena van 397 m is dat een plek die van beide bases even ver is maar 280 m van de weg af. Ik heb de berekening niet veranderd (dan zou elke andere arena opnieuw bekeken moeten worden), maar de duinen een plek gegeven.
+- **`assets/arenas.json`** bestaat nu, met één plek: de minigun in de duinen op (152,4; 6,7; 82,4). Dat is een zandkom tussen twee duinen bij het hek van het complex, 199 en 221 m lopen van de bases, 23 m van de kortste weg af en 76 m van de raketwerper (`benchmark/sheets/stands_dunes.jpg`, de middelste rij). Gevonden door de plekken van de arena te zoeken met een omweg van 15 tot 45 m, eerlijk binnen 8% en minstens 60 m van elke basis; er waren er vier.
+
+**Wat het vuren kost**, op 3456×2160 met MetalFX, kwaliteit Ultra en automatische schaal, in de fabriek op de vloer van de hal (12, 0, 4), naar het westen kijkend. De lader was er een van 30 W met de accu op 69% (die tijdens het meten dus iets leegliep, maar niet zakte); load average 2 tot 3; niemand anders mat, de editor van Michiel stond open zonder spel. In paren direct na elkaar, in beide volgordes, elk 3 tot 3,5 s:
+
+| | Paren | Gemiddeld |
+|---|---|---|
+| Minigun doorvuren (na het opdraaien, tot net voor het oververhitten) tegen stilstaan | +0,99, +0,73, −0,37, +0,74 ms | +0,5 ms |
+| Minigun doorvuren tegen de karabijn doorvuren | +0,14, −0,05, −1,00, +0,17 ms | −0,2 ms |
+| De 2,5 s na een raket (rookspoor, vlam, knal) tegen de raketwerper stil in handen | +1,25, +0,46, +0,26, +0,20, +0,25, +0,28 ms | +0,45 ms (mediaan +0,27) |
+
+Het beeld zelf kostte zo'n 16 tot 18 ms; tussen twee paren schoof dat tot een milliseconde, binnen een paar minder. Met de minigun gaan er 45 tekenopdrachten bij (1 250 tegen 1 207). **Beide blijven onder de grens van 1 ms die het plan noemde**, dus de hulzen en inslaggeluiden van de minigun zijn niet verder uitgedund.
+
+**De eerste keer.** Geteld hoeveel pijplijnen er tijdens het tekenen gemaakt worden, vanaf het titelscherm een potje in (zoals Start dat doet), en daarna elk nieuw uiterlijk apart, met het beeld eerst op zijn plek en tot rust: een leeg rek met zijn klok, het wapen dat verschijnt met zijn naam door de muren, de minigun opgepakt, draaiend, vurend, oververhit en afkoelend, een soldaat met de minigun en met de raketwerper, de raketwerper in handen, een raket met rook en knal, elk wapen van het pakket in handen, een steelhandgranaat met zijn knal, en een soldaat die slaat.
+
+- **Voor de oefenbeurt**, met 1944: na het laden (82) alles 0, behalve een soldaat met de raketwerper in handen: 1. Met Standaard: na het laden (85) alles 0.
+- **Nu draait de wedstrijd bij het begin `Fx.rehearse()`** met wat een speciaal wapen kan laten zien (`looks()` in `scripts/stash.gd` en in `scripts/rocket.gd`): het rek, het wapen zoals het boven het rek hangt en zoals een ander het draagt (met schaduw), zoals de speler het vasthoudt met gloeiende lopen, en de raket met de vlam aan zijn staart. Het rookspoor is een uitbarsting van `Fx`, die werd al geoefend.
+- **Daarna**: 1944 85 bij het laden en verder overal 0; Standaard 87 en verder 0.
+- De nieuwe wapens van de pakketten en de steelhandgranaat kostten ook zonder oefenbeurt al niets: ze gebruiken dezelfde materialen als wat bij het laden getekend wordt.
+
+**Getest**
+
+- `tools/test_match.sh`: 117 controles, één nieuw: in de duinen staat de minigun waar `assets/arenas.json` zegt.
+- `tools/selftest.sh`: 428, geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **De plek in de duinen in het spel.** Bekeken als drie stilstaande beelden; of je er langs komt, en of hij niet juist te makkelijk te pakken is, zegt een potje.
+- **Of de andere plekken goed spelen**: goed om te zien betekent nog niet dat iemand er langskomt. In de telling per pakket (onderdeel 3) werd de minigun op het fabrieksterrein tientallen keren gepakt, de raketwerper 4 tot 14 keer.
+- **Het donker bij de minigun in het depot**: op de beelden is het perron onder het afdak bijna zwart, op de gloeiende rand van het rek na. Of dat in het spel ook zo is, zie je met jouw belichting.
+- **Een zwarte streep langs het hek in de duinen**, op het beeld van de weg naar de nieuwe plek: iets van het level, niet van het rek; niet uitgezocht.
+- **Wat het vuren kost op een gewone lader**: gemeten op 30 W. De verschillen tussen de paren zijn wat telt, en die horen niet van de lader af te hangen, maar op 140 W heb ik het niet gezien.

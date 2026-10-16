@@ -62,30 +62,8 @@ func _ready() -> void:
 	add_child(_model)
 	_model.position.y = HOVER if not dropped else 0.35
 	if not dropped:
-		var plinth := MeshInstance3D.new()
-		var shape := CylinderMesh.new()
-		shape.top_radius = 0.42
-		shape.bottom_radius = 0.48
-		shape.height = 0.14
-		shape.radial_segments = 8
-		shape.rings = 1
-		plinth.mesh = shape
-		plinth.material_override = PLINTH
-		plinth.position.y = 0.07
-		add_child(plinth)
-		var rim := MeshInstance3D.new()
-		var ring := TorusMesh.new()
-		ring.inner_radius = 0.4
-		ring.outer_radius = 0.43
-		ring.rings = 24
-		ring.ring_segments = 6
-		rim.mesh = ring
-		var glow := StandardMaterial3D.new()
-		glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		glow.albedo_color = TINT
-		rim.material_override = glow
-		rim.position.y = 0.145
-		add_child(rim)
+		for part in _stand():
+			add_child(part)
 	_light.light_color = TINT
 	_light.light_energy = 0.6
 	_light.omni_range = 2.2
@@ -196,6 +174,71 @@ func _arrive() -> void:
 	_label.no_depth_test = true
 	_label.visibility_range_end = 0.0
 	arrived.emit()
+
+
+## The plinth and its glowing rim.
+static func _stand() -> Array[MeshInstance3D]:
+	var plinth := MeshInstance3D.new()
+	var shape := CylinderMesh.new()
+	shape.top_radius = 0.42
+	shape.bottom_radius = 0.48
+	shape.height = 0.14
+	shape.radial_segments = 8
+	shape.rings = 1
+	plinth.mesh = shape
+	plinth.material_override = PLINTH
+	plinth.position.y = 0.07
+	var rim := MeshInstance3D.new()
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.4
+	ring.outer_radius = 0.43
+	ring.rings = 24
+	ring.ring_segments = 6
+	rim.mesh = ring
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.albedo_color = TINT
+	rim.material_override = glow
+	rim.position.y = 0.145
+	return [plinth, rim]
+
+
+## Every mesh a weapon of the arena can come to be drawn with, for
+## Fx.rehearse() to draw once as the match begins rather than the first time
+## one comes into view: the stand; the weapon as it hovers there and as
+## somebody else carries it; as the player holds it, barrels glowing as hot
+## as they get; and whatever it fires.
+static func looks(weapon: WeaponData) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = _stand()
+	var held := "res://scenes/models/%s_held.scn" % weapon.resource_path.get_file().get_basename()
+	if ResourceLoader.exists(held):
+		found.append_array(_copies((load(held) as PackedScene).instantiate(), GeometryInstance3D.SHADOW_CASTING_SETTING_ON))
+	for copy in _copies(weapon.viewmodel.instantiate(), GeometryInstance3D.SHADOW_CASTING_SETTING_OFF):
+		copy.set_instance_shader_parameter(&"glow", 1.0)
+		found.append(copy)
+	if weapon.projectile:
+		var projectile: Node = weapon.projectile.instantiate()
+		if projectile.has_method("looks"):
+			found.append_array(projectile.looks())
+		projectile.free()
+	return found
+
+
+## A copy of every mesh of `scene`, to be drawn by itself, casting a shadow
+## as `shadow` says; `scene` is freed.
+static func _copies(scene: Node, shadow: GeometryInstance3D.ShadowCastingSetting) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	for mesh: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		var copy := MeshInstance3D.new()
+		copy.mesh = mesh.mesh
+		copy.material_override = mesh.material_override
+		copy.cast_shadow = shadow
+		copy.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+		found.append(copy)
+	scene.free()
+	return found
 
 
 func _show(there: bool) -> void:

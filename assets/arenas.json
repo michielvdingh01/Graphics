@@ -1,0 +1,8 @@
+{
+	"_doc": "Where a level stands its weapons of the arena (scripts/stash.gd), where the spot that scripts/arena.gd works out (Arena.hideouts()) is not a good one: {\"<level>\": {\"specials\": {\"<weapon>\": [x, y, z]}}}, the weapon by the name of its file in weapons/. A weapon a level does not name here gets the spot that is worked out. Each spot here was looked at in the game: see PLAN.md, 'Wapens afgebouwd'.",
+	"dunes": {
+		"specials": {
+			"minigun": [152.4, 6.7, 82.4]
+		}
+	}
+}

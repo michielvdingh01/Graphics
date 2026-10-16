@@ -388,9 +388,9 @@ func _pose(delta: float) -> void:
 		# Blades up and forward; a strike drives them out.
 		for side: float in [1.0, -1.0]:
 			var arm := "R" if side > 0.0 else "L"
-			var strike := _recoil * (1.0 if side > 0.0 else 0.6)
-			_turn("Arm" + arm, Vector3(lerpf(0.35, 0.75, _raised) + strike * 0.9 + side * stride_r, side * 0.25, side * 0.12))
-			_turn("Forearm" + arm, Vector3(lerpf(0.9, 1.25, _raised) - strike * 0.8, 0.0, 0.0))
+			var thrust := _recoil * (1.0 if side > 0.0 else 0.6)
+			_turn("Arm" + arm, Vector3(lerpf(0.35, 0.75, _raised) + thrust * 0.9 + side * stride_r, side * 0.25, side * 0.12))
+			_turn("Forearm" + arm, Vector3(lerpf(0.9, 1.25, _raised) - thrust * 0.8, 0.0, 0.0))
 		return
 	# The weapon arm comes up level with the target and kicks with every shot.
 	_turn("ArmR", Vector3(lerpf(0.22 + stride_r, 1.02 + _pitch * 0.75 + _recoil * 0.05, _raised), _toe_in * _raised, 0.05))
