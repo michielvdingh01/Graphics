@@ -1072,6 +1072,13 @@ func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
 		{&"tint": Color(0.62, 0.62, 0.64, 0.42), &"speed": 0.9, &"spread": 0.3, &"size": Vector2(0.015, 0.17), &"life": 1.0, &"rise": 0.3, &"amount": lerpf(0.45, 1.0, amount)})
 
 
+## A puff of the smoke a rocket leaves behind it, `direction` the way it flies:
+## thicker than a barrel's, slow to spread and slow to go.
+func rocket_trail(position: Vector3, direction: Vector3) -> void:
+	_burst(_puffs, Transform3D(_up_along(-direction), position), 2.4,
+		{&"tint": Color(0.66, 0.66, 0.68, 0.5), &"speed": 0.35, &"spread": 0.5, &"size": Vector2(0.07, 0.55), &"life": 2.2, &"rise": 0.12, &"amount": 0.4})
+
+
 ## Makes ready what a shot into a puddle throws up.
 func _ready_splash() -> void:
 	_drops = _burst_mesh(48, preload("res://shaders/drops.gdshader"))

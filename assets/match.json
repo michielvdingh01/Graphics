@@ -13,6 +13,7 @@
 		{"regen_to": 50.0, "hurts": 1.0, "focus": 0, "bots": "hardened"}
 	],
 	"cells": {"spots_for_one": 250, "most": 4, "back": 45.0},
+	"specials": {"first": 60.0, "back": 90.0},
 	"arenas": {
 		"dunes": {"most": 20, "size": 20}
 	},

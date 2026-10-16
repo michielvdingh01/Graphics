@@ -25,3 +25,5 @@ ads_time = 0.2
 hip_offset = Vector3(0.1, -0.115, -0.3)
 ads_offset = Vector3(0, -0.066, -0.17)
 hip_rotation_deg = Vector3(1.5, 2.5, -2)
+bot_sight = 70.0
+bot_range = 16.0

@@ -21,6 +21,11 @@ plays a footstep or an enemy's shot, unless --at says from how far.
                                           each step at the moment the game plays it
     tools/hear.py casings rifle           a burst, with the cases landing after it
     tools/hear.py grenade                 the pin, the throw, three bounces and the bang
+    tools/hear.py minigun                 the motor coming up to speed, fire until it overheats,
+                                          the tail, the steam and the motor running down;
+    tools/hear.py minigun b b             the same with variant b of the roar and of the motor
+    tools/hear.py rocket                  the rocket launcher firing, the rocket going away and
+                                          going off 36 m further on
     tools/hear.py ambience boiler         twelve seconds of the bed of a kind of space (hall,
                                           room, yard, boiler, turbine), with what sounds in it
                                           now and then and three shots for scale
@@ -224,6 +229,56 @@ def grenade() -> list:
     return events + played("explosion", [START + 0.22 + 2.2])
 
 
+def minigun(fire: str, spin: str) -> list:
+    """The minigun as scripts/weapons.gd plays it, with the numbers of
+    weapons/minigun.tres: its motor coming up to speed, firing until it
+    overheats, letting go, and the motor running down. The motor and the roar
+    are takes that go round; the game raises the pitch of the motor with the
+    speed of the barrels, which is played here in short steps."""
+    data = dict(re.findall(r"^(\w+) = (.+)$", (ROOT / "weapons/minigun.tres").read_text(), re.M))
+    up = float(data.get("spin_up", 0.75))
+    down = float(data.get("spin_down", 1.0))
+    firing = float(data.get("overheat_after", 4.0))
+
+    def going_round(sound: str, start: float, until: float, db: float, pitch: float = 1.0) -> list:
+        take = sorted((ROOT / "assets/audio" / sound).glob("*.wav"))[0]
+        with wave.open(str(take)) as opened:
+            length = opened.getnframes() / opened.getframerate() / pitch
+        events = []
+        at = start
+        while at < until:
+            events.append({"t": at, "file": str(take), "bus": "World", "db": db, "pitch": pitch, "until": min(at + length, until), "fade": 0.02})
+            at += length
+        return events
+
+    def motor(start: float, seconds: float, rising: bool) -> list:
+        steps = 8
+        events = []
+        for i in range(steps):
+            speed = (i + 0.5) / steps if rising else 1.0 - (i + 0.5) / steps
+            at = start + seconds * i / steps
+            events += going_round(spin, at, at + seconds / steps + 0.02, -16.0 + 12.0 * speed, 0.45 + 0.55 * speed)
+        return events
+
+    begin = START + up
+    end = begin + firing
+    events = motor(START, up, True)
+    events += going_round(spin, begin, end, -4.0)
+    events += going_round(fire, begin, end, 0.0)
+    events += played("minigun_tail", [end], -1.0) + played("minigun_overheat", [end], -2.0)
+    return events + motor(end, down, False)
+
+
+def rocket() -> list:
+    """The rocket launcher: the launch at full level, the roar of the rocket
+    as it goes, fading over the 0.8 s it takes to fly 36 m at 45 m/s, and the
+    blast there, from that far off."""
+    flight = sorted((ROOT / "assets/audio/rocket_flight").glob("*.wav"))[0]
+    events = played("rocket_launch", [START])
+    events.append({"t": START + 0.05, "file": str(flight), "bus": "World", "db": -6.0, "until": START + 0.8, "fade": 0.5})
+    return events + placed(played("explosion", [START + 0.8]), 36.0)
+
+
 def burst(sound: str, rate: float, db: float = 0.0, start: float = START) -> list:
     shots = max(1, int(FIRE * rate / 60.0)) if rate else 1
     return played(sound, [start + i * 60.0 / rate if rate else start for i in range(shots)], db)
@@ -414,6 +469,12 @@ def main() -> None:
         name, events = f"casings_{args[1]}", casings(args[1])
     elif args[0] == "grenade":
         name, events = "grenade", grenade()
+    elif args[0] == "rocket":
+        name, events = "rocket", rocket()
+    elif args[0] == "minigun":
+        fire = "minigun_fire" + (f"_{args[1]}" if len(args) > 1 and args[1] != "a" else "")
+        spin = "minigun_spin" + (f"_{args[2]}" if len(args) > 2 and args[2] != "a" else "")
+        name, events = f"minigun_{'_'.join(args[1:]) or 'a'}", minigun(fire, spin)
     elif args[0] == "ambience":
         kind = args[1] if len(args) > 1 else bed
         if "in" not in options:

@@ -5,7 +5,8 @@ extends Node
 ## from the title screen, or with --match=<kind>:<level>:<size> on the command
 ## line: tdm, ffa or ctf, the name of a level, and how many play a side, or in
 ## all where there are no sides; capture the flag takes :<prize> after that, a
-## name from assets/prizes.json. --only-bots leaves the player out of it, to
+## name from assets/prizes.json. --pack=<name> is what everybody carries, a
+## pack from assets/packs.json. --only-bots leaves the player out of it, to
 ## look on.
 ##
 ## It takes the level over the way the sandbox does: the route is off, no
@@ -40,6 +41,14 @@ signal said(text: String)
 enum State { NONE, LOADING, PLAYING, OVER }
 
 const ARENA := preload("res://scripts/arena.gd")
+const ARMORY := preload("res://scripts/armory.gd")
+const STASH := preload("res://scripts/stash.gd")
+## Where a level says its weapons of the arena stand, if it does:
+## {"<level>": {"specials": {"<weapon>": [x, y, z]}}}. Otherwise
+## scripts/arena.gd finds them a spot.
+const ARENAS := "res://assets/arenas.json"
+## The weapons of the arena where a pack does not say: assets/packs.json.
+const SPECIALS: Array[String] = ["minigun", "rocket_launcher"]
 const PICKUP := preload("res://scripts/pickup.gd")
 ## What knows of the match in its turn is loaded once the game runs, not as
 ## this is read: the brain of a bot, its body and what is on screen.
@@ -72,13 +81,10 @@ const BLAME := 10.0
 const LETS_UP := 1.0
 ## Seconds the can lies there that somebody who went down leaves.
 const CAN_LIES := 30.0
-## What the bots carry, in the order they join a side: the weapons of the
-## loadout by their place in it. Most carry the carbine.
-const ARMS: Array[int] = [0, 3, 0, 2, 0, 4]
-## The same where the ends of the arena are further apart than FAR metres to
-## walk: there the marksman's rifle comes first, and a second before the
-## shotgun.
-const ARMS_FAR: Array[int] = [4, 0, 0, 4, 3, 0]
+## Where the ends of the arena are further apart than this many metres to
+## walk, the bots carry what their pack gives them for far (assets/packs.json):
+## in the standard pack the marksman's rifle comes first, and a second one
+## before the shotgun.
 const FAR := 300.0
 ## Which of the three figures of a theme the bots against the player are, in
 ## the order they join.
@@ -158,6 +164,10 @@ var _rules: Array[Dictionary] = []
 ## lies there now and the clock at which the next one does.
 var _cells: Array[Dictionary] = []
 var _cell_numbers := {}
+## The stands of the weapons of the arena, by weapon, and when they are first
+## there and how long after one is gone it is back: assets/match.json.
+var _stands := {}
+var _special_numbers := {"first": 60.0, "back": 90.0}
 ## What an arena that is big enough for more than a kind allows says of it,
 ## by the name of its level: how many may play a side there (`most`) and how
 ## many do when nothing else is asked for (`size`).
@@ -192,6 +202,8 @@ func _ready() -> void:
 		_rules.append(one)
 	if parsed is Dictionary and parsed.get("cells") is Dictionary:
 		_cell_numbers = parsed.cells
+	if parsed is Dictionary and parsed.get("specials") is Dictionary:
+		_special_numbers.merge(parsed.specials, true)
 	if parsed is Dictionary and parsed.get("arenas") is Dictionary:
 		_arenas = parsed.arenas
 	var bots: Variant = JSON.parse_string(FileAccess.get_file_as_string(BOTS)) if FileAccess.file_exists(BOTS) else null
@@ -210,11 +222,14 @@ func _ready() -> void:
 				what.size = asked[2].to_int()
 			if asked.size() > 3:
 				what.prize = asked[3]
+			for other in args:
+				if other.begins_with("--pack="):
+					what.pack = other.get_slice("=", 1)
 			open(what)
 
 
-## Opens a match and goes to its level: {mode, level, size, only_bots}, of
-## which all but the first may be left out. False if there is no such kind or
+## Opens a match and goes to its level: {mode, level, size, only_bots, prize,
+## pack}, of which all but the first may be left out. False if there is no such kind or
 ## no such level.
 func open(what: Dictionary) -> bool:
 	var kind := str(what.get("mode", "tdm"))
@@ -248,6 +263,7 @@ func open(what: Dictionary) -> bool:
 		"size": size,
 		"only_bots": bool(what.get("only_bots", false)),
 		"prize": str(what.get("prize", "flag")),
+		"pack": str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
 	}
 	Save.set_aside(true)
 	# As the game starts its first level is still on its way in: that one
@@ -539,9 +555,12 @@ func _show_fall(by: int, fallen: int, weapon: int, head: bool, push: Vector3) ->
 		_game.kills = killer.kills
 		_game.kills_changed.emit(killer.kills)
 	if _game:
-		# Whoever goes down leaves a can of ammunition, for a while.
+		# Whoever goes down leaves a can of ammunition, for a while, and the
+		# weapon of the arena if they had it.
 		var can: Node3D = _game.leave(PICKUP.Kind.AMMO, who.body.global_position + Vector3.UP * 0.9)
 		get_tree().create_timer(CAN_LIES, false).timeout.connect(can.queue_free)
+		if who.body == _game.player:
+			_lay_down(_game.player.weapons.drop_special(), who.body.global_position)
 	felled.emit(by if killer else 0, fallen, weapon, head)
 	changed.emit()
 
@@ -652,8 +671,9 @@ func _begin() -> void:
 			roster.append([Net.id(), Net.player_name, side, -1])
 		else:
 			# A bot has the number of its place, below nought.
+			var arms := ARMORY.bots(setup.pack, arena.length() > FAR)
 			@warning_ignore("integer_division")
-			var arm: int = (ARMS_FAR if arena.length() > FAR else ARMS)[(place / (2 if mode.teams() else 1)) % ARMS.size()]
+			var arm: int = arms[(place / (2 if mode.teams() else 1)) % arms.size()]
 			roster.append([-(place + 1), NAMES[named % NAMES.size()], side, arm])
 			named += 1
 	Net.show(self, &"_show_roster", [roster])
@@ -673,9 +693,87 @@ func _begin() -> void:
 	var cells := clampi(roundi(float(arena.spots.size()) / float(_cell_numbers.get("spots_for_one", 250))), 1, int(_cell_numbers.get("most", 4)))
 	for at: Vector3 in arena.caches(cells):
 		_cells.append({"at": at, "cell": null, "due": 0.0})
+	_set_out_specials()
 	state = State.PLAYING
 	began.emit()
 	changed.emit()
+
+
+## Sets out the weapons of the arena of the pack on their stands, each on a
+## spot of another kind of out of the way (Arena.hideouts()), or where the
+## level says in ARENAS. They are there a while after the start.
+func _set_out_specials() -> void:
+	var weapons: Array[WeaponData] = []
+	for weapon_name: Variant in ARMORY.spec(setup.pack).get("specials", SPECIALS):
+		var data := ARMORY.named(str(weapon_name))
+		if data and data.special:
+			weapons.append(data)
+	if weapons.is_empty():
+		return
+	var kinds := [ARENA.Hideout.OFF_THE_WAY, ARENA.Hideout.UP, ARENA.Hideout.IN_THE_OPEN]
+	var spots: PackedVector3Array = arena.hideouts(kinds.slice(0, weapons.size()))
+	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(ARENAS)) if FileAccess.file_exists(ARENAS) else null
+	var placed: Dictionary = said.get(setup.level, {}).get("specials", {}) if said is Dictionary else {}
+	for i in mini(weapons.size(), spots.size()):
+		var data := weapons[i]
+		var stand: Node3D = STASH.new()
+		stand.weapon = data
+		stand.back = float(_special_numbers.back)
+		_game.add_child(stand)
+		var at: Variant = placed.get(data.resource_path.get_file().get_basename())
+		stand.global_position = Vector3(at[0], at[1], at[2]) if at is Array and at.size() == 3 else spots[i]
+		stand.come_in(float(_special_numbers.first))
+		stand.taken.connect(_on_special_taken.bind(stand))
+		stand.arrived.connect(func() -> void: say("%s is up" % data.display_name, &"pickup_grenade"))
+		_stands[data] = stand
+	var weapons_in_hand: Node3D = _game.player.weapons
+	if not weapons_in_hand.special_spent.is_connected(_on_special_spent):
+		weapons_in_hand.special_spent.connect(_on_special_spent)
+
+
+## Somebody took a weapon of the arena up, from its stand or from where it
+## was dropped, and let go of the one they had, if they had one.
+func _on_special_taken(by: Node3D, dropped: Array, from: Node3D) -> void:
+	var who := _entrant_of(by)
+	if who:
+		say("%s has the %s" % [who.title, (from.weapon as WeaponData).display_name.to_lower()])
+	_lay_down(dropped, by.global_position)
+
+
+## A weapon of the arena was fired empty: its stand has it back in a while.
+func _on_special_spent(data: WeaponData) -> void:
+	var stand: Node3D = _stands.get(data)
+	if is_instance_valid(stand):
+		stand.release(float(_special_numbers.back))
+
+
+## Leaves what drop_special() gave where somebody let go of it, with what was
+## left in it, for a while; then its stand has it back in a while.
+func _lay_down(dropped: Array, at: Vector3) -> void:
+	if dropped.is_empty() or _game == null:
+		return
+	var data: WeaponData = dropped[0]
+	var stand: Node3D = _stands.get(data)
+	if int(dropped[1]) <= 0:
+		if is_instance_valid(stand):
+			stand.release(float(_special_numbers.back))
+		return
+	var lying: Node3D = STASH.new()
+	lying.weapon = data
+	lying.rounds = int(dropped[1])
+	lying.dropped = true
+	lying.stand = stand
+	lying.back = float(_special_numbers.back)
+	_game.add_child(lying)
+	lying.global_position = Vector3(at.x, Fx.floor_below(at + Vector3.UP * 0.5), at.z)
+	lying.taken.connect(_on_special_taken.bind(lying))
+
+
+func _entrant_of(body: Node3D) -> Entrant:
+	for who: Entrant in entrants.values():
+		if who.body == body:
+			return who
+	return null
 
 
 ## Who plays: [number, name, side, weapon] for each, the weapon of a bot or
@@ -794,6 +892,7 @@ func _forget() -> void:
 	arena = null
 	_game = null
 	_cells.clear()
+	_stands.clear()
 	_baked = false
 	left = 0.0
 

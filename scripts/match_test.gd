@@ -164,6 +164,44 @@ func _run() -> void:
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	_check("the bot is back, as good as new and somewhere else", target.out <= 0.0 and not target.body.dead and target.health == Match.MAX_HEALTH and target.body.visible)
 	_check("nothing hurts it for a moment", target.safe > 0.0 and not Match.harm(target.id, 50.0, target.body.global_position, Vector3.FORWARD, me.id, 0) and target.health == Match.MAX_HEALTH)
+	# The weapons of the arena: on a stand somewhere out of the way, there
+	# after a while, taken by walking up to them and lost by going down.
+	var stands := tree.get_nodes_in_group("stash")
+	var arena: RefCounted = Match.arena
+	var stand: Node3D = stands[0] if not stands.is_empty() else null
+	var minigun: WeaponData = load("res://weapons/minigun.tres")
+	var from_ends := []
+	for one: Node3D in stands:
+		var nearest := INF
+		for end: int in arena.ends:
+			nearest = minf(nearest, one.global_position.distance_to(arena.spots[end]))
+		from_ends.append(snappedf(nearest, 0.1))
+	print("  the weapons of the arena: %s, %s m from the nearest end" % [stands.map(func(one: Node3D) -> String: return one.weapon.display_name), from_ends])
+	var places_apart: bool = stands.size() == 2 and stands[0].global_position.distance_to(stands[1].global_position) > 15.0
+	_check("the minigun and the rocket launcher stand apart, away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun and places_apart
+		and from_ends.all(func(metres: float) -> bool: return metres > 15.0) and stands.all(func(one: Node3D) -> bool: return not one.is_up() and one.due() > 30.0))
+	var news := []
+	var listen := func(text: String) -> void: news.append(text)
+	Match.said.connect(listen)
+	stand.come_in(0.0)
+	_check("once one is there everybody is told", stand.is_up() and news.has("Minigun is up"))
+	player.global_position = stand.global_position + Vector3(0.4, 0.0, 0.0)
+	await _wait(0.3)
+	_check("the player takes it by walking up to it, and the stand stays empty", player.weapons.special() == minigun and not stand.is_up() and stand.due() == INF
+		and news.any(func(text: String) -> bool: return text.ends_with("has the minigun")))
+	Match.said.disconnect(listen)
+	var went_down_at := player.global_position
+	# Down by nobody's hand, so that no bot has a kill to show for it.
+	Match.harm(me.id, 500.0, went_down_at, Vector3.FORWARD, 0, Match.BLAST)
+	await _wait(0.2)
+	var lying := tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.dropped)
+	_check("going down the player leaves it where they fell, with all that was left in it", player.weapons.special() == null and lying.size() == 1
+		and Vector2(lying[0].global_position.x - went_down_at.x, lying[0].global_position.z - went_down_at.z).length() < 0.5 and lying[0].rounds == minigun.mag_size)
+	lying[0]._age = lying[0].LIES - 0.1
+	await _wait(0.3)
+	_check("left lying, it goes, and its stand has it back a while later", not is_instance_valid(lying[0]) and stand.due() > 60.0 and stand.due() < INF)
+	await _wait(float(Match.mode.numbers.respawn))
+	me.deaths = 0
 	# How many bots fire at a person at a time.
 	var bots: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot)
 	Settings.difficulty = 0
@@ -179,7 +217,7 @@ func _run() -> void:
 	# On easy it takes two shots of a marksman's rifle to the body, or one to
 	# the head.
 	Settings.difficulty = 0
-	var marksman: WeaponData = player.weapons.LOADOUT[4]
+	var marksman: WeaponData = player.weapons.loadout[4]
 	me.safe = 0.0
 	Match.harm(me.id, marksman.damage, player.global_position, Vector3.FORWARD, target.id, 4)
 	_check("on easy one shot of a marksman's rifle to the body leaves the player standing", not player.dead and player.health > 40.0 and player.health < 60.0)
@@ -190,7 +228,7 @@ func _run() -> void:
 	me.safe = 0.0
 	Match.harm(me.id, marksman.damage * marksman.headshot_multiplier, player.global_position, Vector3.FORWARD, target.id, 4, true)
 	_check("one to the head is enough, on easy too", player.dead)
-	var shotgun: WeaponData = player.weapons.LOADOUT[2]
+	var shotgun: WeaponData = player.weapons.loadout[2]
 	_check("a bot's whole load of shot is not, on easy: pellets to the head count as any other", shotgun.damage * shotgun.pellets * float(Match.rules.hurts) < player.MAX_HEALTH)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	Settings.difficulty = 2
@@ -422,6 +460,17 @@ func _run() -> void:
 	level.pressed.emit()
 	_check("and another through the difficulty", level.text == "Difficulty  ·  Hard" and Settings.difficulty == 2)
 	Settings.difficulty = 1
+	var pack_was: String = Settings.pack
+	var weapons_button: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Weapons"))[0]
+	var packs_seen := [weapons_button.text]
+	for i in 6:
+		weapons_button.pressed.emit()
+		if not packs_seen.has(weapons_button.text):
+			packs_seen.append(weapons_button.text)
+	print("  the packs on the screen: %s" % [packs_seen])
+	_check("and another through the packs of weapons, all six of them", packs_seen.size() == 6 and packs_seen.has("Weapons  ·  1944") and packs_seen.has("Weapons  ·  Pistols only"))
+	Settings.pack = pack_was
+	Menu.MATCH_MENU.chosen.pack = pack_was
 	var arenas: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Arena"))[0]
 	var places := [arenas.text]
 	for i in 4:
@@ -459,6 +508,17 @@ func _run() -> void:
 	Match.close()
 	_check("leaving it gives back the rules and what was saved", not Match.active and Settings.rules() == plain and Save.checkpoint == saved)
 
+	# A match with another pack: everybody carries it, the player and the bots.
+	var armory: GDScript = load("res://scripts/armory.gd")
+	_check("a match opens with the pack of 1944", Match.open({"mode": "tdm", "level": "factory", "size": 3, "pack": "1944"}) and Match.setup.pack == "1944")
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	var carried: Array = tree.current_scene.player.weapons.loadout
+	var pack_bots: Array = armory.bots("1944")
+	var bot_arms := Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot).map(func(who: RefCounted) -> String: return armory.at(who.weapon).display_name)
+	print("  1944: the player carries %s; the bots %s" % [carried.map(func(data: WeaponData) -> String: return data.display_name), bot_arms])
+	_check("the player carries its weapons on their keys, and every bot one of them", carried == armory.weapons("1944")
+		and Match.entrants.values().all(func(who: RefCounted) -> bool: return not who.bot or pack_bots.has(who.weapon)))
 	# A big arena: twenty a side in the dunes, coming back where the fight is.
 	_check("the dunes take twenty a side, forty each on their own; the halls six and twelve", Match.most("tdm", "dunes") == 20 and Match.usual("tdm", "dunes") == 20
 		and Match.most("ctf", "dunes") == 20 and Match.most("ffa", "dunes") == 40 and Match.most("tdm", "works") == 6 and Match.most("ffa", "works") == 12 and Match.usual("tdm", "works") == 6)

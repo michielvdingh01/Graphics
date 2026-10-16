@@ -685,6 +685,7 @@ func _controls() -> void:
 		["Aim", "Hold right click", "Hold " + alt, "Hold LT"],
 		["Reload", "R", "R", "X"],
 		["Grenade", "G", "G", "Y"],
+		["Melee", "V", "V", "Click right stick"],
 		["Switch weapon", "1 to 5, or scroll", "1 to 5", "LB and RB"],
 		["Pause", "Esc", "Esc", "Start"],
 	]

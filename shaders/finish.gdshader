@@ -25,6 +25,15 @@ uniform float grain_scale = 20.0;
 uniform float grain_depth : hint_range(0.0, 2.0) = 0.5;
 // Lights one instance up for a moment, as when a shot lands on it.
 instance uniform float flash = 0.0;
+// Heat, from 0 to 1: steel that glows dull red from halfway and orange at the
+// end, as the barrels of a weapon that has been firing for seconds. They are
+// hottest towards the muzzle, which lies along -Z of their part.
+instance uniform float glow = 0.0;
+varying float towards_muzzle;
+
+void vertex() {
+	towards_muzzle = smoothstep(0.0, 0.45, -VERTEX.z);
+}
 
 void fragment() {
 	vec3 wide = texture(wear_mask, UV * mask_scale).rgb;
@@ -60,5 +69,7 @@ void fragment() {
 	METALLIC = mix(coat_metallic, core_metallic, worn);
 	NORMAL_MAP = texture(grain, UV * grain_scale).rgb;
 	NORMAL_MAP_DEPTH = grain_depth * (1.0 - 0.6 * worn);
-	EMISSION = vec3(1.0, 0.45, 0.25) * flash;
+	vec3 hot = mix(vec3(0.5, 0.03, 0.0), vec3(1.0, 0.3, 0.04), smoothstep(0.8, 1.0, glow));
+	float along = towards_muzzle * towards_muzzle;
+	EMISSION = vec3(1.0, 0.45, 0.25) * flash + hot * smoothstep(0.5, 1.0, glow) * (0.06 + 0.94 * along) * (0.6 + 0.6 * fine.g) * 0.8;
 }

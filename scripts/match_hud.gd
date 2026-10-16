@@ -147,8 +147,8 @@ func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
 	if who == null:
 		return
 	var with := "explosion" if weapon == Match.BLAST else "melee" if weapon == Match.MELEE else ""
-	if weapon >= 0 and weapon < WEAPONS.LOADOUT.size():
-		with = WEAPONS.LOADOUT[weapon].display_name.to_lower()
+	if weapon >= 0 and weapon < WEAPONS.ARMORY.ALL.size():
+		with = WEAPONS.ARMORY.ALL[weapon].display_name.to_lower()
 	var text := "%s  ▸  %s" % [killer.title, who.title] if killer else "%s went down" % who.title
 	if with and killer:
 		text += "   (%s%s)" % [with, ", head" if head else ""]

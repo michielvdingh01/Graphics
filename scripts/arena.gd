@@ -44,6 +44,14 @@ const MOST := 500
 const NO_WAY := 1e9
 ## How far along the way to somewhere somebody faces who is put down, in metres.
 const LOOKS_AHEAD := 4.0
+## For hideouts(): how much further it may be to walk from one end than from
+## the other, as a share of the walk between them; how far from either end
+## it is at least; how many metres off the shortest way counts as a detour;
+## and how far apart two of them are at least.
+const FAIR := 0.12
+const END_CLEAR := 25.0
+const DETOUR := 15.0
+const AWAY := 30.0
 
 ## Where somebody can stand, on the floor.
 var spots := PackedVector3Array()
@@ -302,6 +310,90 @@ func caches(count: int) -> PackedVector3Array:
 				best = i
 		chosen.append(spots[middle.pop_at(best)])
 	return chosen
+
+
+## Kinds of a spot a little out of the way, see hideouts().
+enum Hideout { OFF_THE_WAY, UP, IN_THE_OPEN }
+
+## `kinds.size()` spots a little out of the way, for what is worth going out
+## of one's way for: about as far to walk from either end, on a spot where
+## somebody can stand, as far apart as they can be and at least AWAY metres,
+## each of its own kind:
+## - OFF_THE_WAY: a detour of DETOUR metres or more off the shortest walk
+##   between the ends, into a room that does not lead on: in is easy, out is
+##   a fight;
+## - UP: well above the floor that most of the arena is on, up a stair or a
+##   ramp;
+## - IN_THE_OPEN: where whoever stands there is seen from much of the arena.
+## A kind there is no such spot for gives the best of IN_THE_OPEN instead.
+func hideouts(kinds: Array) -> PackedVector3Array:
+	var fair: Array[int] = []
+	for spot in spots.size():
+		var near := minf(walks[0][spot], walks[1][spot])
+		var far := maxf(walks[0][spot], walks[1][spot])
+		if far < NO_WAY and far - near < FAIR * length() and near > END_CLEAR:
+			fair.append(spot)
+	if fair.is_empty():
+		return PackedVector3Array()
+	var heights := PackedFloat32Array()
+	for spot in spots:
+		heights.append(spot.y)
+	heights.sort()
+	@warning_ignore("integer_division")
+	var ground := heights[heights.size() / 2]
+	var chosen := PackedVector3Array()
+	for kind: int in kinds:
+		var best := -1
+		var best_score := -INF
+		for spot: int in fair:
+			var at := spots[spot]
+			var apart := INF
+			for other in chosen:
+				apart = minf(apart, at.distance_to(other))
+			if apart < AWAY:
+				continue
+			var score := _out_of_the_way(spot, kind, ground)
+			if score > best_score:
+				best_score = score
+				best = spot
+		if best < 0 or best_score <= 0.0 and kind != Hideout.IN_THE_OPEN:
+			# Nothing of that kind: the most open spot there is, as far from
+			# the others as it can be.
+			best = -1
+			best_score = -INF
+			for spot: int in fair:
+				var apart := INF
+				for other in chosen:
+					apart = minf(apart, spots[spot].distance_to(other))
+				var score := _out_of_the_way(spot, Hideout.IN_THE_OPEN, ground) + minf(apart, AWAY) * 0.01
+				if best < 0 or score > best_score:
+					best_score = score
+					best = spot
+		chosen.append(spots[best])
+	return chosen
+
+
+## How well `spot` is out of the way in the manner of `kind`; 0 or less if
+## not at all.
+func _out_of_the_way(spot: int, kind: int, ground: float) -> float:
+	match kind:
+		Hideout.OFF_THE_WAY:
+			var detour := walks[0][spot] + walks[1][spot] - length()
+			return minf(detour, DETOUR * 2.5) - DETOUR + 0.1
+		Hideout.UP:
+			return spots[spot].y - ground - 1.5
+	# In the open: the share of a sample of the other spots that sees it.
+	var seen := 0
+	var asked := 0
+	@warning_ignore("integer_division")
+	var stride := maxi(spots.size() / 60, 1)
+	for i in range(spot % 7, spots.size(), stride):
+		if i == spot:
+			continue
+		asked += 1
+		if _sees(spots[i], spots[spot]):
+			seen += 1
+	return float(seen) / maxi(asked, 1)
 
 
 ## True if somebody standing at `from` sees the head or the chest of somebody

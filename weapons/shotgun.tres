@@ -36,3 +36,5 @@ flash_prongs = 0
 hip_offset = Vector3(0.1, -0.112, -0.3)
 ads_offset = Vector3(0, -0.043, -0.2)
 hip_rotation_deg = Vector3(1.5, 2.5, -2)
+bot_sight = 40.0
+bot_range = 6.0

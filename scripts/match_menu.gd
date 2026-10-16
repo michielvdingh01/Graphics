@@ -17,13 +17,14 @@ const SIZES := {"works": "large", "powerhouse": "medium", "factory": "small", "d
 ## look like another.
 const NOT_OFFERED: Array[String] = ["soldiers_desert", "panic_clowns", "mannequin_zombie"]
 const PRIZE := preload("res://scripts/prize.gd")
+const ARMORY := preload("res://scripts/armory.gd")
 ## How many a side, or in all, the button goes through above twelve, as far as
 ## the arena takes them: one by one would be too many presses.
 const BIG: Array[int] = [16, 20, 24, 30, 40]
 
-## What was chosen last, for as long as the game runs. The prize is the one
-## thing of it that is kept after that: it is a setting, see Settings.prize.
-static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag"}
+## What was chosen last, for as long as the game runs. The prize and the pack
+## are kept after that: they are settings, see Settings.prize and Settings.pack.
+static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag", "pack": "standard"}
 ## Whether the screen is the list of prizes to choose from, and whether it
 ## was that a moment ago, so that the focus goes back to where it was.
 static var picking := false
@@ -39,6 +40,8 @@ static func build(menu: Node) -> void:
 		_pick(menu, prizes)
 		return
 	chosen.prize = Settings.prize if prizes.has(Settings.prize) or prizes.is_empty() else prizes[0]
+	var packs := ARMORY.names()
+	chosen.pack = Settings.pack if packs.has(Settings.pack) else ARMORY.STANDARD
 	var kinds: Array = Match.kinds.keys()
 	if not kinds.has(chosen.mode):
 		chosen.mode = kinds[0]
@@ -48,6 +51,7 @@ static func build(menu: Node) -> void:
 	var arena: Button = menu._button("", func() -> void: pass)
 	var size: Button = menu._button("", func() -> void: pass)
 	var prize: Button = menu._button("", func() -> void: pass)
+	var pack: Button = menu._button("", func() -> void: pass)
 	var enemies: Button = menu._button("", func() -> void: pass)
 	var difficulty: Button = menu._button("", func() -> void: pass)
 	# Who there is to play against: the robots, and every theme that has
@@ -66,6 +70,8 @@ static func build(menu: Node) -> void:
 		size.text = ("Players a side  ·  %d" if teams else "Players  ·  %d") % chosen.size
 		prize.visible = chosen.mode == "ctf" and not prizes.is_empty()
 		prize.text = "Prize  ·  %s" % str(PRIZE.spec(chosen.prize).get("name", chosen.prize))
+		pack.text = "Weapons  ·  %s" % ARMORY.title(chosen.pack)
+		pack.tooltip_text = str(ARMORY.spec(chosen.pack).get("about", ""))
 		enemies.text = "Against  ·  %s" % themes[maxi(themes.find(Settings.enemy_theme), 0)].capitalize()
 		difficulty.text = "Difficulty  ·  %s" % Settings.DIFFICULTY_NAMES[clampi(Settings.difficulty, 0, Settings.DIFFICULTY_NAMES.size() - 1)]
 	kind.pressed.connect(func() -> void:
@@ -85,6 +91,10 @@ static func build(menu: Node) -> void:
 	prize.pressed.connect(func() -> void:
 		picking = true
 		menu._show(menu.Screen.MATCH))
+	pack.pressed.connect(func() -> void:
+		chosen.pack = packs[(maxi(packs.find(chosen.pack), 0) + 1) % packs.size()]
+		Settings.put("pack", chosen.pack)
+		refresh.call())
 	enemies.pressed.connect(func() -> void:
 		# The setting of the game itself, so that it is one choice everywhere.
 		Settings.put("enemy_theme", themes[(maxi(themes.find(Settings.enemy_theme), 0) + 1) % themes.size()])
