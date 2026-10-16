@@ -163,6 +163,9 @@ var arena: RefCounted
 ## How often a bot got nowhere and had to think of something else, for the
 ## test to count.
 var stuck := 0
+## The pack everybody carries in the match as it is played; setup.pack may be
+## another by now, chosen in the settings for when it starts again.
+var pack_in_play := ""
 ## Every time a weapon of the arena was taken up: {weapon, by, bot, at}, the
 ## name of the weapon, who took it, whether that was a bot, and the seconds
 ## into the match.
@@ -680,6 +683,7 @@ func _on_baked() -> void:
 
 ## The match begins: everybody who plays is in the level, at their own end.
 func _begin() -> void:
+	pack_in_play = setup.pack
 	arena = ARENA.new()
 	if not arena.survey(_game):
 		push_warning("%s has no floor to play a match on" % setup.scene)

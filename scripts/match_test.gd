@@ -545,6 +545,29 @@ func _run() -> void:
 	print("  1944: the player carries %s; the bots %s" % [carried.map(func(data: WeaponData) -> String: return data.display_name), bot_arms])
 	_check("the player carries its weapons on their keys, and every bot one of them", carried == armory.weapons("1944")
 		and Match.entrants.values().all(func(who: RefCounted) -> bool: return not who.bot or pack_bots.has(who.weapon)))
+	# Another pack, chosen in the settings during the match: for when it is
+	# started again.
+	var pack_set: String = Settings.pack
+	Menu._show(Menu.Screen.PAUSE)
+	Menu._show(Menu.Screen.SETTINGS)
+	var choice: Array = _shown_buttons().filter(func(button: Button) -> bool: return button.text.begins_with("Weapons"))
+	_check("in a match the settings offer the packs, at the one that is played", choice.size() == 1 and choice[0].text == "Weapons  ·  1944")
+	if choice.size() == 1:
+		choice[0].pressed.emit()
+	_check("another is for when the match starts again: what is in hand stays in hand", Match.setup.pack == "heavy" and choice.size() == 1
+		and choice[0].text == "Weapons  ·  Heavy  (once the match starts again)" and tree.current_scene.player.weapons.loadout == armory.weapons("1944"))
+	Menu._show(Menu.Screen.PAUSE)
+	var again: Array = _shown_buttons().filter(func(button: Button) -> bool: return button.text.begins_with("Start the match again"))
+	_check("and the pause screen says which it starts again with", again.size() == 1 and again[0].text == "Start the match again  ·  Heavy")
+	if again.size() == 1:
+		again[0].pressed.emit()
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	var heavy_bots: Array = armory.bots("heavy")
+	_check("started again, the player carries that pack and every bot a weapon of it", tree.current_scene.player.weapons.loadout == armory.weapons("heavy")
+		and Match.pack_in_play == "heavy" and not Menu.is_open() and Match.entrants.values().all(func(who: RefCounted) -> bool: return not who.bot or heavy_bots.has(who.weapon)))
+	Settings.pack = pack_set
+	Menu.MATCH_MENU.chosen.pack = pack_set
 	# A big arena: twenty a side in the dunes, coming back where the fight is.
 	_check("the dunes take twenty a side, forty each on their own; the halls six and twelve", Match.most("tdm", "dunes") == 20 and Match.usual("tdm", "dunes") == 20
 		and Match.most("ctf", "dunes") == 20 and Match.most("ffa", "dunes") == 40 and Match.most("tdm", "works") == 6 and Match.most("ffa", "works") == 12 and Match.usual("tdm", "works") == 6)
