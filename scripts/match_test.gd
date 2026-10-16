@@ -12,7 +12,8 @@ extends Node
 ## has twenty a side play in the dunes, and looks at where those who fall
 ## come back: near a friend and near the fight, not at the far end. On the
 ## way it has bots take up the weapons of the arena and fight with them;
-## with --specials it does only that.
+## with --specials it does only that. With --pack=<name> it only has bots play
+## a match with that pack and counts the kills by weapon, see _pack_kills().
 
 const ROBOT_RIG := preload("res://scripts/enemy_rig.gd")
 
@@ -45,6 +46,13 @@ func _run() -> void:
 			await _soak(arg.get_slice("=", 1).to_float())
 			tree.quit(0)
 			return
+	var told := Array(OS.get_cmdline_user_args())
+	if not told.any(func(arg: String) -> bool: return arg.begins_with("--match=")):
+		for arg in told:
+			if arg.begins_with("--pack="):
+				await _pack_kills(arg.get_slice("=", 1))
+				tree.quit(0)
+				return
 	if "--specials" in OS.get_cmdline_user_args():
 		# Only the part with the weapons of the arena in the hands of bots.
 		Settings.enemy_theme = "soldiers"
@@ -626,6 +634,7 @@ func _soak(seconds: float) -> void:
 		game.player.damaged.connect(func(amount: float) -> void:
 			hits.append(Vector2(Match.left, amount))
 			game.player.health = 1e6)
+	var counted := _count_kills()
 	var news := {}
 	Match.said.connect(func(text: String) -> void:
 		for word: String in [" has ", " dropped ", " brought ", " back home", " scored "]:
@@ -663,6 +672,7 @@ func _soak(seconds: float) -> void:
 	if not news.is_empty():
 		print("  the score is %d : %d; what was said of the prizes, and how often: %s" % [Match.tally[0], Match.tally[1], news])
 	print("  %s" % _taken())
+	_print_kills(counted[0])
 	physics.sort()
 	var mean := 0.0
 	for sample in physics:
@@ -918,6 +928,94 @@ func _of_the_arena(text: String) -> bool:
 	return Match.SPECIALS.any(func(weapon: String) -> bool: return text.ends_with(weapon.replace("_", " ")))
 
 
+## With --pack=<name> and no --match= of its own: a match of bots only with
+## that pack, team deathmatch in the arena --arena=<level> (the works unless
+## said otherwise), as many a side as play there, for --seconds=<seconds> of
+## match (300) at four times the clock. It counts the kills by weapon, next to
+## how many bots carry each: a weapon that takes more than twice its share of
+## the kills is one to look at. Bots play otherwise than people do, but an
+## outlier shows.
+func _pack_kills(pack: String) -> void:
+	var tree := get_tree()
+	var level := "works"
+	var seconds := 300.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--arena="):
+			level = arg.get_slice("=", 1)
+		elif arg.begins_with("--seconds="):
+			seconds = arg.get_slice("=", 1).to_float()
+	var armory: GDScript = load("res://scripts/armory.gd")
+	if not armory.names().has(pack):
+		print("MATCH PACK FAILED: no pack called %s; there are %s" % [pack, ", ".join(armory.names())])
+		return
+	Settings.enemy_theme = "soldiers"
+	if not Match.open({"mode": "tdm", "level": level, "only_bots": true, "pack": pack}):
+		print("MATCH PACK FAILED: no arena called %s" % level)
+		return
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 90.0)
+	if Match.state != Match.State.PLAYING:
+		print("MATCH PACK FAILED: the match did not begin")
+		return
+	Match.mode.numbers = Match.mode.numbers.duplicate()
+	Match.mode.numbers.limit = 100000
+	Match.left = seconds + 60.0
+	var counted := _count_kills()
+	var began := Time.get_ticks_msec()
+	Engine.time_scale = 4.0
+	var clock := 0.0
+	while clock < seconds:
+		await _wait(0.5)
+		clock += 0.5
+	Engine.time_scale = 1.0
+	print("  %s in the %s, %d a side, %.0f s of match in %.0f s" % [armory.title(pack), level, Match.setup.size, seconds, (Time.get_ticks_msec() - began) / 1000.0])
+	var suspects := _print_kills(counted[0])
+	print("  %s" % _taken())
+	print("MATCH PACK %s: %s" % [pack, "no weapon takes more than twice its share of the kills" if suspects.is_empty() else "; ".join(suspects)])
+	Match.close()
+
+
+## Counts every kill of the match by what it was done with, from now on: the
+## first of what this gives is the count, by the place of the weapon in the
+## armory, or Match.MELEE or BLAST.
+func _count_kills() -> Array:
+	var kills := {}
+	Match.felled.connect(func(by: int, _fallen: int, weapon: int, _head: bool) -> void:
+		if by != 0:
+			kills[weapon] = int(kills.get(weapon, 0)) + 1)
+	return [kills]
+
+
+## Prints `kills` by weapon, next to how many bots carry each, and gives back
+## what is suspect: a weapon of the bots with more than twice its share.
+func _print_kills(kills: Dictionary) -> PackedStringArray:
+	var armory: GDScript = load("res://scripts/armory.gd")
+	var carried := {}
+	var bots := 0
+	for who: RefCounted in Match.entrants.values():
+		if who.bot:
+			bots += 1
+			var own: int = armory.index(who.brain._own) if who.brain else who.weapon
+			carried[own] = int(carried.get(own, 0)) + 1
+	var total := 0
+	for weapon: int in kills:
+		total += int(kills[weapon])
+	print("  %d kills: by weapon, the kills, their share and the share of the bots that carry it" % total)
+	var suspects := PackedStringArray()
+	var weapons := carried.keys()
+	for weapon: int in kills:
+		if not weapons.has(weapon):
+			weapons.append(weapon)
+	for weapon: int in weapons:
+		var title: String = "blows" if weapon == Match.MELEE else "blasts" if weapon == Match.BLAST else armory.at(weapon).display_name if weapon >= 0 else "something else"
+		var share := float(kills.get(weapon, 0)) / maxi(total, 1)
+		var bearers := float(carried.get(weapon, 0)) / maxi(bots, 1)
+		print("    %-18s %4d   %3.0f%%   %s" % [title, int(kills.get(weapon, 0)), share * 100.0, "%3.0f%% of the bots" % (bearers * 100.0) if carried.has(weapon) else "from the arena or no weapon"])
+		if carried.has(weapon) and share > bearers * 2.0 and total >= 20:
+			suspects.append("%s takes %.1f times its share" % [title, share / bearers])
+	return suspects
+
+
 ## How often the weapons of the arena were taken up in the match, and by whom.
 func _taken() -> String:
 	if Match.takes.is_empty():
@@ -925,7 +1023,7 @@ func _taken() -> String:
 	var by := {}
 	for take: Dictionary in Match.takes:
 		var line: Array = by.get(take.weapon, [])
-		line.append("%s%s at %d:%02d" % [take.by, "" if take.bot else " (a person)", int(take.at) / 60, int(take.at) % 60])
+		line.append("%s%s at %d:%02d" % [take.by, "" if take.bot else " (a person)", floori(float(take.at) / 60.0), int(take.at) % 60])
 		by[take.weapon] = line
 	var parts := PackedStringArray()
 	for weapon: String in by:

@@ -455,12 +455,12 @@ func _state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int, w
 
 
 ## How hot a weapon is, from 0 to 1, as bits of what a player is doing.
-static func heat_bits(heat: float) -> int:
+func heat_bits(heat: float) -> int:
 	return clampi(roundi(heat * HOTTEST), 0, HOTTEST) << HEAT
 
 
 ## How hot the weapon of somebody is, from 0 to 1, from what they are doing.
-static func heat_of(doing: int) -> float:
+func heat_of(doing: int) -> float:
 	return float((doing >> HEAT) & HOTTEST) / HOTTEST
 
 

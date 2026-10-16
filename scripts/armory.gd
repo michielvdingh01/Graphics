@@ -40,6 +40,15 @@ const MOST := 5
 static var _packs := {}
 
 
+## Every weapon there is, in its place. A script that is read while this one
+## is still being read asks for ALL this way rather than by its name: the
+## constant itself would load every weapon there and then, in the middle of
+## whatever is loading, and a weapon that is already on its way in comes out
+## empty.
+static func all() -> Array[WeaponData]:
+	return ALL
+
+
 ## The place of `data` in ALL, -1 if it is none of them.
 static func index(data: WeaponData) -> int:
 	return ALL.find(data)

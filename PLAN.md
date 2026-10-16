@@ -3803,3 +3803,65 @@ Op 16 oktober 2026 gevraagd: stap 5 en de open punten van "Wapens: de slag, pakk
 - **Of de slag in beweging klopt.** Gezien als vijf stilstaande momenten. Het geweer draait van getrokken naar gedreven over de kortste weg; of dat in 0,1 s als een zwaai leest of als een schok, en of de handen dan op het wapen blijven, zie je pas in het spel.
 - **Hoe vaak bots slaan.** Ze komen alleen binnen 2 m als iemand op ze afloopt of een hoek omkomt; zelf lopen ze er niet op af om te slaan. Of dat in een potje vaak genoeg gebeurt, of juist te vaak, zegt het spelen.
 - **De robot** heb ik niet zien slaan.
+
+### Onderdeel 3: de balans in het spel zelf (gebouwd)
+
+**De schietbaan** (`_balance()` in `scripts/selftest.gd`). Hoog boven het level ligt een vloer van 140 m, met een pop zo groot als de romp waarmee `tools/weapon_sheet.py` rekent (45 bij 60 cm, op borsthoogte). De speler vuurt elk wapen dat er is gericht op die pop af, zoals het spel vuurt: met terugslag, bloom en het schudden van het beeld, en zonder iemand die de loop terugtrekt. Op 5, 10, 20, 40 en 80 m, eerst met de trekker vast (een halfautomaat zo snel als hij gaat); en op 40 en 80 m, waar dat niet raakt, nog eens gedoseerd: een schot pas als de terugslag van het vorige gezakt is, zoals iemand die wil raken vuurt. Naast het aantal schoten dat 100 doet staat wat het blad zegt (`tools/weapon_sheet.py --shots`, gericht en stilstaand; dat blad telt geen terugslag). De schoten vallen op de echte klok: zonder venster komen de beelden niet sneller, en één schot per beeld is wat een wapen hooguit vuurt.
+
+- **`tools/selftest.sh --balance`** draait de hele baan (4½ minuut). De gewone selftest vuurt alleen op 5 m en controleert daar dat spel en blad het eens zijn, op één schot na: verder weg is het balans en geen fout, en dat drukt hij af in plaats van het af te keuren.
+- **Wat de baan zegt**, schoten om 100 te doen en in hoeveel seconden vanaf het eerste schot (het richten niet meegeteld), naast het blad:
+
+  | Wapen | 5 m | 10 m | 20 m | 40 m | 80 m |
+  |---|---|---|---|---|---|
+  | Karabijn | 4 · 0,29 s (4) | 4 · 0,30 s (4) | 4 · 0,31 s (4) | geen in 19; gedoseerd 5 · 1,33 s (5) | geen; gedoseerd 8 · 2,30 s (8) |
+  | Pistool | 3 · 0,31 s (3) | 3 · 0,31 s (3) | 3 · 0,31 s (3) | geen in 19; gedoseerd 5 · 1,66 s (5) | geen; gedoseerd 6 · 2,12 s (6) |
+  | Pompgeweer | 1 · 0,00 s (1) | 3 · 1,51 s (3) | geen in 7 (–) | geen in 7; gedoseerd geen in 7 (–) | geen; gedoseerd geen in 7 (–) |
+  | Pistoolmitrailleur | 5 · 0,28 s (5) | 5 · 0,28 s (5) | 7 · 0,41 s (7) | geen in 46; gedoseerd 14 · 3,54 s (14) | geen; gedoseerd geen in 29 (54) |
+  | Scherpschuttersgeweer | 2 · 0,37 s (2) | 2 · 0,37 s (2) | 2 · 0,36 s (2) | 2 · 0,37 s (2) | 5 · 1,44 s (2) |
+  | Minigun | 7 · 0,26 s (7) | 7 · 0,26 s (7) | 14 · 0,49 s (12) | 60 · 1,87 s (64) | geen in 131 (357) |
+  | Raketwerper | 1 · 0,09 s (1) | 1 · 0,19 s (1) | 1 · 0,42 s (1) | 1 · 0,86 s (1) | geen in 2 (1) |
+  | Revolver | 2 · 0,41 s (2) | 2 · 0,41 s (2) | 2 · 0,41 s (2) | 2 · 0,41 s (2) | 6 · 2,03 s (3) |
+  | Dubbelloops | 1 · 0,00 s (1) | 5 · 6,32 s (5) | geen in 6 (–) | geen in 6; gedoseerd geen in 4 (–) | geen; gedoseerd geen in 4 (–) |
+  | Machinepistool | 6 · 0,24 s (6) | 8 · 0,34 s (7) | geen in 49 (15) | geen in 60; gedoseerd geen in 23 (36) | geen; gedoseerd geen in 16 (–) |
+  | Grendelgeweer | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) |
+  | Gevechtsgeweer | 2 · 0,19 s (2) | 2 · 0,19 s (2) | 2 · 0,19 s (2) | geen in 10; gedoseerd 2 · 0,45 s (2) | geen; gedoseerd 3 · 0,86 s (3) |
+  | Lichte mitrailleur | 4 · 0,27 s (4) | 4 · 0,27 s (4) | 4 · 0,27 s (4) | geen in 16; gedoseerd 4 · 0,93 s (4) | geen; gedoseerd 11 · 3,21 s (8) |
+  | PPSh-41 | 6 · 0,31 s (6) | 6 · 0,31 s (6) | geen in 28 (8) | geen in 58; gedoseerd 22 · 6,22 s (18) | geen; gedoseerd geen in 27 (71) |
+  | Mosin-Nagant | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) |
+  | Trench gun | 1 · 0,00 s (1) | 2 · 0,55 s (4) | geen in 9 (–) | geen in 9; gedoseerd geen in 9 (–) | geen; gedoseerd geen in 9 (–) |
+  | M1911 | 3 · 0,38 s (3) | 3 · 0,38 s (3) | 4 · 0,56 s (3) | geen in 13; gedoseerd 3 · 0,88 s (3) | geen; gedoseerd 4 · 1,30 s (4) |
+
+- **Wat daaruit volgt.**
+  - **Tot 20 m klopt het blad**, ook met de trekker vast, voor bijna alles. Uitzonderingen: de **PPSh** en het **machinepistool** halen op 20 m met de trekker vast geen kill (28 en 49 schoten, waar het blad 8 en 15 zegt): bij 1 000 en 1 300 schoten per minuut klimt de loop van de pop af. De minigun heeft er 14 nodig waar het blad 12 zegt.
+  - **Op 40 m raakt met de trekker vast geen enkel automatisch wapen**, en ook de snelle halfautomaten niet (het pistool, de M1911, het gevechtsgeweer). Gedoseerd halen ze het aantal schoten van het blad, maar ze doen er drie à vier keer zo lang over: de karabijn 1,33 s waar het blad 0,39 s rekent, het pistool 1,66 s.
+  - **Wat op 40 m dan het snelst is**: het scherpschuttersgeweer (0,37 s), de revolver (0,41 s, met de trekker vast!), het gevechtsgeweer gedoseerd (0,45 s), de mitrailleur gedoseerd (0,93 s). In Standaard is de karabijn op 40 m dus trager dan het blad laat zien, en het pistool bijna even traag als de karabijn.
+  - **Op 80 m** doen het scherpschuttersgeweer en de revolver met de trekker vast meer schoten dan het blad (5 en 6 waar het blad 2 en 3 zegt): de tweede kogel komt voor het beeld weer stil staat. De raketwerper miste de pop op 80 m twee keer (op 40 m raak in 0,86 s).
+- **Het blad zelf** (`tools/weapon_sheet.py`) rekent zoals eerst; het heeft er alleen `--shots` bij, dat de schoten per wapen en afstand als JSON geeft.
+
+**Kills per wapen in een potje van bots**: `tools/test_match.sh --pack=<naam> --only-bots` laat twaalf bots vijf minuten team deathmatch spelen op het fabrieksterrein (op vier keer de klok, anderhalve minuut), met dat pakket, en telt de kills per wapen naast hoeveel bots elk wapen dragen. Een wapen dat meer dan twee keer zijn deel haalt, noemt hij (`--arena=` en `--seconds=` voor een andere arena of duur). `--soak` telt nu ook per wapen.
+
+Zo, elk pakket vijf minuten op het fabrieksterrein met zes per kant:
+
+| Pakket | Kills | Wapens van de bots: aandeel kills (aandeel dragers) | Speciaal, slagen en ontploffingen | Speciale wapens gepakt |
+|---|---|---|---|---|
+| Standaard | 136 | karabijn 43% (50%), pistoolmitrailleur 16% (17%), pompgeweer 11% (17%), scherpschuttersgeweer 20% (17%) | slagen 2, ontploffingen 3, minigun 8, raketwerper 1 | raketwerper 4×, minigun 12× |
+| Van dichtbij | 168 | pistoolmitrailleur 60% (50%), dubbelloops 16% (33%), machinepistool 10% (17%) | ontploffingen 4, raketwerper 3, minigun 17 | raketwerper 10×, minigun 27× |
+| Ver weg | 235 | gevechtsgeweer 62% (67%), grendelgeweer 30% (33%) | slagen 1, ontploffingen 4, minigun 11, raketwerper 3 | minigun 32×, raketwerper 14× |
+| 1944 | 135 | PPSh 50% (50%), Mosin 39% (33%), trench gun 4% (17%) | minigun 6, raketwerper 2, ontploffingen 2 | raketwerper 8×, minigun 22× |
+| Zwaar | 246 | mitrailleur 56% (67%), pompgeweer 28% (33%) | raketwerper 4, ontploffingen 5, minigun 26, slagen 3 | raketwerper 9×, minigun 61× |
+| Alleen pistolen | 99 | M1911 38% (33%), revolver 28% (33%), pistool 11% (17%), machinepistool 9% (17%) | ontploffingen 5, minigun 8 | raketwerper 4×, minigun 13× |
+
+Geen wapen haalt meer dan twee keer zijn deel. Wat opvalt: de shotguns blijven op dit grote, open terrein ver onder hun deel (de trench gun 4% van de kills bij 17% van de dragers, de dubbelloops 16% bij 33%); de minigun doet 4 tot 11% van de kills en wisselt tientallen keren van hand; de raketwerper doet weinig (1 tot 4 kills, plus een deel van de ontploffingen).
+
+**Getest**
+
+- `tools/selftest.sh`: 426 controles, met de schietbaan op 5 m (de hele selftest duurt nu 355 s).
+- `tools/selftest.sh --balance`: de hele baan, 4½ minuut, geslaagd.
+- `tools/test_match.sh`: 116 controles, geslaagd; `--pack=` voor alle zes pakketten zoals hierboven.
+- **Een fout onderweg.** Eerst noemde de baan de lijst `ARMORY.ALL` bij naam. Daarna was in elke run de raketwerper leeg: geen rek, en een bot die er een raket mee afvuurde liep vast. De selftest wordt gelezen terwijl de kast nog geladen wordt, en de raket verwijst via `Match` naar de kast terug. De lijst wordt nu via `ARMORY.all()` gevraagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of bots zo vechten als mensen.** De telling per wapen zegt hoe bots met elk wapen doen; een bot richt op de borst en vuurt in stoten naar zijn niveau, een mens niet. Een uitschieter zie je ermee, een fijne afstelling niet.
+- **Of terugslag zo hoort.** De baan laat zien dat iemand die de trekker vasthoudt op 40 m niets raakt. Of dat bedoeld is (terugtrekken hoort bij het spel) of te veel, is een keuze voor het afstellen, stap 6. Ik heb niets aan de wapens veranderd.
+- **De tijd tot de kill met richten erbij**: de baan telt vanaf het eerste schot, het blad vanaf het eerste moment dat iemand gezien wordt, met het richten erbij.
