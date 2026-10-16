@@ -10,6 +10,10 @@ extends "res://tools/models/weapons.gd"
 ## the forearms came from. scripts/humanoid_rig.gd closes the hands of a
 ## character around them.
 
+## What still moves when somebody else carries the weapon, and so stays a
+## part of its own: the barrels of the minigun, which scripts/puppet.gd spins.
+const MOVING: Array[String] = ["Barrels"]
+
 ## "R" or "L" while the part being built is a hand.
 var _side_of_hand := ""
 
@@ -18,9 +22,12 @@ func model(model_name: String) -> void:
 	super(model_name + "_held")
 
 
-func part(part_name: String, _pivot := Transform3D(), _parent := "") -> void:
+func part(part_name: String, pivot := Transform3D(), _parent := "") -> void:
 	_side_of_hand = part_name.trim_prefix("Arm") if part_name.begins_with("Arm") else ""
-	super("Body")
+	if part_name in MOVING:
+		super(part_name, pivot)
+	else:
+		super("Body")
 
 
 func marker(marker_name: String, at: Transform3D, _parent := "") -> void:

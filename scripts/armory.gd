@@ -9,7 +9,7 @@ extends RefCounted
 ## <name>_held.scn).
 ##
 ## A pack is a line in assets/packs.json: the weapons on 1 and on, what bots
-## carry, and the grenades. Everybody in a match carries the pack of the
+## carry, and the grenades: how many, and which. Everybody in a match carries the pack of the
 ## match; the route and the sandbox carry STANDARD. A pack that names a weapon
 ## that is not in ALL yet is not on offer.
 
@@ -34,10 +34,23 @@ const ALL: Array[WeaponData] = [
 ]
 const FILE := "res://assets/packs.json"
 const STANDARD := "standard"
+## What a pack throws where it does not say, and where the scenes of what it
+## can throw are: scenes/<name>.tscn, with scripts/grenade.gd.
+const GRENADE := "grenade"
+const THROWN := "res://scenes/%s.tscn"
 ## The most weapons a pack has: one for each of the keys 1 to 5.
 const MOST := 5
 
 static var _packs := {}
+
+
+## Every weapon there is, in its place. A script that is read while this one
+## is still being read asks for ALL this way rather than by its name: the
+## constant itself would load every weapon there and then, in the middle of
+## whatever is loading, and a weapon that is already on its way in comes out
+## empty.
+static func all() -> Array[WeaponData]:
+	return ALL
 
 
 ## The place of `data` in ALL, -1 if it is none of them.
@@ -108,6 +121,17 @@ static func bots(pack: String, far := false) -> Array[int]:
 static func grenades(pack: String) -> Vector2i:
 	var start := int(spec(pack).get("grenades", 2))
 	return Vector2i(start, maxi(start, 3))
+
+
+## The name of what a pack throws: GRENADE, or "stick_grenade" for 1944.
+static func grenade(pack: String) -> String:
+	var thrown := str(spec(pack).get("grenade", GRENADE))
+	return thrown if ResourceLoader.exists(THROWN % thrown) else GRENADE
+
+
+## The scene of what is thrown by the name grenade() gives.
+static func thrown(grenade_name: String) -> PackedScene:
+	return load(THROWN % (grenade_name if ResourceLoader.exists(THROWN % grenade_name) else GRENADE))
 
 
 static func _all() -> Dictionary:

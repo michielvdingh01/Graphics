@@ -258,10 +258,11 @@ var ads_blend := 0.0
 ## equip().
 var loadout: Array[WeaponData] = []
 ## The grenades carried, how many a level starts with and the most there can
-## be: the pack says.
+## be, and what they are, see ARMORY.grenade(): the pack says.
 var grenades := 2
 var start_grenades := 2
 var most_grenades := 3
+var grenade_kind := ARMORY.GRENADE
 
 var _index := 0
 var _pending := 0
@@ -292,6 +293,9 @@ var _turned := 0.0
 var _firing := false
 var _due := 0.0
 var _rounds := 0
+## Where the rounds of this frame ended up, which the other machines are told
+## of at once: not thirty messages a second.
+var _volley := PackedVector3Array()
 ## The heat that overheats a weapon, from 0 to 1, and the seconds it cannot
 ## fire for once it has.
 var _hot := 0.0
@@ -352,7 +356,7 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
 			pack = arg.get_slice("=", 1)
-	equip(ARMORY.weapons(pack), ARMORY.grenades(pack))
+	equip(ARMORY.weapons(pack), ARMORY.grenades(pack), ARMORY.grenade(pack))
 	_build_fill()
 	player.hit_from.connect(_on_hit)
 	player.landed.connect(_on_landed)
@@ -369,9 +373,9 @@ func _ready() -> void:
 
 ## Takes up `weapons` on 1 and on, each with a full magazine and the reserve a
 ## level starts with, and as many grenades as `grenade_count` starts with, of
-## at most its second number. Whatever was in hand is put away; with nothing
-## to take up it is the standard pack.
-func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3)) -> void:
+## at most its second number, of the kind `grenade` names. Whatever was in
+## hand is put away; with nothing to take up it is the standard pack.
+func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade := ARMORY.GRENADE) -> void:
 	for model in _models:
 		_rig.remove_child(model.root)
 		model.root.queue_free()
@@ -395,6 +399,7 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3)) -> void:
 	_models[_index].root.visible = true
 	start_grenades = grenade_count.x
 	most_grenades = grenade_count.y
+	grenade_kind = grenade
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
 	_settle()
@@ -818,7 +823,10 @@ func _fire(data: WeaponData) -> void:
 			# went, and one round in three of barrels that spin.
 			if (i if data.pellets > 1 else _rounds) % 3 == 0 or (data.pellets == 1 and data.spin_up <= 0.0):
 				Fx.tracer(muzzle, end)
-	Net.player_did(&"fired", [ARMORY.index(data), ends])
+	if data.spin_up > 0.0:
+		_volley.append_array(ends)
+	else:
+		Net.player_did(&"fired", [ARMORY.index(data), ends])
 	if Match.active:
 		Match.fired(player, muzzle, data.flash_size * HEARD)
 
@@ -875,6 +883,7 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	get_tree().current_scene.add_child(rocket)
 	rocket.global_position = start
 	rocket.look_at(start + direction)
+	Net.player_did(&"launched", [start, rocket.velocity])
 	var back: Node3D = _models[_index].root.get_node_or_null("Back")
 	if back:
 		var behind := camera.global_basis.z
@@ -899,6 +908,9 @@ func _spin_barrels(data: WeaponData, delta: float, trigger: bool, aim: bool, bus
 		while _due >= 1.0 and _mags[_index] > 0:
 			_due -= 1.0
 			_fire(data)
+		if not _volley.is_empty():
+			Net.player_did(&"fired", [ARMORY.index(data), _volley])
+			_volley = PackedVector3Array()
 		if data.overheat_after > 0.0:
 			_hot = minf(_hot + delta / data.overheat_after, 1.0)
 			if _hot >= 1.0:
@@ -1090,13 +1102,13 @@ func _release_grenade() -> void:
 	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, [player.get_rid()])
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		from = eye
-	var grenade: RigidBody3D = GRENADE.instantiate()
+	var grenade: RigidBody3D = ARMORY.thrown(grenade_kind).instantiate()
 	get_tree().current_scene.add_child(grenade)
 	grenade.global_position = from
 	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
 	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
 	grenade.thrower = Match.number(player) if Match.active else 0
-	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity])
+	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity, grenade_kind])
 	Sfx.play(&"throw", -6.0)
 
 
@@ -1111,6 +1123,8 @@ func _start_melee(dry := false) -> void:
 	if dry:
 		Sfx.play(&"dry_fire", -6.0)
 	Sfx.play(&"swing", -2.0)
+	# The others see it swing, see Puppet.struck().
+	Net.player_did(&"struck")
 
 
 ## The blow lands on what is in reach in front of the player: an enemy before
@@ -1134,6 +1148,7 @@ func _land_blow() -> void:
 	var direction := (at - origin).normalized()
 	Fx.thud(at, Fx.surface_of(found))
 	Sfx.play(&"melee", -3.0)
+	Net.player_did(&"knocked", [at, Fx.surface_of(found)])
 	player.shake(0.22)
 	player.add_recoil(-0.03, randf_range(-0.01, 0.01))
 	if not target.has_method("take_damage"):

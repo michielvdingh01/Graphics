@@ -10,7 +10,10 @@ extends Node
 ## be hurt, and a death is not the end of the level. It prints how often a
 ## bot got stuck and how often nobody could come back anywhere safe. Last it
 ## has twenty a side play in the dunes, and looks at where those who fall
-## come back: near a friend and near the fight, not at the far end.
+## come back: near a friend and near the fight, not at the far end. On the
+## way it has bots take up the weapons of the arena and fight with them;
+## with --specials it does only that. With --pack=<name> it only has bots play
+## a match with that pack and counts the kills by weapon, see _pack_kills().
 
 const ROBOT_RIG := preload("res://scripts/enemy_rig.gd")
 
@@ -43,6 +46,20 @@ func _run() -> void:
 			await _soak(arg.get_slice("=", 1).to_float())
 			tree.quit(0)
 			return
+	var told := Array(OS.get_cmdline_user_args())
+	if not told.any(func(arg: String) -> bool: return arg.begins_with("--match=")):
+		for arg in told:
+			if arg.begins_with("--pack="):
+				await _pack_kills(arg.get_slice("=", 1))
+				tree.quit(0)
+				return
+	if "--specials" in OS.get_cmdline_user_args():
+		# Only the part with the weapons of the arena in the hands of bots.
+		Settings.enemy_theme = "soldiers"
+		await _bots_and_specials()
+		print("MATCH TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+		tree.quit(1 if _failures else 0)
+		return
 	var saved: Dictionary = Save.checkpoint.duplicate()
 	var plain: Dictionary = Settings.rules()
 	# Soldiers on both sides, until it is played against others further on.
@@ -231,6 +248,13 @@ func _run() -> void:
 	var shotgun: WeaponData = player.weapons.loadout[2]
 	_check("a bot's whole load of shot is not, on easy: pellets to the head count as any other", shotgun.damage * shotgun.pellets * float(Match.rules.hurts) < player.MAX_HEALTH)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
+	me.safe = 0.0
+	var blow: float = player.weapons.MELEE_DAMAGE
+	Match.harm(me.id, blow, player.global_position, Vector3.FORWARD, target.id, Match.MELEE)
+	var after_one: float = player.health
+	Match.harm(me.id, blow, player.global_position, Vector3.FORWARD, target.id, Match.MELEE)
+	_check("two blows of a bot's weapon bring the player down, on easy too", after_one == player.MAX_HEALTH - blow and player.dead)
+	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	Settings.difficulty = 2
 	me.safe = 0.0
 	Match.harm(me.id, 40.0, player.global_position, Vector3.FORWARD, target.id, 0)
@@ -247,6 +271,7 @@ func _run() -> void:
 	Engine.time_scale = 1.0
 	_check("health comes back to half on hard, three quarters on normal and all the way on easy", came_to == [50.0, 75.0, 100.0])
 	Settings.difficulty = 1
+	await _bots_and_specials()
 
 	# Against whoever the enemies were chosen to be.
 	Settings.enemy_theme = "zombies"
@@ -371,7 +396,7 @@ func _run() -> void:
 		who.brain.process_mode = Node.PROCESS_MODE_INHERIT
 	var took := [0]
 	Match.said.connect(func(text: String) -> void:
-		if text.contains(" has "):
+		if text.contains(" has ") and not _of_the_arena(text):
 			took[0] += 1)
 	Engine.time_scale = 6.0
 	clock = 0.0
@@ -382,6 +407,7 @@ func _run() -> void:
 		clock += 0.5
 	Engine.time_scale = 1.0
 	print("  capture the flag among bots: %d : %d after %.0f s, the prize taken %d times, %d times a bot got stuck" % [Match.tally[0], Match.tally[1], clock, took[0], Match.stuck])
+	print("  %s" % _taken())
 	_check("it ends at three points or when the time is up, for whoever leads then", Match.state == Match.State.OVER
 		and Match.won == (rules.DRAW if Match.tally[0] == Match.tally[1] else 0 if Match.tally[0] > Match.tally[1] else 1)
 		and Match.tally[0] >= before[0] and maxi(Match.tally[0], Match.tally[1]) <= 3)
@@ -531,6 +557,10 @@ func _run() -> void:
 		titles[who.title] = true
 	_check("forty bots, twenty a side, no two of one name", crowd.size() == 40 and titles.size() == 40
 		and crowd.filter(func(who: RefCounted) -> bool: return who.team == 0).size() == 20)
+	var said_spot: Array = (JSON.parse_string(FileAccess.get_file_as_string(Match.ARENAS)) as Dictionary).dunes.specials.minigun
+	var minigun_stand: Array = tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.weapon.resource_path.ends_with("minigun.tres"))
+	_check("there the minigun stands where assets/arenas.json says, and not where it is worked out", minigun_stand.size() == 1
+		and minigun_stand[0].global_position.distance_to(Vector3(said_spot[0], said_spot[1], said_spot[2])) < 0.01)
 	var board: PackedStringArray = Match._hud._table()
 	_check("the table under Tab has a column for each side", board.size() == 2 and board[0].count("\n") == 20 and board[1].count("\n") == 20)
 	# Who comes back: how far the nearest enemy and the nearest friend are, and
@@ -608,10 +638,11 @@ func _soak(seconds: float) -> void:
 		game.player.damaged.connect(func(amount: float) -> void:
 			hits.append(Vector2(Match.left, amount))
 			game.player.health = 1e6)
+	var counted := _count_kills()
 	var news := {}
 	Match.said.connect(func(text: String) -> void:
 		for word: String in [" has ", " dropped ", " brought ", " back home", " scored "]:
-			if text.contains(word):
+			if text.contains(word) and not _of_the_arena(text):
 				news[word.strip_edges()] = int(news.get(word.strip_edges(), 0)) + 1)
 	while waited < seconds:
 		await _wait(0.5)
@@ -644,6 +675,8 @@ func _soak(seconds: float) -> void:
 		print("  on %s the player, standing still, was hit %d times for %.0f in all, %.1f a second; the quickest hundred took %s" % [Settings.DIFFICULTY_NAMES[Settings.difficulty].to_lower(), hits.size(), total, total / seconds, "%.1f s" % quickest if quickest < INF else "longer than there was"])
 	if not news.is_empty():
 		print("  the score is %d : %d; what was said of the prizes, and how often: %s" % [Match.tally[0], Match.tally[1], news])
+	print("  %s" % _taken())
+	_print_kills(counted[0])
 	physics.sort()
 	var mean := 0.0
 	for sample in physics:
@@ -654,6 +687,352 @@ func _soak(seconds: float) -> void:
 	print("MATCH SOAK %s in %s, %d playing, %.0f s in %.0f s: %d deaths, %d times nowhere was safe, %d times a bot got stuck; a physics step took %.2f ms on average, %.2f ms at the 95th of a hundred and %.2f ms at worst, %d steps a second"
 		% [Match.setup.mode, Match.setup.level, Match.entrants.size(), seconds, (Time.get_ticks_msec() - began) / 1000.0, deaths, Match.arena.emergencies, Match.stuck,
 			mean, physics[int(physics.size() * 0.95)], physics[-1], Engine.physics_ticks_per_second])
+
+
+## Bots and the weapons of the arena: they take one up by walking past it,
+## from Hardened on the nearest of each side goes to fetch it, they fight
+## with it as the weapon asks and leave it where they fall.
+func _bots_and_specials() -> void:
+	var tree := get_tree()
+	_check("a match of bots opens to see them with the weapons of the arena", Match.open({"mode": "tdm", "level": "factory", "size": 3, "only_bots": true}))
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	var armory: GDScript = load("res://scripts/armory.gd")
+	var minigun: WeaponData = load("res://weapons/minigun.tres")
+	var launcher: WeaponData = load("res://weapons/rocket_launcher.tres")
+	var bots: Array = Match.entrants.values()
+	for who: RefCounted in bots:
+		who.brain.process_mode = Node.PROCESS_MODE_DISABLED
+		who.safe = 0.0
+	var stands := tree.get_nodes_in_group("stash")
+	var stand: Node3D = stands.filter(func(one: Node3D) -> bool: return one.weapon == minigun)[0]
+	var blue: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 0)[0]
+	var orange: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 1)[0]
+	var own: WeaponData = armory.at(blue.weapon)
+
+	# Walking past.
+	stand.come_in(0.0)
+	blue.body.global_position = stand.global_position + Vector3(0.4, 0.0, 0.0)
+	await _wait(0.3)
+	var rig: Node3D = blue.body._rig
+	_check("a bot that walks up to the minigun takes it, has it in its hands and is said to have it", blue.brain.special() == minigun and armory.at(blue.weapon) == minigun
+		and not stand.is_up() and not Match.takes.is_empty() and Match.takes[-1].by == blue.title and Match.takes[-1].bot and Match.takes[-1].weapon == "minigun")
+	_check("its figure carries the minigun, with barrels that turn", rig._weapon != null and rig._weapon.scene_file_path.ends_with("minigun_held.scn") and is_instance_valid(blue.body._barrels))
+	_check("one bot does not take a second weapon of the arena while it has one", not Match.can_arm(blue.body))
+
+	# The minigun in a fight: it spins up on sight, fires in bursts and never
+	# overheats.
+	var pair := _facing_spots(10.0)
+	_check("there are two spots 10 m apart that see each other", not pair.is_empty())
+	if pair.is_empty():
+		return
+	blue.body.global_position = pair[0]
+	orange.body.global_position = pair[1]
+	orange.health = 1e6
+	blue.body.look_at(pair[1] + Vector3.UP * (blue.body.global_position.y - pair[1].y), Vector3.UP)
+	blue.brain._aim = pair[1] + Vector3.UP
+	# It looks at once, and knows where to look: as if it had heard a shot.
+	blue.brain._look = 0.0
+	blue.brain.heard(orange, pair[1])
+	blue.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	var first_round := -1.0
+	var spun_at := -1.0
+	var hottest := 0.0
+	var bursts := 0
+	var was_firing := false
+	var overheated := false
+	var clock := 0.0
+	while clock < 9.0:
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		var brain: Node = blue.brain
+		if brain._spin >= 1.0 and spun_at < 0.0:
+			spun_at = clock
+		if brain._mag < minigun.mag_size and first_round < 0.0:
+			first_round = clock
+		hottest = maxf(hottest, brain._hot)
+		overheated = overheated or brain._overheated > 0.0
+		if brain._firing and not was_firing:
+			bursts += 1
+		was_firing = brain._firing
+		blue.body.global_position = pair[0]
+		orange.body.global_position = pair[1]
+	var fired: int = minigun.mag_size - blue.brain._mag
+	print("  a bot with the minigun at 10 m: up to speed after %.2f s, first round after %.2f s, %d rounds in %d bursts in 9 s, at most %.0f%% hot" % [spun_at, first_round, fired, bursts, hottest * 100.0])
+	_check("it spins up as soon as it sees somebody, and fires once its barrels are up to speed", spun_at > 0.0 and first_round >= spun_at - 0.02 and first_round < spun_at + 0.6)
+	_check("it fires in bursts, and never lets the minigun overheat", fired > 80 and bursts >= 2 and not overheated and hottest < 1.0)
+	_check("its figure spins the barrels and roars, instead of a shot for every round", blue.body._spin > 0.5 and absf(blue.body._turned) > 0.0 and blue.body._roars_until > 0.0)
+	blue.brain.process_mode = Node.PROCESS_MODE_DISABLED
+
+	# The rocket launcher: at the feet, and never from close by.
+	blue.brain.take_special(launcher, launcher.mag_size + launcher.reserve_ammo)
+	_check("a bot that takes another weapon of the arena lets go of the one it had", blue.brain.special() == launcher)
+	var far := _facing_spots(15.0)
+	if far.is_empty():
+		far = pair
+	blue.body.global_position = far[0]
+	orange.body.global_position = far[1]
+	blue.body.look_at(far[1] + Vector3.UP * (far[0].y - far[1].y), Vector3.UP)
+	blue.brain._aim = far[1]
+	blue.brain._seen = 0.0
+	blue.brain._look = 0.0
+	blue.brain.heard(orange, far[1])
+	blue.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	var rockets: Array = []
+	var health: float = orange.health
+	clock = 0.0
+	while clock < 5.0 and rockets.is_empty():
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		_note_rockets(rockets, blue.body, orange.body)
+		blue.body.global_position = far[0]
+		orange.body.global_position = far[1]
+	await _wait(1.0)
+	var feet: Vector3 = far[1]
+	var miss := INF
+	if not rockets.is_empty():
+		var from: Vector3 = rockets[0][0]
+		var along: Vector3 = (rockets[0][1] as Vector3).normalized()
+		miss = (feet - from - along * (feet - from).dot(along)).length()
+	print("  a bot with the rocket launcher at %.0f m: %d rockets, the first passing %.2f m from the feet; the other lost %.0f" % [far[0].distance_to(far[1]), rockets.size(), miss, health - orange.health])
+	_check("it fires a rocket instead of a ray, at the feet, and it hurts", not rockets.is_empty() and miss < 0.9 and orange.health < health)
+	rockets.clear()
+	var near: Vector3 = far[1] + (far[0] - far[1]).normalized() * 4.0
+	blue.body.global_position = near
+	blue.brain._reload = 0.0
+	blue.brain._mag = 1
+	clock = 0.0
+	while clock < 2.5:
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		_note_rockets(rockets, blue.body, orange.body)
+	print("  from 4 m: rockets fired at %s m, and it ended up %.1f m away" % [rockets.map(func(one: Array) -> String: return "%.1f" % one[2]), blue.body.global_position.distance_to(orange.body.global_position)])
+	_check("nearer than 6 m it fires no rocket, and backs away", rockets.all(func(one: Array) -> bool: return one[2] >= 6.0) and blue.body.global_position.distance_to(orange.body.global_position) > 4.5)
+	blue.brain.process_mode = Node.PROCESS_MODE_DISABLED
+
+	# Going down with it.
+	var left: int = blue.brain._mag + blue.brain._spare
+	var fell_at: Vector3 = blue.body.global_position
+	Match.harm(blue.id, 500.0, fell_at, Vector3.FORWARD, orange.id, 0)
+	await _wait(0.2)
+	var lying := tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.dropped)
+	_check("a bot that goes down with it leaves it where it fell, with what was left in it, and is back with its own weapon", lying.size() == 1 and lying[0].weapon == launcher
+		and lying[0].rounds == left and Vector2(lying[0].global_position.x - fell_at.x, lying[0].global_position.z - fell_at.z).length() < 0.5
+		and blue.brain.special() == null and armory.at(blue.weapon) == own)
+	for one: Node3D in lying:
+		one.queue_free()
+	await _wait(float(Match.mode.numbers.respawn) + 0.3)
+
+	# Fetching, from Hardened on.
+	for one: Node3D in tree.get_nodes_in_group("stash"):
+		one.come_in(INF if one != stand else 0.0)
+	Settings.difficulty = 1
+	await _wait(Match.FETCH + 0.1)
+	_check("on normal nobody is sent to fetch it", Match._errands.is_empty())
+	Settings.difficulty = 2
+	await _wait(Match.FETCH + 0.1)
+	var sent: Array = bots.filter(func(who: RefCounted) -> bool: return Match.errand(who) != null)
+	var nearest := [null, null]
+	for side in 2:
+		var shortest := INF
+		for who: RefCounted in bots:
+			if who.team == side:
+				var walk: float = Match.arena.walk(who.body.global_position, stand.global_position)
+				if walk < shortest:
+					shortest = walk
+					nearest[side] = who
+	print("  on hard, sent to fetch the minigun: %s" % [sent.map(func(who: RefCounted) -> String: return "%s of side %d" % [who.title, who.team])])
+	_check("on hard the nearest bot of each side is sent to fetch it, and nobody else", sent.size() == 2 and sent.has(nearest[0]) and sent.has(nearest[1]))
+	var runner: RefCounted = nearest[0]
+	var other: RefCounted = nearest[1]
+	other.body.global_position = Match.arena.spots[Match.arena.ends[1]]
+	runner.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	await _until(func() -> bool: return runner.brain.special() == minigun, 40.0)
+	_check("and the one that is sent goes and takes it", runner.brain.special() == minigun and Match.takes[-1].by == runner.title)
+	runner.brain.process_mode = Node.PROCESS_MODE_DISABLED
+	Settings.difficulty = 1
+
+	# Up close a bot hits with its weapon instead of firing.
+	var hitter: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 0 and who != runner and who.out <= 0.0)[0]
+	var victim: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 1 and who.out <= 0.0)[0]
+	var hitter_rig: Node3D = hitter.body._rig
+	hitter_rig.strike_at(0.15)
+	var drawn: Vector3 = hitter.body.global_transform.affine_inverse() * (hitter_rig._weapon.global_transform * hitter_rig._butt)
+	hitter_rig.strike_at(hitter_rig.STRIKE_LANDS)
+	var driven: Vector3 = hitter.body.global_transform.affine_inverse() * (hitter_rig._weapon.global_transform * hitter_rig._butt)
+	hitter_rig._strike = -1.0
+	print("  a soldier's blow with the carbine: the butt drawn back to %s, driven to %s (x right, y up, -z ahead)" % [drawn.snappedf(0.01), driven.snappedf(0.01)])
+	_check("a soldier hits out with the butt of its weapon: drawn back low, then driven forward at the height of a head", drawn.y < 1.3 and driven.y > drawn.y + 0.15 and driven.z < -0.3 and driven.z < drawn.z - 0.4)
+	victim.health = Match.MAX_HEALTH
+	victim.safe = 0.0
+	var deaths: int = victim.deaths
+	var start: Vector3 = pair[0]
+	var close_by: Vector3 = start + (pair[1] - start).normalized() * 1.5
+	hitter.body.global_position = start
+	victim.body.global_position = close_by
+	hitter.body.look_at(close_by + Vector3.UP * (start.y - close_by.y), Vector3.UP)
+	hitter.brain._aim = close_by + Vector3.UP * 1.1
+	hitter.brain._seen = 0.0
+	hitter.brain._look = 0.0
+	hitter.brain.heard(victim, close_by)
+	var rounds: int = hitter.brain._mag
+	var struck := [false]
+	var healths := []
+	hitter.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	clock = 0.0
+	while clock < 3.0 and victim.deaths == deaths:
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		hitter.body.global_position = start
+		if victim.out <= 0.0:
+			victim.body.global_position = close_by
+		struck[0] = struck[0] or hitter_rig._strike >= 0.0
+		if healths.is_empty() or healths[-1] != victim.health:
+			healths.append(victim.health)
+	hitter.brain.process_mode = Node.PROCESS_MODE_DISABLED
+	print("  a bot 1.5 m from an enemy: its health went %s in %.2f s, and it fired %d rounds" % [healths, clock, rounds - hitter.brain._mag])
+	_check("a bot nearer than 2 m hits instead of firing, and two blows bring the other down", victim.deaths == deaths + 1 and hitter.brain._mag == rounds
+		and healths.size() >= 2 and is_equal_approx(float(healths[1]), Match.MAX_HEALTH - 60.0))
+	_check("and its figure is seen to strike", struck[0])
+	Match.close()
+
+
+## Adds a rocket that has appeared since the last look to `rockets`: where it
+## was first seen, how fast it went and how far `from` was from `at` then.
+func _note_rockets(rockets: Array, from: Node3D, at: Node3D) -> void:
+	for rocket: Node3D in get_tree().get_nodes_in_group("rocket"):
+		if not rocket.has_meta(&"noted"):
+			rocket.set_meta(&"noted", true)
+			rockets.append([rocket.global_position, rocket.velocity, from.global_position.distance_to(at.global_position)])
+
+
+## Two spots of the arena about `metres` apart, on one floor, that see each
+## other with nothing in between; empty if there are none.
+func _facing_spots(metres: float) -> Array[Vector3]:
+	var arena: RefCounted = Match.arena
+	var space: PhysicsDirectSpaceState3D = get_tree().current_scene.get_world_3d().direct_space_state
+	for i in range(0, arena.spots.size(), 3):
+		var a: Vector3 = arena.spots[i]
+		for j in arena.spots.size():
+			var b: Vector3 = arena.spots[j]
+			if absf(a.distance_to(b) - metres) > 1.0 or absf(a.y - b.y) > 0.3:
+				continue
+			var clear := true
+			for height: float in [0.2, 1.0, 1.6]:
+				if not space.intersect_ray(PhysicsRayQueryParameters3D.create(a + Vector3.UP * height, b + Vector3.UP * height, 1)).is_empty():
+					clear = false
+			if clear:
+				return [a, b]
+	return []
+
+
+## True if `text` is the line that says who took a weapon of the arena, not
+## a prize.
+func _of_the_arena(text: String) -> bool:
+	return Match.SPECIALS.any(func(weapon: String) -> bool: return text.ends_with(weapon.replace("_", " ")))
+
+
+## With --pack=<name> and no --match= of its own: a match of bots only with
+## that pack, team deathmatch in the arena --arena=<level> (the works unless
+## said otherwise), as many a side as play there, for --seconds=<seconds> of
+## match (300) at four times the clock. It counts the kills by weapon, next to
+## how many bots carry each: a weapon that takes more than twice its share of
+## the kills is one to look at. Bots play otherwise than people do, but an
+## outlier shows.
+func _pack_kills(pack: String) -> void:
+	var tree := get_tree()
+	var level := "works"
+	var seconds := 300.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--arena="):
+			level = arg.get_slice("=", 1)
+		elif arg.begins_with("--seconds="):
+			seconds = arg.get_slice("=", 1).to_float()
+	var armory: GDScript = load("res://scripts/armory.gd")
+	if not armory.names().has(pack):
+		print("MATCH PACK FAILED: no pack called %s; there are %s" % [pack, ", ".join(armory.names())])
+		return
+	Settings.enemy_theme = "soldiers"
+	if not Match.open({"mode": "tdm", "level": level, "only_bots": true, "pack": pack}):
+		print("MATCH PACK FAILED: no arena called %s" % level)
+		return
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 90.0)
+	if Match.state != Match.State.PLAYING:
+		print("MATCH PACK FAILED: the match did not begin")
+		return
+	Match.mode.numbers = Match.mode.numbers.duplicate()
+	Match.mode.numbers.limit = 100000
+	Match.left = seconds + 60.0
+	var counted := _count_kills()
+	var began := Time.get_ticks_msec()
+	Engine.time_scale = 4.0
+	var clock := 0.0
+	while clock < seconds:
+		await _wait(0.5)
+		clock += 0.5
+	Engine.time_scale = 1.0
+	print("  %s in the %s, %d a side, %.0f s of match in %.0f s" % [armory.title(pack), level, Match.setup.size, seconds, (Time.get_ticks_msec() - began) / 1000.0])
+	var suspects := _print_kills(counted[0])
+	print("  %s" % _taken())
+	print("MATCH PACK %s: %s" % [pack, "no weapon takes more than twice its share of the kills" if suspects.is_empty() else "; ".join(suspects)])
+	Match.close()
+
+
+## Counts every kill of the match by what it was done with, from now on: the
+## first of what this gives is the count, by the place of the weapon in the
+## armory, or Match.MELEE or BLAST.
+func _count_kills() -> Array:
+	var kills := {}
+	Match.felled.connect(func(by: int, _fallen: int, weapon: int, _head: bool) -> void:
+		if by != 0:
+			kills[weapon] = int(kills.get(weapon, 0)) + 1)
+	return [kills]
+
+
+## Prints `kills` by weapon, next to how many bots carry each, and gives back
+## what is suspect: a weapon of the bots with more than twice its share.
+func _print_kills(kills: Dictionary) -> PackedStringArray:
+	var armory: GDScript = load("res://scripts/armory.gd")
+	var carried := {}
+	var bots := 0
+	for who: RefCounted in Match.entrants.values():
+		if who.bot:
+			bots += 1
+			var own: int = armory.index(who.brain._own) if who.brain else who.weapon
+			carried[own] = int(carried.get(own, 0)) + 1
+	var total := 0
+	for weapon: int in kills:
+		total += int(kills[weapon])
+	print("  %d kills: by weapon, the kills, their share and the share of the bots that carry it" % total)
+	var suspects := PackedStringArray()
+	var weapons := carried.keys()
+	for weapon: int in kills:
+		if not weapons.has(weapon):
+			weapons.append(weapon)
+	for weapon: int in weapons:
+		var title: String = "blows" if weapon == Match.MELEE else "blasts" if weapon == Match.BLAST else armory.at(weapon).display_name if weapon >= 0 else "something else"
+		var share := float(kills.get(weapon, 0)) / maxi(total, 1)
+		var bearers := float(carried.get(weapon, 0)) / maxi(bots, 1)
+		print("    %-18s %4d   %3.0f%%   %s" % [title, int(kills.get(weapon, 0)), share * 100.0, "%3.0f%% of the bots" % (bearers * 100.0) if carried.has(weapon) else "from the arena or no weapon"])
+		if carried.has(weapon) and share > bearers * 2.0 and total >= 20:
+			suspects.append("%s takes %.1f times its share" % [title, share / bearers])
+	return suspects
+
+
+## How often the weapons of the arena were taken up in the match, and by whom.
+func _taken() -> String:
+	if Match.takes.is_empty():
+		return "nobody took a weapon of the arena"
+	var by := {}
+	for take: Dictionary in Match.takes:
+		var line: Array = by.get(take.weapon, [])
+		line.append("%s%s at %d:%02d" % [take.by, "" if take.bot else " (a person)", floori(float(take.at) / 60.0), int(take.at) % 60])
+		by[take.weapon] = line
+	var parts := PackedStringArray()
+	for weapon: String in by:
+		parts.append("the %s %d times, by %s" % [weapon.replace("_", " "), (by[weapon] as Array).size(), ", ".join(by[weapon])])
+	return "the weapons of the arena were taken up %d times: %s" % [Match.takes.size(), "; ".join(parts)]
 
 
 func _middle_of(values: Array) -> float:

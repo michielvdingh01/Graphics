@@ -9,8 +9,8 @@ extends Node3D
 ## serves forwards, sideways and backwards; keeps a foot that is down where
 ## it came down, at the height the floor has there, so that it climbs a stair
 ## one foot above the other; puts a weapon to the shoulder with both hands on
-## it; and throws the arms up of one that has lost its head. For those there
-## are no clips.
+## it; strikes with that weapon, butt first (see strike()); and throws the
+## arms up of one that has lost its head. For those there are no clips.
 ##
 ## Everything it works out about bones is in the space of the skeleton, in
 ## which the character looks along +Z with its left arm along +X.
@@ -60,6 +60,20 @@ const FOOT_TURN := 0.6
 const PACED := Vector2(0.5, 2.5)
 ## Damage within a moment that throws a body off its feet.
 const BLOW := 60.0
+## A blow with the weapon in both hands: seconds from start to end, and the
+## share of that after which it lands, as the player's own (scripts/weapons.gd);
+## and how far the trunk turns away as it draws back and into the blow as it
+## drives, in radians, and leans into it.
+const STRIKE_TIME := 0.5
+const STRIKE_LANDS := 0.34
+const STRIKE_TURN := Vector2(-0.45, 0.35)
+const STRIKE_LEAN := Vector2(-0.06, 0.2)
+## Where the weapon goes in a blow, in the space of the chest and hip heights
+## from the shoulder of the hand on its grip: drawn back with its muzzle up
+## ahead and its butt by the hip, then swung round and driven butt first at
+## the height of a head, its muzzle back past the other shoulder.
+const DRAWN := {"along": Vector3(0.0, 0.55, 0.83), "top": Vector3(0.0, 0.83, -0.55), "butt": Vector3(-0.12, -0.3, -0.12)}
+const DRIVEN := {"along": Vector3(0.5, 0.2, -0.85), "top": Vector3(0.0, 1.0, 0.0), "butt": Vector3(0.12, 0.08, 0.62)}
 ## A shot that came in further round than this, in radians from straight in
 ## front, came from behind: the body goes down on its face.
 const BEHIND := 2.2
@@ -235,6 +249,8 @@ var _charging := false
 var _charge := 0.0
 var _struck := false
 var _attack := 0
+## Seconds into a blow with the weapon, below nought while there is none.
+var _strike := -1.0
 var _recoil := 0.0
 var _flinch := Vector3.ZERO
 var _flinched := -1.0
@@ -424,6 +440,28 @@ func fire() -> void:
 		_charging = true
 		_charge = 1.0
 		_pose(0.0)
+
+
+## A blow with what it holds, butt first. There is no clip of one, so it is
+## made of what the rig does with a weapon anyway: the trunk turns away and
+## back into it, and the weapon goes where _strike_pose() puts it, the arms
+## after it. One that holds nothing, or swings something in one hand, strikes
+## as it does when it attacks.
+func strike() -> void:
+	if _hold == Hold.NONE or _dead or _panicking:
+		fire()
+		return
+	_strike = 0.0
+	if not can_process():
+		# Nothing is running: this is a pose for a screenshot.
+		_pose(0.0)
+
+
+## How far into a blow with the weapon it is, for a picture: from 0 to 1.
+func strike_at(share: float) -> void:
+	strike()
+	_strike = share * STRIKE_TIME
+	_pose(0.0)
 
 
 ## Loses its head: what it carried falls, its arms go up and stay up, and it
@@ -616,6 +654,10 @@ func _pose(delta: float) -> void:
 		_wail(delta)
 	_thrown_up = lerpf(_thrown_up, 1.0 if _panicking else 0.0, 1.0 - exp(-9.0 * delta))
 	_raised = lerpf(_raised, 1.0 if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
+	if _strike >= 0.0:
+		_strike += delta
+		if _strike >= STRIKE_TIME:
+			_strike = -1.0
 	_charge = lerpf(_charge, 1.0 if _charging else 0.0, 1.0 - exp(-14.0 * delta))
 	_recoil = lerpf(_recoil, 0.0, 1.0 - exp(-14.0 * delta))
 	_flinch = _flinch.lerp(Vector3.ZERO, 1.0 - exp(-8.0 * delta))
@@ -647,6 +689,9 @@ func _shape(delta: float, hold_on: float) -> void:
 	# with the aim and gives when it is hit.
 	var facing := _aim_yaw * _raised
 	var span: Vector2 = CHEST[_hold]
+	# A blow with the weapon turns the trunk away and then into it.
+	var blow := _strike_shares()
+	facing += blow.dot(STRIKE_TURN)
 	var twist := clampf(clampf(_yaw, facing + span.x, facing + span.y) - _yaw, -TWIST, TWIST) * hold_on
 	_chest_yaw = _yaw + twist
 	var chest := Basis(Vector3.UP, _chest_yaw)
@@ -654,6 +699,8 @@ func _shape(delta: float, hold_on: float) -> void:
 	if _hold == Hold.SHOULDER:
 		# Into the weapon.
 		lean += 0.1 * _raised * hold_on
+	# Into the blow, and back as it is drawn.
+	lean += blow.dot(STRIKE_LEAN) * hold_on
 	var give := Vector3.UP.cross(_flinch)
 	var share := 1.0 / _torso.size()
 	for bone in _torso:
@@ -715,6 +762,13 @@ func _carry(delta: float, chest: Basis, hold_on: float) -> void:
 		# At arm's length under the eyes, or drawn in against the chest.
 		origin = rest.lerp(from + (along * 0.56 + Vector3.DOWN * 0.02) * _hip_height, _raised) - along * 0.03 * _recoil * _hip_height
 	_held = Transform3D(hold, origin)
+	var blow := _strike_shares()
+	if blow != Vector2.ZERO and _weapon:
+		# The blow takes the weapon from where it is held, back and then
+		# forward, by where its butt goes.
+		var drawn := _strike_pose(DRAWN, chest, shoulder)
+		var driven := _strike_pose(DRIVEN, chest, shoulder)
+		_held = _held.interpolate_with(drawn, blow.x).interpolate_with(driven, blow.y)
 	if _weapon:
 		_weapon.transform = _held
 	elif _muzzle:
@@ -733,6 +787,25 @@ func _carry(delta: float, chest: Basis, hold_on: float) -> void:
 		var fingers := -wrist.basis.z
 		var back := wrist.basis.y
 		_turn_to(arm.end, Basis(fingers, back, fingers.cross(back)) * _hand_fix[side], hold_on)
+
+
+## How far a blow with the weapon has drawn it back (x) and driven it forward
+## (y), each from 0 to 1, as the player's own blow goes.
+func _strike_shares() -> Vector2:
+	if _strike < 0.0:
+		return Vector2.ZERO
+	var share := _strike / STRIKE_TIME
+	var back := smoothstep(0.0, 0.22, share) * (1.0 - smoothstep(0.22, STRIKE_LANDS, share))
+	var out := smoothstep(0.2, STRIKE_LANDS, share) * (1.0 - smoothstep(0.5, 1.0, share))
+	return Vector2(back, out)
+
+
+## Where the weapon is at one of the moments of a blow, DRAWN or DRIVEN: its
+## muzzle along the way that says, its top as near the other as can be, and
+## its butt where the third puts it.
+func _strike_pose(moment: Dictionary, chest: Basis, shoulder: Vector3) -> Transform3D:
+	var hold := Basis.looking_at(chest * (moment.along as Vector3).normalized(), chest * (moment.top as Vector3).normalized())
+	return Transform3D(hold, shoulder + chest * (moment.butt as Vector3) * _hip_height - hold * _butt)
 
 
 ## The arms of one that has lost its head: up over it and thrown about, palms

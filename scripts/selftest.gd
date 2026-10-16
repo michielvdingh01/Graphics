@@ -4,7 +4,8 @@ extends Node
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
 ## enemy types, explosives, grenades, settings, how the view moves and what
-## can be shot to pieces. Then it goes through every level along its route,
+## can be shot to pieces, and every weapon fired on a range next to what the
+## balance sheet says of it. Then it goes through every level along its route,
 ## from the start to the exit and on into the next: that the route can be
 ## walked over the navmesh, that every robot can reach the player from its
 ## post and none stands close by and in view where the player appears or
@@ -34,6 +35,12 @@ const STRIDE := 0.5
 ## from at most, and how far apart the points are that are looked at.
 const LOOKOUTS := 150
 const SIGHT_GRID := 1.5
+## The range every weapon is fired on, see _balance(): the distances to the
+## figure, how high above the level the range lies, and how high the middle
+## of the figure is above its floor.
+const RANGE_DISTANCES: Array[float] = [5.0, 10.0, 20.0, 40.0, 80.0]
+const RANGE_HEIGHT := 400.0
+const TORSO_HEIGHT := 1.2
 
 ## True for a self-test run; menus and saved progress stay out of the way.
 var active := false
@@ -71,7 +78,7 @@ func own_file(file: String) -> String:
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
-	tree.create_timer(420.0, true, true).timeout.connect(
+	tree.create_timer(600.0, true, true).timeout.connect(
 		func() -> void:
 			print("SELFTEST FAILED (timed out)")
 			tree.quit(1)
@@ -110,9 +117,10 @@ func _run() -> void:
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
-	# --view leaves out everything but how the view moves, and --breaks
-	# everything but what can be shot to pieces.
-	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"]]:
+	# --view leaves out everything but how the view moves, --breaks
+	# everything but what can be shot to pieces, and --balance everything but
+	# the range every weapon is fired on, at every distance.
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--balance", _balance.bind(true), "balance"]]:
 		if only[0] not in OS.get_cmdline_user_args():
 			continue
 		await (only[1] as Callable).call()
@@ -128,7 +136,8 @@ func _run() -> void:
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
 		await _music_turns()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "music"])
+		await _balance()
+		_ran(["handling", "fights", "supplies", "view", "breakables", "music", "balance"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -991,6 +1000,222 @@ func _rocket_launcher(weapons: Node3D) -> void:
 	# The blast shook the view and knocked the head: let that settle before
 	# what comes next looks at how the view moves.
 	await _wait(3.0)
+
+
+## The balance in the game itself: every weapon there is, fired by the player
+## over its sights at a figure the size of the torso that tools/weapon_sheet.py
+## weighs (45 by 60 cm), at each of RANGE_DISTANCES, as the game fires it:
+## with its kick, its bloom and the shake of the view, and nobody to pull the
+## muzzle back down. Once with the trigger held down for as long as it takes,
+## and at the far distances once more paced: a shot only once the kick has
+## come back down, as somebody who means to hit would. The shots it takes to
+## do 100 are set next to what the sheet works out, aimed and standing, which
+## counts no kick at all. A weapon with barrels that spin is fired from the
+## hip, since holding the aim spins them. The range is a floor high above the
+## level, with nothing on it.
+##
+## What is checked is that the game and the sheet agree where the kick cannot
+## matter, at 5 m. Where they part further off is a matter of balance, which
+## is printed and left to whoever weighs it. The whole test fires at 5 m
+## only; `full`, which --balance asks for, at every distance. Shots are
+## fired on the real clock, the rest goes three times as fast.
+func _balance(full := false) -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	player.force_control = true
+	var sheet := _sheet_shots()
+	_check("tools/weapon_sheet.py --shots says how many shots each weapon takes", not sheet.is_empty())
+	var ground := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var slab := BoxShape3D.new()
+	slab.size = Vector3(10.0, 1.0, 140.0)
+	floor_shape.shape = slab
+	ground.add_child(floor_shape)
+	game.add_child(ground)
+	ground.global_position = Vector3(0.0, RANGE_HEIGHT - 0.5, -65.0)
+	var target := StaticBody3D.new()
+	target.collision_layer = 4
+	target.collision_mask = 0
+	var torso := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.45, 0.6, 0.25)
+	torso.shape = box
+	torso.position.y = TORSO_HEIGHT
+	target.add_child(torso)
+	var counts := GDScript.new()
+	counts.source_code = "extends StaticBody3D\nvar taken := 0.0\nfunc take_damage(amount: float, _at: Vector3, _direction: Vector3) -> bool:\n\ttaken += amount\n\treturn false\n"
+	counts.reload()
+	target.set_script(counts)
+	game.add_child(target)
+	var carried: Array[WeaponData] = weapons.loadout.duplicate()
+	var distances: Array[float] = RANGE_DISTANCES if full else RANGE_DISTANCES.slice(0, 1)
+	Engine.time_scale = 3.0
+	var lines := PackedStringArray()
+	var notes := PackedStringArray()
+	var faults := PackedStringArray()
+	var weighed := 0
+	for data: WeaponData in ARMORY.all():
+		var weapon_name := data.resource_path.get_file().get_basename()
+		var expected: Dictionary = sheet.get(weapon_name, {})
+		var alone: Array[WeaponData] = [data]
+		weapons.equip(alone, Vector2i(0, 0))
+		await _wait(data.switch_time + 0.1)
+		var line := PackedStringArray()
+		var missed := false
+		for metres: float in distances:
+			var wanted: Variant = expected.get(str(int(metres)))
+			var most := mini(data.mag_size * 3, int(wanted) * 3 + 4 if wanted != null else 24)
+			# What misses at 40 m with the trigger held misses at 80 m as well.
+			var held: Array = [-1, 0.0, 0] if missed else await _fire_at_range(player, target, data, metres, most, false)
+			missed = int(held[0]) < 0 and metres >= 40.0
+			var said := "%d m %s" % [metres, _shots(held) if int(held[2]) > 0 else "none"]
+			var hit_held: bool = int(held[0]) > 0 and (wanted == null or int(held[0]) <= int(wanted) * 2 + 1)
+			if metres >= 40.0 and not data.aim_spins and data.rounds_per_minute > 60.0 and not hit_held:
+				var paced: Array = await _fire_at_range(player, target, data, metres, mini(data.mag_size * 3, int(wanted) * 2 + 4 if wanted != null else 16), true)
+				said += ", paced %s" % _shots(paced)
+				if wanted != null and int(wanted) <= 8 and (int(paced[0]) < 0 or int(paced[0]) > int(wanted) * 2 + 1):
+					notes.append("%s at %d m, paced: %s where the sheet says %d" % [data.display_name, metres, _shots(paced), wanted])
+			line.append("%s (sheet %s)" % [said, str(int(wanted)) if wanted != null else "–"])
+			if wanted != null and int(wanted) <= 8 and metres <= 20.0 and (int(held[0]) < 0 or int(held[0]) > int(wanted) * 2 + 1):
+				notes.append("%s at %d m, the trigger held: %s where the sheet says %d" % [data.display_name, metres, _shots(held), wanted])
+			if metres == RANGE_DISTANCES[0] and wanted != null and absi(int(held[0]) - int(wanted)) > 1:
+				faults.append("%s at %d m: %s where the sheet says %d" % [data.display_name, metres, _shots(held), wanted])
+			weighed += 1
+		lines.append("    %s: %s" % [data.display_name, "; ".join(line)])
+	Engine.time_scale = 1.0
+	print("    shots it takes to do 100, and in how long, over the sights:\n%s" % "\n".join(lines))
+	for note in notes:
+		print("    far off the sheet: %s" % note)
+	for fault in faults:
+		print("    the game and the sheet disagree: %s" % fault)
+	_check("every weapon is fired at a figure at %s m" % ", ".join(distances.map(func(metres: float) -> String: return str(int(metres)))), weighed == ARMORY.all().size() * distances.size())
+	_check("at 5 m every weapon takes the shots the sheet says, give or take one", faults.is_empty())
+	await _stick_grenade(player)
+	target.queue_free()
+	ground.queue_free()
+	weapons.equip(carried, ARMORY.grenades(ARMORY.STANDARD))
+	player.global_position = game.start.origin
+	player.velocity = Vector3.ZERO
+	await _wait(0.5)
+	_finished.append("balance")
+
+
+## A count of shots as [shots, seconds] that _fire_at_range() gives, to read:
+## "4 in 0.23 s", or "none in 28" if that many did not do it.
+func _shots(count: Array) -> String:
+	if int(count[0]) < 0:
+		return "none in %d" % int(count[2])
+	return "%d in %.2f s" % [int(count[0]), float(count[1])]
+
+
+## What the pack of 1944 throws, on the range: a stick grenade, which flies
+## end over end and goes off as any grenade does. The standard pack throws
+## the round one.
+func _stick_grenade(player: CharacterBody3D) -> void:
+	var weapons: Node3D = player.weapons
+	weapons.equip(ARMORY.weapons("1944"), ARMORY.grenades("1944"), ARMORY.grenade("1944"))
+	_move(player, Vector3(0.0, RANGE_HEIGHT + 0.05, 0.0))
+	player.rotation.y = 0.0
+	player.head.rotation.x = 0.25
+	await _wait(0.6)
+	var blasts := []
+	var note := func(at: Vector3) -> void: blasts.append(at)
+	Blast.exploded.connect(note)
+	Input.action_press("grenade")
+	await _wait(0.1)
+	Input.action_release("grenade")
+	await _wait(0.6)
+	var thrown := get_tree().get_nodes_in_group("grenade")
+	var stick: bool = thrown.size() == 1 and thrown[0].scene_file_path.ends_with("stick_grenade.tscn")
+	var turning: float = thrown[0].angular_velocity.length() if stick else 0.0
+	var kinds := thrown.map(func(one: Node) -> String: return one.scene_file_path.get_file())
+	await _wait(3.0)
+	Blast.exploded.disconnect(note)
+	print("    1944 throws %s, turning %.1f radians a second; it went off %s" % [kinds, turning,
+		blasts.map(func(at: Vector3) -> String: return "%.0f m ahead" % -at.z)])
+	_check("1944 throws a stick grenade, end over end, and it goes off", weapons.grenade_kind == "stick_grenade" and stick and turning > 1.0
+		and blasts.size() == 1 and blasts[0].y > RANGE_HEIGHT - 1.0 and -blasts[0].z > 5.0)
+	_check("and the standard pack the round one", ARMORY.grenade(ARMORY.STANDARD) == ARMORY.GRENADE and ARMORY.thrown(ARMORY.GRENADE).resource_path == "res://scenes/grenade.tscn")
+
+
+## Fires the weapon in hand at `target` set up `metres` off on the range, over
+## the sights, until it has taken 100 or `most` shots are out: with the
+## trigger held, or `paced`, a shot only once the kick of the last has come
+## down. Gives [the number of the shot that did it or -1, the seconds from the
+## first shot to that one, the shots fired].
+func _fire_at_range(player: CharacterBody3D, target: StaticBody3D, data: WeaponData, metres: float, most: int, paced: bool) -> Array:
+	var weapons: Node3D = player.weapons
+	_move(player, Vector3(0.0, RANGE_HEIGHT + 0.05, 0.0))
+	player.rotation.y = 0.0
+	target.global_position = Vector3(0.0, RANGE_HEIGHT, -metres)
+	target.taken = 0.0
+	weapons._mags[weapons._index] = data.mag_size
+	weapons._reserves[weapons._index] = data.mag_size * 3
+	weapons._reload_left = 0.0
+	weapons._bloom = 0.0
+	weapons._hot = 0.0
+	weapons._overheated = 0.0
+	player._recoil_target = Vector3.ZERO
+	player._recoil = Vector3.ZERO
+	player._trauma = 0.0
+	await _wait(0.25)
+	var eye: Vector3 = player.camera.global_position
+	player.head.rotation.x = atan2(RANGE_HEIGHT + TORSO_HEIGHT - eye.y, metres)
+	if not data.aim_spins:
+		Input.action_press("ads")
+		await _wait(data.ads_time + 0.1)
+	var first: int = weapons._rounds
+	var took := -1
+	var clock := 0.0
+	var began := -1.0
+	var done_at := 0.0
+	# On the real clock: one shot a frame is the most a weapon fires, and the
+	# frames of a test without a window do not come any faster for it.
+	var scale := Engine.time_scale
+	Engine.time_scale = 1.0
+	while weapons._rounds - first < most and clock < 8.0:
+		if target.taken >= 100.0:
+			break
+		var steady: bool = not paced or (player._recoil.length() < 0.002 and weapons._bloom < 0.05)
+		if data.automatic and not paced:
+			Input.action_press("fire")
+		elif steady and weapons._reload_left <= 0.0 and weapons._cooldown <= 0.0:
+			Input.action_press("fire")
+			await get_tree().process_frame
+			Input.action_release("fire")
+		await get_tree().process_frame
+		clock += get_process_delta_time()
+		if began < 0.0 and weapons._rounds > first:
+			began = clock
+		if target.taken >= 100.0 and took < 0:
+			took = weapons._rounds - first
+			done_at = clock
+	Engine.time_scale = scale
+	Input.action_release("fire")
+	Input.action_release("ads")
+	# A rocket is on its way a while: what it does counts once it is there.
+	if took < 0 and data.projectile:
+		await _wait(metres / data.projectile_speed + 0.3)
+		if target.taken >= 100.0:
+			took = weapons._rounds - first
+			done_at = began + metres / data.projectile_speed
+	var fired: int = weapons._rounds - first
+	await _wait(0.2)
+	return [took, maxf(done_at - began, 0.0), fired]
+
+
+## What tools/weapon_sheet.py works out for every weapon: the shots it takes
+## to do 100, aimed and standing, by the name of the weapon and the distance.
+## Empty if it cannot be asked.
+func _sheet_shots() -> Dictionary:
+	var said := []
+	var script := ProjectSettings.globalize_path("res://tools/weapon_sheet.py")
+	if OS.execute("python3", [script, "--shots"], said) != 0 or said.is_empty():
+		return {}
+	var parsed: Variant = JSON.parse_string(str(said[0]))
+	return parsed if parsed is Dictionary else {}
 
 
 ## How the view moves, tried out on the runway of the factory: the bob of a

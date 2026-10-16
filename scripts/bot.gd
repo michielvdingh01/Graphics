@@ -16,8 +16,21 @@ extends Node
 ## looks is its level (assets/bots.json), which goes by the difficulty. So is
 ## how long it keeps firing before it lets up, and at a person no more bots
 ## fire at a time than the match allows.
-## Whom it sees, its side knows of as well. What it does not do yet: take
-## cover, fall back, throw grenades, jump or crouch.
+## Whom it sees, its side knows of as well.
+##
+## A weapon of the arena (scripts/stash.gd) it takes up as it walks by one,
+## or from Hardened on goes to fetch, if it is the nearest of its side (see
+## Match.errand()). It has it in its hands until it is fired empty or it goes
+## down with it, and fights with it as the weapon asks: the barrels of a
+## minigun spin up as soon as it sees somebody, and it fires them in bursts
+## that never let them overheat; a rocket it fires at the feet, and never at
+## somebody nearer than CLOSE_ROCKET.
+##
+## Within STRIKES of somebody it does not fire but hits them with its weapon,
+## the blow of the player (scripts/weapons.gd): two of them bring anybody
+## down.
+## What it does not do yet: take cover, fall back, throw grenades, jump or
+## crouch.
 
 const WEAPONS := preload("res://scripts/weapons.gd")
 const ARMORY := preload("res://scripts/armory.gd")
@@ -63,6 +76,25 @@ const STUCK := Vector2(0.4, 1.5)
 const REPATH := 0.3
 const DETOUR := 3.0
 const EYE := 1.6
+## A weapon of the arena that is there to be taken this near, in metres, and
+## in sight, it goes and takes.
+const NOTICES := 10.0
+## With barrels that spin: a burst ends once they are this hot, from 0 to 1,
+## and the next does not begin before they have cooled to the second number.
+## Overheated they could not fire for seconds.
+const HOT_BURST := Vector2(0.6, 0.3)
+## Seconds a burst of barrels that spin lasts at the least, whatever its level.
+const SPIN_BURST := 1.2
+## It fires no rocket at somebody nearer than this, in metres, nor at a wall
+## that is: the blast would be its own. It aims at the feet, this far above
+## them, for a rocket that misses still goes off by them.
+const CLOSE_ROCKET := 6.0
+const FEET := 0.15
+## Seconds a weapon of the arena that is fired empty stays in its hands.
+const SPENT := 0.35
+## Nearer than this to its target, in metres between the two, it hits them
+## with its weapon instead of firing.
+const STRIKES := 2.0
 ## Further than this from what the screen shows, in metres, it thinks and
 ## moves every other step of the physics, a step twice as long: nobody sees
 ## that at such a distance, and with forty in a match it saves the processor
@@ -74,7 +106,29 @@ var me: RefCounted
 
 var _body: CharacterBody3D
 var _agent := NavigationAgent3D.new()
+## The weapon of its pack it carries, and the one in its hands: that one, or a
+## weapon of the arena it took up, with the rounds that came with it besides
+## those in it.
+var _own: WeaponData
 var _data: WeaponData
+var _spare := 0
+var _spent_for := 0.0
+## Barrels that spin: how far up to speed they are and how far the rate of
+## fire has come up, the rounds they owe, how hot they are, the seconds they
+## cannot fire for once overheated, and whether they fired this step and
+## have to cool down before the next burst.
+var _spin := 0.0
+var _ramp := 0.0
+var _due := 0.0
+var _hot := 0.0
+var _overheated := 0.0
+var _firing := false
+var _cooling := false
+## A weapon of the arena it noticed in passing and goes to take, if any.
+var _noticed: Variant = null
+## Seconds left of a blow with its weapon, and whether it has landed yet.
+var _blow := 0.0
+var _landed := true
 ## Who it knows of, by number: [where, the clock then].
 var _known := {}
 var _clock := 0.0
@@ -119,7 +173,8 @@ func _ready() -> void:
 	_agent.target_desired_distance = 1.0
 	_agent.radius = 0.4
 	_body.add_child.call_deferred(_agent)
-	_data = ARMORY.at(me.weapon)
+	_own = ARMORY.at(me.weapon)
+	_data = _own
 	# Those far off do not all take the same steps.
 	_skipped = randi() % 2 == 0
 	begin()
@@ -127,9 +182,15 @@ func _ready() -> void:
 
 ## As good as new: after coming back.
 func begin() -> void:
+	if _data != _own:
+		drop_special()
 	_known.clear()
 	_target = null
 	_seen = 0.0
+	_noticed = null
+	_blow = 0.0
+	_landed = true
+	_settle_barrels()
 	_mag = _data.mag_size
 	_reload = 0.0
 	_cooldown = 0.0
@@ -156,12 +217,73 @@ func hit_by(who: RefCounted) -> void:
 ## What the other machines are told of it: what net_state() of its puppet
 ## takes.
 func net_state() -> Array:
-	var doing := 0
-	if _sprinting:
-		doing |= Net.SPRINTING
+	var doing := _doing()
 	if me.out > 0.0:
 		doing |= Net.DEAD
 	return [_body.global_position, _body.rotation.y, _body.head.rotation.x, _body.velocity, doing, me.weapon]
+
+
+## What it is doing, as the bits of net.gd have it.
+func _doing() -> int:
+	var doing := Net.heat_bits(_hot)
+	if _sprinting:
+		doing |= Net.SPRINTING
+	if _spin > 0.0:
+		doing |= Net.SPINNING
+	return doing
+
+
+## The weapon of the arena in its hands, null if it has none.
+func special() -> WeaponData:
+	return _data if _data != _own else null
+
+
+## Takes up a weapon of the arena with `rounds` in it and has it in its hands
+## at once. What it gives back is what it let go of for it, as
+## drop_special() says.
+func take_special(data: WeaponData, rounds: int) -> Array:
+	var dropped := drop_special()
+	_data = data
+	_mag = mini(rounds, data.mag_size)
+	_spare = rounds - _mag
+	_rearm()
+	return dropped
+
+
+## Lets go of the weapon of the arena, with its own weapon in its hands
+## again: [the weapon, the rounds left in it], or [] if it had none.
+func drop_special() -> Array:
+	var data := special()
+	if data == null:
+		return []
+	var left := _mag + _spare
+	_data = _own
+	_mag = _own.mag_size
+	_spare = 0
+	_rearm()
+	return [data, left]
+
+
+## Has the weapon now in its hands in the hands of its figure, on every machine.
+func _rearm() -> void:
+	me.weapon = ARMORY.index(_data)
+	_settle_barrels()
+	_reload = 0.0
+	_cooldown = 0.0
+	_bursting = false
+	_noticed = null
+	Net.show(_body, &"rearm", [me.weapon])
+
+
+func _settle_barrels() -> void:
+	_spin = 0.0
+	_ramp = 0.0
+	_due = 0.0
+	_hot = 0.0
+	_overheated = 0.0
+	_firing = false
+	_cooling = false
+	_spent_for = 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -185,7 +307,12 @@ func _physics_process(delta: float) -> void:
 	if _reload > 0.0:
 		_reload -= delta
 		if _reload <= 0.0:
-			_mag = _data.mag_size
+			_fill()
+	_throw_away_spent(delta)
+	if _blow > 0.0:
+		_blow -= delta
+		if not _landed and _blow <= WEAPONS.MELEE_TIME * (1.0 - WEAPONS.MELEE_LANDS):
+			_land_blow()
 	_look -= delta
 	if _look <= 0.0:
 		_look = LOOK
@@ -200,11 +327,18 @@ func _physics_process(delta: float) -> void:
 	# What the kind of match wants of it, unless it got nowhere with that a
 	# moment ago.
 	var wish: Variant = Match.mode.wish(me) if _clock >= _detour else null
+	# A weapon of the arena to take comes before that, unless it is in a hurry.
+	var errand: Variant = _errand()
+	if errand != null and _clock >= _detour and not Match.mode.hurries(me):
+		wish = errand
 	# Whoever has something better to do than to fight runs on, unless the
 	# enemy is on top of them.
 	if _target and not (Match.mode.hurries(me) and eye.distance_to(_target.body.head.global_position) > CORNERED):
 		_seen += delta
 		var at: Vector3 = _target.body.head.global_position - Vector3.UP * CHEST
+		if _data.projectile:
+			# A rocket at the feet: one that misses still goes off by them.
+			at = _target.body.global_position + Vector3.UP * FEET
 		var distance := eye.distance_to(at)
 		# Its aim wanders about its target, and takes a moment to follow.
 		_off_left -= delta
@@ -219,29 +353,45 @@ func _physics_process(delta: float) -> void:
 			desired = _towards(wish, WALK)
 		_sprinting = false
 		var on_target := (_aim - eye).normalized().dot((at - eye).normalized()) > cos(deg_to_rad(ON_TARGET))
-		if _bursting and _clock >= _burst_ends:
+		var hot := _data.overheat_after > 0.0 and _hot >= HOT_BURST.x
+		if _bursting and (_clock >= _burst_ends or hot):
 			_bursting = false
+			_cooling = hot
 			var rest: Array = _level.rest
 			_rest_until = _clock + randf_range(float(rest[0]), float(rest[1]))
-		if _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
+		if _cooling and _hot <= HOT_BURST.y:
+			_cooling = false
+		# Barrels that spin come up to speed as soon as it sees somebody.
+		_spin_barrels(delta, true)
+		var fires := false
+		var close := Vector2(_target.body.global_position.x - _body.global_position.x, _target.body.global_position.z - _body.global_position.z).length() < STRIKES
+		if close or _blow > 0.0:
+			# Up close it hits instead of firing, once it has seen who it is.
+			if close and _blow <= 0.0 and _seen >= float(_level.reaction) and on_target:
+				_strike()
+		elif _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
 			if _mag <= 0:
-				_reload = _data.reload_time
-			elif _clock >= _rest_until and Match.may_fire(me, _target):
+				_start_reload()
+			elif _clock >= _rest_until and not _cooling and _ready_to_fire(eye) and Match.may_fire(me, _target):
 				# A burst, and with a slow weapon one shot of it.
 				if not _bursting:
 					_bursting = true
-					_burst_ends = _clock + float(_level.burst)
-				_shoot(eye)
+					_burst_ends = _clock + (maxf(float(_level.burst), SPIN_BURST) if _data.spin_up > 0.0 else float(_level.burst))
+				fires = true
+		_fire(delta, eye, fires)
 	else:
 		_seen = 0.0
+		_spin_barrels(delta, false)
+		_fire(delta, eye, false)
 		desired = _roam(wish)
-		_sprinting = desired.length() > WALK
+		_sprinting = desired.length() > WALK and not _data.no_sprint
 		if desired.length_squared() > 0.01:
 			facing = desired
 			_aim = _aim.lerp(eye + desired.normalized() * 10.0, 1.0 - exp(-delta * 4.0))
 		# A quiet moment is one to reload in.
 		if _reload <= 0.0 and _mag < _data.mag_size * 0.5:
-			_reload = _data.reload_time
+			_start_reload()
+	desired = _carried(desired)
 	_notice_stuck(delta, desired)
 
 	facing.y = 0.0
@@ -249,7 +399,7 @@ func _physics_process(delta: float) -> void:
 		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(-facing.x, -facing.z), 1.0 - exp(-TURN * delta))
 	var to_aim := _aim - eye
 	_body.head.rotation.x = clampf(atan2(to_aim.y, Vector2(to_aim.x, to_aim.z).length()), -1.2, 1.2)
-	_body.act(Net.SPRINTING if _sprinting else 0)
+	_body.act(_doing())
 	_body.velocity.x = move_toward(_body.velocity.x, desired.x, ACCEL * delta)
 	_body.velocity.z = move_toward(_body.velocity.z, desired.z, ACCEL * delta)
 	_slide(delta)
@@ -304,6 +454,29 @@ func _look_around() -> void:
 	if found != _target:
 		_seen = 0.0 if found == null else minf(_seen, float(_level.reaction) * 0.5)
 		_target = found
+	_notice(space, eye)
+
+
+## Looks for a weapon of the arena near enough and in sight to go and take,
+## while it has none.
+func _notice(space: PhysicsDirectSpaceState3D, eye: Vector3) -> void:
+	if _noticed != null and not Match.special_at(_noticed):
+		_noticed = null
+	if special() or _noticed != null:
+		return
+	for at: Vector3 in Match.specials_up():
+		if at.distance_to(_body.global_position) < NOTICES and space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, at + Vector3.UP, WORLD)).is_empty():
+			_noticed = at
+			return
+
+
+## Where a weapon of the arena lies that it is to take: one the match sends
+## it to fetch, or one it noticed in passing. Null if none.
+func _errand() -> Variant:
+	if special():
+		return null
+	var sent: Variant = Match.errand(me)
+	return sent if sent != null else _noticed
 
 
 ## With somebody in sight: closes in to the distance its weapon is for, and
@@ -312,6 +485,11 @@ func _fight(delta: float, distance: float) -> Vector3:
 	var reach: float = _data.bot_range
 	if distance > reach:
 		return _towards(_target.body.global_position, WALK)
+	if _data.projectile and distance < CLOSE_ROCKET + 2.0:
+		# Too near for a rocket: it backs away.
+		var away: Vector3 = _body.global_position - _target.body.global_position
+		away.y = 0.0
+		return away.normalized() * WALK
 	_strafe_left -= delta
 	if _strafe_left <= 0.0 or _body.is_on_wall():
 		_strafe_left = randf_range(0.6, 1.8)
@@ -387,19 +565,152 @@ func _notice_stuck(delta: float, desired: Vector3) -> void:
 		Match.stuck += 1
 
 
-## A shot: a ray for every pellet along where it points, as wide as its
-## weapon spreads, and the match is told what it landed on.
-func _shoot(eye: Vector3) -> void:
-	_mag -= 1
-	_cooldown = 60.0 / _data.rounds_per_minute
+## A blow with its weapon starts: everybody sees it, and it lands a moment
+## later, see _land_blow().
+func _strike() -> void:
+	_blow = WEAPONS.MELEE_TIME
+	_landed = false
+	_bursting = false
+	Net.show(_body, &"struck")
+
+
+## The blow lands on whoever of the other side is in reach in front of it, as
+## the player's does: two of them bring anybody down.
+func _land_blow() -> void:
+	_landed = true
+	var eye: Vector3 = _body.head.global_position
+	var space := _body.get_world_3d().direct_space_state
+	var mask: int = WEAPONS.HIT_MASK | Match.foes_of(_body)
+	var ahead := (_aim - eye).normalized()
+	if _target and _target.out <= 0.0:
+		# At the chest of whoever it is fighting, if that is in reach.
+		var chest: Vector3 = _target.body.head.global_position - Vector3.UP * CHEST
+		if eye.distance_to(chest) < WEAPONS.MELEE_REACH + 0.4:
+			ahead = (chest - eye).normalized()
+	var aim := Basis.looking_at(ahead)
+	for off: Vector2 in [Vector2.ZERO, Vector2(-0.22, 0), Vector2(0.22, 0), Vector2(0, -0.25)]:
+		var end := eye + aim * Vector3(off.x, off.y, -1.0).normalized() * WEAPONS.MELEE_REACH
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, end, mask, [_body.get_rid()]))
+		if hit and Match.plays(hit.collider):
+			Match.hit(_body, hit.collider, WEAPONS.MELEE_DAMAGE, hit.position, ahead, Match.MELEE)
+			Net.show(_body, &"knocked", [hit.position, Fx.surface_of(hit)])
+			return
+
+
+## Fires what is due this step if `fires`: one shot when the weapon is
+## ready, or with barrels that spin and are up to speed as many rounds as
+## their rate owes; they heat as they fire.
+func _fire(delta: float, eye: Vector3, fires: bool) -> void:
+	if _data.spin_up <= 0.0:
+		if fires:
+			_shoot(eye, 1)
+		return
+	var firing := fires and _spin >= 1.0 and _mag > 0 and _overheated <= 0.0
+	if firing:
+		_ramp = minf(_ramp + delta / _data.spin_ramp, 1.0)
+		_due = 1.0 if not _firing else _due + delta * lerpf(_data.rounds_per_minute_start, _data.rounds_per_minute, _ramp) / 60.0
+		var rounds := mini(floori(_due), _mag)
+		_due -= rounds
+		if rounds > 0:
+			_shoot(eye, rounds)
+		if _data.overheat_after > 0.0:
+			_hot = minf(_hot + delta / _data.overheat_after, 1.0)
+			if _hot >= 1.0:
+				_overheated = _data.overheat_time
+	else:
+		_ramp = move_toward(_ramp, 0.0, delta * 4.0)
+		_due = 0.0
+	if _overheated > 0.0:
+		_overheated = maxf(_overheated - delta, 0.0)
+		_hot = _overheated / _data.overheat_time
+	elif not firing:
+		_hot = maxf(_hot - _data.cooling * delta, 0.0)
+	_firing = firing
+
+
+## Barrels that spin come up to speed while it `wants` them to and has
+## something to fire, and run down otherwise.
+func _spin_barrels(delta: float, wants: bool) -> void:
+	if _data.spin_up <= 0.0:
+		return
+	var up := wants and _mag > 0 and _overheated <= 0.0
+	_spin = move_toward(_spin, 1.0 if up else 0.0, delta / (_data.spin_up if up else _data.spin_down))
+
+
+## True if a shot now does no harm to itself: a rocket goes nowhere near a
+## wall or an enemy closer than CLOSE_ROCKET.
+func _ready_to_fire(eye: Vector3) -> bool:
+	if not _data.projectile:
+		return true
+	if _body.global_position.distance_to(_target.body.global_position) < CLOSE_ROCKET:
+		return false
+	var way := (_aim - eye).normalized() * CLOSE_ROCKET
+	var query := PhysicsRayQueryParameters3D.create(eye, eye + way, WEAPONS.HIT_MASK, [_body.get_rid()])
+	return _body.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+
+func _start_reload() -> void:
+	if _data.special and _spare <= 0:
+		return
+	_reload = _data.reload_time
+
+
+## The magazine is full once a reload is done: its own weapon never runs
+## out, a weapon of the arena has what it came with.
+func _fill() -> void:
+	if not _data.special:
+		_mag = _data.mag_size
+		return
+	var rounds := mini(_data.mag_size - _mag, _spare)
+	_mag += rounds
+	_spare -= rounds
+
+
+## A weapon of the arena that is fired empty is thrown away a moment later,
+## and its stand has it back in a while.
+func _throw_away_spent(delta: float) -> void:
+	var data := special()
+	if data == null or _mag > 0 or _spare > 0 or _reload > 0.0:
+		_spent_for = 0.0
+		return
+	_spent_for += delta
+	if _spent_for >= SPENT:
+		drop_special()
+		Match.special_spent(data)
+
+
+## How fast it goes with what it carries: slower with a heavy weapon, slower
+## still with barrels that spin, and walking where it may not run.
+func _carried(desired: Vector3) -> Vector3:
+	var pace := desired.length()
+	if pace < 0.01:
+		return desired
+	if _data.no_sprint:
+		pace = minf(pace, WALK)
+	return desired * (pace / desired.length()) * _data.move_scale * lerpf(1.0, _data.spun_move_scale, _spin)
+
+
+## `rounds` shots: a ray for every pellet of each along where it points, as
+## wide as its weapon spreads, and the match is told what they landed on. A
+## weapon that fires a rocket fires that instead.
+func _shoot(eye: Vector3, rounds: int) -> void:
+	_mag -= rounds
+	# Barrels that spin owe rounds by their rate instead, see _fire().
+	if _data.spin_up <= 0.0:
+		_cooldown = 60.0 / _data.rounds_per_minute
+	if _data.projectile:
+		_launch(eye)
+		return
 	var space := _body.get_world_3d().direct_space_state
 	var aim := Basis.looking_at((_aim - eye).normalized())
 	var spread := tan(deg_to_rad(_data.ads_spread_deg + UNSTEADY + _data.move_spread_deg * minf(_body.velocity.length() / 8.0, 1.5) * 0.3))
 	if _data.pellets > 1:
 		spread = tan(deg_to_rad(_data.hip_spread_deg))
+	elif _data.spin_up > 0.0:
+		spread = tan(deg_to_rad(_data.hip_spread_deg + _data.ramp_spread_deg * (1.0 - _ramp) + UNSTEADY))
 	var mask: int = WEAPONS.HIT_MASK | Match.foes_of(_body)
 	var ends := PackedVector3Array()
-	for i in _data.pellets:
+	for i in _data.pellets * rounds:
 		var angle := randf() * TAU
 		var radius := sqrt(randf()) * spread
 		var direction := (aim * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)).normalized()
@@ -419,4 +730,19 @@ func _shoot(eye: Vector3) -> void:
 				Match.hit(_body, target, amount, end, direction, me.weapon, head)
 		ends.append(end)
 	Net.show(_body, &"fired", [me.weapon, ends])
+	Match.fired(_body, eye, _data.flash_size * WEAPONS.HEARD)
+
+
+## A rocket, from in front of its eyes along where it aims, give or take its
+## spread; the other machines are shown one that only flies.
+func _launch(eye: Vector3) -> void:
+	var aim := Basis.looking_at((_aim - eye).normalized())
+	var off := tan(deg_to_rad(_data.ads_spread_deg + UNSTEADY)) * sqrt(randf())
+	var angle := randf() * TAU
+	var direction := (aim * Vector3(cos(angle) * off, sin(angle) * off, -1.0)).normalized()
+	var from := eye + direction * 0.7
+	var speed := direction * _data.projectile_speed + _body.velocity * 0.3
+	_body.launched(from, speed, me.id)
+	Net.tell(_body, &"launched", [from, speed])
+	Net.show(_body, &"fired", [me.weapon, PackedVector3Array()])
 	Match.fired(_body, eye, _data.flash_size * WEAPONS.HEARD)

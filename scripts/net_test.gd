@@ -134,6 +134,7 @@ func _host() -> void:
 	lamps[1].take_damage(1.0, lamps[1].global_position, Vector3.UP)
 	stacks[1].take_damage(1000.0, stacks[1].global_position, Vector3.FORWARD)
 	_check("another lamp is shot out and another crate to pieces", lamps[1].out and stacks[1].standing() == stacks[1].size() - 1)
+	_check("the guest is seen to hit out with its weapon", await _until(func() -> bool: return puppet._rig._strike >= 0.0, 15.0))
 
 	# The guest dies, gets up again and takes up another weapon.
 	_check("the guest is seen to die", await _until(func() -> bool: return puppet.dead, 20.0))
@@ -249,6 +250,10 @@ func _join() -> void:
 	_check("a barrel the host sets off is gone here", await _until(func() -> bool: return blasts[0] >= 2 and tree.get_nodes_in_group("explosive").size() == barrels - 1, 15.0))
 	_check("a lamp and a crate the host breaks then break here too, in pieces", await _until(func() -> bool: return lamps[1].out and stacks[1].standing() == stacks[1].size() - 1, 10.0)
 		and STACK.pieces() > 0)
+	# A blow with the weapon, which the host sees.
+	Input.action_press("melee")
+	await _wait(0.1)
+	Input.action_release("melee")
 
 	# Dying is not the end.
 	player.health = 1.0

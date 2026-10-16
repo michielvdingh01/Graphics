@@ -7,6 +7,11 @@ weapons/<name>.tres. No game is started and no GPU is used.
     tools/weapon_sheet.py                every pack in assets/packs.json
     tools/weapon_sheet.py close far      those packs
     tools/weapon_sheet.py --table        only the tables, in the terminal
+    tools/weapon_sheet.py --shots        the shots it takes to do 100, aimed
+                                         and standing, of every weapon there
+                                         is at 5, 10, 20, 40 and 80 m, as JSON:
+                                         what the self-test sets the game's
+                                         own count next to
 
 A sheet lands in benchmark/sheets/weapons_<pack>.png, next to it the .svg it
 was drawn from. A pack is drawn once the data of all its weapons is there,
@@ -98,10 +103,9 @@ def spread(w, aimed, moving):
     return deg
 
 
-def ttk(w, distance, aimed, moving):
-    """Seconds from the moment somebody is seen, the weapon at the hip, to the
-    last shot that is needed, or None: aimed, that begins with bringing the
-    sights up (ads_time)."""
+def shots(w, distance, aimed, moving):
+    """How many shots it takes on average to do 100 at `distance`, or None if
+    that is more than three magazines or out of reach."""
     if distance > w["max_range"]:
         return None
     reach = max(w["falloff_end"] - w["falloff_start"], 1e-6)
@@ -112,11 +116,19 @@ def ttk(w, distance, aimed, moving):
     per_shot = w["damage"] * scale * w["pellets"] * share
     if per_shot <= 0.0:
         return None
-    shots = math.ceil(HEALTH / per_shot - 1e-9)
-    if shots > w["mag_size"] * 3:
+    needed = math.ceil(HEALTH / per_shot - 1e-9)
+    return needed if needed <= w["mag_size"] * 3 else None
+
+
+def ttk(w, distance, aimed, moving):
+    """Seconds from the moment somebody is seen, the weapon at the hip, to the
+    last shot that is needed, or None: aimed, that begins with bringing the
+    sights up (ads_time)."""
+    needed = shots(w, distance, aimed, moving)
+    if needed is None:
         return None
-    reloads = (shots - 1) // int(w["mag_size"])
-    return (w["ads_time"] if aimed else 0.0) + (shots - 1) * 60.0 / w["rounds_per_minute"] + reloads * w["reload_time"]
+    reloads = (needed - 1) // int(w["mag_size"])
+    return (w["ads_time"] if aimed else 0.0) + (needed - 1) * 60.0 / w["rounds_per_minute"] + reloads * w["reload_time"]
 
 
 def verdict(weapons, sidearm):
@@ -255,6 +267,16 @@ def main():
     only_table = "--table" in sys.argv
     packs = json.load(open(os.path.join(ROOT, "assets", "packs.json")))["packs"]
     base = defaults()
+    if "--shots" in sys.argv:
+        found = {}
+        for file in sorted(os.listdir(os.path.join(ROOT, "weapons"))):
+            if file.endswith(".tres"):
+                w = weapon(file[:-5], base)
+                # Barrels that spin are not aimed: holding the aim spins them.
+                aimed = not w.get("aim_spins", False)
+                found[w["name"]] = {str(d): shots(w, d, aimed, False) for d in (5, 10, 20, 40, 80)}
+        print(json.dumps(found))
+        return
     os.makedirs(OUT, exist_ok=True)
     for pack, spec in packs.items():
         if args and pack not in args:
