@@ -33,11 +33,15 @@ var weapon := -1
 
 var _age := 0.0
 var _puff := 0.0
-var _flame := OmniLight3D.new()
-var _hiss := AudioStreamPlayer3D.new()
+## The light of its flame and the roar of its motor, made as it is put in
+## the world: one that is only looked at for looks() never is, and a node
+## that is made and never put anywhere is never freed.
+var _flame: OmniLight3D
+var _hiss: AudioStreamPlayer3D
 
 
 func _ready() -> void:
+	_flame = OmniLight3D.new()
 	_flame.light_color = Color(1.0, 0.55, 0.2)
 	_flame.light_energy = 2.5
 	_flame.omni_range = 5.0
@@ -45,6 +49,7 @@ func _ready() -> void:
 	_flame.position = Vector3(0, 0, 0.35)
 	add_child(_flame)
 	add_child(_tail())
+	_hiss = AudioStreamPlayer3D.new()
 	_hiss.stream = Sfx.loop_of(&"rocket_flight")
 	_hiss.bus = Sfx.WORLD
 	_hiss.unit_size = 6.0

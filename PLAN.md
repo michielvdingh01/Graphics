@@ -3759,6 +3759,8 @@ Op Michiels woord alle pakketten tegelijk. Alle zes staan nu op het scherm "Mult
 
 Op 16 oktober 2026 gevraagd: stap 5 en de open punten van "Wapens: de slag, pakketten en speciale wapens (plan)", in zes onderdelen. Branch `wapenafbouw`, vanaf de trunk op 470c209. Elk onderdeel heeft een eigen commit.
 
+**In de trunk gezet op 16 oktober 2026, op Michiels woord, met minigun A ("Verder is alles perfect"); niet gepusht.** Hij speelde het vanuit de worktree en gooide de steelhandgranaat op de route.
+
 ### Onderdeel 1: bots en de speciale wapens (gebouwd)
 
 - **Oppakken.** Een bot pakt een speciaal wapen op zoals de speler: door er binnen 1,2 m langs te lopen. Ziet hij er een liggen binnen 10 m, op zijn rek of waar iemand het liet vallen, dan loopt hij erheen (`NOTICES` in `scripts/bot.gd`), tenzij hij met een buit op zijn rug naar huis moet. Hij draagt er één tegelijk en heeft het meteen in handen; de wedstrijd zegt "Birch has the minigun", zoals bij de speler.
@@ -3941,3 +3943,7 @@ Niets van de geluiden van de wapenpakketten is beluisterd, en ik kan niet luiste
 - **Herladen**, met een schot ervoor: `tools/hear.py reload revolver`, `reload double_barrel`, `reload mosin`, `reload trench_gun`, `reload colt`, `reload machine_pistol`.
 
 Van elk geluid dat hij niet goed vindt, maak ik twee of drie varianten om uit te kiezen, zoals bij het trefgeluid op een mens.
+
+**Gekozen: minigun A**, de brul en de motor die het spel al speelde (`minigun_fire`, `minigun_spin`). Er is niets aan veranderd. De varianten `minigun_fire_b`, `minigun_fire_c` en `minigun_spin_b` liggen er nog en worden nergens gespeeld. Over de andere geluiden zei hij niets.
+
+**Na zijn eerste potje: een lek.** Bij het afsluiten meldde Godot één licht en één instantie die niet waren opgeruimd. Dat kwam van de oefenbeurt (onderdeel 5): die maakt een raket aan om zijn uiterlijk te tekenen, maar zet hem nooit in de wereld, en de lamp en het geluid van de raket werden al gemaakt als de raket gemaakt werd. Die maakt hij nu pas als hij in de wereld komt. Met `--verbose` geteld: van elf soorten lekkende objecten in `tools/test_match.sh --specials` naar geen. Daarna `tools/selftest.sh` (428) en `tools/test_match.sh` (117) geslaagd.
