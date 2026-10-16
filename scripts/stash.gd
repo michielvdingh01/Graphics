@@ -165,18 +165,22 @@ func _physics_process(delta: float) -> void:
 			return
 
 
-## Who can take it: the player, while alive. Bots leave it lying for now.
+## Who can take it: the player while alive, and in a match a bot of this
+## machine that carries none yet (see Match.can_arm()).
 func _takers() -> Array[Node3D]:
 	var found: Array[Node3D] = []
 	for player: Node3D in get_tree().get_nodes_in_group("player"):
-		if not player.dead and player.has_method("has_control") and player.has_control():
+		if Match.active and Match.can_arm(player) or not Match.active and not player.dead and player.has_method("has_control") and player.has_control():
 			found.append(player)
 	return found
 
 
 func _take(body: Node3D) -> void:
-	var before: Array = body.weapons.take_special(weapon, rounds)
-	Sfx.play(&"pickup_ammo", -4.0)
+	var before: Array = Match.arm(body, weapon, rounds) if Match.active else body.weapons.take_special(weapon, rounds)
+	if body.has_method("has_control"):
+		Sfx.play(&"pickup_ammo", -4.0)
+	else:
+		Sfx.play_at(&"pickup_ammo", global_position, -4.0)
 	if dropped:
 		taken.emit(body, before)
 		queue_free()

@@ -21,6 +21,9 @@ const HIT_MASK := 0b100101  # world + enemy + breakable
 var velocity := Vector3.ZERO
 ## What a hit square does, on top of the blast.
 var direct := 150.0
+## True for the copy another machine shows of a rocket somebody fired there:
+## that one goes off where it goes off, and this only disappears.
+var echo := false
 ## Who fired it, as scripts/match.gd numbers those who play, 0 for nobody,
 ## and their body, which it does not hit on its way out.
 var thrower := 0
@@ -95,6 +98,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _go_off(at: Vector3, struck: Object) -> void:
+	if echo:
+		queue_free()
+		return
 	var direction := velocity.normalized()
 	if struck and struck.has_method("take_damage"):
 		if Match.active:

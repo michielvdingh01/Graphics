@@ -292,6 +292,9 @@ var _turned := 0.0
 var _firing := false
 var _due := 0.0
 var _rounds := 0
+## Where the rounds of this frame ended up, which the other machines are told
+## of at once: not thirty messages a second.
+var _volley := PackedVector3Array()
 ## The heat that overheats a weapon, from 0 to 1, and the seconds it cannot
 ## fire for once it has.
 var _hot := 0.0
@@ -818,7 +821,10 @@ func _fire(data: WeaponData) -> void:
 			# went, and one round in three of barrels that spin.
 			if (i if data.pellets > 1 else _rounds) % 3 == 0 or (data.pellets == 1 and data.spin_up <= 0.0):
 				Fx.tracer(muzzle, end)
-	Net.player_did(&"fired", [ARMORY.index(data), ends])
+	if data.spin_up > 0.0:
+		_volley.append_array(ends)
+	else:
+		Net.player_did(&"fired", [ARMORY.index(data), ends])
 	if Match.active:
 		Match.fired(player, muzzle, data.flash_size * HEARD)
 
@@ -875,6 +881,7 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	get_tree().current_scene.add_child(rocket)
 	rocket.global_position = start
 	rocket.look_at(start + direction)
+	Net.player_did(&"launched", [start, rocket.velocity])
 	var back: Node3D = _models[_index].root.get_node_or_null("Back")
 	if back:
 		var behind := camera.global_basis.z
@@ -899,6 +906,9 @@ func _spin_barrels(data: WeaponData, delta: float, trigger: bool, aim: bool, bus
 		while _due >= 1.0 and _mags[_index] > 0:
 			_due -= 1.0
 			_fire(data)
+		if not _volley.is_empty():
+			Net.player_did(&"fired", [ARMORY.index(data), _volley])
+			_volley = PackedVector3Array()
 		if data.overheat_after > 0.0:
 			_hot = minf(_hot + delta / data.overheat_after, 1.0)
 			if _hot >= 1.0:

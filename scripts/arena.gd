@@ -450,6 +450,17 @@ func _middle() -> Vector3:
 	return (spots[ends[0]] + spots[ends[1]]) * 0.5
 
 
+## How far it is to walk from `from` to `to`; NO_WAY where there is no way.
+func walk(from: Vector3, to: Vector3) -> float:
+	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	if path.is_empty() or path[-1].distance_to(to) > 1.5:
+		return NO_WAY
+	var length := 0.0
+	for i in path.size() - 1:
+		length += path[i].distance_to(path[i + 1])
+	return length
+
+
 ## How far it is to walk from `from` to every spot; NO_WAY where there is none.
 func _walks_from(from: Vector3) -> PackedFloat32Array:
 	var lengths := PackedFloat32Array()

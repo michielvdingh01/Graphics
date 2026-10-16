@@ -3754,3 +3754,33 @@ Op Michiels woord alle pakketten tegelijk. Alle zes staan nu op het scherm "Mult
 - **De revolver en de M1911 van achteren** lijken op het pistool: wat ze anders maakt (de cilinder, de haan) zie je gericht nauwelijks.
 - **De steelhandgranaat van 1944** is er niet: dat pakket gooit dezelfde granaat als de rest.
 - **Bots en speciale wapens, en de slag van een ander**: stap 5 is niet gebouwd.
+
+## Wapens afgebouwd: bots, de slag voor anderen, de balans in het spel en de steelhandgranaat
+
+Op 16 oktober 2026 gevraagd: stap 5 en de open punten van "Wapens: de slag, pakketten en speciale wapens (plan)", in zes onderdelen. Branch `wapenafbouw`, vanaf de trunk op 470c209. Elk onderdeel heeft een eigen commit.
+
+### Onderdeel 1: bots en de speciale wapens (gebouwd)
+
+- **Oppakken.** Een bot pakt een speciaal wapen op zoals de speler: door er binnen 1,2 m langs te lopen. Ziet hij er een liggen binnen 10 m, op zijn rek of waar iemand het liet vallen, dan loopt hij erheen (`NOTICES` in `scripts/bot.gd`), tenzij hij met een buit op zijn rug naar huis moet. Hij draagt er één tegelijk en heeft het meteen in handen; de wedstrijd zegt "Birch has the minigun", zoals bij de speler.
+- **Halen, vanaf Hardened.** Elke seconde kijkt de wedstrijd welke bot van elke kant het dichtst bij een speciaal wapen is dat er ligt, langs het navmesh gemeten (van de vier dichtstbijzijnde in rechte lijn), en stuurt die erheen (`Match.errand()`). Zonder kanten gaat de dichtstbijzijnde van allemaal. Dat staat als `fetches` bij de derde moeilijkheid in `assets/match.json`; op Recruit en Regular pakken bots het alleen als ze erlangs komen.
+- **Met de minigun** draaien de lopen op zodra hij iemand ziet (0,75 s) en blijven ze draaien zolang hij die ziet. Dan vuurt hij per stap van de physics zoveel kogels als de vuursnelheid op dat moment vraagt, van 1 200 naar 2 000 per minuut, in één bericht. Een stoot duurt minstens 1,2 s (langer als zijn niveau dat zegt) en houdt op zodra de lopen 60% heet zijn; de volgende begint pas als ze tot 30% zijn afgekoeld. Zo raakt hij nooit oververhit. Hij loopt op 70% en rent niet, met draaiende lopen op 60% daarvan.
+- **Met de raketwerper** vuurt hij een raket in plaats van een straal, op de voeten (15 cm erboven), en niet op wie dichter dan 6 m staat, noch als er binnen 6 m iets voor zijn loop staat. Staat iemand dichterbij dan 8 m, dan loopt hij achteruit. Hij herlaadt uit de twee raketten die erbij zaten.
+- **Leeggeschoten** gooit hij het na een derde seconde weg en heeft hij zijn eigen wapen weer; het rek telt dan af. **Wie sterft**, laat het liggen waar hij viel, met wat erin zat, zoals de speler. Een bot die terugkomt, heeft zijn eigen wapen.
+- **De pop** (wat anderen zien, `scripts/puppet.gd`). Wisselt een bot van wapen, dan krijgt zijn figuur het model ervan, op elke machine (`rearm`). Een figuur met een minigun laat de lopen draaien zolang zijn drager zegt dat ze draaien, laat ze gloeien naar de hitte die meekomt, en laat de motor horen die oploopt, één brul zolang er schoten komen, de staart als ze ophouden en het geluid van oververhitten. Er klinkt dus geen schot meer per kogel. Daarvoor heeft het minigunmodel voor anderen zijn lopen nu als los deel (`tools/models/held.gd`, `scenes/models/minigun_held.scn`, 6 248 driehoeken zoals eerst).
+- **Over de lijn.** Wat iemand doet heeft twee dingen erbij: `Net.SPINNING` voor lopen die draaien, en de hitte van het wapen in vier bits. De minigun van de speler stuurt één bericht per beeld met alle kogels van dat beeld, niet één per kogel. Een raket is nu een daad (`launched`): de machine van de schutter laat hem ontploffen, de anderen zien er een die meevliegt en verdwijnt (`echo` in `scripts/rocket.gd`). Een raket van een bot vliegt op de host echt. `Net.VERSION` is 11.
+- **Geteld.** `tools/test_match.sh` zegt na de buit en na `--soak` hoe vaak een speciaal wapen gepakt is, door wie en wanneer (`Match.takes`).
+
+**Getest**
+
+- `tools/test_match.sh`: 112 controles, tegen 97 in de trunk, alle geslaagd. Nieuw, in een potje van drie tegen drie in de fabriek: een bot die naar de minigun loopt pakt hem, heeft hem in handen en zijn figuur draagt hem met lopen die draaien; een tweede pakt hij niet. Met de minigun op 10 m van een vijand: op toeren na 0,86 s, het eerste schot op dat moment, 155 kogels in vijf stoten in 9 s, nooit heter dan 60%. Met de raketwerper op 15 m: de raket gaat op 0,25 m langs de voeten en raakt; van 4 m af vuurt hij niet en loopt hij achteruit, en zijn eerste raket viel pas op 6,6 m. Wie sterft laat het liggen met wat erin zat en heeft zijn eigen wapen terug. Op Regular gaat niemand iets halen; op Hard gaan precies de twee dichtstbijzijnden, één per kant, en de eerste haalt het. `tools/test_match.sh --specials` doet alleen dit deel.
+- In capture the flag onder bots (273 s) is de raketwerper acht keer gepakt, door drie bots; de minigun stond buiten hun weg.
+- Een potje van zes tegen zes op Hard in de fabriek, `tools/test_match.sh --match=tdm:factory:6 --only-bots --soak=170 --difficulty=2`: de minigun 32 keer gepakt, de raketwerper 3 keer, 252 doden, 125 tegen 126.
+- `tools/selftest.sh` (423) en `tools/nettest.sh` (62, beide kanten): geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of een bot met een minigun leuk is om tegen te vechten.** Op Hard in de fabriek wisselde de minigun in 170 s 32 keer van hand: hij blijft na elke dood 20 s liggen, de fabriek is klein en wie hem draagt valt snel, en elke bot binnen 10 m die hem ziet gaat hem halen. Of hij zo een magneet is waar het gevecht omheen draait, of juist een wapen dat niemand lang houdt, zegt het spelen.
+- **Hoe het eruitziet.** Een figuur met draaiende, gloeiende lopen, het opdraaien, de raket van een bot en het achteruitlopen heb ik alleen als getallen gezien. Beelden zijn er bij onderdeel 5.
+- **Hoe het klinkt.** De brul van een figuur is de brul van de speler (`minigun_fire`), op 10 m nog op volle sterkte; of hij te luid of te zacht is naast de schoten van anderen, hoor jij.
+- **Een wedstrijd over het net.** De rekken staan nog alleen op de host, zoals de hele wedstrijd: wedstrijden over het net zijn een eigen stap. De berichten zijn er wel (het wisselen van wapen, de lopen, de raket).
+- **De kop van de raketwerper** van een figuur blijft na het schot zichtbaar: het model voor anderen is één stuk.

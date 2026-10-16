@@ -96,6 +96,11 @@ const NAMES: Array[String] = ["Alder", "Birch", "Cedar", "Dogwood", "Elm", "Fir"
 	"Ginkgo", "Heather", "Iris", "Jasmine", "Laurel", "Moss", "Nutmeg", "Olive", "Pine", "Reed", "Sage", "Tansy", "Wattle", "Yew"]
 ## Seconds between two reports of where the bots are, for the other machines.
 const TICK := 0.05
+## Seconds between two looks for who of each side is to fetch a weapon of the
+## arena, where the difficulty has them fetch (`fetches`), and how many of
+## the nearest as the crow flies are asked how far it is to walk.
+const FETCH := 1.0
+const FETCH_ASKED := 4
 
 
 ## Somebody who plays.
@@ -140,7 +145,8 @@ var mode: RefCounted
 ## far health comes back by itself (`regen_to`) and after how long without a
 ## hit (`regen_after`), what is left of what a bot does to a person (`hurts`),
 ## how many bots fire at one person at a time (`focus`, 0 for as many as see
-## them) and how good the bots are (`bots`).
+## them), how good the bots are (`bots`) and whether the nearest bot of a side
+## goes to fetch a weapon of the arena once it is there (`fetches`).
 var rules: Dictionary:
 	get:
 		return _rules[clampi(Settings.difficulty, 0, _rules.size() - 1)]
@@ -157,6 +163,10 @@ var arena: RefCounted
 ## How often a bot got nowhere and had to think of something else, for the
 ## test to count.
 var stuck := 0
+## Every time a weapon of the arena was taken up: {weapon, by, bot, at}, the
+## name of the weapon, who took it, whether that was a bot, and the seconds
+## into the match.
+var takes: Array[Dictionary] = []
 
 var _game: Node3D
 var _rules: Array[Dictionary] = []
@@ -180,6 +190,10 @@ var _corner := Vector3.ZERO
 var _clock := 0.0
 var _tick := 0.0
 var _hud: CanvasLayer
+## The bots that are sent to fetch a weapon of the arena, by number: where it
+## lies. And the seconds until the next look for who that is.
+var _errands := {}
+var _fetch := 0.0
 
 
 func _ready() -> void:
@@ -196,7 +210,7 @@ func _ready() -> void:
 	var by_difficulty: Variant = parsed.get("difficulty") if parsed is Dictionary else null
 	for i in Settings.RULES.size():
 		var one := shared.duplicate()
-		one.merge({"regen_to": 100.0, "hurts": 1.0, "focus": 0, "bots": "regular"})
+		one.merge({"regen_to": 100.0, "hurts": 1.0, "focus": 0, "bots": "regular", "fetches": false})
 		if by_difficulty is Array and i < by_difficulty.size() and by_difficulty[i] is Dictionary:
 			one.merge(by_difficulty[i], true)
 		_rules.append(one)
@@ -533,6 +547,9 @@ func _fell(who: Entrant, push: Vector3) -> void:
 	who.blame = []
 	mode.fell(who)
 	who.out = float(mode.numbers.respawn)
+	if who.brain:
+		# A bot leaves the weapon of the arena where it fell, as the player does.
+		_lay_down(who.brain.drop_special(), who.body.global_position)
 	Net.show(self, &"_show_fall", [by, who.id, weapon, head, push])
 	judge()
 
@@ -636,6 +653,10 @@ func _physics_process(delta: float) -> void:
 			# As far as a person's does, and no further.
 			who.health = minf(who.health + MENDS * delta, float(rules.regen_to))
 	_tend_cells()
+	_fetch -= delta
+	if _fetch <= 0.0:
+		_fetch = FETCH
+		_send_fetchers()
 	mode.tick(delta)
 	_tick -= delta
 	if _tick <= 0.0:
@@ -727,24 +748,104 @@ func _set_out_specials() -> void:
 		stand.arrived.connect(func() -> void: say("%s is up" % data.display_name, &"pickup_grenade"))
 		_stands[data] = stand
 	var weapons_in_hand: Node3D = _game.player.weapons
-	if not weapons_in_hand.special_spent.is_connected(_on_special_spent):
-		weapons_in_hand.special_spent.connect(_on_special_spent)
+	if not weapons_in_hand.special_spent.is_connected(special_spent):
+		weapons_in_hand.special_spent.connect(special_spent)
 
 
 ## Somebody took a weapon of the arena up, from its stand or from where it
 ## was dropped, and let go of the one they had, if they had one.
 func _on_special_taken(by: Node3D, dropped: Array, from: Node3D) -> void:
 	var who := _entrant_of(by)
+	var data: WeaponData = from.weapon
 	if who:
-		say("%s has the %s" % [who.title, (from.weapon as WeaponData).display_name.to_lower()])
+		say("%s has the %s" % [who.title, data.display_name.to_lower()])
+		takes.append({"weapon": data.resource_path.get_file().get_basename(), "by": who.title, "bot": who.bot, "at": _clock})
+		_errands.erase(who.id)
 	_lay_down(dropped, by.global_position)
 
 
 ## A weapon of the arena was fired empty: its stand has it back in a while.
-func _on_special_spent(data: WeaponData) -> void:
+func special_spent(data: WeaponData) -> void:
 	var stand: Node3D = _stands.get(data)
 	if is_instance_valid(stand):
 		stand.release(float(_special_numbers.back))
+
+
+## True if `body` can take up a weapon of the arena now: the player while it
+## stands, or a bot of this machine that stands and carries none yet.
+func can_arm(body: Node3D) -> bool:
+	if body.get(&"dead"):
+		return false
+	if body.has_method("has_control"):
+		# Not somebody who only looks on.
+		return body.has_control() and me() != null
+	var who: Entrant = entrants.get(number(body))
+	return who != null and who.brain != null and who.out <= 0.0 and who.brain.special() == null
+
+
+## Puts a weapon of the arena with `rounds` in it in the hands of `body`, the
+## player or a bot; what they let go of for it, as drop_special() says.
+func arm(body: Node3D, data: WeaponData, rounds: int) -> Array:
+	if body.has_method("has_control"):
+		return body.weapons.take_special(data, rounds)
+	var who: Entrant = entrants.get(number(body))
+	return who.brain.take_special(data, rounds) if who and who.brain else []
+
+
+## Where the weapons of the arena are that can be taken now: on their stands,
+## or lying where somebody dropped them.
+func specials_up() -> PackedVector3Array:
+	var found := PackedVector3Array()
+	if _game:
+		for stand: Node3D in get_tree().get_nodes_in_group("stash"):
+			if stand.is_up() and not stand.is_queued_for_deletion():
+				found.append(stand.global_position)
+	return found
+
+
+## True if a weapon of the arena can still be taken at `at`.
+func special_at(at: Vector3) -> bool:
+	for there in specials_up():
+		if there.distance_to(at) < 0.5:
+			return true
+	return false
+
+
+## Where the bot `who` is sent to fetch a weapon of the arena, null if it is
+## not.
+func errand(who: Entrant) -> Variant:
+	var at: Variant = _errands.get(who.id)
+	if at != null and not special_at(at):
+		_errands.erase(who.id)
+		return null
+	return at
+
+
+## Where the difficulty has it, sends the nearest bot of each side to every
+## weapon of the arena that can be taken, as far as it is to walk: one bot to
+## one weapon. Without sides the nearest of all goes.
+func _send_fetchers() -> void:
+	_errands.clear()
+	if not rules.fetches:
+		return
+	for at in specials_up():
+		for side in ([0, 1] if mode.teams() else [-1]):
+			var near: Array[Entrant] = []
+			for who: Entrant in entrants.values():
+				if who.brain and who.out <= 0.0 and (side < 0 or who.team == side) and who.brain.special() == null \
+						and not _errands.has(who.id) and not mode.hurries(who):
+					near.append(who)
+			near.sort_custom(func(a: Entrant, b: Entrant) -> bool:
+				return a.body.global_position.distance_squared_to(at) < b.body.global_position.distance_squared_to(at))
+			var nearest: Entrant = null
+			var shortest := INF
+			for who in near.slice(0, FETCH_ASKED):
+				var walk: float = arena.walk(who.body.global_position, at)
+				if walk < shortest:
+					shortest = walk
+					nearest = who
+			if nearest:
+				_errands[nearest.id] = at
 
 
 ## Leaves what drop_special() gave where somebody let go of it, with what was
@@ -893,6 +994,8 @@ func _forget() -> void:
 	_game = null
 	_cells.clear()
 	_stands.clear()
+	_errands.clear()
+	takes.clear()
 	_baked = false
 	left = 0.0
 

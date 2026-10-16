@@ -47,6 +47,9 @@ const POSED := Vector2(30.0, 70.0)
 ## makes no flash at its muzzle and no mark where it lands; its streak and
 ## its sound stay.
 const SHOWN := 80.0
+## Barrels that spin roar as one sound for as long as shots keep coming, and
+## fall silent this many seconds after the last.
+const ROAR_GAP := 0.12
 ## A robot of the route, for a bot in a match whose side is robots: its
 ## model, how wide and tall its body is to a shot, where its eyes are and
 ## where its head starts, and its visor. As scenes/enemy.tscn and
@@ -87,6 +90,18 @@ var _look := {}
 ## What it is to a shot: SOLDIER or one of ROBOTS.
 var _build := SOLDIER
 var _collider := CollisionShape3D.new()
+## Barrels that spin, on the weapon in its hands if it has them, where they
+## rest, how far up to speed they are and how far round they have turned;
+## until when they roar, whether they did, and how hot they were.
+var _barrels: Node3D
+var _barrels_rest := Transform3D()
+var _spin := 0.0
+var _turned := 0.0
+var _roars_until := 0.0
+var _roaring := false
+var _heat := 0.0
+var _motor: AudioStreamPlayer3D
+var _roar: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -138,6 +153,9 @@ func _dress() -> void:
 		return
 	add_child(rig)
 	_rig = rig
+	_barrels = rig.find_child("Barrels", true, false) as Node3D
+	if _barrels:
+		_barrels_rest = _barrels.transform
 
 
 ## Becomes a robot of the route. Its weapon is its arm, whatever of the
@@ -199,7 +217,9 @@ func _physics_process(_delta: float) -> void:
 	head.position.y = _eyes()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if ARMORY.at(_weapon).spin_up > 0.0 or _spin > 0.0 or _roaring:
+		_spin_barrels(ARMORY.at(_weapon), delta)
 	if _rig == null or dead:
 		return
 	# Far off, or out of sight, a figure strikes a pose less often. A robot
@@ -300,11 +320,96 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, _rig.flash_prongs, _rig.flash_tint)
 	elif flash:
 		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, data.flash_prongs)
-	Sfx.play_at(data.shot_sound, muzzle)
+	if data.spin_up > 0.0:
+		# Thirty rounds a second are one roar, see _spin_barrels().
+		_roars_until = Time.get_ticks_msec() * 0.001 + ROAR_GAP
+	else:
+		Sfx.play_at(data.shot_sound, muzzle)
 	if Match.active and not ends.is_empty():
 		# Whoever it was meant for hears it go by.
 		Sfx.passing(muzzle, ends[0])
 	get_tree().call_group(&"watch", &"hears", muzzle, data.flash_size * WEAPONS.HEARD)
+
+
+## It fired a rocket from `from` at `speed`. The one shown here flies the
+## same way and is gone at what it meets; the blast is that of the shooter's
+## own. A bot of this machine fires the rocket itself: then `by` is its
+## number in the match, and this one is the one that goes off.
+func launched(from: Vector3, speed: Vector3, by := 0) -> void:
+	var data := ARMORY.at(_weapon)
+	var rocket: Node3D = (data.projectile if data.projectile else ARMORY.named("rocket_launcher").projectile).instantiate()
+	rocket.velocity = speed
+	rocket.echo = by == 0
+	rocket.direct = data.damage
+	rocket.thrower = by
+	rocket.shooter = self
+	rocket.weapon = _weapon
+	get_tree().current_scene.add_child(rocket)
+	rocket.global_position = from
+	# A blast of smoke out of the back of the tube.
+	var behind := -speed.normalized()
+	var back := from + behind * 1.3
+	if get_viewport().get_camera_3d() and get_viewport().get_camera_3d().global_position.distance_to(back) < SHOWN:
+		Fx.gun_smoke(back, behind, 1.0)
+		Fx.rocket_trail(back + behind * 0.4, -behind)
+		Fx.flash(back, Color(1.0, 0.7, 0.4), 3.0, 4.0, 0.08)
+
+
+## A weapon of another place in the armory is in its hands from now on: a
+## weapon of the arena that a bot took up, or put down again.
+func rearm(weapon: int) -> void:
+	if weapon == _weapon:
+		return
+	_weapon = weapon
+	if not dead:
+		_dress()
+
+
+## Barrels that spin: up to speed while whoever carries them says they spin,
+## turning round, glowing as hot as they say, with the motor that turns them
+## and the roar of their fire, and the sound of the last shots and of
+## overheating as they fall silent.
+func _spin_barrels(data: WeaponData, delta: float) -> void:
+	var wants := _doing & Net.SPINNING != 0 and not dead and data.spin_up > 0.0
+	_spin = move_toward(_spin, 1.0 if wants else 0.0, delta / (data.spin_up if wants else maxf(data.spin_down, 0.1)))
+	var heat := Net.heat_of(_doing) if not dead else 0.0
+	var at := head.global_position
+	if heat >= 1.0 and _heat < 1.0:
+		Sfx.play_at(&"minigun_overheat", at, -2.0)
+	_heat = heat
+	if is_instance_valid(_barrels):
+		_turned = fmod(_turned + _spin * WEAPONS.SPIN_TURNS * TAU * delta, TAU)
+		_barrels.transform = _barrels_rest.rotated_local(Vector3.BACK, _turned)
+		_barrels.set_instance_shader_parameter(&"glow", heat)
+	var roaring := Time.get_ticks_msec() * 0.001 < _roars_until and not dead
+	if _roaring and not roaring:
+		Sfx.play_at(&"minigun_tail", at, -1.0)
+	_roaring = roaring
+	_motor = _loop(_motor, &"minigun_spin", _spin > 0.0, lerpf(-16.0, -4.0, _spin), lerpf(0.45, 1.0, _spin))
+	_roar = _loop(_roar, &"minigun_fire", roaring, 0.0, 1.0)
+
+
+## Keeps a sound that goes round playing from its head while `on`, at this
+## level and pitch; made the first time it is needed.
+func _loop(player: AudioStreamPlayer3D, sound: StringName, on: bool, db: float, pitch: float) -> AudioStreamPlayer3D:
+	if not on:
+		if player and player.playing:
+			player.stop()
+		return player
+	if player == null:
+		player = AudioStreamPlayer3D.new()
+		player.stream = Sfx.loop_of(sound)
+		player.bus = Sfx.WORLD
+		player.unit_size = 10.0
+		player.max_distance = 120.0
+		player.attenuation_filter_db = -6.0
+		head.add_child(player)
+	player.volume_db = db
+	player.max_db = maxf(player.max_db, db)
+	player.pitch_scale = pitch
+	if not player.playing and player.stream:
+		player.play()
+	return player
 
 
 ## It threw a grenade. The one shown here flies the same way and is gone when
@@ -361,6 +466,7 @@ func fall(push: Vector3) -> void:
 	if dead:
 		return
 	dead = true
+	_doing = 0
 	collision_layer = 0
 	velocity = Vector3.ZERO
 	_label.visible = false

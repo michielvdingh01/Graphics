@@ -10,7 +10,9 @@ extends Node
 ## be hurt, and a death is not the end of the level. It prints how often a
 ## bot got stuck and how often nobody could come back anywhere safe. Last it
 ## has twenty a side play in the dunes, and looks at where those who fall
-## come back: near a friend and near the fight, not at the far end.
+## come back: near a friend and near the fight, not at the far end. On the
+## way it has bots take up the weapons of the arena and fight with them;
+## with --specials it does only that.
 
 const ROBOT_RIG := preload("res://scripts/enemy_rig.gd")
 
@@ -43,6 +45,13 @@ func _run() -> void:
 			await _soak(arg.get_slice("=", 1).to_float())
 			tree.quit(0)
 			return
+	if "--specials" in OS.get_cmdline_user_args():
+		# Only the part with the weapons of the arena in the hands of bots.
+		Settings.enemy_theme = "soldiers"
+		await _bots_and_specials()
+		print("MATCH TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
+		tree.quit(1 if _failures else 0)
+		return
 	var saved: Dictionary = Save.checkpoint.duplicate()
 	var plain: Dictionary = Settings.rules()
 	# Soldiers on both sides, until it is played against others further on.
@@ -247,6 +256,7 @@ func _run() -> void:
 	Engine.time_scale = 1.0
 	_check("health comes back to half on hard, three quarters on normal and all the way on easy", came_to == [50.0, 75.0, 100.0])
 	Settings.difficulty = 1
+	await _bots_and_specials()
 
 	# Against whoever the enemies were chosen to be.
 	Settings.enemy_theme = "zombies"
@@ -371,7 +381,7 @@ func _run() -> void:
 		who.brain.process_mode = Node.PROCESS_MODE_INHERIT
 	var took := [0]
 	Match.said.connect(func(text: String) -> void:
-		if text.contains(" has "):
+		if text.contains(" has ") and not _of_the_arena(text):
 			took[0] += 1)
 	Engine.time_scale = 6.0
 	clock = 0.0
@@ -382,6 +392,7 @@ func _run() -> void:
 		clock += 0.5
 	Engine.time_scale = 1.0
 	print("  capture the flag among bots: %d : %d after %.0f s, the prize taken %d times, %d times a bot got stuck" % [Match.tally[0], Match.tally[1], clock, took[0], Match.stuck])
+	print("  %s" % _taken())
 	_check("it ends at three points or when the time is up, for whoever leads then", Match.state == Match.State.OVER
 		and Match.won == (rules.DRAW if Match.tally[0] == Match.tally[1] else 0 if Match.tally[0] > Match.tally[1] else 1)
 		and Match.tally[0] >= before[0] and maxi(Match.tally[0], Match.tally[1]) <= 3)
@@ -611,7 +622,7 @@ func _soak(seconds: float) -> void:
 	var news := {}
 	Match.said.connect(func(text: String) -> void:
 		for word: String in [" has ", " dropped ", " brought ", " back home", " scored "]:
-			if text.contains(word):
+			if text.contains(word) and not _of_the_arena(text):
 				news[word.strip_edges()] = int(news.get(word.strip_edges(), 0)) + 1)
 	while waited < seconds:
 		await _wait(0.5)
@@ -644,6 +655,7 @@ func _soak(seconds: float) -> void:
 		print("  on %s the player, standing still, was hit %d times for %.0f in all, %.1f a second; the quickest hundred took %s" % [Settings.DIFFICULTY_NAMES[Settings.difficulty].to_lower(), hits.size(), total, total / seconds, "%.1f s" % quickest if quickest < INF else "longer than there was"])
 	if not news.is_empty():
 		print("  the score is %d : %d; what was said of the prizes, and how often: %s" % [Match.tally[0], Match.tally[1], news])
+	print("  %s" % _taken())
 	physics.sort()
 	var mean := 0.0
 	for sample in physics:
@@ -654,6 +666,216 @@ func _soak(seconds: float) -> void:
 	print("MATCH SOAK %s in %s, %d playing, %.0f s in %.0f s: %d deaths, %d times nowhere was safe, %d times a bot got stuck; a physics step took %.2f ms on average, %.2f ms at the 95th of a hundred and %.2f ms at worst, %d steps a second"
 		% [Match.setup.mode, Match.setup.level, Match.entrants.size(), seconds, (Time.get_ticks_msec() - began) / 1000.0, deaths, Match.arena.emergencies, Match.stuck,
 			mean, physics[int(physics.size() * 0.95)], physics[-1], Engine.physics_ticks_per_second])
+
+
+## Bots and the weapons of the arena: they take one up by walking past it,
+## from Hardened on the nearest of each side goes to fetch it, they fight
+## with it as the weapon asks and leave it where they fall.
+func _bots_and_specials() -> void:
+	var tree := get_tree()
+	_check("a match of bots opens to see them with the weapons of the arena", Match.open({"mode": "tdm", "level": "factory", "size": 3, "only_bots": true}))
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	var armory: GDScript = load("res://scripts/armory.gd")
+	var minigun: WeaponData = load("res://weapons/minigun.tres")
+	var launcher: WeaponData = load("res://weapons/rocket_launcher.tres")
+	var bots: Array = Match.entrants.values()
+	for who: RefCounted in bots:
+		who.brain.process_mode = Node.PROCESS_MODE_DISABLED
+		who.safe = 0.0
+	var stands := tree.get_nodes_in_group("stash")
+	var stand: Node3D = stands.filter(func(one: Node3D) -> bool: return one.weapon == minigun)[0]
+	var blue: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 0)[0]
+	var orange: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 1)[0]
+	var own: WeaponData = armory.at(blue.weapon)
+
+	# Walking past.
+	stand.come_in(0.0)
+	blue.body.global_position = stand.global_position + Vector3(0.4, 0.0, 0.0)
+	await _wait(0.3)
+	var rig: Node3D = blue.body._rig
+	_check("a bot that walks up to the minigun takes it, has it in its hands and is said to have it", blue.brain.special() == minigun and armory.at(blue.weapon) == minigun
+		and not stand.is_up() and not Match.takes.is_empty() and Match.takes[-1].by == blue.title and Match.takes[-1].bot and Match.takes[-1].weapon == "minigun")
+	_check("its figure carries the minigun, with barrels that turn", rig._weapon != null and rig._weapon.scene_file_path.ends_with("minigun_held.scn") and is_instance_valid(blue.body._barrels))
+	_check("one bot does not take a second weapon of the arena while it has one", not Match.can_arm(blue.body))
+
+	# The minigun in a fight: it spins up on sight, fires in bursts and never
+	# overheats.
+	var pair := _facing_spots(10.0)
+	_check("there are two spots 10 m apart that see each other", not pair.is_empty())
+	if pair.is_empty():
+		return
+	blue.body.global_position = pair[0]
+	orange.body.global_position = pair[1]
+	orange.health = 1e6
+	blue.body.look_at(pair[1] + Vector3.UP * (blue.body.global_position.y - pair[1].y), Vector3.UP)
+	blue.brain._aim = pair[1] + Vector3.UP
+	blue.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	var first_round := -1.0
+	var spun_at := -1.0
+	var hottest := 0.0
+	var bursts := 0
+	var was_firing := false
+	var overheated := false
+	var clock := 0.0
+	while clock < 9.0:
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		var brain: Node = blue.brain
+		if brain._spin >= 1.0 and spun_at < 0.0:
+			spun_at = clock
+		if brain._mag < minigun.mag_size and first_round < 0.0:
+			first_round = clock
+		hottest = maxf(hottest, brain._hot)
+		overheated = overheated or brain._overheated > 0.0
+		if brain._firing and not was_firing:
+			bursts += 1
+		was_firing = brain._firing
+		blue.body.global_position = pair[0]
+		orange.body.global_position = pair[1]
+	var fired: int = minigun.mag_size - blue.brain._mag
+	print("  a bot with the minigun at 10 m: up to speed after %.2f s, first round after %.2f s, %d rounds in %d bursts in 9 s, at most %.0f%% hot" % [spun_at, first_round, fired, bursts, hottest * 100.0])
+	_check("it spins up as soon as it sees somebody, and fires once its barrels are up to speed", spun_at > 0.0 and first_round >= spun_at - 0.02 and first_round < spun_at + 0.6)
+	_check("it fires in bursts, and never lets the minigun overheat", fired > 80 and bursts >= 2 and not overheated and hottest < 1.0)
+	_check("its figure spins the barrels and roars, instead of a shot for every round", blue.body._spin > 0.5 and absf(blue.body._turned) > 0.0 and blue.body._roars_until > 0.0)
+	blue.brain.process_mode = Node.PROCESS_MODE_DISABLED
+
+	# The rocket launcher: at the feet, and never from close by.
+	blue.brain.take_special(launcher, launcher.mag_size + launcher.reserve_ammo)
+	_check("a bot that takes another weapon of the arena lets go of the one it had", blue.brain.special() == launcher)
+	var far := _facing_spots(15.0)
+	if far.is_empty():
+		far = pair
+	blue.body.global_position = far[0]
+	orange.body.global_position = far[1]
+	blue.body.look_at(far[1] + Vector3.UP * (far[0].y - far[1].y), Vector3.UP)
+	blue.brain._aim = far[1]
+	blue.brain._seen = 0.0
+	blue.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	var rockets: Array = []
+	var health: float = orange.health
+	clock = 0.0
+	while clock < 5.0 and rockets.is_empty():
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		_note_rockets(rockets, blue.body, orange.body)
+		blue.body.global_position = far[0]
+		orange.body.global_position = far[1]
+	await _wait(1.0)
+	var feet: Vector3 = far[1]
+	var miss := INF
+	if not rockets.is_empty():
+		var from: Vector3 = rockets[0][0]
+		var along: Vector3 = (rockets[0][1] as Vector3).normalized()
+		miss = (feet - from - along * (feet - from).dot(along)).length()
+	print("  a bot with the rocket launcher at %.0f m: %d rockets, the first passing %.2f m from the feet; the other lost %.0f" % [far[0].distance_to(far[1]), rockets.size(), miss, health - orange.health])
+	_check("it fires a rocket instead of a ray, at the feet, and it hurts", not rockets.is_empty() and miss < 0.9 and orange.health < health)
+	rockets.clear()
+	var near: Vector3 = far[1] + (far[0] - far[1]).normalized() * 4.0
+	blue.body.global_position = near
+	blue.brain._reload = 0.0
+	blue.brain._mag = 1
+	clock = 0.0
+	while clock < 2.5:
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		_note_rockets(rockets, blue.body, orange.body)
+	print("  from 4 m: rockets fired at %s m, and it ended up %.1f m away" % [rockets.map(func(one: Array) -> String: return "%.1f" % one[2]), blue.body.global_position.distance_to(orange.body.global_position)])
+	_check("nearer than 6 m it fires no rocket, and backs away", rockets.all(func(one: Array) -> bool: return one[2] >= 6.0) and blue.body.global_position.distance_to(orange.body.global_position) > 4.5)
+	blue.brain.process_mode = Node.PROCESS_MODE_DISABLED
+
+	# Going down with it.
+	var left: int = blue.brain._mag + blue.brain._spare
+	var fell_at: Vector3 = blue.body.global_position
+	Match.harm(blue.id, 500.0, fell_at, Vector3.FORWARD, orange.id, 0)
+	await _wait(0.2)
+	var lying := tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.dropped)
+	_check("a bot that goes down with it leaves it where it fell, with what was left in it, and is back with its own weapon", lying.size() == 1 and lying[0].weapon == launcher
+		and lying[0].rounds == left and Vector2(lying[0].global_position.x - fell_at.x, lying[0].global_position.z - fell_at.z).length() < 0.5
+		and blue.brain.special() == null and armory.at(blue.weapon) == own)
+	for one: Node3D in lying:
+		one.queue_free()
+	await _wait(float(Match.mode.numbers.respawn) + 0.3)
+
+	# Fetching, from Hardened on.
+	for one: Node3D in tree.get_nodes_in_group("stash"):
+		one.come_in(INF if one != stand else 0.0)
+	Settings.difficulty = 1
+	await _wait(Match.FETCH + 0.1)
+	_check("on normal nobody is sent to fetch it", Match._errands.is_empty())
+	Settings.difficulty = 2
+	await _wait(Match.FETCH + 0.1)
+	var sent: Array = bots.filter(func(who: RefCounted) -> bool: return Match.errand(who) != null)
+	var nearest := [null, null]
+	for side in 2:
+		var shortest := INF
+		for who: RefCounted in bots:
+			if who.team == side:
+				var walk: float = Match.arena.walk(who.body.global_position, stand.global_position)
+				if walk < shortest:
+					shortest = walk
+					nearest[side] = who
+	print("  on hard, sent to fetch the minigun: %s" % [sent.map(func(who: RefCounted) -> String: return "%s of side %d" % [who.title, who.team])])
+	_check("on hard the nearest bot of each side is sent to fetch it, and nobody else", sent.size() == 2 and sent.has(nearest[0]) and sent.has(nearest[1]))
+	var runner: RefCounted = nearest[0]
+	var other: RefCounted = nearest[1]
+	other.body.global_position = Match.arena.spots[Match.arena.ends[1]]
+	runner.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	await _until(func() -> bool: return runner.brain.special() == minigun, 40.0)
+	_check("and the one that is sent goes and takes it", runner.brain.special() == minigun and Match.takes[-1].by == runner.title)
+	runner.brain.process_mode = Node.PROCESS_MODE_DISABLED
+	Settings.difficulty = 1
+	Match.close()
+
+
+## Adds a rocket that has appeared since the last look to `rockets`: where it
+## was first seen, how fast it went and how far `from` was from `at` then.
+func _note_rockets(rockets: Array, from: Node3D, at: Node3D) -> void:
+	for rocket: Node3D in get_tree().get_nodes_in_group("rocket"):
+		if not rocket.has_meta(&"noted"):
+			rocket.set_meta(&"noted", true)
+			rockets.append([rocket.global_position, rocket.velocity, from.global_position.distance_to(at.global_position)])
+
+
+## Two spots of the arena about `metres` apart, on one floor, that see each
+## other with nothing in between; empty if there are none.
+func _facing_spots(metres: float) -> Array[Vector3]:
+	var arena: RefCounted = Match.arena
+	var space: PhysicsDirectSpaceState3D = get_tree().current_scene.get_world_3d().direct_space_state
+	for i in range(0, arena.spots.size(), 3):
+		var a: Vector3 = arena.spots[i]
+		for j in arena.spots.size():
+			var b: Vector3 = arena.spots[j]
+			if absf(a.distance_to(b) - metres) > 1.0 or absf(a.y - b.y) > 0.3:
+				continue
+			var clear := true
+			for height: float in [0.2, 1.0, 1.6]:
+				if not space.intersect_ray(PhysicsRayQueryParameters3D.create(a + Vector3.UP * height, b + Vector3.UP * height, 1)).is_empty():
+					clear = false
+			if clear:
+				return [a, b]
+	return []
+
+
+## True if `text` is the line that says who took a weapon of the arena, not
+## a prize.
+func _of_the_arena(text: String) -> bool:
+	return Match.SPECIALS.any(func(weapon: String) -> bool: return text.ends_with(weapon.replace("_", " ")))
+
+
+## How often the weapons of the arena were taken up in the match, and by whom.
+func _taken() -> String:
+	if Match.takes.is_empty():
+		return "nobody took a weapon of the arena"
+	var by := {}
+	for take: Dictionary in Match.takes:
+		var line: Array = by.get(take.weapon, [])
+		line.append("%s%s at %d:%02d" % [take.by, "" if take.bot else " (a person)", int(take.at) / 60, int(take.at) % 60])
+		by[take.weapon] = line
+	var parts := PackedStringArray()
+	for weapon: String in by:
+		parts.append("the %s %d times, by %s" % [weapon.replace("_", " "), (by[weapon] as Array).size(), ", ".join(by[weapon])])
+	return "the weapons of the arena were taken up %d times: %s" % [Match.takes.size(), "; ".join(parts)]
 
 
 func _middle_of(values: Array) -> float:
