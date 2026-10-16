@@ -218,7 +218,9 @@ func _show(screen: Screen) -> void:
 			if Sandbox.active:
 				_sandbox()
 			elif Match.active:
-				_button("Start the match again", _then_resume.bind(Match.again))
+				# With another pack chosen in the settings, it says which.
+				var other: String = "" if Match.setup.pack == Match.pack_in_play else "  ·  %s" % MATCH_MENU.ARMORY.title(Match.setup.pack)
+				_button("Start the match again" + other, _then_resume.bind(Match.again))
 			elif Net.is_host():
 				_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
 			_button("Controls", _show.bind(Screen.CONTROLS))
@@ -234,6 +236,8 @@ func _show(screen: Screen) -> void:
 			# than 1080: they scroll, between a heading and a way back that
 			# stay where they are.
 			_list()
+			if Match.active:
+				_pack_choice()
 			_choice("Difficulty", "difficulty", Settings.DIFFICULTY_NAMES)
 			_choice("Quality", "quality", Settings.QUALITY_NAMES)
 			# MetalFX only exists on Apple hardware, and of its two only the
@@ -587,6 +591,26 @@ func _button(text: String, action: Callable) -> Button:
 	_focusable(button)
 	_into.add_child(button)
 	return button
+
+
+## In a match, a button that steps through the packs of weapons. The one it
+## comes to is what everybody carries from the next start of the match on
+## (Start the match again, on the pause screen), and what the screen of a
+## match offers next time; until then what is in hand stays there.
+func _pack_choice() -> void:
+	var armory: GDScript = MATCH_MENU.ARMORY
+	var packs: PackedStringArray = armory.names()
+	var button := _button("", func() -> void:
+		var pack: String = packs[(maxi(packs.find(Match.setup.pack), 0) + 1) % packs.size()]
+		Match.setup.pack = pack
+		MATCH_MENU.chosen.pack = pack
+		Settings.put("pack", pack))
+	var refresh := func() -> void:
+		var pack: String = Match.setup.pack
+		button.text = "Weapons  ·  %s%s" % [armory.title(pack), "" if pack == Match.pack_in_play else "  (once the match starts again)"]
+		button.tooltip_text = str(armory.spec(pack).get("about", ""))
+	button.pressed.connect(refresh)
+	refresh.call()
 
 
 ## A button that steps through the named options of an integer setting.

@@ -3947,3 +3947,13 @@ Van elk geluid dat hij niet goed vindt, maak ik twee of drie varianten om uit te
 **Gekozen: minigun A**, de brul en de motor die het spel al speelde (`minigun_fire`, `minigun_spin`). Er is niets aan veranderd. De varianten `minigun_fire_b`, `minigun_fire_c` en `minigun_spin_b` liggen er nog en worden nergens gespeeld. Over de andere geluiden zei hij niets.
 
 **Na zijn eerste potje: een lek.** Bij het afsluiten meldde Godot één licht en één instantie die niet waren opgeruimd. Dat kwam van de oefenbeurt (onderdeel 5): die maakt een raket aan om zijn uiterlijk te tekenen, maar zet hem nooit in de wereld, en de lamp en het geluid van de raket werden al gemaakt als de raket gemaakt werd. Die maakt hij nu pas als hij in de wereld komt. Met `--verbose` geteld: van elf soorten lekkende objecten in `tools/test_match.sh --specials` naar geen. Daarna `tools/selftest.sh` (428) en `tools/test_match.sh` (117) geslaagd.
+
+## De wapenset wisselen tijdens een potje
+
+Op 16 oktober 2026 gevraagd: tijdens een wedstrijd in de settings de wapenset kunnen wijzigen, en dan "Start the match again" doen. Branch `wapensetwissel`.
+
+- **In een wedstrijd** staat bovenaan Settings een regel "Weapons", die langs de pakketten gaat zoals op het scherm Multiplayer (`_pack_choice()` in `scripts/menu.gd`). Wat hij kiest geldt vanaf de volgende start: wat je in handen hebt blijft tot dan, en de regel zegt dat erbij ("Weapons · Heavy (once the match starts again)"). De keuze wordt onthouden zoals op het scherm Multiplayer (`Settings.pack`).
+- **Op het pauzescherm** zegt de knop dan met welk pakket het potje opnieuw begint: "Start the match again · Heavy". Opnieuw beginnen geeft de speler en elke bot dat pakket, en ook de speciale wapens die bij dat pakket horen.
+- `Match.pack_in_play` onthoudt welk pakket er nu gespeeld wordt; `Match.setup.pack` is wat er gekozen is.
+- **Getest**: `tools/test_match.sh`, 121 controles, vier nieuw: in een potje met 1944 bieden de settings de pakketten aan bij 1944; Heavy kiezen laat de wapens in handen; de pauzeknop zegt "Start the match again · Heavy"; en na het opnieuw beginnen dragen de speler en elke bot Heavy. `tools/selftest.sh` (428) geslaagd.
+- **Niet gezien**: het scherm zelf heb ik niet als beeld bekeken; de tekst van de knoppen is getest.
