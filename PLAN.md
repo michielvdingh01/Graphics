@@ -3516,7 +3516,7 @@ Op 15 oktober 2026 gevraagd: op grote maps veel meer bots kunnen instellen, voor
 
 ## Wapens: de slag, pakketten en speciale wapens (plan)
 
-**In de trunk gezet op 16 oktober 2026, op Michiels woord ("alles tot nu toe is top gebouwd"), stap 1 tot en met 4; niet gepusht. Stap 5 en 6 en de open punten hieronder zijn voor een volgende agent.**
+**In de trunk gezet op 16 oktober 2026, op Michiels woord ("alles tot nu toe is top gebouwd"), stap 1 tot en met 4; niet gepusht. Stap 5 en de open punten hieronder zijn gebouwd op branch `wapenafbouw`: zie "Wapens afgebouwd" verderop. Stap 6, het afstellen, wacht op het spelen.**
 
 Op 15 oktober 2026 gevraagd: de slag met het wapen repareren, die alleen kon als alle kogels op waren; en een plan voor meer en vettere wapens, voor pakketten die bij een wedstrijd als set gekozen worden, en voor speciale wapens zoals een minigun en een raketwerper die niet in een pakket zitten maar op een ietwat moeilijk plekje in de map liggen, met weinig munitie. De minigun is sterk en heeft veel kogels, maar draait traag op en raakt na een paar seconden oververhit, waarna hij een paar seconden afkoelt. **De slag is gebouwd; de rest is een plan, waarvan niets gebouwd is.** Branch `wapenpakketten`.
 
@@ -3930,3 +3930,14 @@ Het beeld zelf kostte zo'n 16 tot 18 ms; tussen twee paren schoof dat tot een mi
 - **Het donker bij de minigun in het depot**: op de beelden is het perron onder het afdak bijna zwart, op de gloeiende rand van het rek na. Of dat in het spel ook zo is, zie je met jouw belichting.
 - **Een zwarte streep langs het hek in de duinen**, op het beeld van de weg naar de nieuwe plek: iets van het level, niet van het rek; niet uitgezocht.
 - **Wat het vuren kost op een gewone lader**: gemeten op 30 W. De verschillen tussen de paren zijn wat telt, en die horen niet van de lader af te hangen, maar op 140 W heb ik het niet gezien.
+
+### Onderdeel 6: geluid (wacht op Michiel)
+
+Niets van de geluiden van de wapenpakketten is beluisterd, en ik kan niet luisteren. Er is in deze ronde geen nieuw geluid bijgekomen: de slag van een ander gebruikt de zwaai en de klap van de speler, de steelhandgranaat de ronde, en een figuur met een minigun de motor, de brul, de staart en het oververhitten van de minigun van de speler. Wat er te kiezen en te beoordelen is, elk als `tools/hear.py <naam>` (gecontroleerd dat het rendert):
+
+- **De minigun**, het hele verloop (opdraaien, vuren tot hij oververhit raakt, de staart, stoom en de motor die uitloopt), in drie varianten van de brul en twee van de motor: `tools/hear.py minigun` (brul a, motor a), `tools/hear.py minigun b b` (de PPSh, lichter, met de machine uit de fabriek), `tools/hear.py minigun c a` (de Carl Gustav over de lage kant van de AK, zwaarder). Ook `minigun a b`, `minigun b a`, `minigun c b`.
+- **De raketwerper**: `tools/hear.py rocket` (het afvuren, de raket die weggaat, de knal 36 m verder).
+- **De tien schoten**, als salvo op hun eigen vuursnelheid: `tools/hear.py revolver_shot`, `double_barrel_shot`, `machine_pistol_shot 1300`, `bolt_rifle_shot`, `battle_rifle_shot`, `lmg_shot 700`, `ppsh_shot 1000`, `mosin_shot`, `trench_gun_shot`, `colt_shot`.
+- **Herladen**, met een schot ervoor: `tools/hear.py reload revolver`, `reload double_barrel`, `reload mosin`, `reload trench_gun`, `reload colt`, `reload machine_pistol`.
+
+Van elk geluid dat hij niet goed vindt, maak ik twee of drie varianten om uit te kiezen, zoals bij het trefgeluid op een mens.
