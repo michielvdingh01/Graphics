@@ -105,13 +105,20 @@ class Watchers:
 class Grenades:
 	extends Control
 	var count := 0
+	## Stick grenades instead of round ones.
+	var sticks := false
 
-	## One pip for every grenade carried, right to left: a ball with its fuze.
+	## One pip for every grenade carried, right to left: a ball with its fuze,
+	## or the can of a stick grenade on its handle.
 	func _draw() -> void:
 		for i in count:
 			var at := Vector2(-11.0 - i * 24.0, -12.0)
-			draw_circle(at, 8.0, Color(1, 1, 1, 0.9))
-			draw_rect(Rect2(at.x - 3.0, at.y - 13.0, 6.0, 6.0), Color(1, 1, 1, 0.9))
+			if sticks:
+				draw_rect(Rect2(at.x - 7.0, at.y - 16.0, 14.0, 12.0), Color(1, 1, 1, 0.9))
+				draw_rect(Rect2(at.x - 2.5, at.y - 4.0, 5.0, 14.0), Color(1, 1, 1, 0.9))
+			else:
+				draw_circle(at, 8.0, Color(1, 1, 1, 0.9))
+				draw_rect(Rect2(at.x - 3.0, at.y - 13.0, 6.0, 6.0), Color(1, 1, 1, 0.9))
 
 
 class Heat:
@@ -432,6 +439,7 @@ func _on_picked_up(text: String, tint: Color) -> void:
 
 func _on_grenades_changed(count: int) -> void:
 	_grenades.count = count
+	_grenades.sticks = _player.weapons.grenade_kind == "stick_grenade"
 	_grenades.queue_redraw()
 
 

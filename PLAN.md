@@ -3865,3 +3865,23 @@ Geen wapen haalt meer dan twee keer zijn deel. Wat opvalt: de shotguns blijven o
 - **Of bots zo vechten als mensen.** De telling per wapen zegt hoe bots met elk wapen doen; een bot richt op de borst en vuurt in stoten naar zijn niveau, een mens niet. Een uitschieter zie je ermee, een fijne afstelling niet.
 - **Of terugslag zo hoort.** De baan laat zien dat iemand die de trekker vasthoudt op 40 m niets raakt. Of dat bedoeld is (terugtrekken hoort bij het spel) of te veel, is een keuze voor het afstellen, stap 6. Ik heb niets aan de wapens veranderd.
 - **De tijd tot de kill met richten erbij**: de baan telt vanaf het eerste schot, het blad vanaf het eerste moment dat iemand gezien wordt, met het richten erbij.
+
+### Onderdeel 4: de steelhandgranaat (gebouwd)
+
+- **Het model** (`_stick_grenade()` in `tools/models/props.gd`, `scenes/models/stick_grenade.scn`, 1 952 driehoeken): de Duitse steelhandgranaat zoals hij vliegt, met de dop eraf en het koord getrokken. Een bus van plaatstaal, 70 mm doorsnee en 10 cm hoog, licht bol met een opgerolde rand en een naad aan beide kanten, en een klem om hem aan een riem te hangen; een stalen kraag waar de steel in geschroefd zit; een steel van notenhout, naar de bus toe iets dikker, 365 mm in totaal; onderaan de band met schroefdraad van de dop, en uit het holle eind het koord met zijn porseleinen kraal.
+- **De granaat** (`scenes/stick_grenade.tscn`): dezelfde granaat als de ronde (`scripts/grenade.gd`: 2,2 s, 6,5 m, 160), een bus en een steel om mee te botsen, 600 gram, minder stuiterend dan staal. Hij tolt kop over steel zoals elke gegooide granaat. Aan de getallen heb ik niets veranderd: afstellen is stap 6.
+- **Het pakket zegt wat het gooit**: een regel `"grenade": "stick_grenade"` bij 1944 in `assets/packs.json`; zonder die regel is het de ronde. `ARMORY.grenade()` en `ARMORY.thrown()` in `scripts/armory.gd`, en `equip()` neemt het mee. Een medespeler ziet de granaat die jij gooit (de daad `threw` zegt nu welke).
+- **In beeld**: de bolletjes rechtsonder zijn bij 1944 een bus op een steel.
+
+**Getest**
+
+- `tools/selftest.sh`: 428 controles, twee nieuw, op de schietbaan: met 1944 gooit de speler een steelhandgranaat, die tolt (2,1 radialen per seconde) en 22 m verder ontploft; het standaardpakket gooit de ronde.
+- `tools/nettest.sh` (63) en `tools/test_match.sh` (116): geslaagd, ook het potje met 1944.
+
+**Gezien**: `benchmark/sheets/stick_grenade.jpg`, het model drie keer zo groot, van opzij en schuin van boven; niet in de lucht.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe hij vliegt.** Hij tolt zoals de ronde, om zijn zwaartepunt; een echte steelhandgranaat vliegt verder en stabieler, met de bus voorop. Niet in beweging gezien.
+- **Het geluid** van stuiteren is dat van de ronde, een tik van staal; hout klinkt doffer.
+- **De worp in beeld**: de speler gooit met de linkerhand buiten beeld, dus wat hij gooit zie je pas als het vliegt.

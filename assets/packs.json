@@ -1,5 +1,5 @@
 {
-	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start. A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox.",
+	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start; grenade: what is thrown, a scene in scenes/ (grenade unless the pack says). A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox.",
 	"packs": {
 		"standard": {
 			"title": "Standard",
@@ -31,7 +31,8 @@
 			"bots": ["ppsh", "mosin", "ppsh", "trench_gun", "ppsh", "mosin"],
 			"far": ["mosin", "ppsh", "mosin", "ppsh", "trench_gun", "mosin"],
 			"sidearm": "colt",
-			"grenades": 2
+			"grenades": 2,
+			"grenade": "stick_grenade"
 		},
 		"heavy": {
 			"title": "Heavy",

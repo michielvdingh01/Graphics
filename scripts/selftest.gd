@@ -1092,6 +1092,7 @@ func _balance(full := false) -> void:
 		print("    the game and the sheet disagree: %s" % fault)
 	_check("every weapon is fired at a figure at %s m" % ", ".join(distances.map(func(metres: float) -> String: return str(int(metres)))), weighed == ARMORY.all().size() * distances.size())
 	_check("at 5 m every weapon takes the shots the sheet says, give or take one", faults.is_empty())
+	await _stick_grenade(player)
 	target.queue_free()
 	ground.queue_free()
 	weapons.equip(carried, ARMORY.grenades(ARMORY.STANDARD))
@@ -1107,6 +1108,36 @@ func _shots(count: Array) -> String:
 	if int(count[0]) < 0:
 		return "none in %d" % int(count[2])
 	return "%d in %.2f s" % [int(count[0]), float(count[1])]
+
+
+## What the pack of 1944 throws, on the range: a stick grenade, which flies
+## end over end and goes off as any grenade does. The standard pack throws
+## the round one.
+func _stick_grenade(player: CharacterBody3D) -> void:
+	var weapons: Node3D = player.weapons
+	weapons.equip(ARMORY.weapons("1944"), ARMORY.grenades("1944"), ARMORY.grenade("1944"))
+	_move(player, Vector3(0.0, RANGE_HEIGHT + 0.05, 0.0))
+	player.rotation.y = 0.0
+	player.head.rotation.x = 0.25
+	await _wait(0.6)
+	var blasts := []
+	var note := func(at: Vector3) -> void: blasts.append(at)
+	Blast.exploded.connect(note)
+	Input.action_press("grenade")
+	await _wait(0.1)
+	Input.action_release("grenade")
+	await _wait(0.6)
+	var thrown := get_tree().get_nodes_in_group("grenade")
+	var stick: bool = thrown.size() == 1 and thrown[0].scene_file_path.ends_with("stick_grenade.tscn")
+	var turning: float = thrown[0].angular_velocity.length() if stick else 0.0
+	var kinds := thrown.map(func(one: Node) -> String: return one.scene_file_path.get_file())
+	await _wait(3.0)
+	Blast.exploded.disconnect(note)
+	print("    1944 throws %s, turning %.1f radians a second; it went off %s" % [kinds, turning,
+		blasts.map(func(at: Vector3) -> String: return "%.0f m ahead" % -at.z)])
+	_check("1944 throws a stick grenade, end over end, and it goes off", weapons.grenade_kind == "stick_grenade" and stick and turning > 1.0
+		and blasts.size() == 1 and blasts[0].y > RANGE_HEIGHT - 1.0 and -blasts[0].z > 5.0)
+	_check("and the standard pack the round one", ARMORY.grenade(ARMORY.STANDARD) == ARMORY.GRENADE and ARMORY.thrown(ARMORY.GRENADE).resource_path == "res://scenes/grenade.tscn")
 
 
 ## Fires the weapon in hand at `target` set up `metres` off on the range, over

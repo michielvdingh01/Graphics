@@ -258,10 +258,11 @@ var ads_blend := 0.0
 ## equip().
 var loadout: Array[WeaponData] = []
 ## The grenades carried, how many a level starts with and the most there can
-## be: the pack says.
+## be, and what they are, see ARMORY.grenade(): the pack says.
 var grenades := 2
 var start_grenades := 2
 var most_grenades := 3
+var grenade_kind := ARMORY.GRENADE
 
 var _index := 0
 var _pending := 0
@@ -355,7 +356,7 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
 			pack = arg.get_slice("=", 1)
-	equip(ARMORY.weapons(pack), ARMORY.grenades(pack))
+	equip(ARMORY.weapons(pack), ARMORY.grenades(pack), ARMORY.grenade(pack))
 	_build_fill()
 	player.hit_from.connect(_on_hit)
 	player.landed.connect(_on_landed)
@@ -372,9 +373,9 @@ func _ready() -> void:
 
 ## Takes up `weapons` on 1 and on, each with a full magazine and the reserve a
 ## level starts with, and as many grenades as `grenade_count` starts with, of
-## at most its second number. Whatever was in hand is put away; with nothing
-## to take up it is the standard pack.
-func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3)) -> void:
+## at most its second number, of the kind `grenade` names. Whatever was in
+## hand is put away; with nothing to take up it is the standard pack.
+func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade := ARMORY.GRENADE) -> void:
 	for model in _models:
 		_rig.remove_child(model.root)
 		model.root.queue_free()
@@ -398,6 +399,7 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3)) -> void:
 	_models[_index].root.visible = true
 	start_grenades = grenade_count.x
 	most_grenades = grenade_count.y
+	grenade_kind = grenade
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
 	_settle()
@@ -1100,13 +1102,13 @@ func _release_grenade() -> void:
 	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, [player.get_rid()])
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		from = eye
-	var grenade: RigidBody3D = GRENADE.instantiate()
+	var grenade: RigidBody3D = ARMORY.thrown(grenade_kind).instantiate()
 	get_tree().current_scene.add_child(grenade)
 	grenade.global_position = from
 	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
 	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
 	grenade.thrower = Match.number(player) if Match.active else 0
-	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity])
+	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity, grenade_kind])
 	Sfx.play(&"throw", -6.0)
 
 

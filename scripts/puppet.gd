@@ -432,10 +432,11 @@ func knocked(at: Vector3, surface: String) -> void:
 	Sfx.play_at(&"melee", at, -3.0)
 
 
-## It threw a grenade. The one shown here flies the same way and is gone when
-## its time is up; the blast is that of the thrower's own.
-func threw(from: Vector3, speed: Vector3, spin: Vector3) -> void:
-	var grenade: RigidBody3D = GRENADE.instantiate()
+## It threw a grenade of the kind `kind` (ARMORY.grenade()). The one shown
+## here flies the same way and is gone when its time is up; the blast is that
+## of the thrower's own.
+func threw(from: Vector3, speed: Vector3, spin: Vector3, kind := ARMORY.GRENADE) -> void:
+	var grenade: RigidBody3D = ARMORY.thrown(kind).instantiate()
 	grenade.echo = true
 	get_tree().current_scene.add_child(grenade)
 	grenade.global_position = from
