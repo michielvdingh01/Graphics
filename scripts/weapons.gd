@@ -1121,6 +1121,8 @@ func _start_melee(dry := false) -> void:
 	if dry:
 		Sfx.play(&"dry_fire", -6.0)
 	Sfx.play(&"swing", -2.0)
+	# The others see it swing, see Puppet.struck().
+	Net.player_did(&"struck")
 
 
 ## The blow lands on what is in reach in front of the player: an enemy before
@@ -1144,6 +1146,7 @@ func _land_blow() -> void:
 	var direction := (at - origin).normalized()
 	Fx.thud(at, Fx.surface_of(found))
 	Sfx.play(&"melee", -3.0)
+	Net.player_did(&"knocked", [at, Fx.surface_of(found)])
 	player.shake(0.22)
 	player.add_recoil(-0.03, randf_range(-0.01, 0.01))
 	if not target.has_method("take_damage"):

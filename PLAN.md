@@ -3784,3 +3784,22 @@ Op 16 oktober 2026 gevraagd: stap 5 en de open punten van "Wapens: de slag, pakk
 - **Hoe het klinkt.** De brul van een figuur is de brul van de speler (`minigun_fire`), op 10 m nog op volle sterkte; of hij te luid of te zacht is naast de schoten van anderen, hoor jij.
 - **Een wedstrijd over het net.** De rekken staan nog alleen op de host, zoals de hele wedstrijd: wedstrijden over het net zijn een eigen stap. De berichten zijn er wel (het wisselen van wapen, de lopen, de raket).
 - **De kop van de raketwerper** van een figuur blijft na het schot zichtbaar: het model voor anderen is één stuk.
+
+### Onderdeel 2: slaan, voor anderen en door bots (gebouwd)
+
+- **De slag gaat over de lijn.** Wie V indrukt, laat de anderen dat weten (de daad `struck`), en als hij raak slaat ook waar en op wat (`knocked`), zodat zij de klap horen. Hun pop van hem slaat, met het geluid van de zwaai.
+- **Een slag met twee handen, uit wat er is.** Er is geen geknipte slag met een geweer, en de stoot met de vuist uit de set als romp draaide de figuur van zijn doel weg. De slag is daarom gemaakt van wat de rig met een wapen al doet (`strike()` in `scripts/humanoid_rig.gd`): de romp draait weg en dan in de slag mee en leunt erin, het wapen gaat naar twee standen en de armen volgen het, zoals bij richten. Eerst schuin omhoog met de kolf bij de heup (getrokken), dan rond en met de kolf vooruit op hoofdhoogte, de loop langs de andere schouder naar achteren (gedreven). Dezelfde tijden als de slag van de speler: 0,5 s, raak na 0,17 s. Met een pistool is het dezelfde beweging, met de kolf van het pistool. Een robot slaat met zijn vrije arm (`strike()` in `scripts/enemy_rig.gd`).
+- **Bots slaan van dichtbij.** Staat een bot binnen 2 m van wie hij bevecht, dan schiet hij niet maar slaat hij, met de slag van de speler: 60 schade, raak na 0,17 s, op 2,1 m bereik (`STRIKES` in `scripts/bot.gd`). Twee slagen doden, ook op Recruit: de korting die de moeilijkheid op wat een bot een mens aandoet geeft (`hurts`), geldt voor schoten en niet voor een slag.
+- **Gezien**: `benchmark/sheets/blow_others.jpg`, de karabijn en het pistool in vijf momenten van de slag, van opzij.
+
+**Getest**
+
+- `tools/test_match.sh`: 116 controles. Nieuw: een figuur slaat met de kolf, eerst laag getrokken (de kolf op 1,17 m, achter het lijf) en dan op hoofdhoogte vooruit (1,46 m, 0,41 m voor het lijf); een bot op 1,5 m van een vijand slaat en schiet niet, en die gaat van 100 naar 40 en bij de tweede slag neer, in 1,3 s; zijn figuur slaat zichtbaar; en op Recruit brengen twee slagen van een bot de speler neer. De eerste keer faalde de minigun-controle van onderdeel 1 omdat de bot bij het begin van de proef de andere kant op keek en zijn doel pas na 7 s zag; in de proef hoort hij nu eerst waar die staat, en daarna slaagde het deel met de speciale wapens drie keer op rij.
+- `tools/nettest.sh`: 63 controles, één nieuw: de host ziet de pop van de gast slaan als de gast V indrukt.
+- `tools/selftest.sh` (423) en `tools/test_humanoid.sh` (55): geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of de slag in beweging klopt.** Gezien als vijf stilstaande momenten. Het geweer draait van getrokken naar gedreven over de kortste weg; of dat in 0,1 s als een zwaai leest of als een schok, en of de handen dan op het wapen blijven, zie je pas in het spel.
+- **Hoe vaak bots slaan.** Ze komen alleen binnen 2 m als iemand op ze afloopt of een hoek omkomt; zelf lopen ze er niet op af om te slaan. Of dat in een potje vaak genoeg gebeurt, of juist te vaak, zegt het spelen.
+- **De robot** heb ik niet zien slaan.

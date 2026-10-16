@@ -40,7 +40,7 @@ const CONFIG := "user://net.cfg"
 ## What a guest may have the host do to a node, see ask().
 const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm"]
 ## What a machine may report its player did, see player_did().
-const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched"]
+const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched", &"struck", &"knocked"]
 const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
 
 ## Bits of what a player is doing, as they go over the wire. SPINNING is the

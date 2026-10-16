@@ -240,6 +240,13 @@ func _run() -> void:
 	var shotgun: WeaponData = player.weapons.loadout[2]
 	_check("a bot's whole load of shot is not, on easy: pellets to the head count as any other", shotgun.damage * shotgun.pellets * float(Match.rules.hurts) < player.MAX_HEALTH)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
+	me.safe = 0.0
+	var blow: float = player.weapons.MELEE_DAMAGE
+	Match.harm(me.id, blow, player.global_position, Vector3.FORWARD, target.id, Match.MELEE)
+	var after_one: float = player.health
+	Match.harm(me.id, blow, player.global_position, Vector3.FORWARD, target.id, Match.MELEE)
+	_check("two blows of a bot's weapon bring the player down, on easy too", after_one == player.MAX_HEALTH - blow and player.dead)
+	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	Settings.difficulty = 2
 	me.safe = 0.0
 	Match.harm(me.id, 40.0, player.global_position, Vector3.FORWARD, target.id, 0)
@@ -710,6 +717,9 @@ func _bots_and_specials() -> void:
 	orange.health = 1e6
 	blue.body.look_at(pair[1] + Vector3.UP * (blue.body.global_position.y - pair[1].y), Vector3.UP)
 	blue.brain._aim = pair[1] + Vector3.UP
+	# It looks at once, and knows where to look: as if it had heard a shot.
+	blue.brain._look = 0.0
+	blue.brain.heard(orange, pair[1])
 	blue.brain.process_mode = Node.PROCESS_MODE_INHERIT
 	var first_round := -1.0
 	var spun_at := -1.0
@@ -751,6 +761,8 @@ func _bots_and_specials() -> void:
 	blue.body.look_at(far[1] + Vector3.UP * (far[0].y - far[1].y), Vector3.UP)
 	blue.brain._aim = far[1]
 	blue.brain._seen = 0.0
+	blue.brain._look = 0.0
+	blue.brain.heard(orange, far[1])
 	blue.brain.process_mode = Node.PROCESS_MODE_INHERIT
 	var rockets: Array = []
 	var health: float = orange.health
@@ -825,6 +837,49 @@ func _bots_and_specials() -> void:
 	_check("and the one that is sent goes and takes it", runner.brain.special() == minigun and Match.takes[-1].by == runner.title)
 	runner.brain.process_mode = Node.PROCESS_MODE_DISABLED
 	Settings.difficulty = 1
+
+	# Up close a bot hits with its weapon instead of firing.
+	var hitter: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 0 and who != runner and who.out <= 0.0)[0]
+	var victim: RefCounted = bots.filter(func(who: RefCounted) -> bool: return who.team == 1 and who.out <= 0.0)[0]
+	var hitter_rig: Node3D = hitter.body._rig
+	hitter_rig.strike_at(0.15)
+	var drawn: Vector3 = hitter.body.global_transform.affine_inverse() * (hitter_rig._weapon.global_transform * hitter_rig._butt)
+	hitter_rig.strike_at(hitter_rig.STRIKE_LANDS)
+	var driven: Vector3 = hitter.body.global_transform.affine_inverse() * (hitter_rig._weapon.global_transform * hitter_rig._butt)
+	hitter_rig._strike = -1.0
+	print("  a soldier's blow with the carbine: the butt drawn back to %s, driven to %s (x right, y up, -z ahead)" % [drawn.snappedf(0.01), driven.snappedf(0.01)])
+	_check("a soldier hits out with the butt of its weapon: drawn back low, then driven forward at the height of a head", drawn.y < 1.3 and driven.y > drawn.y + 0.15 and driven.z < -0.3 and driven.z < drawn.z - 0.4)
+	victim.health = Match.MAX_HEALTH
+	victim.safe = 0.0
+	var deaths: int = victim.deaths
+	var start: Vector3 = pair[0]
+	var close_by: Vector3 = start + (pair[1] - start).normalized() * 1.5
+	hitter.body.global_position = start
+	victim.body.global_position = close_by
+	hitter.body.look_at(close_by + Vector3.UP * (start.y - close_by.y), Vector3.UP)
+	hitter.brain._aim = close_by + Vector3.UP * 1.1
+	hitter.brain._seen = 0.0
+	hitter.brain._look = 0.0
+	hitter.brain.heard(victim, close_by)
+	var rounds: int = hitter.brain._mag
+	var struck := [false]
+	var healths := []
+	hitter.brain.process_mode = Node.PROCESS_MODE_INHERIT
+	clock = 0.0
+	while clock < 3.0 and victim.deaths == deaths:
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		hitter.body.global_position = start
+		if victim.out <= 0.0:
+			victim.body.global_position = close_by
+		struck[0] = struck[0] or hitter_rig._strike >= 0.0
+		if healths.is_empty() or healths[-1] != victim.health:
+			healths.append(victim.health)
+	hitter.brain.process_mode = Node.PROCESS_MODE_DISABLED
+	print("  a bot 1.5 m from an enemy: its health went %s in %.2f s, and it fired %d rounds" % [healths, clock, rounds - hitter.brain._mag])
+	_check("a bot nearer than 2 m hits instead of firing, and two blows bring the other down", victim.deaths == deaths + 1 and hitter.brain._mag == rounds
+		and healths.size() >= 2 and is_equal_approx(float(healths[1]), Match.MAX_HEALTH - 60.0))
+	_check("and its figure is seen to strike", struck[0])
 	Match.close()
 
 

@@ -474,8 +474,10 @@ func harm(victim: int, amount: float, at: Vector3, direction: Vector3, by := 0, 
 		who.blame = [by, weapon, head, _clock]
 		if who.brain:
 			who.brain.hit_by(from)
-		if from.bot and not who.bot:
-			# How hard a bot hits a person is a matter of the difficulty.
+		if from.bot and not who.bot and weapon != MELEE:
+			# How hard a bot shoots a person is a matter of the difficulty; a
+			# blow with its weapon is the player's, two of which bring anybody
+			# down.
 			amount *= float(rules.hurts)
 	who.unhurt = 0.0
 	if who.bot:

@@ -25,6 +25,10 @@ extends Node
 ## minigun spin up as soon as it sees somebody, and it fires them in bursts
 ## that never let them overheat; a rocket it fires at the feet, and never at
 ## somebody nearer than CLOSE_ROCKET.
+##
+## Within STRIKES of somebody it does not fire but hits them with its weapon,
+## the blow of the player (scripts/weapons.gd): two of them bring anybody
+## down.
 ## What it does not do yet: take cover, fall back, throw grenades, jump or
 ## crouch.
 
@@ -88,6 +92,9 @@ const CLOSE_ROCKET := 6.0
 const FEET := 0.15
 ## Seconds a weapon of the arena that is fired empty stays in its hands.
 const SPENT := 0.35
+## Nearer than this to its target, in metres between the two, it hits them
+## with its weapon instead of firing.
+const STRIKES := 2.0
 ## Further than this from what the screen shows, in metres, it thinks and
 ## moves every other step of the physics, a step twice as long: nobody sees
 ## that at such a distance, and with forty in a match it saves the processor
@@ -119,6 +126,9 @@ var _firing := false
 var _cooling := false
 ## A weapon of the arena it noticed in passing and goes to take, if any.
 var _noticed: Variant = null
+## Seconds left of a blow with its weapon, and whether it has landed yet.
+var _blow := 0.0
+var _landed := true
 ## Who it knows of, by number: [where, the clock then].
 var _known := {}
 var _clock := 0.0
@@ -178,6 +188,8 @@ func begin() -> void:
 	_target = null
 	_seen = 0.0
 	_noticed = null
+	_blow = 0.0
+	_landed = true
 	_settle_barrels()
 	_mag = _data.mag_size
 	_reload = 0.0
@@ -297,6 +309,10 @@ func _physics_process(delta: float) -> void:
 		if _reload <= 0.0:
 			_fill()
 	_throw_away_spent(delta)
+	if _blow > 0.0:
+		_blow -= delta
+		if not _landed and _blow <= WEAPONS.MELEE_TIME * (1.0 - WEAPONS.MELEE_LANDS):
+			_land_blow()
 	_look -= delta
 	if _look <= 0.0:
 		_look = LOOK
@@ -348,7 +364,12 @@ func _physics_process(delta: float) -> void:
 		# Barrels that spin come up to speed as soon as it sees somebody.
 		_spin_barrels(delta, true)
 		var fires := false
-		if _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
+		var close := Vector2(_target.body.global_position.x - _body.global_position.x, _target.body.global_position.z - _body.global_position.z).length() < STRIKES
+		if close or _blow > 0.0:
+			# Up close it hits instead of firing, once it has seen who it is.
+			if close and _blow <= 0.0 and _seen >= float(_level.reaction) and on_target:
+				_strike()
+		elif _seen >= float(_level.reaction) and on_target and _cooldown <= 0.0 and _reload <= 0.0:
 			if _mag <= 0:
 				_start_reload()
 			elif _clock >= _rest_until and not _cooling and _ready_to_fire(eye) and Match.may_fire(me, _target):
@@ -542,6 +563,38 @@ func _notice_stuck(delta: float, desired: Vector3) -> void:
 		_strafe = -_strafe
 		_detour = _clock + DETOUR
 		Match.stuck += 1
+
+
+## A blow with its weapon starts: everybody sees it, and it lands a moment
+## later, see _land_blow().
+func _strike() -> void:
+	_blow = WEAPONS.MELEE_TIME
+	_landed = false
+	_bursting = false
+	Net.show(_body, &"struck")
+
+
+## The blow lands on whoever of the other side is in reach in front of it, as
+## the player's does: two of them bring anybody down.
+func _land_blow() -> void:
+	_landed = true
+	var eye: Vector3 = _body.head.global_position
+	var space := _body.get_world_3d().direct_space_state
+	var mask: int = WEAPONS.HIT_MASK | Match.foes_of(_body)
+	var ahead := (_aim - eye).normalized()
+	if _target and _target.out <= 0.0:
+		# At the chest of whoever it is fighting, if that is in reach.
+		var chest: Vector3 = _target.body.head.global_position - Vector3.UP * CHEST
+		if eye.distance_to(chest) < WEAPONS.MELEE_REACH + 0.4:
+			ahead = (chest - eye).normalized()
+	var aim := Basis.looking_at(ahead)
+	for off: Vector2 in [Vector2.ZERO, Vector2(-0.22, 0), Vector2(0.22, 0), Vector2(0, -0.25)]:
+		var end := eye + aim * Vector3(off.x, off.y, -1.0).normalized() * WEAPONS.MELEE_REACH
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, end, mask, [_body.get_rid()]))
+		if hit and Match.plays(hit.collider):
+			Match.hit(_body, hit.collider, WEAPONS.MELEE_DAMAGE, hit.position, ahead, Match.MELEE)
+			Net.show(_body, &"knocked", [hit.position, Fx.surface_of(hit)])
+			return
 
 
 ## Fires what is due this step if `fires`: one shot when the weapon is

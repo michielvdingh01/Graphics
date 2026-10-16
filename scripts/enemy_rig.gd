@@ -87,6 +87,8 @@ var _flinch := Vector3.ZERO
 var _flash := 0.0
 var _charging := false
 var _charge := 0.0
+## A blow with the free arm, from 1 as it is thrown to 0.
+var _blow := 0.0
 var _spin := 0.0
 var _spin_speed := 0.0
 var _time := randf() * 10.0
@@ -181,6 +183,15 @@ func charge(on: bool) -> void:
 func fire() -> void:
 	_recoil = 1.0
 	_spin_speed = 30.0
+
+
+## A blow, for one that carries a weapon in its arm: the other arm swings out
+## and forward, a fist of steel. One with blades strikes with those.
+func strike() -> void:
+	if _melee:
+		fire()
+	else:
+		_blow = 1.0
 
 
 ## Where its shots leave.
@@ -331,6 +342,7 @@ func _pose(delta: float) -> void:
 		_pitch = _near(_pitch, clampf(atan2(to.y, flat), -0.7, 0.7), 12.0, delta)
 		_toe_in = atan2(0.3 * _bulk, maxf(flat, 1.0))
 	_recoil = _near(_recoil, 0.0, 7.0 if _melee else 14.0, delta)
+	_blow = _near(_blow, 0.0, 5.0, delta)
 	_flinch = _flinch.lerp(Vector3.ZERO, 1.0 - exp(-8.0 * delta))
 	if _flinch.length_squared() < ARRIVED * ARRIVED:
 		_flinch = Vector3.ZERO
@@ -388,6 +400,10 @@ func _pose(delta: float) -> void:
 	# plate is bolted on so that it then faces straight ahead.
 	var arm_l := Vector3(lerpf(0.15 - stride_r, 0.75 + _pitch * 0.4, _raised), lerpf(0.0, -0.55, _raised), -0.05)
 	var forearm_l := Vector3(lerpf(0.35, 1.05, _raised), 0.0, 0.0)
+	# A blow: drawn up and back at first, then thrown out straight.
+	var thrown := sin(PI * (1.0 - _blow))
+	arm_l = arm_l.lerp(Vector3(1.45, -0.3, -0.1), thrown)
+	forearm_l = forearm_l.lerp(Vector3(0.1, 0.0, 0.0), thrown)
 	_turn("ArmL", arm_l.lerp(Vector3(_guard_raise, 0.0, 0.0), _guard))
 	_turn("ForearmL", forearm_l.lerp(Vector3(PI * 0.5, -PI * 0.5, 0.0), _guard))
 	if _joints.has("Barrels"):

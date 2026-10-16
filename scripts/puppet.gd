@@ -236,15 +236,17 @@ func _process(delta: float) -> void:
 
 
 ## Strikes a pose for a screenshot of a puppet that nobody is behind: 1 with
-## its weapon up, 2 in mid-stride as well, 3 running with its weapon down.
-## Tenths choose the weapon of the loadout: 1.2 has the shotgun up.
+## its weapon up, 2 in mid-stride as well, 3 running with its weapon down, 4
+## hitting out with its weapon. Tenths choose the weapon of the armory: 1.2
+## has the shotgun up. In a blow what follows is how far into it: 4.034 is
+## the carbine as the blow lands.
 func preview(pose: float) -> void:
-	_weapon = roundi(fmod(pose, 1.0) * 10.0)
+	_weapon = floori(fmod(pose, 1.0) * 10.0 + 0.001)
 	_label.text = title if title else "Player"
 	_dress()
 	visible = true
 	var stance := floorf(pose)
-	if stance >= 2.0:
+	if stance == 2.0 or stance == 3.0:
 		velocity = -global_basis.z * (7.0 if stance == 3.0 else 4.0)
 	if stance == 3.0:
 		_rig.lower()
@@ -252,6 +254,8 @@ func preview(pose: float) -> void:
 		_rig.aim(head.global_position - head.global_basis.z * 20.0)
 	for i in 40:
 		_rig._pose(0.03)
+	if stance == 4.0 and _rig.has_method("strike_at"):
+		_rig.strike_at(fmod(pose * 10.0, 1.0))
 
 
 # --- What its own machine says of it, see net.gd ------------------------------
@@ -410,6 +414,22 @@ func _loop(player: AudioStreamPlayer3D, sound: StringName, on: bool, db: float, 
 	if not player.playing and player.stream:
 		player.play()
 	return player
+
+
+## It hits out with its weapon: the blow of the player, which lands a moment
+## later (scripts/weapons.gd), or of a bot (scripts/bot.gd).
+func struck() -> void:
+	if _rig == null or dead:
+		return
+	_rig.strike()
+	Sfx.play_at(&"swing", head.global_position, -2.0)
+
+
+## Its blow landed at `at`, on something made of `surface`: what that sounds
+## like where it is heard.
+func knocked(at: Vector3, surface: String) -> void:
+	Fx.thud(at, surface)
+	Sfx.play_at(&"melee", at, -3.0)
 
 
 ## It threw a grenade. The one shown here flies the same way and is gone when
