@@ -3455,7 +3455,7 @@ Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de
 
 ## Twintig tegen twintig: een veldslag in de duinen
 
-Op 15 oktober 2026 gevraagd: op grote maps veel meer bots kunnen instellen, voor een levendig potje in plaats van eindeloos rennen naar de andere kant; in de duinen bijvoorbeeld twintig tegen twintig. "Denk je dat dat goed gaat werken? Bouw het dan maar in." Gebouwd op de branch `veldslag`, vanaf de trunk met de muziek en de maat van de arena's erin.
+Op 15 oktober 2026 gevraagd: op grote maps veel meer bots kunnen instellen, voor een levendig potje in plaats van eindeloos rennen naar de andere kant; in de duinen bijvoorbeeld twintig tegen twintig. "Denk je dat dat goed gaat werken? Bouw het dan maar in." Gebouwd op de branch `veldslag`, vanaf de trunk met de muziek en de maat van de arena's erin. Michiel speelde het op 15 en 16 oktober ("Het werkt allemaal top. Dus merge het maar") en op dat woord is het op 16 oktober in de trunk gezet; niet gepusht.
 
 **Wat er nu is**
 
