@@ -67,6 +67,11 @@ const STUCK := Vector2(0.4, 1.5)
 const REPATH := 0.3
 const DETOUR := 3.0
 const EYE := 1.6
+## Further than this from what the screen shows, in metres, it thinks and
+## moves every other step of the physics, a step twice as long: nobody sees
+## that at such a distance, and with forty in a match it saves the processor
+## half of what they cost it.
+const FAR_OFF := 40.0
 
 ## The entrant it thinks for, see match.gd.
 var me: RefCounted
@@ -106,6 +111,10 @@ var _level := LEVEL
 var _path_at := 0.0
 ## Until when it goes its own way instead of where the match wants it.
 var _detour := 0.0
+## Whether it is far from what the screen shows, and whether it let the last
+## step of the physics go by.
+var _far := false
+var _skipped := false
 
 
 func _ready() -> void:
@@ -115,6 +124,8 @@ func _ready() -> void:
 	_agent.radius = 0.4
 	_body.add_child.call_deferred(_agent)
 	_data = WEAPONS.LOADOUT[me.weapon]
+	# Those far off do not all take the same steps.
+	_skipped = randi() % 2 == 0
 	begin()
 
 
@@ -158,13 +169,20 @@ func net_state() -> Array:
 
 
 func _physics_process(delta: float) -> void:
+	if _far:
+		# Far from what the screen shows it takes every other step, one twice
+		# as long.
+		_skipped = not _skipped
+		if _skipped:
+			return
+		delta *= 2.0
 	if not _body.is_on_floor():
 		_body.velocity += _body.get_gravity() * delta
 	if me.out > 0.0 or Match.state != Match.State.PLAYING or not _agent.is_inside_tree():
 		_body.velocity.x = move_toward(_body.velocity.x, 0.0, ACCEL * delta)
 		_body.velocity.z = move_toward(_body.velocity.z, 0.0, ACCEL * delta)
 		if me.out <= 0.0:
-			_body.move_and_slide()
+			_slide(delta)
 		return
 	_clock += delta
 	_cooldown = maxf(_cooldown - delta, 0.0)
@@ -176,6 +194,8 @@ func _physics_process(delta: float) -> void:
 	if _look <= 0.0:
 		_look = LOOK
 		_level = LEVEL.merged(Match.bot_level(), true)
+		var camera := _body.get_viewport().get_camera_3d()
+		_far = camera != null and camera.global_position.distance_to(_body.global_position) > FAR_OFF
 		_look_around()
 
 	var eye: Vector3 = _body.head.global_position
@@ -236,7 +256,19 @@ func _physics_process(delta: float) -> void:
 	_body.act(Net.SPRINTING if _sprinting else 0)
 	_body.velocity.x = move_toward(_body.velocity.x, desired.x, ACCEL * delta)
 	_body.velocity.z = move_toward(_body.velocity.z, desired.z, ACCEL * delta)
-	_body.move_and_slide()
+	_slide(delta)
+
+
+## Moves the body as far as its velocity takes it in `delta` seconds, which
+## is one step of the physics or two.
+func _slide(delta: float) -> void:
+	var stride := delta / get_physics_process_delta_time()
+	if stride > 1.01:
+		_body.velocity *= stride
+		_body.move_and_slide()
+		_body.velocity /= stride
+	else:
+		_body.move_and_slide()
 
 
 ## Sees who there is to see, and goes for the nearest of them.

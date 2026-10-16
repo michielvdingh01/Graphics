@@ -13,8 +13,11 @@
 		{"regen_to": 50.0, "hurts": 1.0, "focus": 0, "bots": "hardened"}
 	],
 	"cells": {"spots_for_one": 250, "most": 4, "back": 45.0},
+	"arenas": {
+		"dunes": {"most": 20, "size": 20}
+	},
 	"modes": {
-		"tdm": {"title": "Team deathmatch", "limit": 50, "minutes": 10, "respawn": 2.0, "least": 1, "most": 6, "size": 6},
+		"tdm": {"title": "Team deathmatch", "limit": 50, "grows": true, "minutes": 10, "respawn": 2.0, "least": 1, "most": 6, "size": 6},
 		"ffa": {"title": "Free for all", "limit": 25, "minutes": 10, "respawn": 2.0, "least": 2, "most": 12, "size": 8},
 		"ctf": {"title": "Capture the flag", "limit": 3, "minutes": 12, "respawn": 2.0, "least": 2, "most": 6, "size": 6, "returns": 20.0}
 	}

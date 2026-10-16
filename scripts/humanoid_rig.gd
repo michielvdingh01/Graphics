@@ -125,9 +125,17 @@ var flash_size := 0.3
 ## Heights above its feet, in metres, once it stands in the level: the top of
 ## its head, its eyes and where its head begins.
 var fit := {"height": 1.8, "eyes": 1.6, "head": 1.5}
+## It strikes a pose every this many frames, for all the time since the last:
+## whoever has it says so of a figure far off or out of sight, where nobody
+## sees the difference and the frames it saves count when there are forty.
+var every := 1
 
 var _body: CharacterBody3D
 var _figure: Node3D
+## The seconds since it last struck a pose, and the frames it has seen: see
+## `every`. Not all count from nought, so that they do not all pose at once.
+var _waited := 0.0
+var _frames := 0
 var _skeleton: Skeleton3D
 var _tree: AnimationTree
 var _meshes: Array[MeshInstance3D] = []
@@ -316,6 +324,7 @@ func setup(cast: Dictionary) -> bool:
 
 func _ready() -> void:
 	_body = get_parent() as CharacterBody3D
+	_frames = randi() % 12
 	for gait: String in _set.gaits:
 		if not _speeds.is_empty():
 			_switch.append(sqrt(_speeds[-1] * _facts[gait].speed) * LATE)
@@ -529,7 +538,12 @@ func collapse(push: Vector3) -> void:
 
 
 func _process(delta: float) -> void:
-	_pose(delta)
+	_waited += delta
+	_frames += 1
+	if every > 1 and not _dead and _frames % every != 0:
+		return
+	_pose(_waited)
+	_waited = 0.0
 
 
 func _pose(delta: float) -> void:

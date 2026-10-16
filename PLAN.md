@@ -3452,3 +3452,64 @@ Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de
 
 - **Meer voorwerpen hebben een botsvorm die groter is dan wat je ziet.** In de duinen: de rollen prikkeldraad (een doos tot 1,15 m: een schot op de benen van iemand erachter blijft hangen), en de bovenkant van de poort van het complex, waar tralies staan. In de andere levels: tafels (een doos tot de vloer: niemand schiet onder een tafel door), rekken en hekken. Voor dingen waar je niet door kan lopen maar wel doorheen kan schieten bestaat nog geen soort botsvorm: dat vraagt een eigen laag die wel het lopen tegenhoudt en geen schot.
 - **De showroom heeft nog de oude slagboom en wachttoren**, tot hij herbouwd wordt: `tools/build_level.sh showroom`.
+
+## Twintig tegen twintig: een veldslag in de duinen
+
+Op 15 oktober 2026 gevraagd: op grote maps veel meer bots kunnen instellen, voor een levendig potje in plaats van eindeloos rennen naar de andere kant; in de duinen bijvoorbeeld twintig tegen twintig. "Denk je dat dat goed gaat werken? Bouw het dan maar in." Gebouwd op de branch `veldslag`, vanaf de trunk met de muziek en de maat van de arena's erin. Michiel speelde het op 15 en 16 oktober ("Het werkt allemaal top. Dus merge het maar") en op dat woord is het op 16 oktober in de trunk gezet; niet gepusht.
+
+**Wat er nu is**
+
+- **Een arena kan meer spelers dragen dan een spelsoort toestaat.** `assets/match.json` heeft daarvoor een tabel `arenas`: de duinen dragen twintig per kant (`most`) en spelen er twintig als je niets anders kiest (`size`). Bij ieder voor zich telt dat dubbel: veertig. Capture the flag gaat ook tot twintig per kant. In de andere vier arena's blijft het zoals het was: zes per kant, twaalf bij ieder voor zich. `Match.most()` en `Match.usual()` zeggen het per soort en arena, en `--match=tdm:dunes` zonder aantal is twintig tegen twintig.
+- **Op het scherm Multiplayer** springt het aantal naar wat er in die arena gespeeld wordt zodra je een andere arena kiest: twintig per kant in de duinen, zes in een hal. De knop gaat daarna een voor een tot twaalf, en dan 16 en 20.
+- **Team deathmatch speelt tot een grens die meegroeit met de teams**: 50 bij zes per kant, 170 bij twintig, in tientallen (`grows` in `assets/match.json`). Met meer man vallen er evenredig meer doden; anders is het potje na drie minuten voorbij. Capture the flag (drie keer binnenbrengen) en ieder voor zich (25 per persoon) groeien niet mee.
+- **Je komt terug bij je eigen mensen, aan het front** (`scripts/arena.gd`, `pick()`). Tot nu toe was het de plek het verst van de dichtstbijzijnde vijand: in de duinen het andere eind van de kaart, 399 m lopen, bijna een minuut sprinten na elke keer doodgaan. Nu, zolang er teamgenoten zijn: een plek zo'n 35 tot 60 m van de dichtstbijzijnde vijand, binnen 20 m van een teamgenoot, dichter bij je eigen mensen dan bij de vijand, en zoals eerst buiten het zicht van elke vijand (nu tot 80 m in plaats van 60) en nooit binnen 12 m van een. Uit de beste drie wordt geloot. Dat is de regel uit het plan ("Spawnplekken"), met afstanden hemelsbreed in plaats van gelopen. Ligt aan het front alles in iemands zicht, dan wordt het de veilige plek het verst van de vijand, zoals vroeger; pas als ook die er niet is, is het een noodplek. Hij geldt in elke arena; bij ieder voor zich, zonder teamgenoten, blijft het de verste plek, en bij capture the flag kies je zoals eerst alleen op de grond van je eigen basis.
+- **Vierenveertig namen** in plaats van veertien, zodat geen twee bots dezelfde heten.
+- **Het scorebord onder Tab** zet de twee kanten naast elkaar zodra een kant meer dan tien man heeft; bij ieder voor zich met meer dan twintig de betere helft links. Twintig onder elkaar liep van het scherm. Het bord staat nu vanaf onder de stand en krijgt kleinere letters naarmate het langer is, zodat het niet meer over "OVER" en "Back in" heen valt; bij twintig per kant gaat de letter van 20 naar 14 punt. Binnen een kant staat de beste nu ook echt bovenaan: het sorteren op kant gooide de volgorde door elkaar.
+- **Drie besparingen**, omdat veertig figuren het grootste deel van hun kosten op de processor hebben:
+  - een bot verder dan 40 m van de camera denkt en loopt om de andere stap van de physics, met een stap die twee keer zo lang is (`FAR_OFF` in `scripts/bot.gd`); de bots van de twee helften wisselen elkaar af;
+  - een figuur verder dan 30 m wordt om het andere beeld geposeerd, verder dan 70 m om het derde, en buiten beeld om het vierde (`every` in `scripts/humanoid_rig.gd`, gezet door `scripts/puppet.gd`; de vijanden van de route poseren als vanouds elk beeld);
+  - een schot verder dan 80 m van de camera geeft geen flits aan de loop en geen inslag waar het landt; zijn spoor en geluid blijven, en ruiten breken als vanouds (`SHOWN` in `scripts/puppet.gd`).
+
+**Denk ik dat het goed werkt?** Op het beeld wel: twintig tegen twintig kost in de duinen gemiddeld zo'n 5 fps ten opzichte van zes tegen zes. De haperingen zijn het zwakke punt: die waren er al in de duinen, ook met zes tegen zes, en met veertig zijn het er ongeveer twee keer zoveel. Of het speelt zoals hij hoopt, staat onder "Wat ik niet kon beoordelen".
+
+**Gemeten** op 15 oktober 2026, 14:30 tot 15:00, M1 Pro aan de lader, load 3,7 tot 7,6, terwijl twee andere sessies hun tests draaiden en ook op de GPU maten. Op 3456×2160 met de instellingen van Michiel (zijn `settings.cfg`: MetalFX, de schaal die zichzelf zet), vsync uit, een wedstrijd van alleen bots in de duinen. De camera stond steeds 4 m achter de bot van kant 1 die het dichtst bij een vijand was, met zijn gezicht naar die vijand: zoals iemand die meevecht. Na 32 s, als de kanten elkaar gevonden hebben, 40 s gemeten. Om en om, twee rondes, vanaf bevroren kopieën: de nieuwe stand, de trunk met twintig per kant, de trunk met zes. Beide kopieën hadden tijdelijke tijdmetingen in het brein van de bots, en de nieuwe was nog van vóór de terugval op de verste veilige plek, die alleen iets doet als aan het front niets veilig is.
+
+| | Per beeld | p50 | p99 (1% low) | Beelden boven 33 ms, boven 50 ms | Physics-scripts | Overige scripts | Soldaten in beeld |
+|---|---|---|---|---|---|---|---|
+| Zes tegen zes, trunk | 12,43 en 12,60 ms | 12,1 en 12,5 ms | 18,4 en 16,3 ms (54 en 62 fps) | 14 en 12, 12 en 6 | 1,1 en 1,0 ms | 1,2 en 1,2 ms | 4,8 en 4,3 |
+| Twintig tegen twintig, trunk | 14,10 en 12,90 ms | 13,4 en 12,4 ms | 44,4 en 27,5 ms (23 en 36 fps) | 39 en 25, 25 en 18 | 4,0 en 3,4 ms | 3,4 en 3,2 ms | 17,6 en 8,6 |
+| Twintig tegen twintig, nu | 12,87 en 13,64 ms | 12,5 en 13,1 ms | 21,4 en 28,9 ms (47 en 35 fps) | 16 en 28, 14 en 22 | 2,9 en 3,4 ms | 2,1 en 2,6 ms | 16,1 en 16,0 |
+
+- **Het beeld wacht meestal op de GPU, niet op de figuren.** In een eerdere run met de figuren onzichtbaar (wel geposeerd) was het beeld niet sneller. De physics-scripts zijn vooral de bots; de overige scripts vooral het poseren. Wat de processor bespaart, gaat bij zes tegen zes op aan wachten op de GPU: daarom is het verschil in het gemiddelde kleiner dan dat in de scripts.
+- **Wat de besparingen opleveren**, om en om: het poseren kost 0,8 tot 1,2 ms minder per beeld, de bots 0,3 tot 0,6 ms. Dat de bots niet de helft goedkoper zijn: met de nieuwe manier van terugkomen staat het grootste deel binnen 40 m van wie meevecht. En de nieuwe stand heeft steeds zo'n 16 soldaten in beeld, de trunk de tweede keer 8,6: aan het front gebeurt meer.
+- **De haperingen.** Een beeld boven de 50 ms valt bij zes tegen zes in de duinen eens per vier tot zeven seconden, bij twintig tegen twintig eens per twee à drie. In zo'n beeld zit het meeste van de tijd buiten de scripts en buiten het tekenwerk op de processor (40 tot 60 ms), en daarna haalt de physics vijf tot acht stappen in. Er werden op die momenten geen pipelines gecompileerd en het navmesh werd niet bijgewerkt (beide geteld). Wat het wel is, heb ik niet gevonden: de Godot van deze laptop heeft geen symbolen voor een profiler. Twee keer was het een script in de processtap (60 en 97 ms), ook in de trunk.
+- **Tegen robots**, zoals Michiel speelt sinds de duinfixes de robots in een wedstrijd teruggaven: na het binnenhalen van die trunk om en om gemeten, twee rondes, 20 tegen 20 met de andere kant robots en met de andere kant soldaten, verder als hierboven (load 6 tot 11). Robots 13,82 en 13,71 ms per beeld, p99 30,7 en 23,9 ms, 11 en 11 beelden boven 50 ms; soldaten 13,94 en 13,70 ms, p99 24,3 en 22,7 ms, 11 en 10. Dat een robot in een stuk of twaalf losse delen uiteenvalt, kost dus niets wat te meten was.
+- **Terugkomen kost 4 ms in één stap**, zonder GPU gemeten: 2,4 ms een nieuw figuur aankleden en 1,6 ms een plek kiezen. Het aankleden heb ik ook op een andere thread laten doen terwijl de bot twee tellen weg is; dat liet per keer een object achter dat nooit werd opgeruimd (36 bij 36 doden), en het is er weer uit. Die beelden vielen bovendien niet op tussen de haperende.
+
+**Getest**, zonder GPU.
+
+- `tools/test_match.sh`: 85 controles, tegen 78 in de trunk. Nieuw zijn de knop die in de duinen op twintig springt en daarna 1 tot 12, 16 en 20 aanbiedt, en terug in een hal weer zes; de aantallen per soort en arena; dat `--match=tdm:dunes` twintig per kant speelt tot 170; veertig bots met elk een eigen naam; het scorebord met een kolom per kant; en een wedstrijd van twintig tegen twintig tot er twaalf zijn teruggekomen. Bij die twaalf (84 s wedstrijd) stond de dichtstbijzijnde vijand op het moment van terugkomen minstens 43 m weg en in het midden 50 m, de dichtstbijzijnde teamgenoot in het midden 12 m, en hun eigen eind in het midden 139 m: aan het front, niet aan het eind. In de fabriek kwam bij drie tegen drie niemand binnen 8 m van een vijand terug, zoals eerst.
+- `tools/selftest.sh` (404), `tools/test_humanoid.sh` (55), `tools/test_prize.sh` (122) en `tools/nettest.sh` (62, beide kanten): geslaagd. Na het binnenhalen van de duinfixes opnieuw: `tools/test_match.sh` 89 controles, de selftest 404 en `tools/test_humanoid.sh` 55, en een minuut twintig tegen twintig tegen robots met de speler erin: 105 doden, geen noodplek. De selftest faalde eerst op de nieuwe muziek van de trunk: de importcache van deze worktree was van voor dat nummer. Na het klonen van die twee bestanden uit de hoofdcheckout slaagde hij.
+- Veertig bots in de duinen, `tools/test_match.sh --match=tdm:dunes:20 --only-bots --soak=60`: 83 doden in een minuut, waarvan de eerste halve minuut lopen is, en geen enkele noodplek. Zonder de terugval op de verste veilige plek waren het er twee tot zeven in 45 s, en dan kwam die bot aan het andere eind terug.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het leuk is.** Ik heb niet gespeeld, alleen bots tegen bots gemeten en geteld. Of twintig tegen twintig in de duinen chaos is of een veldslag, of 35 tot 60 m van de vijand de goede afstand is om terug te komen, en of je nu genoeg tegenkomt: dat zegt het spelen.
+- **Of het halve tempo van verre bots te zien is.** Een bot verder dan 40 m beweegt 60 keer per seconde in plaats van 120, een figuur verder dan 30 m wordt om het andere beeld geposeerd. Ik verwacht dat niemand het ziet, maar heb het niet op het scherm in beweging gezien.
+- **De eerste halve minuut.** Beide kanten beginnen nog aan hun eigen eind, 399 m uit elkaar, en lopen eerst naar elkaar toe. Pas wie terugkomt, komt aan het front terug.
+- **Of de grens van 170 klopt.** Gerekend, niet gespeeld: hoe snel er bij twintig tegen twintig gescoord wordt, hangt af van hoe de bots en hij vechten.
+- **De haperingen zelf**: zie hierboven.
+
+**Nog open**
+
+- Bots lopen in de duinen vaak vast (80 tot 160 keer in 45 s bij veertig; ze komen er na anderhalve seconde uit). Dat stond al onder "Het potje bijgesteld": het navmesh van het land klopt niet overal met wat er staat.
+- Een plek kiezen en aankleden gebeurt nog op het moment van terugkomen. Het plan wil dat het kiezen over de twee tellen dat iemand weg is verdeeld wordt.
+- Over het net is niets hiervan geprobeerd: wedstrijden over het net zijn stap 4. Veertig bots twintig keer per seconde is een bericht van zo'n 2 kB.
+- Andere grote arena's: de grachten staan nog niet in de lijst. Een regel in `arenas` is genoeg.
+
+**Gezien**, op 1920×1200 met zijn instellingen, een wedstrijd van alleen bots: een beeld van het front (twee kanten door elkaar op een duinhelling, stof van inslagen, wapens en blikken van wie viel) en het bord aan het eind in twee kolommen van twintig onder "TEAM DEATHMATCH · to 170". Niet in beweging.
+
+**Wat Michiel bekijkt**
+
+- Spelen, twintig tegen twintig in de duinen: "Multiplayer" op het titelscherm, Arena tot Dunes, Start. Of meteen: `GODOT_WINDOW=1 .claude/worktrees/veldslag/tools/godot.sh -- --play --match=tdm:dunes`.
+- Alleen kijken hoe veertig bots het onder elkaar doen: `--only-bots` erachter.

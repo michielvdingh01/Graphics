@@ -38,6 +38,14 @@ const HEAD_START := 1.36
 const CROUCH_DROP := 0.65
 ## What marks somebody on the side of this machine's player in a match.
 const FRIEND := Color(0.35, 0.65, 1.0, 0.9)
+## Nearer than the first, in metres, it strikes a pose every frame; nearer
+## than the second every other frame, and further off every third. Out of
+## sight it does so every fourth.
+const POSED := Vector2(30.0, 70.0)
+## Further than this from what the screen shows, in metres, a shot of it
+## makes no flash at its muzzle and no mark where it lands; its streak and
+## its sound stay.
+const SHOWN := 80.0
 ## A robot of the route, for a bot in a match whose side is robots: its
 ## model, how wide and tall its body is to a shot, where its eyes are and
 ## where its head starts, and its visor. As scenes/enemy.tscn and
@@ -193,6 +201,12 @@ func _physics_process(_delta: float) -> void:
 func _process(_delta: float) -> void:
 	if _rig == null or dead:
 		return
+	# Far off, or out of sight, a figure strikes a pose less often. A robot
+	# has no pose to strike.
+	var camera := get_viewport().get_camera_3d()
+	if camera and _rig is HUMANOID:
+		var off := camera.global_position.distance_to(global_position)
+		_rig.every = 1 if off < POSED.x else 4 if not camera.is_position_in_frustum(global_position + Vector3.UP) else 2 if off < POSED.y else 3
 	# The weapon is on what its player looks at, and down while that one runs.
 	if _doing & Net.SPRINTING:
 		_rig.lower()
@@ -259,22 +273,30 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 	# What a robot fires glows the colour it does on the route.
 	var robot := _rig is ROBOT
 	var space := get_world_3d().direct_space_state
+	# What is further off than SHOWN makes no flash and no mark: in a match of
+	# forty there are shots all over the land.
+	var camera := get_viewport().get_camera_3d()
+	var eye := camera.global_position if camera else muzzle
 	for i in ends.size():
 		var end := ends[i]
 		var along := (end - head.global_position).normalized()
-		# What it struck is looked up again here, where the mark is made. An
-		# enemy shows a hit itself, once the host says it was one.
-		var query := PhysicsRayQueryParameters3D.create(end - along * 0.3, end + along * 0.3, HIT_MASK)
-		var hit := space.intersect_ray(query)
-		if hit and not hit.collider.has_method("is_headshot"):
-			Fx.impact(hit, along, ends.size() > 1)
+		if eye.distance_to(end) < SHOWN:
+			# What it struck is looked up again here, where the mark is made.
+			# An enemy shows a hit itself, once the host says it was one.
+			var query := PhysicsRayQueryParameters3D.create(end - along * 0.3, end + along * 0.3, HIT_MASK)
+			var hit := space.intersect_ray(query)
+			if hit and not hit.collider.has_method("is_headshot"):
+				Fx.impact(hit, along, ends.size() > 1)
+		# The streak is also where the glass it went through breaks, so it is
+		# always there.
 		if i % 3 == 0 and robot:
 			Fx.tracer(muzzle, end, _rig.tracer_tint)
 		elif i % 3 == 0:
 			Fx.tracer(muzzle, end)
-	if not ends.is_empty() and robot:
+	var flash := not ends.is_empty() and eye.distance_to(muzzle) < SHOWN
+	if flash and robot:
 		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, _rig.flash_prongs, _rig.flash_tint)
-	elif not ends.is_empty():
+	elif flash:
 		Fx.muzzle_flash(null, Transform3D(Fx.facing(ends[0] - muzzle), muzzle), data.flash_size, data.flash_prongs)
 	Sfx.play_at(data.shot_sound, muzzle)
 	if Match.active and not ends.is_empty():
