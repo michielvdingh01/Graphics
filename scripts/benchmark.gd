@@ -67,6 +67,11 @@ extends Node
 ## --at stands the player at that pose first, and each --eval="..." runs a
 ## line of script one second in, with Menu, Save, game and player to call:
 ## --eval="Menu.show_end(12)" shows the end screen. The save file is left alone.
+## --direct=<script> hands the run over to a director: a Node script, from
+## inside the project or outside it, that is put under the root as the game
+## starts and plays it from there, as tools/trailer.sh films the trailer. Like
+## --snap it keeps no progress, and it takes the settings from the command
+## line, as a benchmark does.
 
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const PROFILE_FRAMES := 150
@@ -78,6 +83,8 @@ const COVERED_TIMEOUT := 60.0
 var active := false
 ## True for a --snap run, which plays the game but keeps no progress.
 var snapping := false
+## True for a --direct run, which a script plays: no progress kept either.
+var directing := false
 
 var _resolution := DEFAULT_RESOLUTION
 var _scene := ""
@@ -107,6 +114,7 @@ var _eval := PackedStringArray()
 var _posted := false
 var _exit := false
 var _awake := PackedFloat64Array()
+var _director := ""
 
 
 func _ready() -> void:
@@ -160,7 +168,12 @@ func _ready() -> void:
 			_snap = arg.get_slice("=", 1).to_float()
 		elif arg.begins_with("--eval="):
 			_eval.append(arg.trim_prefix("--eval="))
+		elif arg.begins_with("--direct="):
+			_director = arg.trim_prefix("--direct=")
 	snapping = not active and _snap >= 0.0
+	directing = not active and _director != ""
+	if directing:
+		_direct.call_deferred()
 	if snapping:
 		_snapshot.call_deferred()
 	if active:
@@ -387,6 +400,15 @@ func _run() -> void:
 	file.close()
 	print("Saved to ", out_dir)
 	tree.quit()
+
+
+func _direct() -> void:
+	var script: Script = load(_director)
+	if script == null or not script.can_instantiate():
+		push_error("--direct: no script at %s" % _director)
+		get_tree().quit(1)
+		return
+	get_tree().root.add_child(script.new())
 
 
 ## Lets the game run for a moment and saves what is on screen then.

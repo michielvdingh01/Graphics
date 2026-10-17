@@ -29,7 +29,7 @@ var _aside := {}
 
 
 func _ready() -> void:
-	_persistent = not Benchmark.active and not Benchmark.snapping
+	_persistent = not Benchmark.active and not Benchmark.snapping and not Benchmark.directing
 	if SelfTest.active:
 		# Starts from nothing, whatever an earlier run left behind.
 		_path = SelfTest.own_file("save.cfg")
