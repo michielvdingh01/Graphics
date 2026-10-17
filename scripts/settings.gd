@@ -170,7 +170,7 @@ var _fringe_effect: CompositorEffect
 func _ready() -> void:
 	for theme in enemy_themes:
 		enemy_names.append(theme.capitalize())
-	if Benchmark.active:
+	if Benchmark.active or Benchmark.directing:
 		_read_args()
 	elif not SelfTest.active:
 		auto_scale = true
@@ -206,7 +206,7 @@ func put(key: String, value: Variant) -> void:
 		return
 	set(key, value)
 	apply()
-	if not Benchmark.active and not testing():
+	if not Benchmark.active and not Benchmark.directing and not testing():
 		_save()
 
 

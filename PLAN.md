@@ -3957,3 +3957,50 @@ Op 16 oktober 2026 gevraagd: tijdens een wedstrijd in de settings de wapenset ku
 - `Match.pack_in_play` onthoudt welk pakket er nu gespeeld wordt; `Match.setup.pack` is wat er gekozen is.
 - **Getest**: `tools/test_match.sh`, 121 controles, vier nieuw: in een potje met 1944 bieden de settings de pakketten aan bij 1944; Heavy kiezen laat de wapens in handen; de pauzeknop zegt "Start the match again · Heavy"; en na het opnieuw beginnen dragen de speler en elke bot Heavy. `tools/selftest.sh` (428) geslaagd.
 - **Niet gezien**: het scherm zelf heb ik niet als beeld bekeken; de tekst van de knoppen is getest.
+
+## Een trailer van twintig seconden
+
+Op 17 oktober 2026 gevraagd: een nieuwe trailer van ongeveer 20 seconden, met in ieder geval actie met een machinegeweer in de duinen, inzoomen met een sniper en een headshot in de duinen, soldaten, clowns en robots in actie, ontploffende vaten, actie in een wedstrijd van zes tegen zes bots, actie met de shotgun, en alle maps snel achter elkaar. Branch `trailer`.
+
+**Het resultaat** staat in `benchmark/results/trailer/trailer.mp4` (niet in git): 20,55 s, 1920×1080 op 60 beelden per seconde, H.264 op 21 Mbit/s met AAC, 54 MB. Ernaast `trailer_sheet.jpg`, twee beelden per seconde.
+
+| Tijd | Shot | Waar | Wat er gebeurt |
+|---|---|---|---|
+| 0,0–3,0 | Sniper | Duinen, bivak | Uit het zwart: het geweer komt omhoog, door de kijker de wacht voor de tent, het kruis schuift naar zijn hoofd, één schot, hij valt. Bijna stil. |
+| 3,0–5,5 | Minigun | Duinen, wagenpark | De muziek valt in. De lopen draaien al; soldaten in woestijntenue komen over het zand en gaan neer. |
+| 5,5–6,9 | Soldaten | Works, steeg | Laag naast de speler: soldaten stormen tegen de lage zon de steeg in en langs de camera. |
+| 6,9–8,3 | Robots | Centrale, turbinehal | Met het geweer; een robot loopt erop af en ontploft in een vuurbal. |
+| 8,3–9,7 | Clowns | Fabriekshal | Laag naast de speler: clowns met hakmessen rennen door het zonlicht op je af, één springt langs. |
+| 9,7–11,2 | Vaten | Fabriek, bij de deur | Een salvo op het rode vat bij twee soldaten; het vat gaat de lucht in. |
+| 11,2–12,7 | Shotgun | Centrale, pomphuis | Twee soldaten komen door het gangpad tot op twee meter, twee schoten. |
+| 12,7–15,3 | Zes tegen zes | Works, binnenterrein | Op de volgende inslag: de camera rijdt achter een bot het vuurgevecht in, met de stand en de killfeed van de wedstrijd. |
+| 15,3–17,6 | Alle maps | | Factory, Works, Depot, Powerhouse, Dunes, elk 0,45 s, de camera schuift langzaam. De muziek is hier even zacht. |
+| 17,6–20,6 | Titel | Duinen, bos | Op de inslag daarna: GRAPHICS FPS, en uitfaden naar zwart. |
+
+**Hoe het gemaakt is**
+
+- **Movie Maker van Godot.** `tools/trailer.sh` filmt elke take als een run van het spel op de GPU met `--write-movie` en `--fixed-fps 60`: elk beeld krijgt precies 1/60 s, hoe lang het tekenen ook duurt, dus er hapert niets, en het geluid van het spel komt beeld voor beeld mee. Als PNG kostte dat 680 ms per beeld; als MJPEG 13 ms. Daarvoor staat `editor/movie_writer/mjpeg_quality=0.95` in `project.godot` (alleen Movie Maker leest dat). Een take kost 13 tot 37 s op de klok.
+- **De regisseur** (`tools/trailer/director.gd`) speelt de take: hij laadt een level, haalt de route leeg, zet vijanden van een thema neer, wekt ze, geeft de speler een wapen en stuurt hem zoals de tests dat doen (`force_control`, acties indrukken), richt elk beeld na de speler zodat terugslag en zwaai erbovenop komen, of kijkt door een eigen camera die een baan volgt. `action()` zegt waar het bruikbare begint. Het spel geeft hem het woord met `--direct=<script>` (nieuw in `scripts/benchmark.gd`): zo'n run bewaart geen voortgang en neemt de instellingen van de commandoregel, niet die van Michiel. Gefilmd op Ultra op volle grootte, zonder upscaler, met `--undo=lamp_filter,sun_atlas`.
+- **De montage** (`tools/trailer/cut.py`, lijst `CUT`) leest de AVI's zelf (`tools/trailer/avi.py`: de JPEG's en het geluid liggen er onbewerkt in), knipt per take vanaf zijn actie, legt de muziek eronder, fadet in en uit, en laat `tools/trailer/encode.swift` (AVFoundation van macOS) er een mp4 van maken. Er is niets voor geïnstalleerd: geen ffmpeg.
+- **De muziek** is `level1and2` van het spel zelf, vanaf 9,32 s: haar eerste inslag na een stil stuk (12,32 s in het nummer) valt op de cut naar de minigun, de volgende (22,04 en 26,87 s) op de wedstrijd en op de titel. Spel ×0,85, muziek ×0,8, met een zachte begrenzer (`tanh`) erop; tijdens de actie is het spel met RMS 0,2 tot 0,3 het luidst.
+
+**Wat ik zelf koos, en wat hij kan omgooien**
+
+- "Machinegeweer" is de minigun. Het lichte machinegeweer (`lmg`) is één woord in `take_minigun()`.
+- De wacht van de sniper ziet de speler niet (`sight_lit` 3 m), en het rookpluimpje uit de loop na het schot is weggelaten: door de kijker bedekte het precies de val.
+- Bij de soldaten en de clowns schiet de onzichtbare speler over hun hoofden, anders liggen ze neer voor ze dichtbij zijn. Bij de shotgun komen de soldaten met de kolf (`melee`), anders blijven ze op vijf meter staan.
+- In de wedstrijd zijn beide teams bij het begin tegenover elkaar op het binnenterrein gezet, zodat er meteen gevochten wordt.
+- Van de HUD blijven alleen de kijker, de hitmarker en de rode rand bij een treffer; in de wedstrijd ook de stand en de killfeed.
+- De grachten zitten er niet in: ze staan niet in de levelkeuze, en hun levelbestanden staan niet in git (alleen ongevolgd in de hoofdcheckout).
+- De titel is de naam van het project, zoals het titelscherm hem toont.
+
+**Opnieuw maken.** `tools/trailer.sh <take>` filmt één take opnieuw en knipt alles opnieuw. De vijanden en bots spelen elke keer anders, dus een nieuwe take is een andere take: kijk naar `<take>_sheet.jpg` en zet in `CUT` waar de montage hem vandaan haalt als het moment verschoven is. Alleen knippen: `tools/trailer/cut.py benchmark/results/trailer`.
+
+**Getest**: `tools/selftest.sh` slaagt, 428 controles; daarin niets nieuws, het bewijst dat `--direct` en wat Save en Settings ervan weten de rest niet raken.
+
+**Niet beoordeeld**
+
+- **Gehoord is het niet.** De balans tussen spel en muziek en of de inslagen goed vallen, heb ik uit getallen gehaald. Het moet beluisterd worden.
+- **Bewegend gezien ook niet**: ik heb bladen met zes beelden per seconde bekeken en losse beelden op volle grootte. Of de snelheid van de cuts prettig is en of het geluid synchroon voelt, weet ik niet.
+- De lucht boven de minigun is wit: hij kijkt naar het zuiden, in de zon. Naar het noorden was het licht vlak; ik koos de lange schaduwen.
+- De laptop stond op de accu (73 tot 60%); er draaide geen andere Godot. Voor beelden van Movie Maker maakt dat niets uit, alleen voor hoe lang het duurt.
