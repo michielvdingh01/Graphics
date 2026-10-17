@@ -1,8 +1,9 @@
 GRAPHICS FPS - samen spelen
 
 Starten
-  Windows: pak de zip uit en start GraphicsFPS.exe. Windows kent de maker
-  niet en waarschuwt: kies "Meer informatie" en dan "Toch uitvoeren".
+  Windows: pak de zip uit en start GraphicsFPS.exe. Laat GraphicsFPS.pck
+  ernaast staan: daar zit het spel in. Windows kent de maker niet en
+  waarschuwt: kies "Meer informatie" en dan "Toch uitvoeren".
   Mac: pak de zip uit en open Graphics FPS. De Mac weigert dat de eerste
   keer. Ga naar Systeeminstellingen > Privacy en beveiliging, scrol naar
   beneden en kies "Open toch".
@@ -29,10 +30,16 @@ Zelf een spel hosten
   Wie later komt, kan er gewoon bij. Stopt de host, dan stopt het spel
   voor iedereen.
 
-Iedereen moet dezelfde versie van het spel hebben.
+Mac en Windows kunnen samen spelen. Iedereen moet wel dezelfde versie van
+het spel hebben: de zips van dezelfde dag.
+
+Loopt het schokkerig
+  Het spel is zwaar. Zet onder Settings de Quality lager (Medium of Low),
+  of de Render scale omlaag.
 
 Besturing
   WASD lopen, Shift rennen, Ctrl of C bukken (rennend: slide), spatie
   springen. Linkermuisknop vuren, rechtermuisknop richten, R herladen,
-  G granaat, 1 tot 5 of het muiswiel voor een ander wapen, Esc het menu.
-  Een controller werkt ook.
+  G granaat, V slaan, 1 tot 5 of het muiswiel voor een ander wapen, Esc
+  het menu. Op een trackpad van een Mac richt je met Option ingedrukt.
+  Een controller werkt ook. Alles staat ook in het spel onder Controls.

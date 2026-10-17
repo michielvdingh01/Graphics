@@ -4005,7 +4005,7 @@ Op 17 oktober 2026 gevraagd: een nieuwe trailer van ongeveer 20 seconden, met in
 - De lucht boven de minigun is wit: hij kijkt naar het zuiden, in de zon. Naar het noorden was het licht vlak; ik koos de lange schaduwen.
 - De laptop stond op de accu (73 tot 60%); er draaide geen andere Godot. Voor beelden van Movie Maker maakt dat niets uit, alleen voor hoe lang het duurt.
 
-## Een Mac-build voor vrienden
+## Een build voor vrienden: Mac en Windows
 
 Op 15 oktober 2026 gevraagd: een actuele versie van het spel om naar vrienden met een MacBook te sturen, om samen spelen over het netwerk uit te proberen. Gebouwd op de branch `vriendenbuild`, vanaf de trunk op `8adccf2`. Wat op dat moment nog op `killfeedback`, `veldslag`, `wapenpakketten` en `duingrond` stond, zit er niet in.
 
@@ -4032,3 +4032,23 @@ Op 15 oktober 2026 gevraagd: een actuele versie van het spel om naar vrienden me
 
 - Met twee Macs over een echt netwerk is het nog nooit gespeeld, en de release-app heeft hier nooit een venster geopend.
 - Of macOS bij deze app om het lokale netwerk vraagt: de app heeft geen `NSLocalNetworkUsageDescription` in zijn `Info.plist`. De LEESMIJ zegt wat je doet als het gebeurt.
+
+**17 oktober: opnieuw, en ook voor Windows**
+
+Op 17 oktober gevraagd: een nieuwe zip van de trunk, en kijken of vrienden met een Windows-laptop mee kunnen doen. De trunk van `fd79880` (`VERSION` 11, met de wapenpakketten, de veldslag en de trailer) is in `vriendenbuild` samengevoegd; alleen het einde van dit plan botste.
+
+- **Een vriend met Windows kon tot nu toe niet meedoen**: er was alleen een Mac-zip. `tools/export.sh` maakt ze nu allebei: `build/GraphicsFPS-windows.zip` (849 MB: `GraphicsFPS.exe`, 109 MB, en `GraphicsFPS.pck`, 1,2 GB) en `build/GraphicsFPS-macos.zip` (885 MB).
+- **Twee minuten voor beide**, waar de eerste Mac-export 79 minuten kostte: de importcache in `build/src` bleef staan. Er waren 70 bestanden nieuw te importeren (14 texturen, 66 geluiden), geen lightmaps.
+- **Het spel kent Windows al**: daar biedt het menu geen MetalFX en kiest het FSR waar het op een Mac MetalFX zou nemen (`scripts/settings.gd`, `scripts/menu.gd`).
+- `tools/LEESMIJ.txt` zegt nu ook: laat de `.pck` naast de `.exe` staan, Mac en Windows spelen samen met zips van dezelfde dag, wat je doet als het schokt (Quality of Render scale lager), en de slag op V en het richten met Option op een trackpad. Een nieuwe speler begint op High, in een venster, op 100%.
+
+**Getest op 17 oktober**
+
+- Beide zips uitgepakt zoals een vriend ze krijgt. De Mac-app is geldig ondertekend; `GraphicsFPS.exe` is een 64-bits Windows-programma (PE32+, x86-64).
+- De netwerktest, zonder venster en in een eigen thuismap, drie keer: twee keer de Mac-app, een Mac-app als host met als gast het Windows-pakket, en het Windows-pakket als host met de Mac-app als gast. Alle drie slagen ze (host 32, gast 31 controles). Het Windows-pakket draaide daarbij in de editor van deze Mac (`Godot --main-pack GraphicsFPS.pck`), niet in `GraphicsFPS.exe`. Wat het bewijst: de twee pakketten hebben dezelfde levels, dezelfde versie en dezelfde berichten over de lijn. De wedstrijdtest slaagt op de Mac-app.
+- Op de GPU, via de editor: de duinen uit het Mac-pakket en het fabrieksterrein uit het Windows-pakket, beide met texturen, licht en HUD.
+
+**Niet beoordeeld**
+
+- `GraphicsFPS.exe` heeft nog nooit gedraaid: hier is geen Windows, en geen Wine. Wat alleen Windows laat zien (de driver, D3D12 of Vulkan, de firewall, SmartScreen, hoe snel het loopt op een laptop zonder losse videokaart) is niet gezien. De Asus met NVIDIA kan het als eerste proberen.
+- Nog steeds niet met twee echte machines over een echt netwerk gespeeld.
