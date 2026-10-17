@@ -4,7 +4,8 @@ extends Node
 ## Drives the real player through simulated input and checks that the core
 ## loop still works: navmesh, slide, shooting, enemy AI, weapon switching,
 ## enemy types, explosives, grenades, settings, how the view moves and what
-## can be shot to pieces. Then it goes through every level along its route,
+## can be shot to pieces, and every weapon fired on a range next to what the
+## balance sheet says of it. Then it goes through every level along its route,
 ## from the start to the exit and on into the next: that the route can be
 ## walked over the navmesh, that every robot can reach the player from its
 ## post and none stands close by and in view where the player appears or
@@ -16,6 +17,7 @@ extends Node
 ## be seen, it looks for lines of sight into a zone from where that zone is
 ## switched off.
 
+const ARMORY := preload("res://scripts/armory.gd")
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
@@ -33,6 +35,12 @@ const STRIDE := 0.5
 ## from at most, and how far apart the points are that are looked at.
 const LOOKOUTS := 150
 const SIGHT_GRID := 1.5
+## The range every weapon is fired on, see _balance(): the distances to the
+## figure, how high above the level the range lies, and how high the middle
+## of the figure is above its floor.
+const RANGE_DISTANCES: Array[float] = [5.0, 10.0, 20.0, 40.0, 80.0]
+const RANGE_HEIGHT := 400.0
+const TORSO_HEIGHT := 1.2
 
 ## True for a self-test run; menus and saved progress stay out of the way.
 var active := false
@@ -70,7 +78,7 @@ func own_file(file: String) -> String:
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
-	tree.create_timer(420.0, true, true).timeout.connect(
+	tree.create_timer(600.0, true, true).timeout.connect(
 		func() -> void:
 			print("SELFTEST FAILED (timed out)")
 			tree.quit(1)
@@ -109,9 +117,10 @@ func _run() -> void:
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
-	# --view leaves out everything but how the view moves, and --breaks
-	# everything but what can be shot to pieces.
-	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"]]:
+	# --view leaves out everything but how the view moves, --breaks
+	# everything but what can be shot to pieces, and --balance everything but
+	# the range every weapon is fired on, at every distance.
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--balance", _balance.bind(true), "balance"]]:
 		if only[0] not in OS.get_cmdline_user_args():
 			continue
 		await (only[1] as Callable).call()
@@ -127,7 +136,8 @@ func _run() -> void:
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
 		await _music_turns()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "music"])
+		await _balance()
+		_ran(["handling", "fights", "supplies", "view", "breakables", "music", "balance"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -347,7 +357,7 @@ func _handling() -> void:
 	Input.action_release("grenade")
 	await _wait(0.5)
 	var thrown := tree.get_nodes_in_group("grenade")
-	_check("a grenade is thrown", weapons.grenades == weapons.START_GRENADES - 1 and thrown.size() == 1)
+	_check("a grenade is thrown", weapons.grenades == weapons.start_grenades - 1 and thrown.size() == 1)
 	if not thrown.is_empty():
 		_check("it flies ahead of the player", thrown[0].global_position.x < player.global_position.x - 2.0)
 	await _wait(2.4)
@@ -378,7 +388,7 @@ func _handling() -> void:
 	# A sound is found by its name, and that of an impact by what was hit, so a
 	# folder that is missing would only show up as an error in mid-fight.
 	var sounds: Array[StringName] = []
-	for data: WeaponData in weapons.LOADOUT:
+	for data: WeaponData in weapons.loadout:
 		sounds.append(data.shot_sound)
 	for surface: String in Fx.HOLE_VARIANTS:
 		sounds.append(StringName("impact_" + surface))
@@ -732,7 +742,7 @@ func _supplies() -> void:
 	key.action = "weapon_1"
 	Input.parse_input_event(key)
 	await _wait(0.5)
-	var rifle: WeaponData = weapons.LOADOUT[0]
+	var rifle: WeaponData = weapons.loadout[0]
 	weapons.resupply()
 	_check("a level starts with part of the reserve a weapon can hold", weapons._start_reserve(rifle) == rifle.mag_size * weapons.START_MAGS
 		and weapons._start_reserve(rifle) < rifle.reserve_ammo and weapons._reserves[0] >= weapons._start_reserve(rifle))
@@ -772,7 +782,7 @@ func _supplies() -> void:
 	await _wait(1.2)
 	_check("and a can fills the reserve, most of all that of the weapon in hand", not is_instance_valid(can) and notes.has("+AMMO")
 		and weapons._reserves[0] == rifle.mag_size
-		and weapons._reserves[2] == weapons._start_reserve(weapons.LOADOUT[2]) + ceili(weapons.LOADOUT[2].mag_size * weapons.CAN_MAGS_OTHERS))
+		and weapons._reserves[2] == weapons._start_reserve(weapons.loadout[2]) + ceili(weapons.loadout[2].mag_size * weapons.CAN_MAGS_OTHERS))
 	var grenade: Node3D = drop.call(game.PICKUP.Kind.GRENADE)
 	await _wait(1.2)
 	_check("and a grenade is one more to throw", not is_instance_valid(grenade) and weapons.grenades == 1)
@@ -800,6 +810,22 @@ func _supplies() -> void:
 	_check("out of rounds, the trigger swings the weapon", weapons._melee_left > 0.0 and dummy.health == dummy.max_health)
 	await _wait(0.6)
 	_check("and the blow lands on what stands in front of it", is_equal_approx(dummy.health, dummy.max_health - weapons.MELEE_DAMAGE))
+	# Its own key swings it at any time, rounds or none, and breaks off a reload.
+	dummy.health = dummy.max_health
+	weapons._mags[0] = 5
+	weapons._reserves[0] = rounds
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	var reloading: bool = weapons._reload_left > 0.0
+	Input.action_press("melee")
+	await _wait(0.1)
+	Input.action_release("melee")
+	_check("with rounds left, the melee key swings the weapon and breaks off a reload", reloading and weapons._melee_left > 0.0
+		and weapons._reload_left == 0.0 and weapons._mags[0] == 5)
+	await _wait(0.6)
+	_check("and that blow lands as well, without a shot", is_equal_approx(dummy.health, dummy.max_health - weapons.MELEE_DAMAGE)
+		and weapons._mags[0] == 5 and weapons._reserves[0] == rounds)
 	dummy.free()
 	weapons._mags[0] = rifle.mag_size
 	weapons._reserves[0] = rounds
@@ -814,7 +840,7 @@ func _supplies() -> void:
 	weapons.resupply()
 	player.heal(maxf(game.CHECKPOINT_HEALTH - player.health, 0.0))
 	_check("a checkpoint brings health and reserves back up, not to the full", player.health == game.CHECKPOINT_HEALTH
-		and weapons._reserves[0] == weapons._start_reserve(rifle) and weapons.grenades == weapons.START_GRENADES)
+		and weapons._reserves[0] == weapons._start_reserve(rifle) and weapons.grenades == weapons.start_grenades)
 	player.health = 1e6
 
 	# The difficulty is one table, and a run is measured.
@@ -830,7 +856,366 @@ func _supplies() -> void:
 	print("    the run so far: %s; the end screen would say: %s" % [run, " / ".join(summary)])
 	_check("a run is measured: time, shots, hits", run.seconds > 5.0 and run.shots > 0.0 and run.hits > 0.0 and run.hits <= run.shots)
 	_check("and summed up for the end screen", summary.size() == 2 and summary[0].begins_with("Time  12:34   ·   Deaths  2") and summary[1] == "Accuracy  41%   ·   Headshots  9")
+
+	# Packs: what everybody carries in a match, see scripts/ARMORY.gd.
+	var standard: Array[WeaponData] = ARMORY.weapons(ARMORY.STANDARD)
+	_check("on the route the standard pack is carried, in the order of the keys", weapons.loadout == standard
+		and standard.map(func(data: WeaponData) -> String: return data.display_name) == ["Rifle", "Pistol", "Shotgun", "SMG", "Marksman"])
+	var offered: PackedStringArray = ARMORY.names()
+	var misses := []
+	var file: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(ARMORY.FILE)).packs
+	for pack: String in file:
+		var built: bool = (file[pack].weapons as Array).all(func(weapon_name: String) -> bool: return ARMORY.named(weapon_name) != null)
+		var sizes_fit: bool = ARMORY.weapons(pack).size() in range(2, ARMORY.MOST + 1) and not ARMORY.bots(pack).is_empty()
+		if offered.has(pack) != built or (built and not sizes_fit):
+			misses.append(pack)
+	print("    packs on offer: %s of %s" % [", ".join(offered), ", ".join(file.keys())])
+	_check("a pack is on offer once all its weapons are built, with two to five of them", offered.has(ARMORY.STANDARD) and misses.is_empty())
+	var pair: Array[WeaponData] = [standard[2], standard[1]]
+	weapons.equip(pair, Vector2i(3, 4))
+	await _wait(0.1)
+	var two := InputEventAction.new()
+	two.action = "weapon_2"
+	two.pressed = true
+	Input.parse_input_event(two)
+	await _wait(0.5)
+	var on_two: String = weapons.current().display_name
+	var five := two.duplicate()
+	five.action = "weapon_5"
+	Input.parse_input_event(five)
+	await _wait(0.5)
+	_check("another pack is taken up whole: its weapons on its keys, nothing on the rest, its grenades", weapons.loadout.size() == 2
+		and on_two == "Pistol" and weapons.current().display_name == "Pistol" and weapons.grenades == 3 and weapons.most_grenades == 4
+		and weapons._rig.get_child_count() == 2)
+	_check("and what is fired goes by its place in the armory, not in the pack", ARMORY.index(weapons.current()) == 1 and ARMORY.index(pair[0]) == 2)
+	weapons.equip(standard, ARMORY.grenades(ARMORY.STANDARD))
+	await _wait(0.1)
+	await _minigun(weapons)
 	_finished.append("supplies")
+
+
+## A weapon of the arena with barrels that spin: taken up on a key of its own,
+## slow to start, fast once it has, overheating after a few seconds of fire and
+## cooling after a few more; heavy to carry, not filled up by a can, and
+## thrown away once it is fired empty.
+func _minigun(weapons: Node3D) -> void:
+	var minigun: WeaponData = ARMORY.named("minigun")
+	var spent := []
+	var note := func(data: WeaponData) -> void: spent.append(data)
+	weapons.special_spent.connect(note)
+	var before: WeaponData = weapons.current()
+	weapons.take_special(minigun, 450)
+	await _wait(1.0)
+	_check("a weapon of the arena is taken up after the pack, and brought up", weapons.loadout.size() == 6 and weapons.current() == minigun
+		and weapons.special() == minigun and weapons.special_rounds() == 450)
+	_check("it is heavy: slower on foot, and no running with it", is_equal_approx(weapons.move_speed_scale(), minigun.move_scale) and weapons.blocks_sprint())
+	_check("a can of ammunition does not fill it", not weapons.add_ammo() or weapons.special_rounds() == 450)
+	Input.action_press("fire")
+	await _wait(minigun.spin_up * 0.6)
+	var while_spinning: int = weapons.special_rounds()
+	await _wait(minigun.spin_up * 0.4 + minigun.spin_ramp + 0.15)
+	var counted: int = weapons.special_rounds()
+	await _wait(1.0)
+	var a_second: int = counted - weapons.special_rounds()
+	print("    minigun: %d rounds out while it spun up, %d in a second at full speed" % [450 - while_spinning, a_second])
+	_check("it spins up before the first round, then fires about as fast as its data says", while_spinning == 450
+		and a_second > minigun.rounds_per_minute / 60.0 * 0.8 and a_second <= ceili(minigun.rounds_per_minute / 60.0) + 1)
+	await _wait(minigun.overheat_after - minigun.spin_ramp - 1.0 + 0.2)
+	var at_heat: int = weapons.special_rounds()
+	await _wait(1.0)
+	_check("after %d seconds of fire it overheats and stops" % minigun.overheat_after, weapons.overheated() and weapons.special_rounds() == at_heat)
+	Input.action_release("fire")
+	await _wait(minigun.overheat_time)
+	_check("and %d seconds later it can fire again" % minigun.overheat_time, not weapons.overheated() and weapons.heat() < 0.1)
+	# Fired empty, it is thrown away and what was in hand before comes up.
+	weapons._mags[weapons._index] = 5
+	weapons.add_ammo()
+	Input.action_press("fire")
+	await _wait(minigun.spin_up + 0.8)
+	Input.action_release("fire")
+	await _wait(0.5)
+	_check("fired empty, it is thrown away, said so, and the weapon before is in hand", weapons.special() == null and spent == [minigun]
+		and weapons.loadout.size() == 5 and weapons.current() == before)
+	weapons.take_special(minigun, 100)
+	var dropped: Array = weapons.drop_special()
+	_check("let go of, it says what it had left", dropped.size() == 2 and dropped[0] == minigun and dropped[1] == 100 and weapons.special() == null)
+	weapons.special_spent.disconnect(note)
+	await _wait(1.0)
+	await _rocket_launcher(weapons)
+
+
+## The other weapon of the arena: one round in the tube and two to come, each
+## a rocket that flies, goes off at what it meets and hurts what it hits square
+## besides; whoever fires it close to a wall is hurt by it too.
+func _rocket_launcher(weapons: Node3D) -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var launcher: WeaponData = ARMORY.named("rocket_launcher")
+	var blasts := []
+	var note := func(at: Vector3) -> void: blasts.append(at)
+	Blast.exploded.connect(note)
+	weapons.take_special(launcher, launcher.mag_size + launcher.reserve_ammo)
+	await _wait(launcher.switch_time + 0.2)
+	_check("the rocket launcher holds one round in the tube and two more", weapons.current() == launcher and weapons._mags[weapons._index] == 1
+		and weapons.special_rounds() == 3)
+	var dummy: CharacterBody3D = game.GRUNT.instantiate()
+	var ahead: Vector3 = -player.global_basis.z
+	ahead.y = 0.0
+	dummy.position = player.global_position + ahead.normalized() * 12.0
+	game.add_child(dummy)
+	dummy.set_physics_process(false)
+	await _wait(0.2)
+	await _aim(player, player.global_position, dummy.global_position + Vector3.UP * 1.1)
+	Input.action_press("fire")
+	await _wait(0.1)
+	Input.action_release("fire")
+	var flying := tree.get_nodes_in_group("rocket")
+	var warhead: Node3D = weapons._models[weapons._index].mag
+	_check("a shot sends a rocket on its way, and the round is gone from the tube", flying.size() == 1 and weapons._mags[weapons._index] == 0
+		and not warhead.visible)
+	await _wait(0.6)
+	print("    rocket: blasts %s, the grunt %s 12 m off has %.0f health left" % [blasts, "dead" if dummy.dead else "alive", dummy.health])
+	_check("it goes off at what it meets, and that is dead", tree.get_nodes_in_group("rocket").is_empty() and blasts.size() == 1
+		and blasts[0].distance_to(dummy.position + Vector3.UP * 1.1) < 1.0 and (not is_instance_valid(dummy) or dummy.dead))
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	await _wait(launcher.reload_time + 0.2)
+	_check("a reload puts the next round in the tube", weapons._mags[weapons._index] == 1 and weapons._reserves[weapons._index] == 1 and warhead.visible)
+	# Fired at a wall close by, it hurts whoever fired it.
+	player.health = player.MAX_HEALTH
+	await _aim(player, player.global_position, player.global_position + Vector3.DOWN * 3.0 + ahead * 2.0)
+	Input.action_press("fire")
+	await _wait(0.1)
+	Input.action_release("fire")
+	await _wait(0.5)
+	print("    rocket at the floor 2 m ahead: the player has %.0f health left" % player.health)
+	_check("one's own rocket hurts as anybody's", blasts.size() == 2 and player.health < player.MAX_HEALTH)
+	player.health = player.MAX_HEALTH
+	weapons.drop_special()
+	if is_instance_valid(dummy):
+		dummy.queue_free()
+	Blast.exploded.disconnect(note)
+	# The blast shook the view and knocked the head: let that settle before
+	# what comes next looks at how the view moves.
+	await _wait(3.0)
+
+
+## The balance in the game itself: every weapon there is, fired by the player
+## over its sights at a figure the size of the torso that tools/weapon_sheet.py
+## weighs (45 by 60 cm), at each of RANGE_DISTANCES, as the game fires it:
+## with its kick, its bloom and the shake of the view, and nobody to pull the
+## muzzle back down. Once with the trigger held down for as long as it takes,
+## and at the far distances once more paced: a shot only once the kick has
+## come back down, as somebody who means to hit would. The shots it takes to
+## do 100 are set next to what the sheet works out, aimed and standing, which
+## counts no kick at all. A weapon with barrels that spin is fired from the
+## hip, since holding the aim spins them. The range is a floor high above the
+## level, with nothing on it.
+##
+## What is checked is that the game and the sheet agree where the kick cannot
+## matter, at 5 m. Where they part further off is a matter of balance, which
+## is printed and left to whoever weighs it. The whole test fires at 5 m
+## only; `full`, which --balance asks for, at every distance. Shots are
+## fired on the real clock, the rest goes three times as fast.
+func _balance(full := false) -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	player.force_control = true
+	var sheet := _sheet_shots()
+	_check("tools/weapon_sheet.py --shots says how many shots each weapon takes", not sheet.is_empty())
+	var ground := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var slab := BoxShape3D.new()
+	slab.size = Vector3(10.0, 1.0, 140.0)
+	floor_shape.shape = slab
+	ground.add_child(floor_shape)
+	game.add_child(ground)
+	ground.global_position = Vector3(0.0, RANGE_HEIGHT - 0.5, -65.0)
+	var target := StaticBody3D.new()
+	target.collision_layer = 4
+	target.collision_mask = 0
+	var torso := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.45, 0.6, 0.25)
+	torso.shape = box
+	torso.position.y = TORSO_HEIGHT
+	target.add_child(torso)
+	var counts := GDScript.new()
+	counts.source_code = "extends StaticBody3D\nvar taken := 0.0\nfunc take_damage(amount: float, _at: Vector3, _direction: Vector3) -> bool:\n\ttaken += amount\n\treturn false\n"
+	counts.reload()
+	target.set_script(counts)
+	game.add_child(target)
+	var carried: Array[WeaponData] = weapons.loadout.duplicate()
+	var distances: Array[float] = RANGE_DISTANCES if full else RANGE_DISTANCES.slice(0, 1)
+	Engine.time_scale = 3.0
+	var lines := PackedStringArray()
+	var notes := PackedStringArray()
+	var faults := PackedStringArray()
+	var weighed := 0
+	for data: WeaponData in ARMORY.all():
+		var weapon_name := data.resource_path.get_file().get_basename()
+		var expected: Dictionary = sheet.get(weapon_name, {})
+		var alone: Array[WeaponData] = [data]
+		weapons.equip(alone, Vector2i(0, 0))
+		await _wait(data.switch_time + 0.1)
+		var line := PackedStringArray()
+		var missed := false
+		for metres: float in distances:
+			var wanted: Variant = expected.get(str(int(metres)))
+			var most := mini(data.mag_size * 3, int(wanted) * 3 + 4 if wanted != null else 24)
+			# What misses at 40 m with the trigger held misses at 80 m as well.
+			var held: Array = [-1, 0.0, 0] if missed else await _fire_at_range(player, target, data, metres, most, false)
+			missed = int(held[0]) < 0 and metres >= 40.0
+			var said := "%d m %s" % [metres, _shots(held) if int(held[2]) > 0 else "none"]
+			var hit_held: bool = int(held[0]) > 0 and (wanted == null or int(held[0]) <= int(wanted) * 2 + 1)
+			if metres >= 40.0 and not data.aim_spins and data.rounds_per_minute > 60.0 and not hit_held:
+				var paced: Array = await _fire_at_range(player, target, data, metres, mini(data.mag_size * 3, int(wanted) * 2 + 4 if wanted != null else 16), true)
+				said += ", paced %s" % _shots(paced)
+				if wanted != null and int(wanted) <= 8 and (int(paced[0]) < 0 or int(paced[0]) > int(wanted) * 2 + 1):
+					notes.append("%s at %d m, paced: %s where the sheet says %d" % [data.display_name, metres, _shots(paced), wanted])
+			line.append("%s (sheet %s)" % [said, str(int(wanted)) if wanted != null else "–"])
+			if wanted != null and int(wanted) <= 8 and metres <= 20.0 and (int(held[0]) < 0 or int(held[0]) > int(wanted) * 2 + 1):
+				notes.append("%s at %d m, the trigger held: %s where the sheet says %d" % [data.display_name, metres, _shots(held), wanted])
+			if metres == RANGE_DISTANCES[0] and wanted != null and absi(int(held[0]) - int(wanted)) > 1:
+				faults.append("%s at %d m: %s where the sheet says %d" % [data.display_name, metres, _shots(held), wanted])
+			weighed += 1
+		lines.append("    %s: %s" % [data.display_name, "; ".join(line)])
+	Engine.time_scale = 1.0
+	print("    shots it takes to do 100, and in how long, over the sights:\n%s" % "\n".join(lines))
+	for note in notes:
+		print("    far off the sheet: %s" % note)
+	for fault in faults:
+		print("    the game and the sheet disagree: %s" % fault)
+	_check("every weapon is fired at a figure at %s m" % ", ".join(distances.map(func(metres: float) -> String: return str(int(metres)))), weighed == ARMORY.all().size() * distances.size())
+	_check("at 5 m every weapon takes the shots the sheet says, give or take one", faults.is_empty())
+	await _stick_grenade(player)
+	target.queue_free()
+	ground.queue_free()
+	weapons.equip(carried, ARMORY.grenades(ARMORY.STANDARD))
+	player.global_position = game.start.origin
+	player.velocity = Vector3.ZERO
+	await _wait(0.5)
+	_finished.append("balance")
+
+
+## A count of shots as [shots, seconds] that _fire_at_range() gives, to read:
+## "4 in 0.23 s", or "none in 28" if that many did not do it.
+func _shots(count: Array) -> String:
+	if int(count[0]) < 0:
+		return "none in %d" % int(count[2])
+	return "%d in %.2f s" % [int(count[0]), float(count[1])]
+
+
+## What the pack of 1944 throws, on the range: a stick grenade, which flies
+## end over end and goes off as any grenade does. The standard pack throws
+## the round one.
+func _stick_grenade(player: CharacterBody3D) -> void:
+	var weapons: Node3D = player.weapons
+	weapons.equip(ARMORY.weapons("1944"), ARMORY.grenades("1944"), ARMORY.grenade("1944"))
+	_move(player, Vector3(0.0, RANGE_HEIGHT + 0.05, 0.0))
+	player.rotation.y = 0.0
+	player.head.rotation.x = 0.25
+	await _wait(0.6)
+	var blasts := []
+	var note := func(at: Vector3) -> void: blasts.append(at)
+	Blast.exploded.connect(note)
+	Input.action_press("grenade")
+	await _wait(0.1)
+	Input.action_release("grenade")
+	await _wait(0.6)
+	var thrown := get_tree().get_nodes_in_group("grenade")
+	var stick: bool = thrown.size() == 1 and thrown[0].scene_file_path.ends_with("stick_grenade.tscn")
+	var turning: float = thrown[0].angular_velocity.length() if stick else 0.0
+	var kinds := thrown.map(func(one: Node) -> String: return one.scene_file_path.get_file())
+	await _wait(3.0)
+	Blast.exploded.disconnect(note)
+	print("    1944 throws %s, turning %.1f radians a second; it went off %s" % [kinds, turning,
+		blasts.map(func(at: Vector3) -> String: return "%.0f m ahead" % -at.z)])
+	_check("1944 throws a stick grenade, end over end, and it goes off", weapons.grenade_kind == "stick_grenade" and stick and turning > 1.0
+		and blasts.size() == 1 and blasts[0].y > RANGE_HEIGHT - 1.0 and -blasts[0].z > 5.0)
+	_check("and the standard pack the round one", ARMORY.grenade(ARMORY.STANDARD) == ARMORY.GRENADE and ARMORY.thrown(ARMORY.GRENADE).resource_path == "res://scenes/grenade.tscn")
+
+
+## Fires the weapon in hand at `target` set up `metres` off on the range, over
+## the sights, until it has taken 100 or `most` shots are out: with the
+## trigger held, or `paced`, a shot only once the kick of the last has come
+## down. Gives [the number of the shot that did it or -1, the seconds from the
+## first shot to that one, the shots fired].
+func _fire_at_range(player: CharacterBody3D, target: StaticBody3D, data: WeaponData, metres: float, most: int, paced: bool) -> Array:
+	var weapons: Node3D = player.weapons
+	_move(player, Vector3(0.0, RANGE_HEIGHT + 0.05, 0.0))
+	player.rotation.y = 0.0
+	target.global_position = Vector3(0.0, RANGE_HEIGHT, -metres)
+	target.taken = 0.0
+	weapons._mags[weapons._index] = data.mag_size
+	weapons._reserves[weapons._index] = data.mag_size * 3
+	weapons._reload_left = 0.0
+	weapons._bloom = 0.0
+	weapons._hot = 0.0
+	weapons._overheated = 0.0
+	player._recoil_target = Vector3.ZERO
+	player._recoil = Vector3.ZERO
+	player._trauma = 0.0
+	await _wait(0.25)
+	var eye: Vector3 = player.camera.global_position
+	player.head.rotation.x = atan2(RANGE_HEIGHT + TORSO_HEIGHT - eye.y, metres)
+	if not data.aim_spins:
+		Input.action_press("ads")
+		await _wait(data.ads_time + 0.1)
+	var first: int = weapons._rounds
+	var took := -1
+	var clock := 0.0
+	var began := -1.0
+	var done_at := 0.0
+	# On the real clock: one shot a frame is the most a weapon fires, and the
+	# frames of a test without a window do not come any faster for it.
+	var scale := Engine.time_scale
+	Engine.time_scale = 1.0
+	while weapons._rounds - first < most and clock < 8.0:
+		if target.taken >= 100.0:
+			break
+		var steady: bool = not paced or (player._recoil.length() < 0.002 and weapons._bloom < 0.05)
+		if data.automatic and not paced:
+			Input.action_press("fire")
+		elif steady and weapons._reload_left <= 0.0 and weapons._cooldown <= 0.0:
+			Input.action_press("fire")
+			await get_tree().process_frame
+			Input.action_release("fire")
+		await get_tree().process_frame
+		clock += get_process_delta_time()
+		if began < 0.0 and weapons._rounds > first:
+			began = clock
+		if target.taken >= 100.0 and took < 0:
+			took = weapons._rounds - first
+			done_at = clock
+	Engine.time_scale = scale
+	Input.action_release("fire")
+	Input.action_release("ads")
+	# A rocket is on its way a while: what it does counts once it is there.
+	if took < 0 and data.projectile:
+		await _wait(metres / data.projectile_speed + 0.3)
+		if target.taken >= 100.0:
+			took = weapons._rounds - first
+			done_at = began + metres / data.projectile_speed
+	var fired: int = weapons._rounds - first
+	await _wait(0.2)
+	return [took, maxf(done_at - began, 0.0), fired]
+
+
+## What tools/weapon_sheet.py works out for every weapon: the shots it takes
+## to do 100, aimed and standing, by the name of the weapon and the distance.
+## Empty if it cannot be asked.
+func _sheet_shots() -> Dictionary:
+	var said := []
+	var script := ProjectSettings.globalize_path("res://tools/weapon_sheet.py")
+	if OS.execute("python3", [script, "--shots"], said) != 0 or said.is_empty():
+		return {}
+	var parsed: Variant = JSON.parse_string(str(said[0]))
+	return parsed if parsed is Dictionary else {}
 
 
 ## How the view moves, tried out on the runway of the factory: the bob of a
@@ -846,7 +1231,7 @@ func _view() -> void:
 	var weapons: Node3D = player.weapons
 	var camera: Camera3D = player.camera
 	var hud: CanvasLayer = game.get_node("HUD")
-	var rifle: WeaponData = weapons.LOADOUT[0]
+	var rifle: WeaponData = weapons.loadout[0]
 	player.force_control = true
 	player.health = 1e6
 	for zone: RefCounted in game.zones:

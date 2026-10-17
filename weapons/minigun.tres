@@ -1,0 +1,54 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/minigun.scn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Minigun"
+viewmodel = ExtResource("2")
+shot_sound = &"minigun_fire"
+damage = 15.0
+headshot_multiplier = 1.5
+rounds_per_minute = 2000.0
+automatic = true
+max_range = 150.0
+falloff_start = 25.0
+falloff_end = 50.0
+min_damage_scale = 0.5
+mag_size = 450
+reserve_ammo = 0
+reload_time = 0.0
+hip_spread_deg = 1.0
+ads_spread_deg = 1.0
+move_spread_deg = 1.5
+bloom_per_shot_deg = 0.0
+bloom_max_deg = 0.0
+recoil_pitch_deg = 0.12
+recoil_yaw_deg = 0.2
+ads_recoil_scale = 1.0
+kick_back = 0.006
+kick_rotation = 0.008
+ads_time = 0.3
+ads_move_scale = 1.0
+flash_size = 0.3
+flash_prongs = 0
+hip_offset = Vector3(0.16, -0.27, -0.36)
+ads_offset = Vector3(0.16, -0.27, -0.36)
+hip_rotation_deg = Vector3(4, 5, -5)
+bot_sight = 45.0
+bot_range = 12.0
+move_scale = 0.7
+no_sprint = true
+switch_time = 0.8
+spin_up = 0.75
+spin_down = 1.0
+rounds_per_minute_start = 1200.0
+spin_ramp = 0.5
+ramp_spread_deg = 0.6
+aim_spins = true
+spun_move_scale = 0.6
+overheat_after = 4.0
+overheat_time = 3.0
+cooling = 0.25
+special = true

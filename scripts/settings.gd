@@ -21,7 +21,7 @@ const UPSCALER_ARGS: Array[String] = ["bilinear", "fsr1", "fsr2", "metalfx", "me
 const KEYS: Array[String] = [
 	"quality", "upscaler", "auto_scale", "render_scale", "vsync", "fullscreen", "show_fps",
 	"fov", "view_motion", "mouse_sensitivity", "stick_sensitivity", "invert_y", "volume", "music",
-	"enemy_theme", "difficulty", "prize",
+	"enemy_theme", "difficulty", "prize", "pack",
 ]
 const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
 ## What a difficulty changes, and nothing else does:
@@ -144,6 +144,9 @@ var difficulty := 1
 ## assets/prizes.json, or of a prize made on this machine (scripts/prize.gd).
 ## Chosen on the screen of a match.
 var prize := "flag"
+## What everybody carries in a match: a pack from assets/packs.json, see
+## scripts/armory.gd. Chosen on the screen of a match.
+var pack := "standard"
 ## Who the enemies are: a theme from enemy_themes.gd, robots unless chosen
 ## otherwise here or with --enemies=<theme> on the command line. It holds for
 ## the enemies that spawn from then on.
@@ -167,7 +170,7 @@ var _fringe_effect: CompositorEffect
 func _ready() -> void:
 	for theme in enemy_themes:
 		enemy_names.append(theme.capitalize())
-	if Benchmark.active:
+	if Benchmark.active or Benchmark.directing:
 		_read_args()
 	elif not SelfTest.active:
 		auto_scale = true
@@ -203,7 +206,7 @@ func put(key: String, value: Variant) -> void:
 		return
 	set(key, value)
 	apply()
-	if not Benchmark.active and not testing():
+	if not Benchmark.active and not Benchmark.directing and not testing():
 		_save()
 
 

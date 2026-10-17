@@ -12,6 +12,12 @@ const THEIRS := Color(1.0, 0.62, 0.25)
 ## seconds one stays.
 const LINES := 5
 const LINE_TIME := 6.0
+## The most of a side the table shows under each other, in one column.
+const TALL := 10
+## How high the table may be, in pixels of a screen 1080 high: from under the
+## score and the lines under it to above what is written in the middle. A
+## long one has smaller type.
+const ROOM := 440.0
 
 var _ours := Label.new()
 var _theirs := Label.new()
@@ -19,7 +25,9 @@ var _middle := Label.new()
 var _feed := Label.new()
 var _centre := Label.new()
 var _status := Label.new()
-var _board := Label.new()
+## The table under Tab: one column, or a side in each where they are big.
+var _board := HBoxContainer.new()
+var _columns: Array[Label] = [Label.new(), Label.new()]
 ## What the feed has to say: [text, seconds left].
 var _lines: Array[Array] = []
 ## Who brought this machine's player down last.
@@ -69,14 +77,17 @@ func _ready() -> void:
 	_status.position.y += 46
 	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_status)
-	_board.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	# Under the score, down to no further than what stands in the middle.
+	_board.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 124)
 	_board.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_board.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_board.add_theme_font_size_override("font_size", 20)
-	_board.add_theme_constant_override("outline_size", 6)
-	_board.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	_board.position.y -= 120
+	_board.add_theme_constant_override("separation", 64)
 	add_child(_board)
+	for column in _columns:
+		column.add_theme_font_size_override("font_size", 20)
+		column.add_theme_constant_override("outline_size", 6)
+		column.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_board.add_child(column)
 	for control: Control in [top, _ours, _middle, _theirs, _feed, _centre, _board]:
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Match.felled.connect(_on_felled)
@@ -119,7 +130,15 @@ func _process(delta: float) -> void:
 	_centre.text = text
 	_board.visible = over or Input.is_action_pressed("scoreboard")
 	if _board.visible:
-		_board.text = _table()
+		var table := _table()
+		var lines := 0
+		for column in table:
+			lines = maxi(lines, column.count("\n") + 1)
+		var font := clampi(int(ROOM / (lines * 1.4)), 13, 20)
+		for i in _columns.size():
+			_columns[i].text = table[i] if i < table.size() else ""
+			_columns[i].visible = i < table.size()
+			_columns[i].add_theme_font_size_override("font_size", font)
 
 
 func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
@@ -128,8 +147,8 @@ func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
 	if who == null:
 		return
 	var with := "explosion" if weapon == Match.BLAST else "melee" if weapon == Match.MELEE else ""
-	if weapon >= 0 and weapon < WEAPONS.LOADOUT.size():
-		with = WEAPONS.LOADOUT[weapon].display_name.to_lower()
+	if weapon >= 0 and weapon < WEAPONS.ARMORY.ALL.size():
+		with = WEAPONS.ARMORY.ALL[weapon].display_name.to_lower()
 	var text := "%s  ▸  %s" % [killer.title, who.title] if killer else "%s went down" % who.title
 	if with and killer:
 		text += "   (%s%s)" % [with, ", head" if head else ""]
@@ -144,18 +163,36 @@ func _say(text: String) -> void:
 		_lines.pop_front()
 
 
-## Everybody who plays, the best first, a side at a time.
-func _table() -> String:
+## Everybody who plays, the best first, a side at a time: the text of each
+## column. Sides of more than TALL stand next to each other, or the table
+## runs off the screen; so do the two halves of more than twice that who are
+## each on their own.
+func _table() -> PackedStringArray:
 	var me: RefCounted = Match.me()
+	var columns := PackedStringArray()
 	var rows := PackedStringArray()
 	var last := -1
 	var list: Array = Match.ranking()
-	if Match.mode.teams():
-		list.sort_custom(func(a: RefCounted, b: RefCounted) -> bool: return a.team < b.team)
+	var teams: bool = Match.mode.teams()
+	if teams:
+		# A side at a time, and in each the best first still.
+		var place := {}
+		for i in list.size():
+			place[list[i]] = i
+		list.sort_custom(func(a: RefCounted, b: RefCounted) -> bool: return a.team < b.team or (a.team == b.team and place[a] < place[b]))
+	var apart := list.size() > TALL * 2
 	for who: RefCounted in list:
-		if Match.mode.teams() and who.team != last:
+		if apart and not teams and rows.size() == ceili(list.size() / 2.0):
+			# Everybody for themselves: the better half on the left.
+			columns.append("\n".join(rows))
+			rows.clear()
+		if teams and who.team != last:
+			if apart and not rows.is_empty():
+				columns.append("\n".join(rows))
+				rows.clear()
 			last = who.team
 			var ours: bool = me != null and me.team == who.team
 			rows.append("%s%s   %d" % ["" if rows.is_empty() else "\n", "YOUR SIDE" if ours else "THE OTHER SIDE" if me else "SIDE %d" % (who.team + 1), Match.tally[who.team]])
 		rows.append("%s %-12s %3d kills  %3d deaths" % ["▸" if who == me else "  ", who.title, who.kills, who.deaths])
-	return "\n".join(rows)
+	columns.append("\n".join(rows))
+	return columns

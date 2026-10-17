@@ -133,7 +133,7 @@ func _wanted() -> bool:
 		Kind.AMMO:
 			return _player.weapons.ammo_room()
 		_:
-			return _player.weapons.grenades < _player.weapons.GRENADES
+			return _player.weapons.grenades < _player.weapons.most_grenades
 
 
 func _take() -> void:

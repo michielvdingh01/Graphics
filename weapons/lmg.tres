@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/lmg.scn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Light machine gun"
+viewmodel = ExtResource("2")
+shot_sound = &"lmg_shot"
+damage = 25.0
+headshot_multiplier = 1.8
+rounds_per_minute = 700.0
+automatic = true
+falloff_start = 40.0
+falloff_end = 80.0
+min_damage_scale = 0.6
+mag_size = 100
+reserve_ammo = 200
+reload_time = 4.5
+hip_spread_deg = 2.2
+ads_spread_deg = 0.2
+move_spread_deg = 2.5
+bloom_per_shot_deg = 0.25
+bloom_max_deg = 3.5
+recoil_pitch_deg = 1.0
+recoil_yaw_deg = 0.7
+kick_back = 0.04
+kick_rotation = 0.06
+ads_fov = 52.0
+ads_time = 0.3
+ads_move_scale = 0.45
+flash_size = 0.4
+flash_prongs = 4
+bot_sight = 70.0
+bot_range = 18.0
+move_scale = 0.85
+switch_time = 0.5
+hip_offset = Vector3(0.1, -0.115, -0.3)
+ads_offset = Vector3(0, -0.066, -0.25)
+hip_rotation_deg = Vector3(1.5, 2.5, -2)

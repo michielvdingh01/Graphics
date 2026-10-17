@@ -9,9 +9,11 @@ extends RefCounted
 ## Where somebody comes back is chosen each time by where everybody stands at
 ## that moment, see pick().
 ##
-## This is the first cut of it: of what the plan says makes a spot better or
-## worse, it knows an enemy close by, an enemy who sees the spot and somebody
-## standing on it. scripts/match.gd makes one when a level has become an arena.
+## Of what the plan says makes a spot better or worse, it knows an enemy close
+## by, an enemy who sees the spot, somebody standing on it, how far the
+## nearest enemy is and how near a friend, and it draws from the best three.
+## Distances are as the crow flies, not walked. scripts/match.gd makes one
+## when a level has become an arena.
 
 const WORLD := 1
 const GRID := 2.0
@@ -23,9 +25,17 @@ const TOO_NEAR := 12.0
 const TAKEN := 1.2
 ## Past this an enemy with a clear line to a spot is not counted as seeing
 ## it, when nothing nearer is safe.
-const SEEN_FROM := 60.0
-## How many of the spots a choice looks at closely, the furthest from the
-## enemy first: seeing costs two rays for every enemy.
+const SEEN_FROM := 80.0
+## With friends about: how far from the nearest enemy somebody best comes
+## back, in metres, and how near to the nearest friend. Nearer to the enemy
+## counts three times as heavily as further off; further from a friend than
+## that, and nearer to an enemy than to a friend, count against a spot too.
+const FRONT := Vector2(35.0, 60.0)
+const WITH_FRIENDS := 20.0
+## Of the best spots, how many are drawn from: not always the same one.
+const DRAWN := 3
+## How many of the spots a choice looks at closely, the best first: seeing
+## costs two rays for every enemy.
 const LOOKS := 24
 ## The most spots that are kept. A level with more floor than that has them
 ## further apart: the way to every spot is looked up three times, and over
@@ -34,6 +44,14 @@ const MOST := 500
 const NO_WAY := 1e9
 ## How far along the way to somewhere somebody faces who is put down, in metres.
 const LOOKS_AHEAD := 4.0
+## For hideouts(): how much further it may be to walk from one end than from
+## the other, as a share of the walk between them; how far from either end
+## it is at least; how many metres off the shortest way counts as a detour;
+## and how far apart two of them are at least.
+const FAIR := 0.12
+const END_CLEAR := 25.0
+const DETOUR := 15.0
+const AWAY := 30.0
 
 ## Where somebody can stand, on the floor.
 var spots := PackedVector3Array()
@@ -175,36 +193,47 @@ func line_up(side: int, count: int) -> Array[Transform3D]:
 
 
 ## Where somebody comes back whose enemies stand at `foes` and whose friends
-## at `friends`: the spot furthest from the nearest enemy that none of them
-## sees and nobody stands on. If no spot is safe, the one furthest from them
-## all, which is counted in `emergencies`.
+## at `friends`: a spot that none of the enemies sees, that no enemy is
+## within TOO_NEAR of and that nobody stands on. Of those, with friends about,
+## one near them and about FRONT from the nearest enemy: back in the fight in
+## a few seconds, and not at the far end of an arena as big as the dunes.
+## Without friends, or where nothing near the fight is safe, the one furthest
+## from the nearest enemy. If no spot is safe, the one furthest from them all,
+## which is counted in `emergencies`.
 ##
 ## `among` narrows it down to those spots, as around() gives them: a base.
 func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := PackedInt32Array()) -> Transform3D:
 	var gaps := PackedFloat32Array()
+	var worth := PackedFloat32Array()
 	gaps.resize(spots.size())
+	worth.resize(spots.size())
 	for i in spots.size():
 		var gap := INF
 		for foe in foes:
 			gap = minf(gap, spots[i].distance_to(foe))
 		gaps[i] = gap
+		worth[i] = gap
+		if not friends.is_empty():
+			var near := INF
+			for friend in friends:
+				near = minf(near, spots[i].distance_to(friend))
+			var off := 0.0
+			if not foes.is_empty():
+				off = maxf(FRONT.x - gap, 0.0) * 3.0 + maxf(gap - FRONT.y, 0.0) + (30.0 if near > gap else 0.0)
+			worth[i] = -(off + maxf(near - WITH_FRIENDS, 0.0))
 	var order := Array(among) if not among.is_empty() else range(spots.size())
-	order.sort_custom(func(a: int, b: int) -> bool: return gaps[a] > gaps[b])
+	order.sort_custom(func(a: int, b: int) -> bool: return worth[a] > worth[b])
+	var good := _safe(order.slice(0, LOOKS), gaps, foes, friends, DRAWN if not friends.is_empty() else 1)
+	if good.is_empty():
+		# Where the fight is, everything may be in somebody's sight: then the
+		# spots furthest from the enemy, as when there are no friends.
+		order.sort_custom(func(a: int, b: int) -> bool: return gaps[a] > gaps[b])
+		if not friends.is_empty():
+			good = _safe(order.slice(0, LOOKS), gaps, foes, friends, 1)
 	var best := -1
-	for spot: int in order.slice(0, LOOKS):
-		if gaps[spot] < TOO_NEAR:
-			break
-		if _taken(spots[spot], foes) or _taken(spots[spot], friends):
-			continue
-		var seen := false
-		for foe in foes:
-			if foe.distance_to(spots[spot]) < SEEN_FROM and _sees(foe, spots[spot]):
-				seen = true
-				break
-		if not seen:
-			best = spot
-			break
-	if best < 0:
+	if not good.is_empty():
+		best = good.pick_random()
+	else:
 		emergencies += 1
 		best = order[0]
 	var towards := _middle()
@@ -212,6 +241,25 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := Packed
 		if towards == _middle() or foe.distance_to(spots[best]) < towards.distance_to(spots[best]):
 			towards = foe
 	return _facing(spots[best], _ahead(spots[best], towards))
+
+
+## Of `candidates`, the first `wanted` that no enemy is too near to or sees
+## and that nobody stands on.
+func _safe(candidates: Array, gaps: PackedFloat32Array, foes: PackedVector3Array, friends: PackedVector3Array, wanted: int) -> Array[int]:
+	var good: Array[int] = []
+	for spot: int in candidates:
+		if gaps[spot] < TOO_NEAR or _taken(spots[spot], foes) or _taken(spots[spot], friends):
+			continue
+		var seen := false
+		for foe in foes:
+			if foe.distance_to(spots[spot]) < SEEN_FROM and _sees(foe, spots[spot]):
+				seen = true
+				break
+		if not seen:
+			good.append(spot)
+			if good.size() >= wanted:
+				break
+	return good
 
 
 ## The spots that are no nearer to the end of `side` than `from` metres to
@@ -262,6 +310,90 @@ func caches(count: int) -> PackedVector3Array:
 				best = i
 		chosen.append(spots[middle.pop_at(best)])
 	return chosen
+
+
+## Kinds of a spot a little out of the way, see hideouts().
+enum Hideout { OFF_THE_WAY, UP, IN_THE_OPEN }
+
+## `kinds.size()` spots a little out of the way, for what is worth going out
+## of one's way for: about as far to walk from either end, on a spot where
+## somebody can stand, as far apart as they can be and at least AWAY metres,
+## each of its own kind:
+## - OFF_THE_WAY: a detour of DETOUR metres or more off the shortest walk
+##   between the ends, into a room that does not lead on: in is easy, out is
+##   a fight;
+## - UP: well above the floor that most of the arena is on, up a stair or a
+##   ramp;
+## - IN_THE_OPEN: where whoever stands there is seen from much of the arena.
+## A kind there is no such spot for gives the best of IN_THE_OPEN instead.
+func hideouts(kinds: Array) -> PackedVector3Array:
+	var fair: Array[int] = []
+	for spot in spots.size():
+		var near := minf(walks[0][spot], walks[1][spot])
+		var far := maxf(walks[0][spot], walks[1][spot])
+		if far < NO_WAY and far - near < FAIR * length() and near > END_CLEAR:
+			fair.append(spot)
+	if fair.is_empty():
+		return PackedVector3Array()
+	var heights := PackedFloat32Array()
+	for spot in spots:
+		heights.append(spot.y)
+	heights.sort()
+	@warning_ignore("integer_division")
+	var ground := heights[heights.size() / 2]
+	var chosen := PackedVector3Array()
+	for kind: int in kinds:
+		var best := -1
+		var best_score := -INF
+		for spot: int in fair:
+			var at := spots[spot]
+			var apart := INF
+			for other in chosen:
+				apart = minf(apart, at.distance_to(other))
+			if apart < AWAY:
+				continue
+			var score := _out_of_the_way(spot, kind, ground)
+			if score > best_score:
+				best_score = score
+				best = spot
+		if best < 0 or best_score <= 0.0 and kind != Hideout.IN_THE_OPEN:
+			# Nothing of that kind: the most open spot there is, as far from
+			# the others as it can be.
+			best = -1
+			best_score = -INF
+			for spot: int in fair:
+				var apart := INF
+				for other in chosen:
+					apart = minf(apart, spots[spot].distance_to(other))
+				var score := _out_of_the_way(spot, Hideout.IN_THE_OPEN, ground) + minf(apart, AWAY) * 0.01
+				if best < 0 or score > best_score:
+					best_score = score
+					best = spot
+		chosen.append(spots[best])
+	return chosen
+
+
+## How well `spot` is out of the way in the manner of `kind`; 0 or less if
+## not at all.
+func _out_of_the_way(spot: int, kind: int, ground: float) -> float:
+	match kind:
+		Hideout.OFF_THE_WAY:
+			var detour := walks[0][spot] + walks[1][spot] - length()
+			return minf(detour, DETOUR * 2.5) - DETOUR + 0.1
+		Hideout.UP:
+			return spots[spot].y - ground - 1.5
+	# In the open: the share of a sample of the other spots that sees it.
+	var seen := 0
+	var asked := 0
+	@warning_ignore("integer_division")
+	var stride := maxi(spots.size() / 60, 1)
+	for i in range(spot % 7, spots.size(), stride):
+		if i == spot:
+			continue
+		asked += 1
+		if _sees(spots[i], spots[spot]):
+			seen += 1
+	return float(seen) / maxi(asked, 1)
 
 
 ## True if somebody standing at `from` sees the head or the chest of somebody
@@ -316,6 +448,17 @@ func _facing(at: Vector3, towards: Vector3) -> Transform3D:
 
 func _middle() -> Vector3:
 	return (spots[ends[0]] + spots[ends[1]]) * 0.5
+
+
+## How far it is to walk from `from` to `to`; NO_WAY where there is no way.
+func walk(from: Vector3, to: Vector3) -> float:
+	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	if path.is_empty() or path[-1].distance_to(to) > 1.5:
+		return NO_WAY
+	var length := 0.0
+	for i in path.size() - 1:
+		length += path[i].distance_to(path[i + 1])
+	return length
 
 
 ## How far it is to walk from `from` to every spot; NO_WAY where there is none.

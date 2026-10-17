@@ -31,7 +31,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 9
+const VERSION := 11
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -40,11 +40,15 @@ const CONFIG := "user://net.cfg"
 ## What a guest may have the host do to a node, see ask().
 const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm"]
 ## What a machine may report its player did, see player_did().
-const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt"]
+const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched", &"struck", &"knocked"]
 const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
 
-## Bits of what a player is doing, as they go over the wire.
-enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4 }
+## Bits of what a player is doing, as they go over the wire. SPINNING is the
+## barrels of a weapon that spin, and above HEAT is how hot it is, from 0 to
+## HOTTEST: see heat_bits().
+enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4, SPINNING = 8 }
+const HEAT := 4
+const HOTTEST := 15
 
 ## True while hosting or joined.
 var active := false
@@ -440,7 +444,7 @@ func _physics_process(delta: float) -> void:
 		doing |= SPRINTING
 	if player.dead:
 		doing |= DEAD
-	_state.rpc(player.global_position, player.rotation.y, player.head.rotation.x, player.velocity, doing, player.weapons.LOADOUT.find(player.weapons.current()))
+	_state.rpc(player.global_position, player.rotation.y, player.head.rotation.x, player.velocity, doing, player.weapons.ARMORY.index(player.weapons.current()))
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)
@@ -448,6 +452,16 @@ func _state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int, w
 	var puppet := _puppet()
 	if puppet:
 		puppet.net_state(at, yaw, pitch, speed, doing, weapon)
+
+
+## How hot a weapon is, from 0 to 1, as bits of what a player is doing.
+func heat_bits(heat: float) -> int:
+	return clampi(roundi(heat * HOTTEST), 0, HOTTEST) << HEAT
+
+
+## How hot the weapon of somebody is, from 0 to 1, from what they are doing.
+func heat_of(doing: int) -> float:
+	return float((doing >> HEAT) & HOTTEST) / HOTTEST
 
 
 ## Tells the others what this machine's player did, one of DEEDS, which their

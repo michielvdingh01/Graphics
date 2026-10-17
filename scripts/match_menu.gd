@@ -2,7 +2,9 @@ extends RefCounted
 ## The screen of a match, opened with "Multiplayer" on the title screen: what
 ## kind it is, where it is played and how many play, and a button to start.
 ## It is put together out of the widgets of scripts/menu.gd, which shows it.
-## Bots fill every place that is not the player's.
+## Bots fill every place that is not the player's. How many there can be is
+## the arena's to say: in the dunes twenty a side, and that many unless fewer
+## are chosen.
 
 ## The levels there are to play in: the name of each as Match.open() takes it.
 const ARENAS: Array[String] = ["works", "powerhouse", "factory", "depot", "dunes"]
@@ -15,10 +17,14 @@ const SIZES := {"works": "large", "powerhouse": "medium", "factory": "small", "d
 ## look like another.
 const NOT_OFFERED: Array[String] = ["soldiers_desert", "panic_clowns", "mannequin_zombie"]
 const PRIZE := preload("res://scripts/prize.gd")
+const ARMORY := preload("res://scripts/armory.gd")
+## How many a side, or in all, the button goes through above twelve, as far as
+## the arena takes them: one by one would be too many presses.
+const BIG: Array[int] = [16, 20, 24, 30, 40]
 
-## What was chosen last, for as long as the game runs. The prize is the one
-## thing of it that is kept after that: it is a setting, see Settings.prize.
-static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag"}
+## What was chosen last, for as long as the game runs. The prize and the pack
+## are kept after that: they are settings, see Settings.prize and Settings.pack.
+static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag", "pack": "standard"}
 ## Whether the screen is the list of prizes to choose from, and whether it
 ## was that a moment ago, so that the focus goes back to where it was.
 static var picking := false
@@ -34,6 +40,8 @@ static func build(menu: Node) -> void:
 		_pick(menu, prizes)
 		return
 	chosen.prize = Settings.prize if prizes.has(Settings.prize) or prizes.is_empty() else prizes[0]
+	var packs := ARMORY.names()
+	chosen.pack = Settings.pack if packs.has(Settings.pack) else ARMORY.STANDARD
 	var kinds: Array = Match.kinds.keys()
 	if not kinds.has(chosen.mode):
 		chosen.mode = kinds[0]
@@ -43,6 +51,7 @@ static func build(menu: Node) -> void:
 	var arena: Button = menu._button("", func() -> void: pass)
 	var size: Button = menu._button("", func() -> void: pass)
 	var prize: Button = menu._button("", func() -> void: pass)
+	var pack: Button = menu._button("", func() -> void: pass)
 	var enemies: Button = menu._button("", func() -> void: pass)
 	var difficulty: Button = menu._button("", func() -> void: pass)
 	# Who there is to play against: the robots, and every theme that has
@@ -54,13 +63,15 @@ static func build(menu: Node) -> void:
 	var refresh := func() -> void:
 		var numbers: Dictionary = Match.kinds[chosen.mode]
 		var teams: bool = (Match.MODES[chosen.mode].new() as RefCounted).teams()
-		if chosen.size < int(numbers.least) or chosen.size > int(numbers.most):
-			chosen.size = int(numbers.size)
+		if chosen.size < int(numbers.least) or chosen.size > Match.most(chosen.mode, chosen.level):
+			chosen.size = Match.usual(chosen.mode, chosen.level)
 		kind.text = "Kind  ·  %s" % numbers.title
 		arena.text = "Arena  ·  %s (%s)" % [(chosen.level as String).capitalize(), SIZES.get(chosen.level, "?")]
 		size.text = ("Players a side  ·  %d" if teams else "Players  ·  %d") % chosen.size
 		prize.visible = chosen.mode == "ctf" and not prizes.is_empty()
 		prize.text = "Prize  ·  %s" % str(PRIZE.spec(chosen.prize).get("name", chosen.prize))
+		pack.text = "Weapons  ·  %s" % ARMORY.title(chosen.pack)
+		pack.tooltip_text = str(ARMORY.spec(chosen.pack).get("about", ""))
 		enemies.text = "Against  ·  %s" % themes[maxi(themes.find(Settings.enemy_theme), 0)].capitalize()
 		difficulty.text = "Difficulty  ·  %s" % Settings.DIFFICULTY_NAMES[clampi(Settings.difficulty, 0, Settings.DIFFICULTY_NAMES.size() - 1)]
 	kind.pressed.connect(func() -> void:
@@ -69,14 +80,21 @@ static func build(menu: Node) -> void:
 		refresh.call())
 	arena.pressed.connect(func() -> void:
 		chosen.level = ARENAS[(ARENAS.find(chosen.level) + 1) % ARENAS.size()]
+		# As many as usually play there: twenty a side in the dunes, six in a hall.
+		chosen.size = 0
 		refresh.call())
 	size.pressed.connect(func() -> void:
-		var numbers: Dictionary = Match.kinds[chosen.mode]
-		chosen.size = chosen.size + 1 if chosen.size < int(numbers.most) else int(numbers.least)
+		var sizes := _sizes(int(Match.kinds[chosen.mode].least), Match.most(chosen.mode, chosen.level))
+		var next := sizes.find(chosen.size) + 1
+		chosen.size = sizes[next % sizes.size()]
 		refresh.call())
 	prize.pressed.connect(func() -> void:
 		picking = true
 		menu._show(menu.Screen.MATCH))
+	pack.pressed.connect(func() -> void:
+		chosen.pack = packs[(maxi(packs.find(chosen.pack), 0) + 1) % packs.size()]
+		Settings.put("pack", chosen.pack)
+		refresh.call())
 	enemies.pressed.connect(func() -> void:
 		# The setting of the game itself, so that it is one choice everywhere.
 		Settings.put("enemy_theme", themes[(maxi(themes.find(Settings.enemy_theme), 0) + 1) % themes.size()])
@@ -92,6 +110,20 @@ static func build(menu: Node) -> void:
 	if _picked_one:
 		_picked_one = false
 		_focus(menu, prize)
+
+
+## How many a side, or in all, there is to choose from between `least` and
+## `most`: one by one up to twelve, then in the steps of BIG.
+static func _sizes(least: int, most: int) -> Array[int]:
+	var sizes: Array[int] = []
+	for size in range(least, mini(most, 12) + 1):
+		sizes.append(size)
+	for size in BIG:
+		if size > 12 and size < most:
+			sizes.append(size)
+	if most > 12:
+		sizes.append(most)
+	return sizes
 
 
 ## Every prize there is, one under the other: choosing one goes back to the

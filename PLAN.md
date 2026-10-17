@@ -3453,6 +3453,558 @@ Op 15 oktober 2026 gemeld door Michiel, na het spelen van de duinen: (1) door de
 - **Meer voorwerpen hebben een botsvorm die groter is dan wat je ziet.** In de duinen: de rollen prikkeldraad (een doos tot 1,15 m: een schot op de benen van iemand erachter blijft hangen), en de bovenkant van de poort van het complex, waar tralies staan. In de andere levels: tafels (een doos tot de vloer: niemand schiet onder een tafel door), rekken en hekken. Voor dingen waar je niet door kan lopen maar wel doorheen kan schieten bestaat nog geen soort botsvorm: dat vraagt een eigen laag die wel het lopen tegenhoudt en geen schot.
 - **De showroom heeft nog de oude slagboom en wachttoren**, tot hij herbouwd wordt: `tools/build_level.sh showroom`.
 
+## Twintig tegen twintig: een veldslag in de duinen
+
+Op 15 oktober 2026 gevraagd: op grote maps veel meer bots kunnen instellen, voor een levendig potje in plaats van eindeloos rennen naar de andere kant; in de duinen bijvoorbeeld twintig tegen twintig. "Denk je dat dat goed gaat werken? Bouw het dan maar in." Gebouwd op de branch `veldslag`, vanaf de trunk met de muziek en de maat van de arena's erin. Michiel speelde het op 15 en 16 oktober ("Het werkt allemaal top. Dus merge het maar") en op dat woord is het op 16 oktober in de trunk gezet; niet gepusht.
+
+**Wat er nu is**
+
+- **Een arena kan meer spelers dragen dan een spelsoort toestaat.** `assets/match.json` heeft daarvoor een tabel `arenas`: de duinen dragen twintig per kant (`most`) en spelen er twintig als je niets anders kiest (`size`). Bij ieder voor zich telt dat dubbel: veertig. Capture the flag gaat ook tot twintig per kant. In de andere vier arena's blijft het zoals het was: zes per kant, twaalf bij ieder voor zich. `Match.most()` en `Match.usual()` zeggen het per soort en arena, en `--match=tdm:dunes` zonder aantal is twintig tegen twintig.
+- **Op het scherm Multiplayer** springt het aantal naar wat er in die arena gespeeld wordt zodra je een andere arena kiest: twintig per kant in de duinen, zes in een hal. De knop gaat daarna een voor een tot twaalf, en dan 16 en 20.
+- **Team deathmatch speelt tot een grens die meegroeit met de teams**: 50 bij zes per kant, 170 bij twintig, in tientallen (`grows` in `assets/match.json`). Met meer man vallen er evenredig meer doden; anders is het potje na drie minuten voorbij. Capture the flag (drie keer binnenbrengen) en ieder voor zich (25 per persoon) groeien niet mee.
+- **Je komt terug bij je eigen mensen, aan het front** (`scripts/arena.gd`, `pick()`). Tot nu toe was het de plek het verst van de dichtstbijzijnde vijand: in de duinen het andere eind van de kaart, 399 m lopen, bijna een minuut sprinten na elke keer doodgaan. Nu, zolang er teamgenoten zijn: een plek zo'n 35 tot 60 m van de dichtstbijzijnde vijand, binnen 20 m van een teamgenoot, dichter bij je eigen mensen dan bij de vijand, en zoals eerst buiten het zicht van elke vijand (nu tot 80 m in plaats van 60) en nooit binnen 12 m van een. Uit de beste drie wordt geloot. Dat is de regel uit het plan ("Spawnplekken"), met afstanden hemelsbreed in plaats van gelopen. Ligt aan het front alles in iemands zicht, dan wordt het de veilige plek het verst van de vijand, zoals vroeger; pas als ook die er niet is, is het een noodplek. Hij geldt in elke arena; bij ieder voor zich, zonder teamgenoten, blijft het de verste plek, en bij capture the flag kies je zoals eerst alleen op de grond van je eigen basis.
+- **Vierenveertig namen** in plaats van veertien, zodat geen twee bots dezelfde heten.
+- **Het scorebord onder Tab** zet de twee kanten naast elkaar zodra een kant meer dan tien man heeft; bij ieder voor zich met meer dan twintig de betere helft links. Twintig onder elkaar liep van het scherm. Het bord staat nu vanaf onder de stand en krijgt kleinere letters naarmate het langer is, zodat het niet meer over "OVER" en "Back in" heen valt; bij twintig per kant gaat de letter van 20 naar 14 punt. Binnen een kant staat de beste nu ook echt bovenaan: het sorteren op kant gooide de volgorde door elkaar.
+- **Drie besparingen**, omdat veertig figuren het grootste deel van hun kosten op de processor hebben:
+  - een bot verder dan 40 m van de camera denkt en loopt om de andere stap van de physics, met een stap die twee keer zo lang is (`FAR_OFF` in `scripts/bot.gd`); de bots van de twee helften wisselen elkaar af;
+  - een figuur verder dan 30 m wordt om het andere beeld geposeerd, verder dan 70 m om het derde, en buiten beeld om het vierde (`every` in `scripts/humanoid_rig.gd`, gezet door `scripts/puppet.gd`; de vijanden van de route poseren als vanouds elk beeld);
+  - een schot verder dan 80 m van de camera geeft geen flits aan de loop en geen inslag waar het landt; zijn spoor en geluid blijven, en ruiten breken als vanouds (`SHOWN` in `scripts/puppet.gd`).
+
+**Denk ik dat het goed werkt?** Op het beeld wel: twintig tegen twintig kost in de duinen gemiddeld zo'n 5 fps ten opzichte van zes tegen zes. De haperingen zijn het zwakke punt: die waren er al in de duinen, ook met zes tegen zes, en met veertig zijn het er ongeveer twee keer zoveel. Of het speelt zoals hij hoopt, staat onder "Wat ik niet kon beoordelen".
+
+**Gemeten** op 15 oktober 2026, 14:30 tot 15:00, M1 Pro aan de lader, load 3,7 tot 7,6, terwijl twee andere sessies hun tests draaiden en ook op de GPU maten. Op 3456×2160 met de instellingen van Michiel (zijn `settings.cfg`: MetalFX, de schaal die zichzelf zet), vsync uit, een wedstrijd van alleen bots in de duinen. De camera stond steeds 4 m achter de bot van kant 1 die het dichtst bij een vijand was, met zijn gezicht naar die vijand: zoals iemand die meevecht. Na 32 s, als de kanten elkaar gevonden hebben, 40 s gemeten. Om en om, twee rondes, vanaf bevroren kopieën: de nieuwe stand, de trunk met twintig per kant, de trunk met zes. Beide kopieën hadden tijdelijke tijdmetingen in het brein van de bots, en de nieuwe was nog van vóór de terugval op de verste veilige plek, die alleen iets doet als aan het front niets veilig is.
+
+| | Per beeld | p50 | p99 (1% low) | Beelden boven 33 ms, boven 50 ms | Physics-scripts | Overige scripts | Soldaten in beeld |
+|---|---|---|---|---|---|---|---|
+| Zes tegen zes, trunk | 12,43 en 12,60 ms | 12,1 en 12,5 ms | 18,4 en 16,3 ms (54 en 62 fps) | 14 en 12, 12 en 6 | 1,1 en 1,0 ms | 1,2 en 1,2 ms | 4,8 en 4,3 |
+| Twintig tegen twintig, trunk | 14,10 en 12,90 ms | 13,4 en 12,4 ms | 44,4 en 27,5 ms (23 en 36 fps) | 39 en 25, 25 en 18 | 4,0 en 3,4 ms | 3,4 en 3,2 ms | 17,6 en 8,6 |
+| Twintig tegen twintig, nu | 12,87 en 13,64 ms | 12,5 en 13,1 ms | 21,4 en 28,9 ms (47 en 35 fps) | 16 en 28, 14 en 22 | 2,9 en 3,4 ms | 2,1 en 2,6 ms | 16,1 en 16,0 |
+
+- **Het beeld wacht meestal op de GPU, niet op de figuren.** In een eerdere run met de figuren onzichtbaar (wel geposeerd) was het beeld niet sneller. De physics-scripts zijn vooral de bots; de overige scripts vooral het poseren. Wat de processor bespaart, gaat bij zes tegen zes op aan wachten op de GPU: daarom is het verschil in het gemiddelde kleiner dan dat in de scripts.
+- **Wat de besparingen opleveren**, om en om: het poseren kost 0,8 tot 1,2 ms minder per beeld, de bots 0,3 tot 0,6 ms. Dat de bots niet de helft goedkoper zijn: met de nieuwe manier van terugkomen staat het grootste deel binnen 40 m van wie meevecht. En de nieuwe stand heeft steeds zo'n 16 soldaten in beeld, de trunk de tweede keer 8,6: aan het front gebeurt meer.
+- **De haperingen.** Een beeld boven de 50 ms valt bij zes tegen zes in de duinen eens per vier tot zeven seconden, bij twintig tegen twintig eens per twee à drie. In zo'n beeld zit het meeste van de tijd buiten de scripts en buiten het tekenwerk op de processor (40 tot 60 ms), en daarna haalt de physics vijf tot acht stappen in. Er werden op die momenten geen pipelines gecompileerd en het navmesh werd niet bijgewerkt (beide geteld). Wat het wel is, heb ik niet gevonden: de Godot van deze laptop heeft geen symbolen voor een profiler. Twee keer was het een script in de processtap (60 en 97 ms), ook in de trunk.
+- **Tegen robots**, zoals Michiel speelt sinds de duinfixes de robots in een wedstrijd teruggaven: na het binnenhalen van die trunk om en om gemeten, twee rondes, 20 tegen 20 met de andere kant robots en met de andere kant soldaten, verder als hierboven (load 6 tot 11). Robots 13,82 en 13,71 ms per beeld, p99 30,7 en 23,9 ms, 11 en 11 beelden boven 50 ms; soldaten 13,94 en 13,70 ms, p99 24,3 en 22,7 ms, 11 en 10. Dat een robot in een stuk of twaalf losse delen uiteenvalt, kost dus niets wat te meten was.
+- **Terugkomen kost 4 ms in één stap**, zonder GPU gemeten: 2,4 ms een nieuw figuur aankleden en 1,6 ms een plek kiezen. Het aankleden heb ik ook op een andere thread laten doen terwijl de bot twee tellen weg is; dat liet per keer een object achter dat nooit werd opgeruimd (36 bij 36 doden), en het is er weer uit. Die beelden vielen bovendien niet op tussen de haperende.
+
+**Getest**, zonder GPU.
+
+- `tools/test_match.sh`: 85 controles, tegen 78 in de trunk. Nieuw zijn de knop die in de duinen op twintig springt en daarna 1 tot 12, 16 en 20 aanbiedt, en terug in een hal weer zes; de aantallen per soort en arena; dat `--match=tdm:dunes` twintig per kant speelt tot 170; veertig bots met elk een eigen naam; het scorebord met een kolom per kant; en een wedstrijd van twintig tegen twintig tot er twaalf zijn teruggekomen. Bij die twaalf (84 s wedstrijd) stond de dichtstbijzijnde vijand op het moment van terugkomen minstens 43 m weg en in het midden 50 m, de dichtstbijzijnde teamgenoot in het midden 12 m, en hun eigen eind in het midden 139 m: aan het front, niet aan het eind. In de fabriek kwam bij drie tegen drie niemand binnen 8 m van een vijand terug, zoals eerst.
+- `tools/selftest.sh` (404), `tools/test_humanoid.sh` (55), `tools/test_prize.sh` (122) en `tools/nettest.sh` (62, beide kanten): geslaagd. Na het binnenhalen van de duinfixes opnieuw: `tools/test_match.sh` 89 controles, de selftest 404 en `tools/test_humanoid.sh` 55, en een minuut twintig tegen twintig tegen robots met de speler erin: 105 doden, geen noodplek. De selftest faalde eerst op de nieuwe muziek van de trunk: de importcache van deze worktree was van voor dat nummer. Na het klonen van die twee bestanden uit de hoofdcheckout slaagde hij.
+- Veertig bots in de duinen, `tools/test_match.sh --match=tdm:dunes:20 --only-bots --soak=60`: 83 doden in een minuut, waarvan de eerste halve minuut lopen is, en geen enkele noodplek. Zonder de terugval op de verste veilige plek waren het er twee tot zeven in 45 s, en dan kwam die bot aan het andere eind terug.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het leuk is.** Ik heb niet gespeeld, alleen bots tegen bots gemeten en geteld. Of twintig tegen twintig in de duinen chaos is of een veldslag, of 35 tot 60 m van de vijand de goede afstand is om terug te komen, en of je nu genoeg tegenkomt: dat zegt het spelen.
+- **Of het halve tempo van verre bots te zien is.** Een bot verder dan 40 m beweegt 60 keer per seconde in plaats van 120, een figuur verder dan 30 m wordt om het andere beeld geposeerd. Ik verwacht dat niemand het ziet, maar heb het niet op het scherm in beweging gezien.
+- **De eerste halve minuut.** Beide kanten beginnen nog aan hun eigen eind, 399 m uit elkaar, en lopen eerst naar elkaar toe. Pas wie terugkomt, komt aan het front terug.
+- **Of de grens van 170 klopt.** Gerekend, niet gespeeld: hoe snel er bij twintig tegen twintig gescoord wordt, hangt af van hoe de bots en hij vechten.
+- **De haperingen zelf**: zie hierboven.
+
+**Nog open**
+
+- Bots lopen in de duinen vaak vast (80 tot 160 keer in 45 s bij veertig; ze komen er na anderhalve seconde uit). Dat stond al onder "Het potje bijgesteld": het navmesh van het land klopt niet overal met wat er staat.
+- Een plek kiezen en aankleden gebeurt nog op het moment van terugkomen. Het plan wil dat het kiezen over de twee tellen dat iemand weg is verdeeld wordt.
+- Over het net is niets hiervan geprobeerd: wedstrijden over het net zijn stap 4. Veertig bots twintig keer per seconde is een bericht van zo'n 2 kB.
+- Andere grote arena's: de grachten staan nog niet in de lijst. Een regel in `arenas` is genoeg.
+
+**Gezien**, op 1920×1200 met zijn instellingen, een wedstrijd van alleen bots: een beeld van het front (twee kanten door elkaar op een duinhelling, stof van inslagen, wapens en blikken van wie viel) en het bord aan het eind in twee kolommen van twintig onder "TEAM DEATHMATCH · to 170". Niet in beweging.
+
+**Wat Michiel bekijkt**
+
+- Spelen, twintig tegen twintig in de duinen: "Multiplayer" op het titelscherm, Arena tot Dunes, Start. Of meteen: `GODOT_WINDOW=1 .claude/worktrees/veldslag/tools/godot.sh -- --play --match=tdm:dunes`.
+- Alleen kijken hoe veertig bots het onder elkaar doen: `--only-bots` erachter.
+
+## Wapens: de slag, pakketten en speciale wapens (plan)
+
+**In de trunk gezet op 16 oktober 2026, op Michiels woord ("alles tot nu toe is top gebouwd"), stap 1 tot en met 4; niet gepusht. Stap 5 en de open punten hieronder zijn gebouwd op branch `wapenafbouw`: zie "Wapens afgebouwd" verderop. Stap 6, het afstellen, wacht op het spelen.**
+
+Op 15 oktober 2026 gevraagd: de slag met het wapen repareren, die alleen kon als alle kogels op waren; en een plan voor meer en vettere wapens, voor pakketten die bij een wedstrijd als set gekozen worden, en voor speciale wapens zoals een minigun en een raketwerper die niet in een pakket zitten maar op een ietwat moeilijk plekje in de map liggen, met weinig munitie. De minigun is sterk en heeft veel kogels, maar draait traag op en raakt na een paar seconden oververhit, waarna hij een paar seconden afkoelt. **De slag is gebouwd; de rest is een plan, waarvan niets gebouwd is.** Branch `wapenpakketten`.
+
+### De slag (gebouwd)
+
+- **Wat er mis was.** Slaan zat alleen achter de trekker, en alleen als het magazijn én de reserve van het wapen in de hand leeg waren (`_process` in `scripts/weapons.gd`). Met kogels op zak kon je dus nooit slaan.
+- **Nu heeft slaan een eigen toets**: V, en op een controller de rechterstick indrukken (`melee` in `project.godot`; beide waren vrij, ook in de sandbox). Hij werkt zodra de handen vrij zijn: niet tijdens het wisselen of gooien en niet midden in een slag, wel tijdens het richten, rennen of herladen. Een herlading breekt hij af zoals een granaat dat doet: de kogels die er nog niet in zaten komen er niet in, en patronen die al in het pompgeweer zaten blijven zitten. De lege trekker slaat nog steeds, met eerst de klik van een leeg wapen; de toets slaat zonder die klik. Het scherm met de besturing noemt de toets.
+- **Wat een slag doet is niet veranderd**: 60 schade, 0,5 s van begin tot eind, raak na 0,17 s, 2,1 m bereik. Twee slagen doden iemand met 100 health, de tweede valt na 0,67 s.
+- **Getest.** `tools/selftest.sh --fights` met twee nieuwe controles: met vijf kogels in het magazijn en een herlading bezig slaat de toets, breekt hij de herlading af en blijven de vijf kogels zitten, en die slag raakt zonder dat er een schot valt. De oude controle (lege trekker slaat) slaagt ook nog. De hele `tools/selftest.sh` slaagt, 403 controles, zonder GPU, naast de wedstrijdtests van een andere sessie.
+- **Wat niet gebouwd is**: anderen zien je niet slaan (de pop van een medespeler of bot heeft geen slag met een geweer, en er gaat geen bericht over de lijn), en bots slaan niet. Dat staat in stap 5.
+
+### Waar het plan op verder bouwt
+
+- **Iedereen draagt alle vijf wapens**, op 1 tot 5: `LOADOUT` in `scripts/weapons.gd`. Over de lijn gaat een wapen als zijn plaats in die lijst (`net.gd`, `puppet.gd`, `bot.gd`, `match_hud.gd`); een bot draagt er één, verdeeld over zijn kant (`ARMS` in `scripts/match.gd`).
+- **Een wapen is vier dingen**: de cijfers (`weapons/<naam>.tres`, `WeaponData`), het model in beeld met de handschoen (in code, `tools/models/weapons.gd`), het model dat een ander draagt (`*_held.scn`) en zijn geluiden (`assets/manifest.json`). De schoten zijn opnamen uit de CC0-bibliotheek die er al is, met gesynthetiseerde lagen eronder. Daarin zitten precies tien wapens: AK-47, SKS, Colt 1911, Walther PPQ, PPSh-41, Carl Gustav M45, Mosin-Nagant, Winchester Model 12, Benelli Nova en Mossberg. Van een minigun of een raket is er geen opname.
+- **Explosies bestaan al** (`scripts/blast.gd`): schade die afneemt met de afstand, ruiten, vaten die meegaan, brand, en wie gooide telt voor de kill. Een raket gebruikt dat.
+- **De arena kent de loopafstanden** vanaf beide uiteinden en legt cellen halverwege, zo ver mogelijk uit elkaar (`Arena.caches()`). Speciale wapens gebruiken dezelfde afstanden met een andere score.
+
+### Wat de vijf nu doen, doorgerekend
+
+Tijd tot de kill van iemand met 100 health, in seconden, met tussen haakjes het aantal treffers; gericht en alleen in het lijf. Gerekend uit de `.tres`-bestanden met de spreiding zoals `_fire()` die verdeelt; een lading hagel telt het deel dat op een romp van 45 bij 60 cm valt. Terugslag, bloom en bewegen tellen niet mee.
+
+| | 5 m | 10 m | 20 m | 35 m | 50 m | 80 m | 120 m |
+|---|---|---|---|---|---|---|---|
+| Karabijn | 0,29 (4) | 0,29 (4) | 0,29 (4) | 0,39 (5) | 0,48 (6) | 0,68 (8) | 0,68 (8) |
+| Pistoolmitrailleur | 0,33 (6) | 0,33 (6) | 0,47 (8) | 0,93 (15) | 1,60 (25) | – | – |
+| Shotgun | 0 (1) | 1,50 (3) | – | – | – | – | – |
+| Scherpschuttersgeweer | 0,35 (2) | 0,35 (2) | 0,35 (2) | 0,35 (2) | 0,35 (2) | 0,35 (2) | 0,71 (3) |
+| Pistool | 0,30 (3) | 0,30 (3) | 0,30 (3) | 0,60 (5) | 0,75 (6) | 0,75 (6) | 0,75 (6) |
+
+- De shotgun doodt met één schot tot ongeveer 7 m, de karabijn is het snelst van 7 tot 20 m en het scherpschuttersgeweer vanaf 20 m: elk heeft zijn eigen afstand.
+- **De pistoolmitrailleur heeft er geen.** Gericht is de karabijn op elke afstand sneller (0,29 tegen 0,33 s). Alleen vanaf de heup wint hij, op 10 m 0,33 tegen 0,39 s, en hij richt sneller (0,13 tegen 0,20 s) en loopt gericht harder (85 tegen 60%). Of dat in het spel genoeg is, laat de meting van stap 1 zien.
+- **Het pistool is tot 20 m bijna even snel als de karabijn** (0,30 tegen 0,29 s). Als wapen voor als je magazijn leeg is mag dat. In een pakket waar het naast een sterker pistool ligt, moet het anders.
+
+### Het ontwerp
+
+**Een wapenkast en pakketten**
+
+- **Alle wapens staan in één lijst** (`ARMORY` in `scripts/weapons.gd`, met de `.tres`-bestanden), waar alleen wapens bij komen en nooit een van plaats verandert. Over de lijn gaat de plaats in die lijst: een pop of een bot kan dan elk wapen dragen, ook een speciaal wapen. `Net.VERSION` gaat omhoog.
+- **Een pakket is een regel in `assets/packs.json`**, zoals een buit in `prizes.json`: een naam, een zin uitleg, de wapens in de volgorde van de toetsen (twee tot vijf), hoeveel granaten en welke, en eventueel een regel die het pakket anders maakt (bijvoorbeeld een slag die met één klap doodt). Een nieuw pakket is een regel erbij.
+- **In een wedstrijd draagt iedereen hetzelfde pakket**, mensen en bots. Dan hoeven pakketten niet tegen elkaar opgewassen te zijn, alleen de wapens binnen een pakket tegen elkaar, en tegen de speciale wapens. Zelf een hoofdwapen kiezen binnen het pakket, zoals een klasse bij Call of Duty, kan later.
+- **De host kiest het pakket** op het scherm "Multiplayer" ("Weapons: Standard"), en het wordt onthouden zoals de buit (`Settings`). Gasten krijgen het mee in de opzet van de wedstrijd. Vanaf de opdrachtregel: `--pack=<naam>`. De route en de sandbox houden het standaardpakket.
+- **Bots** krijgen hun wapen uit de hoofdwapens van het pakket, verdeeld over hun kant zoals nu. De regel voor arena's langer dan 300 m wordt dan: "het wapen van het pakket dat het verst reikt", in plaats van het scherpschuttersgeweer.
+
+**De pakketten, als eerste voorstel**
+
+| Pakket | Wapens (op 1, 2, ...) | Waar het past | Wat er nieuw voor gebouwd moet worden |
+|---|---|---|---|
+| Standaard | karabijn, pistoolmitrailleur, shotgun, scherpschuttersgeweer, pistool | overal | niets |
+| Van dichtbij | pistoolmitrailleur, dubbelloops, machinepistool, revolver; drie granaten | fabriek, depot, de straten van de grachten | dubbelloops, machinepistool, revolver |
+| Ver weg | grendelgeweer, gevechtsgeweer, revolver | duinen, fabrieksterrein | grendelgeweer, gevechtsgeweer |
+| 1944 | PPSh met trommel, Mosin-Nagant, Model 12 (trench gun), Colt 1911; steelhandgranaat | overal, en het klinkt echt: de opnamen zijn van precies deze wapens | vier modellen en een granaat; de schoten zijn er al |
+| Zwaar | lichte mitrailleur, pompgeweer, revolver; met de mitrailleur loop je langzamer | centrale, fabrieksterrein | lichte mitrailleur |
+| Alleen pistolen | pistool, revolver, machinepistool, Colt 1911; één slag is dodelijk | om te lachen met vrienden | niets na de pakketten hierboven |
+
+De nieuwe wapens als eerste gok, in dezelfde rekensom (gericht, in het lijf):
+
+| | Per treffer | Schoten per minuut | Magazijn | Tot 20 m | 50 m | Waar het voor is |
+|---|---|---|---|---|---|---|
+| Revolver | 55 | 150 | 6 | 0,40 (2) | 1,20 (4) | twee treffers tot 25 m; een schot in het hoofd is er één |
+| Dubbelloops | 12 × 11 | twee snel na elkaar | 2 | één schot tot 6 m | – | het hardste van dichtbij; daarna herladen |
+| Machinepistool | 14 | 1 100 | 20 | 0,38 tot 10 m | – | vanuit de heup en rennend |
+| Lichte mitrailleur | 24 | 700 | 100 | 0,34 (5) | 0,34 (5) | lang doorvuren; traag richten, 4,5 s herladen, langzamer lopen |
+| Grendelgeweer | 105 | 45 | 5 | één schot | één schot | één treffer in het lijf tot ruim 120 m; 1,3 s tussen schoten |
+| Gevechtsgeweer | 40 | 330 | 20 | 0,36 (3) | 0,36 (3) | halfautomatisch, voor de middenafstand |
+
+De vier wapens van 1944 krijgen hun cijfers bij het bouwen, met dezelfde regels.
+
+**Wanneer een pakket in balans is**, zodat dat gemeten kan worden in plaats van gevoeld:
+
+- **Elk wapen in een pakket is ergens het snelst**, gericht of vanaf de heup, en geen wapen zit op elke afstand binnen 10% van het snelste. Nu zakt de pistoolmitrailleur daarvoor.
+- **Op zijn eigen afstand doodt een wapen in 0,25 tot 0,40 s.** Een wapen dat met één treffer doodt (de shotgun en de dubbelloops van dichtbij, het grendelgeweer) betaalt met tijd tussen de schoten (0,9 s of meer), een klein magazijn en een grens aan zijn afstand of een kijker die beweegt.
+- **Een pistool is nergens sneller dan het hoofdwapen van zijn pakket op diens eigen afstand**, behalve in "Alleen pistolen".
+- **Het gereedschap.** `tools/weapon_sheet.py` (zonder GPU) zet per pakket de tabel hierboven op een blad, gericht, vanaf de heup en lopend, met een lijn per wapen. Een controle in de selftest laat elk wapen in het spel zelf op een pop vuren op 5, 10, 20, 40 en 80 m, met terugslag en bloom, en vergelijkt dat met het blad. En `tools/test_match.sh --pack=<naam> --only-bots` telt de kills per wapen: een wapen dat meer dan twee keer zijn deel haalt, is verdacht. Bots spelen anders dan mensen, maar een uitschieter zie je er wel mee.
+
+**Speciale wapens**
+
+- **Ze zitten in geen pakket.** Ze liggen in de arena op een rek, met de munitie die erbij hoort en verder niets: een blik munitie vult ze niet aan.
+- **Een extra plaats, op 6.** Wie het oppakt heeft het meteen in handen. Is het leeg, dan gooit hij het weg en heeft hij weer wat hij had. Wie sterft laat het vallen met wat erin zit; het ligt dan twintig seconden voor het terug naar zijn rek gaat.
+- **De klok.** Een speciaal wapen ligt er voor het eerst één minuut na het begin, en daarna anderhalve minuut nadat het vorige op is of verloren. Iedereen hoort dat het er ligt, ziet een regel in het overzicht van wie wie neerhaalde ("Rocket launcher is up") en ziet vijf seconden een teken door de muren heen, zoals bij de buit. De getallen staan in `assets/match.json` en zijn eerste gokken.
+- **Elk pakket noemt welke speciale wapens er liggen**, standaard de minigun en de raketwerper. "1944" kan later een vlammenwerper hebben (er is al brand die zich verspreidt), en de host kan ze uitzetten.
+
+**De minigun**
+
+- **Opdraaien.** Vanuit stilstand draaien de lopen 0,75 s op voor het eerste schot, en de vuursnelheid loopt daarna in 0,5 s op van 1 200 naar 2 000 schoten per minuut. Wie de richtknop vasthoudt laat de lopen draaien zonder te vuren: dan schiet hij meteen, maar loopt hij half zo hard en hoort iedereen hem. Losgelaten draaien de lopen in 1 s uit, en zolang ze nog draaien vuurt hij meteen weer.
+- **Sterk van dichtbij.** 15 per kogel, 1° spreiding op volle toeren (1,6° tijdens het opdraaien), schade naar de helft tussen 25 en 50 m. Dat is 0,18 s tot 10 m, 0,33 s op 20 m (de karabijn 0,29) en 1,3 s op 35 m: een kamer leegmaken, niet over het veld heen schieten.
+- **Hitte.** Na 4 s aan één stuk vuren (ongeveer 130 kogels) is hij oververhit: 3 s kan hij niets, met stoom en het tikken van metaal dat afkoelt. Losgelaten zakt de hitte 25% per seconde, dus wie in stoten van twee à drie seconden vuurt, houdt hem aan de gang. De lopen gloeien op naarmate hij heter wordt, van donkerrood naar oranje; ook anderen zien dat. In beeld staat een balk met de hitte naast de munitie.
+- **Munitie.** 450 kogels in een kist aan de zijkant, zonder herladen: drie à vier keer oververhit.
+- **Dragen.** Lopen op 70% (3,5 m/s), niet rennen, niet richten door een vizier. Wisselen naar en van de minigun duurt 0,8 s. Tijdens het vuren trilt het beeld licht en klimt het een beetje.
+- **Het model**: zes lopen in een bundel met een ring voorop, een motorhuis, een draaghandgreep, een greep voor en een pistoolgreep achter, en de kist met een patronenband naar de kast. De band schuift mee als hij vuurt; een op de drie kogels is een lichtspoor; de hulzen vallen eronder uit.
+- **Het geluid**: een motor die oploopt (uit de machinegeluiden die er zijn, met een stijgende toon erover), een brul in plaats van losse schoten (korte stukjes van de AK-47 en de PPSh om de 30 ms over elkaar, met hun lage kant), een staart als hij loslaat, en stoom en tikken als hij oververhit is. Elk in twee of drie varianten om op het oor te kiezen.
+
+**De raketwerper**
+
+- **Een RPG-7**: een buis met de kegelvormige kop voorop, houten hitteschilden en een kijker links. Herladen is een nieuwe kop die de linkerhand voorin de buis duwt.
+- **Drie raketten**: één in de buis en twee op de rug. Herladen 2,6 s.
+- **De raket** vliegt recht, 45 m/s, met een vlam en een rookspoor: op afstand zie je hem komen en kun je opzij. Na 3 s (135 m) ontploft hij vanzelf.
+- **De explosie** is die van een vat, groter: 6 m bereik, de volle 130 binnen 1,5 m, daarbuiten aflopend; een voltreffer doet 150. Ruiten, vaten en wat er staat gaan mee, via `blast.gd`. Je eigen raket raakt jou ook, zoals je eigen granaat.
+- **Richten** door de kijker, 1,5 keer vergroot. Lopen op 85%.
+- **Het geluid**: een holle klap met een sissende start, een sissend gebrul dat met de raket meevliegt, en de explosie die er is met meer laag.
+
+**Een ietwat moeilijk plekje**
+
+- **Uitgerekend uit het navmesh**, zoals de cellen, zodat elk level ze meteen heeft, zonder herbouwen of bakken. Per plek in de arena wordt gekeken naar:
+  - **eerlijkheid**: van beide bases even ver lopen, op 10% van de lengte van de arena;
+  - **omweg**: hoeveel verder het is dan de kortste weg tussen de bases (de loopafstand van beide bases samen min de lengte);
+  - **open**: welk deel van de andere plekken hem ziet;
+  - **hoogte**: boven de gewone vloer van de arena, op een galerij, een dak of boven aan een trap.
+- **Moeilijk is één van drie soorten**: een doodlopend stuk 15 tot 40 m van de weg af met één ingang (erin kom je wel, eruit moet je vechten); een hoge plek met één trap of helling erheen; of een open plek waar wie het pakt door een groot deel van de arena gezien wordt. Gekozen worden de twee beste, minstens 30 m uit elkaar en elk van een andere soort: de minigun bijvoorbeeld in een doodlopend stuk, de raketwerper hoog of in het open.
+- **Een level kan het zelf zeggen.** In `assets/arenas.json` (nieuw, en hetzelfde bestand dat stap 2b van de wedstrijden noemt) een plek per wapen, en voor levels die nog gebouwd worden een merkteken `Level/Arena/Special` uit de bouwdoos. Dat laatste is werk voor de agent van "Kit-ruimtes".
+- **Alles is te lopen**, ook hier: bots springen niet. Een plek waar alleen een mens kan komen (een sprong op een container) is mogelijk, maar dan vecht geen bot er ooit om.
+- **Het keurmerk** (`tools/arena_sheet.py`, als dat er is) zet de rekken op de kaart, en per rek komt er een beeld uit het spel, vanaf de plek zelf en vanaf de weg ernaartoe.
+
+**Over de lijn**
+
+- De host houdt de rekken bij (ligt er, gepakt door wie, ligt op de grond) en vertelt het wie later binnenkomt. Een gast vraagt de host om iets te pakken, zoals bij de buit.
+- Een raket is een bericht zoals een granaat die gegooid wordt (waarvandaan, met welke snelheid). Elke machine laat hem vliegen; de machine van de schutter beslist waar hij inslaat, en de schade gaat via de host met de naam van de schutter.
+- De minigun vuurt 33 keer per seconde: niet één bericht per schot, maar één per frame met alle kogels van dat frame.
+
+### Wat het kost en wat ik niet weet
+
+- **Modellen in beeld.** Bij het overdoen van de wapens kostte een wapen met handen in beeld 0 tot 1 fps (zie "De wapens opnieuw"). Een minigun met zes lopen en een band wordt groter dan de karabijn; meten zoals toen, om en om.
+- **De minigun in vuur** is het grootste risico: 33 lichtsporen, inslagen, hulzen en geluiden per seconde, waar het spel nu hooguit 15 kent (de pistoolmitrailleur). Meten: 4 s doorvuren in de fabriek op 3456×2160 met MetalFX, om en om met de karabijn. Kost het meer dan 1 ms, dan een huls op de drie en een inslaggeluid op de twee.
+- **De eerste keer.** De rook van een raket, gloeiende lopen en de nieuwe modellen moeten in `Fx.rehearse()`, anders hapert het de eerste keer dat ze in beeld komen.
+- **Of het leuk is**, en of de getallen goed zijn: dat zegt het spelen met vrienden, niet de rekensom. De tabellen hierboven tellen geen terugslag en geen bewegen.
+- **Over een echt netwerk** is nog nooit gespeeld; een minigun en raketten maken dat niet makkelijker.
+
+### De stappen
+
+Stap 1 raakt de bestanden die elk wapen raakt (`weapons.gd`, `net.gd`, `puppet.gd`, `bot.gd`, `match.gd`, `match_menu.gd`) en gaat dus eerst, alleen. Daarna kunnen stap 2 en stap 4a naast elkaar: 4a voegt alleen wapens toe, in eigen functies van de modelbouwer en eigen `.tres`-bestanden.
+
+| Stap | Wat | Wacht op | Wat Michiel ervan bekijkt |
+|---|---|---|---|
+| 0. De slag | gebouwd, op deze branch | – | spelen en V indrukken |
+| 1. Kast en pakketten | de lijst van alle wapens, `assets/packs.json` met Standaard en twee pakketten uit de vijf die er zijn, de keuze op het scherm en met `--pack=`, over de lijn, bots uit het pakket, het blad en de controle in het spel voor de balans | – | het balansblad, en een potje met een ander pakket |
+| 2. Speciale wapens, en de minigun | het rek, de klok, de plekken, plaats 6, laten vallen bij doodgaan, opdraaien en hitte in de wapendata en in beeld; de minigun met model, model voor anderen en geluiden | 1 | `tools/hear.py` voor het opdraaien, het vuren en de oververhitting, elk in varianten; een blad van het model in rust, vurend en gloeiend; spelen met `--give=minigun` |
+| 3. De raketwerper | de raket, het spoor, de explosie, herladen met een nieuwe kop, model en geluiden | 2 | de geluiden, een blad, spelen |
+| 4a. 1944 | PPSh met trommel, Mosin-Nagant, Model 12, Colt 1911, steelhandgranaat | 1 | een blad per wapen, de schoten beluisteren, spelen met `--pack=1944` |
+| 4b. Van dichtbij | revolver, dubbelloops, machinepistool | 1 | idem |
+| 4c. Ver weg en Zwaar | grendelgeweer, gevechtsgeweer, lichte mitrailleur | 1 | idem |
+| 5. Bots en de slag voor anderen | bots die een speciaal wapen gaan halen en ermee vechten (vanaf Hardened), bots die van dichtbij slaan, en de pop die zichtbaar slaat | 2, 3 | spelen op Hard |
+| 6. Afstellen | naar wat er na het spelen met vrienden van gezegd wordt | wat er dan staat | |
+
+**Wat Michiel koos**, dezelfde dag:
+
+1. Iedereen in een wedstrijd draagt hetzelfde pakket.
+2. De slagtoets blijft V.
+3. Twee slagen om te doden, ook in "Alleen pistolen": de regel dat daar één slag doodt is vervallen.
+4. Speciale wapens alleen waar je kunt lopen.
+5. Alle pakketten tegelijk: stap 4a, 4b en 4c worden één stap.
+6. Je eigen raket raakt jou ook.
+
+### Stap 1: de wapenkast en de pakketten (gebouwd)
+
+- **`scripts/armory.gd`** kent alle wapens (`ALL`), in een volgorde die alleen aan het eind groeit; de vijf die er waren hebben hun oude plaats, zodat een spel met anderen er niets van merkt. Een wapen heet naar zijn bestand in `weapons/`. Over de lijn, in de handen van een bot en in de regel van wie wie neerhaalde is een wapen zijn plaats in die lijst.
+- **`assets/packs.json`** heeft alle zes pakketten, met per pakket de wapens op 1 en verder, wat bots dragen (en in een arena van meer dan 300 m), het wapen voor als je magazijn leeg is (`sidearm`) en de granaten. Een pakket dat een wapen noemt dat nog niet gebouwd is, wordt niet aangeboden; nu is dat alleen Standaard.
+- **`scripts/weapons.gd`** draagt in een wedstrijd het pakket van de wedstrijd en elders Standaard, in dezelfde volgorde als altijd. `equip()` neemt een ander pakket in één keer op: modellen, magazijnen, reserves en granaten. Alleen de modellen van het pakket worden gemaakt, niet die van alle wapens.
+- **Het scherm "Multiplayer"** heeft een regel "Weapons", die langs de pakketten gaat en wordt onthouden (`Settings.pack`). Vanaf de opdrachtregel: `--pack=<naam>`. Bots krijgen hun wapen uit het pakket; hoe ver een bot ziet en op welke afstand hij vecht, staat nu bij het wapen (`bot_sight`, `bot_range`) in plaats van in twee lijsten in `bot.gd`.
+- **`Net.VERSION` is 10.**
+- **Het balansblad**, `tools/weapon_sheet.py`, zonder GPU: per pakket vier grafieken (gericht, vanaf de heup, en beide lopend) van de tijd tot de kill per afstand, de banden waar elk wapen het snelst is, en wat er mis is. Het weegt gericht tegen gericht en heup tegen heup; afstanden waar niemand binnen een seconde doodt tellen niet. Het werkt op de `.tres`-bestanden, dus een wapen kan gewogen worden voor het een model heeft. Het blad van Standaard: `benchmark/sheets/weapons_standard.png`.
+- **De pistoolmitrailleur doet 20 per kogel in plaats van 17.** Het blad liet zien dat hij nergens het snelst was: gericht won de karabijn, vanaf de heup het pistool. Met 20 is hij het snelst van 7 tot 12 m gericht en tot 20 m vanaf de heup (5 kogels, 0,27 s); de karabijn houdt 13 tot 32 m en het scherpschuttersgeweer alles daarboven. Bots met een pistoolmitrailleur doen daarmee ook 18% meer schade.
+- **Wat het blad nog over het pistool zegt**: vanaf de heup is het van 13 tot 20 m het snelst (34 per kogel en 1° spreiding). Als wapen voor als je magazijn leeg is, is dat te sterk volgens de regel; ik heb het gelaten, omdat het pistool zoals het is jouw keuze is.
+- **Getest**: `tools/selftest.sh` (407 controles), `tools/test_match.sh` (77) en `tools/nettest.sh` (62) slagen. De selftest kijkt nu ook of op de route het standaardpakket gedragen wordt in de volgorde van de toetsen, of een pakket aangeboden wordt precies als al zijn wapens er zijn, of een ander pakket helemaal wordt opgenomen (twee wapens op 1 en 2, niets op 5, zijn granaten) en of een schot met de plaats in de kast over de lijn gaat.
+
+### Stap 2: speciale wapens, en de minigun (gebouwd)
+
+- **De wapendata kent nu wat een speciaal wapen anders maakt** (`scripts/weapon_data.gd`): hoe hard je ermee loopt (`move_scale`), of je ermee kunt rennen (`no_sprint`), hoe lang wisselen duurt (`switch_time`), lopen die opdraaien (`spin_up`, `spin_down`, de vuursnelheid die van `rounds_per_minute_start` naar de volle oploopt in `spin_ramp`, extra spreiding tot dan), richten dat de lopen laat draaien in plaats van te richten (`aim_spins`), hitte (`overheat_after`, `overheat_time`, `cooling`), `special` en een `projectile` voor wat geen kogel is.
+- **In de handen** (`scripts/weapons.gd`): een speciaal wapen komt na het pakket, op 6. `take_special()` neemt het op en brengt het omhoog, `drop_special()` laat het los en zegt wat erin zat. Leeggeschoten wordt het na een derde seconde weggegooid en komt wat je ervoor had weer omhoog. Een blik munitie vult het niet. Lopen die draaien vuren zoveel kogels als de vuursnelheid op dat moment vraagt, ook meer dan één per beeld; ze brullen als één geluid dat rondgaat in plaats van met een geluid per schot, en een op de drie kogels is een lichtspoor, een op de twee inslagen klinkt. Warm geschoten gloeien de lopen, naar de monding toe het felst (`glow` in `shaders/finish.gdshader`). Onder de naam van het wapen staat een balk met de hitte; oververhit staat er OVERHEATED.
+- **De minigun** (`weapons/minigun.tres`, het model `_minigun()` in `tools/models/weapons.gd`, 6 248 driehoeken zonder handen): de getallen van het plan. 0,75 s opdraaien voor het eerste schot, daarna van 1 200 naar 2 000 per minuut, 15 per kogel, na 4 s vuren 3 s oververhit, 450 kogels, lopen op 70% en niet rennen, met de richtknop draaien de lopen alvast en loop je op 60% daarvan. Wisselen duurt 0,8 s.
+- **Het rek** (`scripts/stash.gd`): een lage sokkel met een gloeiende rand, het wapen draait erboven in een warm licht. Leeg staat er een klok boven ("MINIGUN 0:42"), te zien tot 45 m. Is het er, dan zegt de wedstrijd "Minigun is up" en is de naam vijf seconden door de muren te zien. Wie het pakt, laat het rek leeg tot het wapen op is of verloren; dan staat het er 90 s later weer. Wie ermee sterft laat het liggen waar hij viel, met wat erin zat, twintig seconden lang.
+- **De plek** (`Arena.hideouts()`): even ver lopen van beide uiteinden (op 12% van de lengte), minstens 25 m van elk uiteinde, en per wapen een andere soort lastig: het eerste in een omweg van 15 m of meer van de kortste weg tussen de uiteinden, het tweede hoog (anderhalve meter boven de gewone vloer of meer), en waar dat er niet is in het open, waar de meeste plekken het zien. Ze liggen minstens 30 m uit elkaar. `assets/arenas.json` kan per level een plek per wapen noemen; dat bestand bestaat nog niet. In de fabriek staat de minigun 32 m van het dichtstbijzijnde uiteinde.
+- **Een wedstrijd** zet de speciale wapens van het pakket uit (`specials` in `assets/packs.json`, anders de minigun en de raketwerper), de eerste keer na 60 s en daarna 90 s nadat het vorige op is (`specials` in `assets/match.json`). Bots pakken ze niet op: dat is stap 5.
+- **Geluid**, elk gesynthetiseerd uit wat er al lag: `minigun_fire` (de AK-47 dertig keer per seconde over de lage kant van de SKS, met een lage luchtstroom en het brommen van de vuursnelheid zelf), `minigun_spin` (een motor, een derde sneller, met het gejank van een elektromotor; de toonhoogte gaat met de lopen mee van half naar heel), `minigun_tail` (het laatste schot met galm, een rommel die naklinkt, de motor die uitloopt), `minigun_overheat` (een klap als hij blokkeert, stoom, tikkend metaal). Varianten om te kiezen: `minigun_fire_b` (de PPSh, lichter) en `_c` (de Carl Gustav over de lage kant van de AK, zwaarder), `minigun_spin_b` (een machine uit de fabriek, met geratel). `tools/hear.py minigun` speelt het hele verloop zoals het spel het speelt; `tools/hear.py minigun b b` met de varianten.
+- **`--give=minigun`** geeft het wapen meteen, in elk level, om het te proberen.
+- **Getest**: de selftest kijkt of het na het pakket komt en omhoog gebracht wordt, langzamer loopt en niet rent, niet door een blik wordt gevuld, de eerste 0,75 s geen kogel afgeeft en daarna 34 in een seconde, na 4 s oververhit en stil valt, 3 s later weer kan, leeggeschoten wordt weggegooid met het vorige wapen in de hand, en bij loslaten zegt wat het nog had. De wedstrijdtest kijkt of het rek ver van de uiteinden staat en er bij het begin nog niet is, of iedereen hoort dat het er is, of de speler het pakt door ernaartoe te lopen, het laat liggen waar hij valt, en of het rek na het liggen weer gaat tellen.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het klinkt.** Ik kan niet luisteren: de geluiden zijn gemaakt op wat de opnamen zijn en gemeten op niveau (de brul rond −11 dB RMS, zoals een salvo, pieken onder −3 dB). Of de brul een minigun is of een machinegeweer, en of de motor bij het opdraaien te horen is, hoor jij.
+- **Hoe het voelt.** 2 000 schoten per minuut met een kleine schok per schot en een beeld dat licht trilt: alleen bekeken als drie stilstaande beelden (koud, en heet met gloeiende lopen). Hoe het opdraaien en het stilvallen er in beweging uitzien, en of de handen goed zitten (ze vallen bij deze stand onder het beeld), heb ik niet gezien.
+- **Wat het kost.** Niet gemeten: dertig lichtsporen, inslagen en hulzen per seconde. Hulzen zijn begrensd op 24 tegelijk.
+
+### Stap 3: de raketwerper (gebouwd)
+
+- **Een RPG-7** (`weapons/rocket_launcher.tres`, het model `_rocket_launcher()` in `tools/models/weapons.gd`, 3 376 driehoeken zonder handen): een buis met een uitlopende mond achter, twee houten hitteschilden, een pistoolgreep onder het midden, vizier en korrel bovenop en een kijker links. De kop steekt voor uit de buis; na het schot is hij weg, en bij het herladen brengt de linkerhand de volgende van onder naar voren, zoals bij een ander wapen een magazijn. Gericht kijk je door de kijker, 40° beeld, zoals bij het scherpschuttersgeweer.
+- **De raket** (`scripts/rocket.gd`, `scenes/rocket.tscn`, het model `_rocket()`): vliegt recht, 45 m/s plus wat de schutter zelf beweegt, met een vlam, een licht en een rookspoor (`Fx.rocket_trail()`), en een brul die met hem meevliegt. Hij ontploft bij wat hij raakt, of na 3 s (135 m). Een voltreffer doet 150, de explosie daarbovenop 130 tot 1,5 m en minder tot 6 m, groter in beeld en geluid dan een vat (`Blast.explode`, maat 1,6). Achter de buis een steekvlam en rook.
+- **Drie raketten**: één in de buis, twee erbij, 2,6 s herladen. Lopen op 85%, wisselen 0,6 s.
+- **Je eigen raket raakt jou ook**, zoals de granaat: buiten een wedstrijd voor de helft (de regel van `blast.gd` voor de speler), in een wedstrijd helemaal.
+- **Geluid**: `rocket_launch` (de klap van het pompgeweer vertraagd tot een holle dreun, de motor van de raket die aanslaat en weggaat, een lage dreun en een rommel die naklinkt), `rocket_flight` (de motor die rondgaat, vanaf de raket zelf). De explosie is die van een vat. `tools/hear.py rocket` speelt het afvuren, de raket die weggaat en de knal 36 m verderop.
+- **`--give=rocket_launcher`** om hem te proberen.
+- **Getest**: de selftest kijkt of er één raket in de buis zit en twee erbij, of een schot een raket wegstuurt en de kop uit de buis verdwijnt, of de raket ontploft bij een robot op 12 m en die dood is, of herladen de volgende in de buis zet, en of een raket op de vloer 2 m voor de schutter hem raakt (hij hield 35 over). De wedstrijdtest kijkt of de minigun en de raketwerper elk op hun eigen plek staan, ver van de uiteinden en uit elkaar: in de fabriek 32 en 33 m van het dichtstbijzijnde uiteinde.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het klinkt**, en of de raket snel genoeg is om nog te ontwijken of te traag om iemand te raken: 45 m/s is een eerste gok.
+- **Het rookspoor en de vlam** heb ik niet in beeld gehad, alleen het wapen in rust, gericht en halverwege het herladen.
+- **De plekken in de andere arena's**: alleen in de fabriek bekeken, als getal. Op het fabrieksterrein, in de centrale en in de duinen niet, en geen beeld van een rek in een level.
+
+### Stap 4: tien wapens, en alle zes pakketten (gebouwd)
+
+Op Michiels woord alle pakketten tegelijk. Alle zes staan nu op het scherm "Multiplayer" en zijn ook buiten een wedstrijd te dragen met `--pack=<naam>`, op de route of in de sandbox.
+
+**De wapens**, elk een model in `tools/models/weapons.gd` (met handen, en een versie voor wie het een ander ziet dragen), cijfers in `weapons/<naam>.tres` en eigen geluiden:
+
+| Wapen | Per treffer | Per minuut | Magazijn | Herladen | Richten | Pakket | Model |
+|---|---|---|---|---|---|---|---|
+| Revolver | 60 | 150 | 6, patroon voor patroon | 2,2 s | 0,15 s | Van dichtbij, Ver weg, Zwaar, Alleen pistolen | .44 met loop van zes duim en een cilinder met groeven |
+| Dubbelloops | 11 × 12 | 400 | 2, patroon voor patroon | 2,2 s | 0,22 s | Van dichtbij | twee lopen naast elkaar met een rib, notenhout |
+| Machinepistool | 17 | 1 300 | 20 | 1,4 s | 0,11 s | Van dichtbij, Alleen pistolen | het pistool met een compensator, een keuzeschakelaar en een lang magazijn |
+| Grendelgeweer | 105 | 45 | 5 | 2,8 s | 0,45 s, door de kijker | Ver weg | ronde kast in een tan kolf met wangstuk, zware gecanneleerde loop, mondingsrem, tweepoot |
+| Gevechtsgeweer | 50 | 330 | 20 | 2,3 s | 0,24 s | Ver weg | lange stalen kast, handguard met ribben, gasbuis, vlamdemper met sleuven, diopter |
+| Lichte mitrailleur | 25 | 700 | 100 | 4,5 s | 0,3 s | Zwaar | vierkante kast met klep, draaghandgreep, tweepoot, kist met band aan de linkerkant |
+| PPSh-41 | 17 | 1 000 | 71 | 2,6 s | 0,16 s | 1944 | ronde kast, geperforeerde mantel schuin afgesneden, trommel, kolf van notenhout |
+| Mosin-Nagant | 100 | 50 | 5, patroon voor patroon | 3,0 s | 0,45 s | 1944 | lange loop in notenhout tot bijna de monding, twee banden, rechte grendel |
+| Trench gun | 13 × 8 | 110 | 6, patroon voor patroon | 2,6 s | 0,22 s | 1944 | het pompgeweer in notenhout, met een korrel en een bajonetnok |
+| M1911 | 45 | 330 | 7 | 1,5 s | 0,13 s | 1944, Alleen pistolen | slede met platte zijden, stalen frame, haan en greepveiligheid, houten greepplaten |
+
+- **Gedeeld waar het kon.** Het pistool en het pompgeweer zijn in stukken gesplitst die de nieuwe wapens hergebruiken: de handen om een pistoolgreep (`_handgun_hands()`), het frame en de slede van het pistool (`_polymer_pistol()`), het pompgeweer (`_pump_gun()`), de kijker van het scherpschuttersgeweer (`_telescope()`), de greep van de linkerhand op een magazijn (`_mag_hold()`) en een kolf van hout (`_wood_stock()`). Pistool, pompgeweer en scherpschuttersgeweer komen er met evenveel driehoeken uit als ervoor. Kolven zijn van een nieuw materiaal, notenhout (`materials/gun_walnut.tres`); de hitteschilden van de raketwerper ook.
+- **Geluid.** Tien schoten, zwaar gelaagd uit de opnamen die er waren: de M1911 uit de 1911, de revolver uit de 1911 vertraagd met de knal van de Mosin erover, het machinepistool uit de Walther, het dubbelloops uit de Mossberg en de Nova met de Model 12, de trench gun uit de Model 12, de PPSh uit de andere opname van de PPSh dan de pistoolmitrailleur, de Mosin uit de Mosin, het grendelgeweer uit de Mosin vertraagd met de lage kant van de Carl Gustav en een rommel van drie seconden, het gevechtsgeweer uit de SKS en de mitrailleur uit de andere opname van de AK-47. Herladen: eigen geluiden voor de pistolen, het laden van de revolver, de Mosin, de trench gun en het dubbelloops; de rest deelt die van de karabijn. Beluisteren: `tools/hear.py <naam>_shot 600`, of `tools/hear.py reload revolver`.
+- **De balans** (`tools/weapon_sheet.py`, de bladen `benchmark/sheets/weapons_<pakket>.png`) telt nu de tijd om te richten mee. Zonder dat wint een geweer dat met één schot doodt overal. Waar elk wapen het snelst is, gericht of vanaf de heup:
+  - **Van dichtbij**: dubbelloops tot 6 m, machinepistool tot 11 m, pistoolmitrailleur tot 22 m, revolver daarboven;
+  - **Ver weg**: gevechtsgeweer tot 50 m, grendelgeweer daarboven, revolver vanaf de heup van 11 tot 17 m;
+  - **1944**: trench gun tot 6 m, PPSh vanaf de heup tot 17 m, de Mosin gericht daarboven;
+  - **Zwaar**: pompgeweer tot 6 m, de mitrailleur daarboven;
+  - **Alleen pistolen**: machinepistool tot 11 m, pistool tot 20 m, M1911 tot 46 m, revolver daarboven.
+
+  Het blad noemt nog als opmerking dat in 1944 de M1911 en in Zwaar de revolver op sommige afstanden sneller zijn dan het hoofdwapen. Dat ligt deels aan het blad, dat terugslag niet telt.
+- **Getest**: de selftest kijkt of alle zes pakketten aangeboden worden (dat doen ze nu allemaal) met twee tot vijf wapens. De wedstrijdtest kijkt of het scherm alle zes laat kiezen, en of in een potje met 1944 de speler PPSh, Mosin, trench gun en M1911 draagt op 1 tot 4 en elke bot een wapen uit dat pakket.
+- **Gezien**: `benchmark/sheets/weapons_in_view.jpg`, elk van de tien vanaf de heup en gericht, in de fabriek. Bij de eerste versie keek het oog bij de shotguns, de PPSh en de Mosin tegen de kast aan; dat is rechtgezet door het oog hoger en verder naar achteren te zetten.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe ze klinken.** Elk schot is gemaakt en op niveau gebracht, niet beluisterd. Vooral de PPSh en de mitrailleur hebben staarten van anderhalf tot twee seconden: bij 1 000 schoten per minuut klinken er zo'n twintig tegelijk.
+- **Hoe ze herladen er in beweging uitzien.** De magazijnwissel van de nieuwe wapens gebruikt de beweging van de karabijn met de greep naar het nieuwe magazijn verplaatst; het laden patroon voor patroon die van het pompgeweer. Alleen als stilstaand beeld gecontroleerd, en niet halverwege het herladen.
+- **De revolver en de M1911 van achteren** lijken op het pistool: wat ze anders maakt (de cilinder, de haan) zie je gericht nauwelijks.
+- **De steelhandgranaat van 1944** is er niet: dat pakket gooit dezelfde granaat als de rest.
+- **Bots en speciale wapens, en de slag van een ander**: stap 5 is niet gebouwd.
+
+## Wapens afgebouwd: bots, de slag voor anderen, de balans in het spel en de steelhandgranaat
+
+Op 16 oktober 2026 gevraagd: stap 5 en de open punten van "Wapens: de slag, pakketten en speciale wapens (plan)", in zes onderdelen. Branch `wapenafbouw`, vanaf de trunk op 470c209. Elk onderdeel heeft een eigen commit.
+
+**In de trunk gezet op 16 oktober 2026, op Michiels woord, met minigun A ("Verder is alles perfect"); niet gepusht.** Hij speelde het vanuit de worktree en gooide de steelhandgranaat op de route.
+
+### Onderdeel 1: bots en de speciale wapens (gebouwd)
+
+- **Oppakken.** Een bot pakt een speciaal wapen op zoals de speler: door er binnen 1,2 m langs te lopen. Ziet hij er een liggen binnen 10 m, op zijn rek of waar iemand het liet vallen, dan loopt hij erheen (`NOTICES` in `scripts/bot.gd`), tenzij hij met een buit op zijn rug naar huis moet. Hij draagt er één tegelijk en heeft het meteen in handen; de wedstrijd zegt "Birch has the minigun", zoals bij de speler.
+- **Halen, vanaf Hardened.** Elke seconde kijkt de wedstrijd welke bot van elke kant het dichtst bij een speciaal wapen is dat er ligt, langs het navmesh gemeten (van de vier dichtstbijzijnde in rechte lijn), en stuurt die erheen (`Match.errand()`). Zonder kanten gaat de dichtstbijzijnde van allemaal. Dat staat als `fetches` bij de derde moeilijkheid in `assets/match.json`; op Recruit en Regular pakken bots het alleen als ze erlangs komen.
+- **Met de minigun** draaien de lopen op zodra hij iemand ziet (0,75 s) en blijven ze draaien zolang hij die ziet. Dan vuurt hij per stap van de physics zoveel kogels als de vuursnelheid op dat moment vraagt, van 1 200 naar 2 000 per minuut, in één bericht. Een stoot duurt minstens 1,2 s (langer als zijn niveau dat zegt) en houdt op zodra de lopen 60% heet zijn; de volgende begint pas als ze tot 30% zijn afgekoeld. Zo raakt hij nooit oververhit. Hij loopt op 70% en rent niet, met draaiende lopen op 60% daarvan.
+- **Met de raketwerper** vuurt hij een raket in plaats van een straal, op de voeten (15 cm erboven), en niet op wie dichter dan 6 m staat, noch als er binnen 6 m iets voor zijn loop staat. Staat iemand dichterbij dan 8 m, dan loopt hij achteruit. Hij herlaadt uit de twee raketten die erbij zaten.
+- **Leeggeschoten** gooit hij het na een derde seconde weg en heeft hij zijn eigen wapen weer; het rek telt dan af. **Wie sterft**, laat het liggen waar hij viel, met wat erin zat, zoals de speler. Een bot die terugkomt, heeft zijn eigen wapen.
+- **De pop** (wat anderen zien, `scripts/puppet.gd`). Wisselt een bot van wapen, dan krijgt zijn figuur het model ervan, op elke machine (`rearm`). Een figuur met een minigun laat de lopen draaien zolang zijn drager zegt dat ze draaien, laat ze gloeien naar de hitte die meekomt, en laat de motor horen die oploopt, één brul zolang er schoten komen, de staart als ze ophouden en het geluid van oververhitten. Er klinkt dus geen schot meer per kogel. Daarvoor heeft het minigunmodel voor anderen zijn lopen nu als los deel (`tools/models/held.gd`, `scenes/models/minigun_held.scn`, 6 248 driehoeken zoals eerst).
+- **Over de lijn.** Wat iemand doet heeft twee dingen erbij: `Net.SPINNING` voor lopen die draaien, en de hitte van het wapen in vier bits. De minigun van de speler stuurt één bericht per beeld met alle kogels van dat beeld, niet één per kogel. Een raket is nu een daad (`launched`): de machine van de schutter laat hem ontploffen, de anderen zien er een die meevliegt en verdwijnt (`echo` in `scripts/rocket.gd`). Een raket van een bot vliegt op de host echt. `Net.VERSION` is 11.
+- **Geteld.** `tools/test_match.sh` zegt na de buit en na `--soak` hoe vaak een speciaal wapen gepakt is, door wie en wanneer (`Match.takes`).
+
+**Getest**
+
+- `tools/test_match.sh`: 112 controles, tegen 97 in de trunk, alle geslaagd. Nieuw, in een potje van drie tegen drie in de fabriek: een bot die naar de minigun loopt pakt hem, heeft hem in handen en zijn figuur draagt hem met lopen die draaien; een tweede pakt hij niet. Met de minigun op 10 m van een vijand: op toeren na 0,86 s, het eerste schot op dat moment, 155 kogels in vijf stoten in 9 s, nooit heter dan 60%. Met de raketwerper op 15 m: de raket gaat op 0,25 m langs de voeten en raakt; van 4 m af vuurt hij niet en loopt hij achteruit, en zijn eerste raket viel pas op 6,6 m. Wie sterft laat het liggen met wat erin zat en heeft zijn eigen wapen terug. Op Regular gaat niemand iets halen; op Hard gaan precies de twee dichtstbijzijnden, één per kant, en de eerste haalt het. `tools/test_match.sh --specials` doet alleen dit deel.
+- In capture the flag onder bots (273 s) is de raketwerper acht keer gepakt, door drie bots; de minigun stond buiten hun weg.
+- Een potje van zes tegen zes op Hard in de fabriek, `tools/test_match.sh --match=tdm:factory:6 --only-bots --soak=170 --difficulty=2`: de minigun 32 keer gepakt, de raketwerper 3 keer, 252 doden, 125 tegen 126.
+- `tools/selftest.sh` (423) en `tools/nettest.sh` (62, beide kanten): geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of een bot met een minigun leuk is om tegen te vechten.** Op Hard in de fabriek wisselde de minigun in 170 s 32 keer van hand: hij blijft na elke dood 20 s liggen, de fabriek is klein en wie hem draagt valt snel, en elke bot binnen 10 m die hem ziet gaat hem halen. Of hij zo een magneet is waar het gevecht omheen draait, of juist een wapen dat niemand lang houdt, zegt het spelen.
+- **Hoe het eruitziet.** Een figuur met draaiende, gloeiende lopen, het opdraaien, de raket van een bot en het achteruitlopen heb ik alleen als getallen gezien. Beelden zijn er bij onderdeel 5.
+- **Hoe het klinkt.** De brul van een figuur is de brul van de speler (`minigun_fire`), op 10 m nog op volle sterkte; of hij te luid of te zacht is naast de schoten van anderen, hoor jij.
+- **Een wedstrijd over het net.** De rekken staan nog alleen op de host, zoals de hele wedstrijd: wedstrijden over het net zijn een eigen stap. De berichten zijn er wel (het wisselen van wapen, de lopen, de raket).
+- **De kop van de raketwerper** van een figuur blijft na het schot zichtbaar: het model voor anderen is één stuk.
+
+### Onderdeel 2: slaan, voor anderen en door bots (gebouwd)
+
+- **De slag gaat over de lijn.** Wie V indrukt, laat de anderen dat weten (de daad `struck`), en als hij raak slaat ook waar en op wat (`knocked`), zodat zij de klap horen. Hun pop van hem slaat, met het geluid van de zwaai.
+- **Een slag met twee handen, uit wat er is.** Er is geen geknipte slag met een geweer, en de stoot met de vuist uit de set als romp draaide de figuur van zijn doel weg. De slag is daarom gemaakt van wat de rig met een wapen al doet (`strike()` in `scripts/humanoid_rig.gd`): de romp draait weg en dan in de slag mee en leunt erin, het wapen gaat naar twee standen en de armen volgen het, zoals bij richten. Eerst schuin omhoog met de kolf bij de heup (getrokken), dan rond en met de kolf vooruit op hoofdhoogte, de loop langs de andere schouder naar achteren (gedreven). Dezelfde tijden als de slag van de speler: 0,5 s, raak na 0,17 s. Met een pistool is het dezelfde beweging, met de kolf van het pistool. Een robot slaat met zijn vrije arm (`strike()` in `scripts/enemy_rig.gd`).
+- **Bots slaan van dichtbij.** Staat een bot binnen 2 m van wie hij bevecht, dan schiet hij niet maar slaat hij, met de slag van de speler: 60 schade, raak na 0,17 s, op 2,1 m bereik (`STRIKES` in `scripts/bot.gd`). Twee slagen doden, ook op Recruit: de korting die de moeilijkheid op wat een bot een mens aandoet geeft (`hurts`), geldt voor schoten en niet voor een slag.
+- **Gezien**: `benchmark/sheets/blow_others.jpg`, de karabijn en het pistool in vijf momenten van de slag, van opzij.
+
+**Getest**
+
+- `tools/test_match.sh`: 116 controles. Nieuw: een figuur slaat met de kolf, eerst laag getrokken (de kolf op 1,17 m, achter het lijf) en dan op hoofdhoogte vooruit (1,46 m, 0,41 m voor het lijf); een bot op 1,5 m van een vijand slaat en schiet niet, en die gaat van 100 naar 40 en bij de tweede slag neer, in 1,3 s; zijn figuur slaat zichtbaar; en op Recruit brengen twee slagen van een bot de speler neer. De eerste keer faalde de minigun-controle van onderdeel 1 omdat de bot bij het begin van de proef de andere kant op keek en zijn doel pas na 7 s zag; in de proef hoort hij nu eerst waar die staat, en daarna slaagde het deel met de speciale wapens drie keer op rij.
+- `tools/nettest.sh`: 63 controles, één nieuw: de host ziet de pop van de gast slaan als de gast V indrukt.
+- `tools/selftest.sh` (423) en `tools/test_humanoid.sh` (55): geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of de slag in beweging klopt.** Gezien als vijf stilstaande momenten. Het geweer draait van getrokken naar gedreven over de kortste weg; of dat in 0,1 s als een zwaai leest of als een schok, en of de handen dan op het wapen blijven, zie je pas in het spel.
+- **Hoe vaak bots slaan.** Ze komen alleen binnen 2 m als iemand op ze afloopt of een hoek omkomt; zelf lopen ze er niet op af om te slaan. Of dat in een potje vaak genoeg gebeurt, of juist te vaak, zegt het spelen.
+- **De robot** heb ik niet zien slaan.
+
+### Onderdeel 3: de balans in het spel zelf (gebouwd)
+
+**De schietbaan** (`_balance()` in `scripts/selftest.gd`). Hoog boven het level ligt een vloer van 140 m, met een pop zo groot als de romp waarmee `tools/weapon_sheet.py` rekent (45 bij 60 cm, op borsthoogte). De speler vuurt elk wapen dat er is gericht op die pop af, zoals het spel vuurt: met terugslag, bloom en het schudden van het beeld, en zonder iemand die de loop terugtrekt. Op 5, 10, 20, 40 en 80 m, eerst met de trekker vast (een halfautomaat zo snel als hij gaat); en op 40 en 80 m, waar dat niet raakt, nog eens gedoseerd: een schot pas als de terugslag van het vorige gezakt is, zoals iemand die wil raken vuurt. Naast het aantal schoten dat 100 doet staat wat het blad zegt (`tools/weapon_sheet.py --shots`, gericht en stilstaand; dat blad telt geen terugslag). De schoten vallen op de echte klok: zonder venster komen de beelden niet sneller, en één schot per beeld is wat een wapen hooguit vuurt.
+
+- **`tools/selftest.sh --balance`** draait de hele baan (4½ minuut). De gewone selftest vuurt alleen op 5 m en controleert daar dat spel en blad het eens zijn, op één schot na: verder weg is het balans en geen fout, en dat drukt hij af in plaats van het af te keuren.
+- **Wat de baan zegt**, schoten om 100 te doen en in hoeveel seconden vanaf het eerste schot (het richten niet meegeteld), naast het blad:
+
+  | Wapen | 5 m | 10 m | 20 m | 40 m | 80 m |
+  |---|---|---|---|---|---|
+  | Karabijn | 4 · 0,29 s (4) | 4 · 0,30 s (4) | 4 · 0,31 s (4) | geen in 19; gedoseerd 5 · 1,33 s (5) | geen; gedoseerd 8 · 2,30 s (8) |
+  | Pistool | 3 · 0,31 s (3) | 3 · 0,31 s (3) | 3 · 0,31 s (3) | geen in 19; gedoseerd 5 · 1,66 s (5) | geen; gedoseerd 6 · 2,12 s (6) |
+  | Pompgeweer | 1 · 0,00 s (1) | 3 · 1,51 s (3) | geen in 7 (–) | geen in 7; gedoseerd geen in 7 (–) | geen; gedoseerd geen in 7 (–) |
+  | Pistoolmitrailleur | 5 · 0,28 s (5) | 5 · 0,28 s (5) | 7 · 0,41 s (7) | geen in 46; gedoseerd 14 · 3,54 s (14) | geen; gedoseerd geen in 29 (54) |
+  | Scherpschuttersgeweer | 2 · 0,37 s (2) | 2 · 0,37 s (2) | 2 · 0,36 s (2) | 2 · 0,37 s (2) | 5 · 1,44 s (2) |
+  | Minigun | 7 · 0,26 s (7) | 7 · 0,26 s (7) | 14 · 0,49 s (12) | 60 · 1,87 s (64) | geen in 131 (357) |
+  | Raketwerper | 1 · 0,09 s (1) | 1 · 0,19 s (1) | 1 · 0,42 s (1) | 1 · 0,86 s (1) | geen in 2 (1) |
+  | Revolver | 2 · 0,41 s (2) | 2 · 0,41 s (2) | 2 · 0,41 s (2) | 2 · 0,41 s (2) | 6 · 2,03 s (3) |
+  | Dubbelloops | 1 · 0,00 s (1) | 5 · 6,32 s (5) | geen in 6 (–) | geen in 6; gedoseerd geen in 4 (–) | geen; gedoseerd geen in 4 (–) |
+  | Machinepistool | 6 · 0,24 s (6) | 8 · 0,34 s (7) | geen in 49 (15) | geen in 60; gedoseerd geen in 23 (36) | geen; gedoseerd geen in 16 (–) |
+  | Grendelgeweer | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) |
+  | Gevechtsgeweer | 2 · 0,19 s (2) | 2 · 0,19 s (2) | 2 · 0,19 s (2) | geen in 10; gedoseerd 2 · 0,45 s (2) | geen; gedoseerd 3 · 0,86 s (3) |
+  | Lichte mitrailleur | 4 · 0,27 s (4) | 4 · 0,27 s (4) | 4 · 0,27 s (4) | geen in 16; gedoseerd 4 · 0,93 s (4) | geen; gedoseerd 11 · 3,21 s (8) |
+  | PPSh-41 | 6 · 0,31 s (6) | 6 · 0,31 s (6) | geen in 28 (8) | geen in 58; gedoseerd 22 · 6,22 s (18) | geen; gedoseerd geen in 27 (71) |
+  | Mosin-Nagant | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) | 1 · 0,00 s (1) |
+  | Trench gun | 1 · 0,00 s (1) | 2 · 0,55 s (4) | geen in 9 (–) | geen in 9; gedoseerd geen in 9 (–) | geen; gedoseerd geen in 9 (–) |
+  | M1911 | 3 · 0,38 s (3) | 3 · 0,38 s (3) | 4 · 0,56 s (3) | geen in 13; gedoseerd 3 · 0,88 s (3) | geen; gedoseerd 4 · 1,30 s (4) |
+
+- **Wat daaruit volgt.**
+  - **Tot 20 m klopt het blad**, ook met de trekker vast, voor bijna alles. Uitzonderingen: de **PPSh** en het **machinepistool** halen op 20 m met de trekker vast geen kill (28 en 49 schoten, waar het blad 8 en 15 zegt): bij 1 000 en 1 300 schoten per minuut klimt de loop van de pop af. De minigun heeft er 14 nodig waar het blad 12 zegt.
+  - **Op 40 m raakt met de trekker vast geen enkel automatisch wapen**, en ook de snelle halfautomaten niet (het pistool, de M1911, het gevechtsgeweer). Gedoseerd halen ze het aantal schoten van het blad, maar ze doen er drie à vier keer zo lang over: de karabijn 1,33 s waar het blad 0,39 s rekent, het pistool 1,66 s.
+  - **Wat op 40 m dan het snelst is**: het scherpschuttersgeweer (0,37 s), de revolver (0,41 s, met de trekker vast!), het gevechtsgeweer gedoseerd (0,45 s), de mitrailleur gedoseerd (0,93 s). In Standaard is de karabijn op 40 m dus trager dan het blad laat zien, en het pistool bijna even traag als de karabijn.
+  - **Op 80 m** doen het scherpschuttersgeweer en de revolver met de trekker vast meer schoten dan het blad (5 en 6 waar het blad 2 en 3 zegt): de tweede kogel komt voor het beeld weer stil staat. De raketwerper miste de pop op 80 m twee keer (op 40 m raak in 0,86 s).
+- **Het blad zelf** (`tools/weapon_sheet.py`) rekent zoals eerst; het heeft er alleen `--shots` bij, dat de schoten per wapen en afstand als JSON geeft.
+
+**Kills per wapen in een potje van bots**: `tools/test_match.sh --pack=<naam> --only-bots` laat twaalf bots vijf minuten team deathmatch spelen op het fabrieksterrein (op vier keer de klok, anderhalve minuut), met dat pakket, en telt de kills per wapen naast hoeveel bots elk wapen dragen. Een wapen dat meer dan twee keer zijn deel haalt, noemt hij (`--arena=` en `--seconds=` voor een andere arena of duur). `--soak` telt nu ook per wapen.
+
+Zo, elk pakket vijf minuten op het fabrieksterrein met zes per kant:
+
+| Pakket | Kills | Wapens van de bots: aandeel kills (aandeel dragers) | Speciaal, slagen en ontploffingen | Speciale wapens gepakt |
+|---|---|---|---|---|
+| Standaard | 136 | karabijn 43% (50%), pistoolmitrailleur 16% (17%), pompgeweer 11% (17%), scherpschuttersgeweer 20% (17%) | slagen 2, ontploffingen 3, minigun 8, raketwerper 1 | raketwerper 4×, minigun 12× |
+| Van dichtbij | 168 | pistoolmitrailleur 60% (50%), dubbelloops 16% (33%), machinepistool 10% (17%) | ontploffingen 4, raketwerper 3, minigun 17 | raketwerper 10×, minigun 27× |
+| Ver weg | 235 | gevechtsgeweer 62% (67%), grendelgeweer 30% (33%) | slagen 1, ontploffingen 4, minigun 11, raketwerper 3 | minigun 32×, raketwerper 14× |
+| 1944 | 135 | PPSh 50% (50%), Mosin 39% (33%), trench gun 4% (17%) | minigun 6, raketwerper 2, ontploffingen 2 | raketwerper 8×, minigun 22× |
+| Zwaar | 246 | mitrailleur 56% (67%), pompgeweer 28% (33%) | raketwerper 4, ontploffingen 5, minigun 26, slagen 3 | raketwerper 9×, minigun 61× |
+| Alleen pistolen | 99 | M1911 38% (33%), revolver 28% (33%), pistool 11% (17%), machinepistool 9% (17%) | ontploffingen 5, minigun 8 | raketwerper 4×, minigun 13× |
+
+Geen wapen haalt meer dan twee keer zijn deel. Wat opvalt: de shotguns blijven op dit grote, open terrein ver onder hun deel (de trench gun 4% van de kills bij 17% van de dragers, de dubbelloops 16% bij 33%); de minigun doet 4 tot 11% van de kills en wisselt tientallen keren van hand; de raketwerper doet weinig (1 tot 4 kills, plus een deel van de ontploffingen).
+
+**Getest**
+
+- `tools/selftest.sh`: 426 controles, met de schietbaan op 5 m (de hele selftest duurt nu 355 s).
+- `tools/selftest.sh --balance`: de hele baan, 4½ minuut, geslaagd.
+- `tools/test_match.sh`: 116 controles, geslaagd; `--pack=` voor alle zes pakketten zoals hierboven.
+- **Een fout onderweg.** Eerst noemde de baan de lijst `ARMORY.ALL` bij naam. Daarna was in elke run de raketwerper leeg: geen rek, en een bot die er een raket mee afvuurde liep vast. De selftest wordt gelezen terwijl de kast nog geladen wordt, en de raket verwijst via `Match` naar de kast terug. De lijst wordt nu via `ARMORY.all()` gevraagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Of bots zo vechten als mensen.** De telling per wapen zegt hoe bots met elk wapen doen; een bot richt op de borst en vuurt in stoten naar zijn niveau, een mens niet. Een uitschieter zie je ermee, een fijne afstelling niet.
+- **Of terugslag zo hoort.** De baan laat zien dat iemand die de trekker vasthoudt op 40 m niets raakt. Of dat bedoeld is (terugtrekken hoort bij het spel) of te veel, is een keuze voor het afstellen, stap 6. Ik heb niets aan de wapens veranderd.
+- **De tijd tot de kill met richten erbij**: de baan telt vanaf het eerste schot, het blad vanaf het eerste moment dat iemand gezien wordt, met het richten erbij.
+
+### Onderdeel 4: de steelhandgranaat (gebouwd)
+
+- **Het model** (`_stick_grenade()` in `tools/models/props.gd`, `scenes/models/stick_grenade.scn`, 1 952 driehoeken): de Duitse steelhandgranaat zoals hij vliegt, met de dop eraf en het koord getrokken. Een bus van plaatstaal, 70 mm doorsnee en 10 cm hoog, licht bol met een opgerolde rand en een naad aan beide kanten, en een klem om hem aan een riem te hangen; een stalen kraag waar de steel in geschroefd zit; een steel van notenhout, naar de bus toe iets dikker, 365 mm in totaal; onderaan de band met schroefdraad van de dop, en uit het holle eind het koord met zijn porseleinen kraal.
+- **De granaat** (`scenes/stick_grenade.tscn`): dezelfde granaat als de ronde (`scripts/grenade.gd`: 2,2 s, 6,5 m, 160), een bus en een steel om mee te botsen, 600 gram, minder stuiterend dan staal. Hij tolt kop over steel zoals elke gegooide granaat. Aan de getallen heb ik niets veranderd: afstellen is stap 6.
+- **Het pakket zegt wat het gooit**: een regel `"grenade": "stick_grenade"` bij 1944 in `assets/packs.json`; zonder die regel is het de ronde. `ARMORY.grenade()` en `ARMORY.thrown()` in `scripts/armory.gd`, en `equip()` neemt het mee. Een medespeler ziet de granaat die jij gooit (de daad `threw` zegt nu welke).
+- **In beeld**: de bolletjes rechtsonder zijn bij 1944 een bus op een steel.
+
+**Getest**
+
+- `tools/selftest.sh`: 428 controles, twee nieuw, op de schietbaan: met 1944 gooit de speler een steelhandgranaat, die tolt (2,1 radialen per seconde) en 22 m verder ontploft; het standaardpakket gooit de ronde.
+- `tools/nettest.sh` (63) en `tools/test_match.sh` (116): geslaagd, ook het potje met 1944.
+
+**Gezien**: `benchmark/sheets/stick_grenade.jpg`, het model drie keer zo groot, van opzij en schuin van boven; niet in de lucht.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe hij vliegt.** Hij tolt zoals de ronde, om zijn zwaartepunt; een echte steelhandgranaat vliegt verder en stabieler, met de bus voorop. Niet in beweging gezien.
+- **Het geluid** van stuiteren is dat van de ronde, een tik van staal; hout klinkt doffer.
+- **De worp in beeld**: de speler gooit met de linkerhand buiten beeld, dus wat hij gooit zie je pas als het vliegt.
+
+### Onderdeel 5: kijken en meten (gebouwd)
+
+**De rekken in elke arena.** Per arena een beeld van elk rek, van de weg ernaartoe (20 m ervoor, langs het navmesh vanaf de dichtstbijzijnde basis), van dichtbij (5 m) en vanaf het rek terug, op 1920×1080 in een potje van drie tegen drie: `benchmark/sheets/stands_<arena>.jpg`.
+
+| Arena | Minigun | Raketwerper | Oordeel |
+|---|---|---|---|
+| Fabrieksterrein (`works`) | in een kantine aan een gang, 121 en 138 m lopen van de bases | in een hoek van een binnenplaats tussen containers en vuilnisbakken, 100 en 126 m | goed |
+| Centrale (`powerhouse`) | in een zaal met tanks en kratten, half achter een tank, 106 en 109 m | tussen de ketels van het ketelhuis, 82 en 101 m | goed; van dichtbij zie je hem pas om de ketel heen |
+| Depot | op het laadperron onder het afdak, via de oprit, 42 en 50 m; daar is het donker | tussen de containers op het terrein, 36 en 38 m | goed |
+| Duinen | **niet goed**: 330 en 349 m lopen, diep in het bos en ver van waar gevochten wordt | boven op een duin, 181 en 227 m | minigun verplaatst |
+| Fabriek (`factory`) | op de vloer van de hal, 33 en 42 m | naast een tank in de hal, 35 en 41 m | goed |
+
+- **Waarom de duinen misgingen.** `Arena.hideouts()` geeft een omweg van 15 m of meer punten, maar boven 37,5 m allemaal evenveel, en neemt dan de eerste. In een arena van 397 m is dat een plek die van beide bases even ver is maar 280 m van de weg af. Ik heb de berekening niet veranderd (dan zou elke andere arena opnieuw bekeken moeten worden), maar de duinen een plek gegeven.
+- **`assets/arenas.json`** bestaat nu, met één plek: de minigun in de duinen op (152,4; 6,7; 82,4). Dat is een zandkom tussen twee duinen bij het hek van het complex, 199 en 221 m lopen van de bases, 23 m van de kortste weg af en 76 m van de raketwerper (`benchmark/sheets/stands_dunes.jpg`, de middelste rij). Gevonden door de plekken van de arena te zoeken met een omweg van 15 tot 45 m, eerlijk binnen 8% en minstens 60 m van elke basis; er waren er vier.
+
+**Wat het vuren kost**, op 3456×2160 met MetalFX, kwaliteit Ultra en automatische schaal, in de fabriek op de vloer van de hal (12, 0, 4), naar het westen kijkend. De lader was er een van 30 W met de accu op 69% (die tijdens het meten dus iets leegliep, maar niet zakte); load average 2 tot 3; niemand anders mat, de editor van Michiel stond open zonder spel. In paren direct na elkaar, in beide volgordes, elk 3 tot 3,5 s:
+
+| | Paren | Gemiddeld |
+|---|---|---|
+| Minigun doorvuren (na het opdraaien, tot net voor het oververhitten) tegen stilstaan | +0,99, +0,73, −0,37, +0,74 ms | +0,5 ms |
+| Minigun doorvuren tegen de karabijn doorvuren | +0,14, −0,05, −1,00, +0,17 ms | −0,2 ms |
+| De 2,5 s na een raket (rookspoor, vlam, knal) tegen de raketwerper stil in handen | +1,25, +0,46, +0,26, +0,20, +0,25, +0,28 ms | +0,45 ms (mediaan +0,27) |
+
+Het beeld zelf kostte zo'n 16 tot 18 ms; tussen twee paren schoof dat tot een milliseconde, binnen een paar minder. Met de minigun gaan er 45 tekenopdrachten bij (1 250 tegen 1 207). **Beide blijven onder de grens van 1 ms die het plan noemde**, dus de hulzen en inslaggeluiden van de minigun zijn niet verder uitgedund.
+
+**De eerste keer.** Geteld hoeveel pijplijnen er tijdens het tekenen gemaakt worden, vanaf het titelscherm een potje in (zoals Start dat doet), en daarna elk nieuw uiterlijk apart, met het beeld eerst op zijn plek en tot rust: een leeg rek met zijn klok, het wapen dat verschijnt met zijn naam door de muren, de minigun opgepakt, draaiend, vurend, oververhit en afkoelend, een soldaat met de minigun en met de raketwerper, de raketwerper in handen, een raket met rook en knal, elk wapen van het pakket in handen, een steelhandgranaat met zijn knal, en een soldaat die slaat.
+
+- **Voor de oefenbeurt**, met 1944: na het laden (82) alles 0, behalve een soldaat met de raketwerper in handen: 1. Met Standaard: na het laden (85) alles 0.
+- **Nu draait de wedstrijd bij het begin `Fx.rehearse()`** met wat een speciaal wapen kan laten zien (`looks()` in `scripts/stash.gd` en in `scripts/rocket.gd`): het rek, het wapen zoals het boven het rek hangt en zoals een ander het draagt (met schaduw), zoals de speler het vasthoudt met gloeiende lopen, en de raket met de vlam aan zijn staart. Het rookspoor is een uitbarsting van `Fx`, die werd al geoefend.
+- **Daarna**: 1944 85 bij het laden en verder overal 0; Standaard 87 en verder 0.
+- De nieuwe wapens van de pakketten en de steelhandgranaat kostten ook zonder oefenbeurt al niets: ze gebruiken dezelfde materialen als wat bij het laden getekend wordt.
+
+**Getest**
+
+- `tools/test_match.sh`: 117 controles, één nieuw: in de duinen staat de minigun waar `assets/arenas.json` zegt.
+- `tools/selftest.sh`: 428, geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **De plek in de duinen in het spel.** Bekeken als drie stilstaande beelden; of je er langs komt, en of hij niet juist te makkelijk te pakken is, zegt een potje.
+- **Of de andere plekken goed spelen**: goed om te zien betekent nog niet dat iemand er langskomt. In de telling per pakket (onderdeel 3) werd de minigun op het fabrieksterrein tientallen keren gepakt, de raketwerper 4 tot 14 keer.
+- **Het donker bij de minigun in het depot**: op de beelden is het perron onder het afdak bijna zwart, op de gloeiende rand van het rek na. Of dat in het spel ook zo is, zie je met jouw belichting.
+- **Een zwarte streep langs het hek in de duinen**, op het beeld van de weg naar de nieuwe plek: iets van het level, niet van het rek; niet uitgezocht.
+- **Wat het vuren kost op een gewone lader**: gemeten op 30 W. De verschillen tussen de paren zijn wat telt, en die horen niet van de lader af te hangen, maar op 140 W heb ik het niet gezien.
+
+### Onderdeel 6: geluid (wacht op Michiel)
+
+Niets van de geluiden van de wapenpakketten is beluisterd, en ik kan niet luisteren. Er is in deze ronde geen nieuw geluid bijgekomen: de slag van een ander gebruikt de zwaai en de klap van de speler, de steelhandgranaat de ronde, en een figuur met een minigun de motor, de brul, de staart en het oververhitten van de minigun van de speler. Wat er te kiezen en te beoordelen is, elk als `tools/hear.py <naam>` (gecontroleerd dat het rendert):
+
+- **De minigun**, het hele verloop (opdraaien, vuren tot hij oververhit raakt, de staart, stoom en de motor die uitloopt), in drie varianten van de brul en twee van de motor: `tools/hear.py minigun` (brul a, motor a), `tools/hear.py minigun b b` (de PPSh, lichter, met de machine uit de fabriek), `tools/hear.py minigun c a` (de Carl Gustav over de lage kant van de AK, zwaarder). Ook `minigun a b`, `minigun b a`, `minigun c b`.
+- **De raketwerper**: `tools/hear.py rocket` (het afvuren, de raket die weggaat, de knal 36 m verder).
+- **De tien schoten**, als salvo op hun eigen vuursnelheid: `tools/hear.py revolver_shot`, `double_barrel_shot`, `machine_pistol_shot 1300`, `bolt_rifle_shot`, `battle_rifle_shot`, `lmg_shot 700`, `ppsh_shot 1000`, `mosin_shot`, `trench_gun_shot`, `colt_shot`.
+- **Herladen**, met een schot ervoor: `tools/hear.py reload revolver`, `reload double_barrel`, `reload mosin`, `reload trench_gun`, `reload colt`, `reload machine_pistol`.
+
+Van elk geluid dat hij niet goed vindt, maak ik twee of drie varianten om uit te kiezen, zoals bij het trefgeluid op een mens.
+
+**Gekozen: minigun A**, de brul en de motor die het spel al speelde (`minigun_fire`, `minigun_spin`). Er is niets aan veranderd. De varianten `minigun_fire_b`, `minigun_fire_c` en `minigun_spin_b` liggen er nog en worden nergens gespeeld. Over de andere geluiden zei hij niets.
+
+**Na zijn eerste potje: een lek.** Bij het afsluiten meldde Godot één licht en één instantie die niet waren opgeruimd. Dat kwam van de oefenbeurt (onderdeel 5): die maakt een raket aan om zijn uiterlijk te tekenen, maar zet hem nooit in de wereld, en de lamp en het geluid van de raket werden al gemaakt als de raket gemaakt werd. Die maakt hij nu pas als hij in de wereld komt. Met `--verbose` geteld: van elf soorten lekkende objecten in `tools/test_match.sh --specials` naar geen. Daarna `tools/selftest.sh` (428) en `tools/test_match.sh` (117) geslaagd.
+
+## De wapenset wisselen tijdens een potje
+
+Op 16 oktober 2026 gevraagd: tijdens een wedstrijd in de settings de wapenset kunnen wijzigen, en dan "Start the match again" doen. Branch `wapensetwissel`.
+
+- **In een wedstrijd** staat bovenaan Settings een regel "Weapons", die langs de pakketten gaat zoals op het scherm Multiplayer (`_pack_choice()` in `scripts/menu.gd`). Wat hij kiest geldt vanaf de volgende start: wat je in handen hebt blijft tot dan, en de regel zegt dat erbij ("Weapons · Heavy (once the match starts again)"). De keuze wordt onthouden zoals op het scherm Multiplayer (`Settings.pack`).
+- **Op het pauzescherm** zegt de knop dan met welk pakket het potje opnieuw begint: "Start the match again · Heavy". Opnieuw beginnen geeft de speler en elke bot dat pakket, en ook de speciale wapens die bij dat pakket horen.
+- `Match.pack_in_play` onthoudt welk pakket er nu gespeeld wordt; `Match.setup.pack` is wat er gekozen is.
+- **Getest**: `tools/test_match.sh`, 121 controles, vier nieuw: in een potje met 1944 bieden de settings de pakketten aan bij 1944; Heavy kiezen laat de wapens in handen; de pauzeknop zegt "Start the match again · Heavy"; en na het opnieuw beginnen dragen de speler en elke bot Heavy. `tools/selftest.sh` (428) geslaagd.
+- **Niet gezien**: het scherm zelf heb ik niet als beeld bekeken; de tekst van de knoppen is getest.
+
+## Een trailer van twintig seconden
+
+Op 17 oktober 2026 gevraagd: een nieuwe trailer van ongeveer 20 seconden, met in ieder geval actie met een machinegeweer in de duinen, inzoomen met een sniper en een headshot in de duinen, soldaten, clowns en robots in actie, ontploffende vaten, actie in een wedstrijd van zes tegen zes bots, actie met de shotgun, en alle maps snel achter elkaar. Branch `trailer`.
+
+**Het resultaat** staat in `benchmark/results/trailer/trailer.mp4` (niet in git): 20,55 s, 1920×1080 op 60 beelden per seconde, H.264 op 21 Mbit/s met AAC, 54 MB. Ernaast `trailer_sheet.jpg`, twee beelden per seconde.
+
+| Tijd | Shot | Waar | Wat er gebeurt |
+|---|---|---|---|
+| 0,0–3,0 | Sniper | Duinen, bivak | Uit het zwart: het geweer komt omhoog, door de kijker de wacht voor de tent, het kruis schuift naar zijn hoofd, één schot, hij valt. Bijna stil. |
+| 3,0–5,5 | Minigun | Duinen, wagenpark | De muziek valt in. De lopen draaien al; soldaten in woestijntenue komen over het zand en gaan neer. |
+| 5,5–6,9 | Soldaten | Works, steeg | Laag naast de speler: soldaten stormen tegen de lage zon de steeg in en langs de camera. |
+| 6,9–8,3 | Robots | Centrale, turbinehal | Met het geweer; een robot loopt erop af en ontploft in een vuurbal. |
+| 8,3–9,7 | Clowns | Fabriekshal | Laag naast de speler: clowns met hakmessen rennen door het zonlicht op je af, één springt langs. |
+| 9,7–11,2 | Vaten | Fabriek, bij de deur | Een salvo op het rode vat bij twee soldaten; het vat gaat de lucht in. |
+| 11,2–12,7 | Shotgun | Centrale, pomphuis | Twee soldaten komen door het gangpad tot op twee meter, twee schoten. |
+| 12,7–15,3 | Zes tegen zes | Works, binnenterrein | Op de volgende inslag: de camera rijdt achter een bot het vuurgevecht in, met de stand en de killfeed van de wedstrijd. |
+| 15,3–17,6 | Alle maps | | Factory, Works, Depot, Powerhouse, Dunes, elk 0,45 s, de camera schuift langzaam. De muziek is hier even zacht. |
+| 17,6–20,6 | Titel | Duinen, bos | Op de inslag daarna: GRAPHICS FPS, en uitfaden naar zwart. |
+
+**Hoe het gemaakt is**
+
+- **Movie Maker van Godot.** `tools/trailer.sh` filmt elke take als een run van het spel op de GPU met `--write-movie` en `--fixed-fps 60`: elk beeld krijgt precies 1/60 s, hoe lang het tekenen ook duurt, dus er hapert niets, en het geluid van het spel komt beeld voor beeld mee. Als PNG kostte dat 680 ms per beeld; als MJPEG 13 ms. Daarvoor staat `editor/movie_writer/mjpeg_quality=0.95` in `project.godot` (alleen Movie Maker leest dat). Een take kost 13 tot 37 s op de klok.
+- **De regisseur** (`tools/trailer/director.gd`) speelt de take: hij laadt een level, haalt de route leeg, zet vijanden van een thema neer, wekt ze, geeft de speler een wapen en stuurt hem zoals de tests dat doen (`force_control`, acties indrukken), richt elk beeld na de speler zodat terugslag en zwaai erbovenop komen, of kijkt door een eigen camera die een baan volgt. `action()` zegt waar het bruikbare begint. Het spel geeft hem het woord met `--direct=<script>` (nieuw in `scripts/benchmark.gd`): zo'n run bewaart geen voortgang en neemt de instellingen van de commandoregel, niet die van Michiel. Gefilmd op Ultra op volle grootte, zonder upscaler, met `--undo=lamp_filter,sun_atlas`.
+- **De montage** (`tools/trailer/cut.py`, lijst `CUT`) leest de AVI's zelf (`tools/trailer/avi.py`: de JPEG's en het geluid liggen er onbewerkt in), knipt per take vanaf zijn actie, legt de muziek eronder, fadet in en uit, en laat `tools/trailer/encode.swift` (AVFoundation van macOS) er een mp4 van maken. Er is niets voor geïnstalleerd: geen ffmpeg.
+- **De muziek** is `level1and2` van het spel zelf, vanaf 9,32 s: haar eerste inslag na een stil stuk (12,32 s in het nummer) valt op de cut naar de minigun, de volgende (22,04 en 26,87 s) op de wedstrijd en op de titel. Spel ×0,85, muziek ×0,8, met een zachte begrenzer (`tanh`) erop; tijdens de actie is het spel met RMS 0,2 tot 0,3 het luidst.
+
+**Wat ik zelf koos, en wat hij kan omgooien**
+
+- "Machinegeweer" is de minigun. Het lichte machinegeweer (`lmg`) is één woord in `take_minigun()`.
+- De wacht van de sniper ziet de speler niet (`sight_lit` 3 m), en het rookpluimpje uit de loop na het schot is weggelaten: door de kijker bedekte het precies de val.
+- Bij de soldaten en de clowns schiet de onzichtbare speler over hun hoofden, anders liggen ze neer voor ze dichtbij zijn. Bij de shotgun komen de soldaten met de kolf (`melee`), anders blijven ze op vijf meter staan.
+- In de wedstrijd zijn beide teams bij het begin tegenover elkaar op het binnenterrein gezet, zodat er meteen gevochten wordt.
+- Van de HUD blijven alleen de kijker, de hitmarker en de rode rand bij een treffer; in de wedstrijd ook de stand en de killfeed.
+- De grachten zitten er niet in: ze staan niet in de levelkeuze, en hun levelbestanden staan niet in git (alleen ongevolgd in de hoofdcheckout).
+- De titel is de naam van het project, zoals het titelscherm hem toont.
+
+**Opnieuw maken.** `tools/trailer.sh <take>` filmt één take opnieuw en knipt alles opnieuw. De vijanden en bots spelen elke keer anders, dus een nieuwe take is een andere take: kijk naar `<take>_sheet.jpg` en zet in `CUT` waar de montage hem vandaan haalt als het moment verschoven is. Alleen knippen: `tools/trailer/cut.py benchmark/results/trailer`.
+
+**Getest**: `tools/selftest.sh` slaagt, 428 controles; daarin niets nieuws, het bewijst dat `--direct` en wat Save en Settings ervan weten de rest niet raken.
+
+**Niet beoordeeld**
+
+- **Gehoord is het niet.** De balans tussen spel en muziek en of de inslagen goed vallen, heb ik uit getallen gehaald. Het moet beluisterd worden.
+- **Bewegend gezien ook niet**: ik heb bladen met zes beelden per seconde bekeken en losse beelden op volle grootte. Of de snelheid van de cuts prettig is en of het geluid synchroon voelt, weet ik niet.
+- De lucht boven de minigun is wit: hij kijkt naar het zuiden, in de zon. Naar het noorden was het licht vlak; ik koos de lange schaduwen.
+- De laptop stond op de accu (73 tot 60%); er draaide geen andere Godot. Voor beelden van Movie Maker maakt dat niets uit, alleen voor hoe lang het duurt.
+
 ## Een Mac-build voor vrienden
 
 Op 15 oktober 2026 gevraagd: een actuele versie van het spel om naar vrienden met een MacBook te sturen, om samen spelen over het netwerk uit te proberen. Gebouwd op de branch `vriendenbuild`, vanaf de trunk op `8adccf2`. Wat op dat moment nog op `killfeedback`, `veldslag`, `wapenpakketten` en `duingrond` stond, zit er niet in.
