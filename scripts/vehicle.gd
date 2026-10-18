@@ -1085,7 +1085,9 @@ func _crush() -> void:
 
 ## Whoever stands in its way as it comes at speed is run down.
 func _run_over_people(_delta: float) -> void:
-	for body: Object in _run_over.keys():
+	# Untyped: whoever was run down may since have been taken away, and a
+	# freed object put in a typed variable is a script error.
+	for body: Variant in _run_over.keys():
 		if not is_instance_valid(body) or _clock - float(_run_over[body]) > RUN_OVER_AGAIN:
 			_run_over.erase(body)
 	var fast := linear_velocity.length()
@@ -1100,7 +1102,7 @@ func _run_over_people(_delta: float) -> void:
 	query.collision_mask = PEOPLE
 	var skip: Array[RID] = [get_rid()]
 	for body in occupants:
-		if body is CollisionObject3D:
+		if is_instance_valid(body) and body is CollisionObject3D:
 			skip.append((body as CollisionObject3D).get_rid())
 	query.exclude = skip
 	for hit in get_world_3d().direct_space_state.intersect_shape(query, 8):
