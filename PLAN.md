@@ -4092,3 +4092,21 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 | De modellen opnieuw bouwen | `tools/build_model.sh vehicles`; het level hoeft daarvoor niet opnieuw, behalve als `vehicle()` of het nummer verandert |
 | Een nieuw voertuig | een model in `tools/models/vehicles.gd` met `_touches`, `_sits` en `_solid`, een `vehicles/<soort>.tres`, en `vehicle("<soort>", ...)` in het level |
 | De geluiden opnieuw snijden | `tools/build_sounds.py <id>`; de opnamen staan in `.cache/sounds/freesound_vehicles` |
+
+## De duinen bij nacht (plan)
+
+Op 18 oktober 2026 gevraagd: van precies dezelfde map van de duinen een tweede versie bij nacht, zoals Call of Duty dat weleens doet: donker, met lichtbronnen bij de tenten, de verzamelpunten en het complex. Het plan is dezelfde dag goedgekeurd ("Ja, alles zoals je aanraadt"), met een wapenset erbij: het standaardpakket, maar elk wapen met een demper, om stiller te blijven. Branch `duinnacht`.
+
+**Hoe**
+
+- **Eén gebouwd level, twee scènes.** `scenes/dunes_night.tscn` laadt hetzelfde `scenes/levels/dunes_level.tscn` als de dag, met een eigen omgeving, een maan en een laag lampen. Botsvormen, navmesh, route en posten zijn die van de dag.
+- **De maan staat waar de zon staat** (28,6 graden op 214 graden): de schaduwkaart van het level, de donkere grond in de verte en `sunward` op het beton blijven kloppen.
+- **De lucht wordt in `shaders/dune_sky.gdshader` gerekend**: sterren, de maan waar het licht vandaan komt, een gloed aan de horizon. Geen download.
+- **Eén schakelaar `night`** (een globale shaderwaarde) voor wat de nacht anders tekent: de kamers achter de ramen, het glas van de lampen, de lucht. De omgeving van een level zegt het (`metadata/night`), zoals `metadata/open_sky`.
+- **De lampen** zet de bouwer in een laag `Night`, die zichzelf opruimt als het dag is (zoals `scripts/bake_only.gd`), met namen die `scripts/breakables.gd` kent: ze kunnen stuk. Niets ervan heeft een botsvorm.
+- **Sluipen**: drie standen in plaats van twee. Onder een lamp 34 m, in het maanlicht ongeveer 14, in het donker ongeveer 5; het licht op de speler wordt in het spel uitgerekend, dus een kapotgeschoten lamp maakt het donker.
+- **De begroting**: de nacht is niet trager dan de dag op de vijf vaste standpunten met de soldaten op hun post, om en om op de speelinstelling, en de dag blijft precies gelijk.
+
+**Wat Michiel koos**: de lucht zelf rekenen, maanlicht, geen zaklamp of nachtkijker, en het level mag op deze branch opnieuw gebouwd en meegecommit worden (er is geen lightmap).
+
+**De stappen**: 1. de nacht (scène, maan, lucht, kleur, schakelaar, in de levelkeuze); 2. de lampen; 3. sluipen; 4. geluid, de arena voor wedstrijden, `Net.VERSION`, de hele selftest. Daarnaast het pakket met dempers.
