@@ -59,6 +59,15 @@ const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
 ## The node the vehicles of the level stand under, and how many there are.
 var _vehicles: Node3D
 var _vehicle_count := 0
+## What a vehicle breaks or flattens as it drives into it, each a body of its
+## own with a mesh of its own (scripts/barrier.gd, scripts/wire.gd): the node
+## they stand under, them by name, and the one that is being built now, into
+## which whatever is built goes, see _breakable_into().
+const CRUSHABLE := &"crushable"
+const BREAKABLE := 32
+var _crushables: Node3D
+var _owned := {}
+var _owning: StaticBody3D
 ## The vehicle that can be driven whose number and load are being built, and
 ## whether what is built now is on its turret: it goes into a mesh of its own
 ## that moves with it, see _trim() and _commit().
@@ -97,6 +106,8 @@ func _dice(at: Vector2, salt := 0) -> RandomNumberGenerator:
 ## strand of wire, a toggle. They throw no shadow and are not drawn from
 ## further off than TRIM_REACH, see _commit().
 func _trim(mat: String, at: Vector3) -> SurfaceTool:
+	if _owning:
+		return _still(_tool_named("|own %s/%s" % [_owning.name, mat]), mat)
 	if _riding:
 		return _still(_tool_named("|vehicle %s%s/%s" % [_riding.name, " turret" if _on_turret else "", mat]), mat)
 	@warning_ignore("integer_division")
@@ -115,6 +126,8 @@ func _still(st: SurfaceTool, mat: String) -> SurfaceTool:
 ## Something small that is in nobody's way goes with the small things, as
 ## long as _small says so: a mug, a peg, a helmet.
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	if _owning:
+		return _trim(mat, at)
 	if _small and flags & DETAIL and flags & NO_COLLIDE and not _moving:
 		return _trim(mat, at)
 	return _still(super(mat, flags, at), mat)
@@ -147,6 +160,19 @@ func _commit(zone_name: String, kind: String) -> void:
 		column.extra_cull_margin = 12.0
 	elif kind == "glass" and zone_name == "" and _glass_reveal > 0.0:
 		(_root.get_child(0) as MeshInstance3D).set_meta(&"reveal", _glass_reveal)
+	elif kind.begins_with("own "):
+		# Something a vehicle breaks: its mesh goes with its body, in the
+		# coordinates of the level.
+		var mesh := _root.get_child(0) as MeshInstance3D
+		var body: StaticBody3D = _owned[kind.get_slice(" ", 1)]
+		mesh.owner = null
+		_root.remove_child(mesh)
+		_add(mesh, body)
+		mesh.name = "Mesh"
+		mesh.transform = body.transform.affine_inverse()
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if body.get_meta(&"shadow", false) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.visibility_range_end = TRIM_REACH
+		mesh.visibility_range_end_margin = 8.0
 	elif kind.begins_with("vehicle "):
 		# The number and the load of a vehicle that can be driven go along
 		# with it, and what is on its turret turns with that: see
@@ -1054,6 +1080,9 @@ func wire_coil(from: Vector2, to: Vector2) -> void:
 		turns.append(Vector2(_clutter_rng.randf_range(-0.08, 0.08), _clutter_rng.randf_range(-0.3, 0.3)))
 	var pickets := maxi(2, int(length / 3.0) + 1)
 	var gap := length / maxf(int(length / 3.0), 1.0)
+	# A vehicle flattens it: it is a body of its own, see scripts/wire.gd.
+	var middle_at := (from + to) * 0.5
+	_breakable_into("Wire", "res://scripts/wire.gd", ground(middle_at.x, middle_at.y))
 	var heads: Array[Vector3] = []
 	for stake in pickets:
 		var at := from + way * gap * stake
@@ -1082,6 +1111,33 @@ func wire_coil(from: Vector2, to: Vector2) -> void:
 	var high := maxf(ground_height(from.x, from.y), ground_height(to.x, to.y)) + 1.15
 	var half_way := (from + to) * 0.5
 	_collide_box(Transform3D(Basis.looking_at(along), Vector3(half_way.x, (low + high) * 0.5, half_way.y)), Vector3(0.9, high - low, length), "metal")
+	_breakable_into("", "", Vector3.ZERO)
+
+
+## Builds what follows into a body of its own at `at`, with `script`, which
+## a vehicle breaks or flattens as it drives into it; an empty name builds
+## into the level again. Its colliders go into that body, and its mesh, see _commit().
+## A shot and a blast find it as they found it in the level.
+func _breakable_into(body_name: String, script: String, at: Vector3, shadow := false) -> void:
+	if body_name == "":
+		_owning = null
+		_into = null
+		return
+	if _crushables == null:
+		_crushables = Node3D.new()
+		_crushables.name = "Crushables"
+		_add(_crushables, _root)
+	var body := StaticBody3D.new()
+	body.name = body_name
+	body.position = at
+	body.collision_layer = 1 | BREAKABLE
+	body.set_script(load(script))
+	body.set_meta(&"shadow", shadow)
+	_add(body, _crushables)
+	body.add_to_group(CRUSHABLE, true)
+	_owned[String(body.name)] = body
+	_owning = body
+	_into = body
 
 
 ## A barrier across a track: a pole, red and white, on a post with a weight
@@ -1108,6 +1164,15 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 	var arm := xf * Transform3D(tilt, Vector3(0, 1.0, 0))
 	var lying := Basis(Vector3.BACK, -PI * 0.5)
 	var bands := int(length / 0.5)
+	if not raised:
+		var rest := on_ground(xf * Vector3(length - 0.2, 0, 0))
+		cylinder("steel", rest, 0.025, 0.94, SLIGHT, Vector3.ZERO, -1.0, 6)
+		for z: float in [-0.05, 0.05]:
+			_local_box("steel", xf, Vector3(length - 0.2, 0.98, z), Vector3(0.04, 0.16, 0.008), SLIGHT)
+		_collide_box(Transform3D(xf.basis, rest + Vector3.UP * 0.53), Vector3(0.06, 1.06, 0.12), "metal")
+	# The pole with its weight and its disc snaps off its post when a vehicle
+	# drives into it: a body of its own, see scripts/barrier.gd.
+	_breakable_into("Barrier", "res://scripts/barrier.gd", arm.origin, true)
 	for i in bands:
 		# Thicker at the butt than at the tip, as a pole is.
 		var thick := lerpf(0.055, 0.038, float(i) / bands)
@@ -1118,11 +1183,6 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 	_collide_box(arm * Transform3D(Basis(), Vector3((bands * 0.5 - 0.85) * 0.5, 0, 0)), Vector3(bands * 0.5 + 0.85, 0.11, 0.11), "metal")
 	_cylinder("steel", arm * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0, -0.13)), 0.018, 0.26, SLIGHT, -1.0, 6)
 	if not raised:
-		var rest := on_ground(xf * Vector3(length - 0.2, 0, 0))
-		cylinder("steel", rest, 0.025, 0.94, SLIGHT, Vector3.ZERO, -1.0, 6)
-		for z: float in [-0.05, 0.05]:
-			_local_box("steel", xf, Vector3(length - 0.2, 0.98, z), Vector3(0.04, 0.16, 0.008), SLIGHT)
-		_collide_box(Transform3D(xf.basis, rest + Vector3.UP * 0.53), Vector3(0.06, 1.06, 0.12), "metal")
 		# The disc, red with a white bar, on two links of chain.
 		var middle := Vector3(length * 0.5, -0.32, 0)
 		_cylinder("enamel_red", arm * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), middle + Vector3(0, 0, -0.006)), 0.21, 0.012, SLIGHT, -1.0, 16)
@@ -1131,6 +1191,7 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 			_local_box("paper", arm, middle + Vector3(0, 0, z), Vector3(0.3, 0.065, 0.004), SLIGHT)
 		for x: float in [-0.1, 0.1]:
 			_local_box("steel", arm, middle + Vector3(x, 0.25, 0), Vector3(0.008, 0.12, 0.008), SLIGHT)
+	_breakable_into("", "", Vector3.ZERO)
 
 
 ## A sentry box of boards, its open front facing `yaw_deg`: on skids, with

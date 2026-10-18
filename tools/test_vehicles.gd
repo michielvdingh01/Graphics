@@ -5,13 +5,14 @@ extends SceneTree
 ## drives it with the keys, as somebody playing would: it starts, pulls away,
 ## shifts up, steers, brakes, reverses and lets the player out. The tank turns
 ## on the spot and fires. Then they are worn down to a wreck. Last the dunes
-## are loaded, where every vehicle has to stand on its wheels.
+## are loaded, where every vehicle has to stand on its wheels, and each kind
+## drives out of gate 2 through its barrier and its wire.
 ##
 ##   tools/test_vehicles.sh             all of it
 ##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, wear,
-##                                      run_over, dunes, match
+##                                      run_over, dunes, gate, match
 
-const LIMIT := 420.0
+const LIMIT := 600.0
 ## Loaded once the game runs, not as this is read: the autoloads they name
 ## are not there yet then.
 const PLAYER := "res://scenes/player.tscn"
@@ -45,7 +46,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--only="):
 			only = argument.trim_prefix("--only=")
-	for part: String in ["jeep", "truck", "tank", "wear", "run_over", "dunes", "match"]:
+	for part: String in ["jeep", "truck", "tank", "wear", "run_over", "dunes", "gate", "match"]:
 		if only == "" or only == part:
 			print("-- ", part)
 			await call("_" + part)
@@ -453,6 +454,107 @@ func _dunes() -> void:
 		vehicle.autopilot = false
 		vehicle.engine_on = false
 	check(stuck.is_empty(), "dunes: every vehicle can be driven away from where it stands (stuck: %s)" % ", ".join(stuck))
+
+
+## Gate 2 of the complex in the dunes, at x GATE_X in its wall at z GATE_Z,
+## with a barrier before it and two belts of wire beyond. Whoever walks out
+## is stopped by both; a jeep, a lorry and a tank each drive straight out
+## through them, the barrier snapping off and the wire pressed flat.
+const GATE_X := 69.0
+const GATE_Z := 56.0
+
+
+func _gate() -> void:
+	for kind: String in ["jeep", "truck", "tank"]:
+		if world:
+			world.queue_free()
+			world = null
+		autoload("Save").clear()
+		change_scene_to_file(DUNES)
+		await scene_changed
+		for enemy in get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		await seconds(3.0)
+		var crushables := get_nodes_in_group(&"crushable")
+		var barrier: Node3D = _nearest(crushables, Vector3(GATE_X, 0, 61.6), "broken")
+		var wires: Array[Node3D] = []
+		for z: float in [71.0, 82.0]:
+			wires.append(_nearest(crushables, Vector3(GATE_X, 0, z), "flat"))
+		if barrier == null or wires.has(null):
+			check(false, "gate: the barrier and both belts of wire are there to break")
+			return
+		var space := (current_scene as Node3D).get_world_3d().direct_space_state
+		if kind == "jeep":
+			check(crushables.size() == 17, "gate: the dunes have 2 barriers and 15 coils of wire to break (%d)" % crushables.size())
+			# Whoever walks out of the gate is stopped by the barrier, and
+			# beyond it by the wire.
+			var walker: CharacterBody3D = current_scene.get("player")
+			walker.force_control = true
+			for stop: Array in [[barrier, 59.5, 61.6], [wires[0], 67.0, 71.0]]:
+				walker.global_position = _ground(space, GATE_X - 1.0, stop[1])
+				walker.rotation = Vector3(0, PI, 0)
+				walker.velocity = Vector3.ZERO
+				await frames(2)
+				await _hold("move_forward", 2.5)
+				var to: float = walker.global_position.z
+				check(to < stop[2] - 0.05 and to > stop[1] + 0.3, "gate: walking out, the player is stopped by %s (at z %.2f)" % [stop[0].name, to])
+			walker.global_position = _ground(space, GATE_X, GATE_Z - 30.0)
+			walker.force_control = false
+		var vehicle: RigidBody3D = null
+		for candidate: Node in get_nodes_in_group("vehicle"):
+			if candidate.kind == kind and absf(candidate.turret_deg) < 1.0:
+				vehicle = candidate
+				break
+		# Between the gate and the sandbags in line with it in the yard.
+		vehicle.wake()
+		vehicle.global_transform = Transform3D(Basis(Vector3.UP, PI), _ground(space, GATE_X, GATE_Z - 4.5) + Vector3.UP * 0.4)
+		vehicle.linear_velocity = Vector3.ZERO
+		vehicle.angular_velocity = Vector3.ZERO
+		await seconds(1.0)
+		vehicle.autopilot = true
+		vehicle.hand_brake = false
+		vehicle.engine_on = true
+		vehicle.ask_forward = 1.0
+		var fastest := 0.0
+		var out := false
+		for i in int(14.0 * Engine.physics_ticks_per_second):
+			await physics_frame
+			fastest = maxf(fastest, vehicle.linear_velocity.length())
+			if vehicle.global_position.z > 88.0:
+				out = true
+				break
+			if OS.get_environment("DEBUG_VEHICLE") != "" and i % 60 == 0:
+				print("    %s at %s: speed %.1f gas %.2f brake %.2f gear %d rpm %d engine %s freeze %s physics %s paused %s touching %d" % [vehicle.name, vehicle.global_position.snappedf(0.1), vehicle.speed, vehicle.gas, vehicle.braking, vehicle.gear, vehicle.rpm, vehicle.engine_on, vehicle.freeze, vehicle.is_physics_processing(), paused, vehicle._touching()])
+		vehicle.ask_forward = 0.0
+		var reached: Vector3 = vehicle.global_position
+		check(out, "gate: a %s drives straight out of gate 2 past both belts of wire (to %s, %.1f m/s at most)" % [kind, reached.snappedf(0.1), fastest])
+		check(barrier.broken, "gate: the %s snaps the barrier off" % kind)
+		check(wires.all(func(wire: Node) -> bool: return wire.flat), "gate: and presses the wire flat")
+		check(barrier.collision_layer == 0 and wires.all(func(wire: Node) -> bool: return wire.collision_layer == 0), "gate: what it broke stops nobody any more")
+		var pole := barrier.get_parent().get_node_or_null(NodePath(String(barrier.name) + "Pole")) as RigidBody3D
+		check(pole != null and pole.get_child_count() > 2, "gate: the pole lies in the sand as a piece of its own, with its mesh and its shapes")
+		vehicle.autopilot = false
+		vehicle.engine_on = false
+
+
+## Of `nodes`, the one whose middle is nearest `to` across the ground, with a
+## property `state` that is false still.
+func _nearest(nodes: Array, to: Vector3, state: String) -> Node3D:
+	var best: Node3D = null
+	var best_by := 6.0
+	for node: Node in nodes:
+		var at := (node as Node3D).global_position
+		var by := Vector2(at.x, at.z).distance_to(Vector2(to.x, to.z))
+		if node.get(state) == false and by < best_by:
+			best = node
+			best_by = by
+	return best
+
+
+func _ground(space: PhysicsDirectSpaceState3D, x: float, z: float) -> Vector3:
+	var ray := PhysicsRayQueryParameters3D.create(Vector3(x, 40.0, z), Vector3(x, -10.0, z), 1)
+	var hit := space.intersect_ray(ray)
+	return hit.position if hit else Vector3(x, 6.4, z)
 
 
 ## A match in the dunes with the player in a tank: the bots of the other side

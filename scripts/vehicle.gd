@@ -55,6 +55,10 @@ const RIDER := preload("res://scripts/rider.gd")
 ## is a vehicle, and is one that a blast reaches.
 const WORLD := 1
 const VEHICLE := 1 << 6
+## What breaks or flattens as a vehicle drives into it, and the layer that
+## is on: see _crush() and tools/kit/field.gd.
+const CRUSHABLE := &"crushable"
+const BREAKABLE := 32
 ## Whoever can be run over: players, robots and the two sides of a match.
 const PEOPLE := 2 | 4 | (1 << 8) | (1 << 9)
 const GRAVITY := 9.8
@@ -286,6 +290,11 @@ func _ready() -> void:
 			_axles.append([node, node.transform, on[part]])
 	_make_hull()
 	_keep_off_navmesh()
+	# What it breaks or flattens as it drives into it, a barrier or a coil
+	# of wire, does not stop it: see _crush().
+	for body in get_tree().get_nodes_in_group(CRUSHABLE):
+		if body is PhysicsBody3D:
+			add_collision_exception_with(body)
 	# What the level put on the turret goes round with it.
 	for child in get_children():
 		if child.has_meta(&"on_turret") and _turret:
@@ -659,6 +668,7 @@ func _physics_process(delta: float) -> void:
 	if not freeze:
 		_drive(delta)
 		_crashes(delta)
+		_crush()
 		_run_over_people(delta)
 		_settle(delta)
 	_carry_occupants()
@@ -967,6 +977,26 @@ func _crashes(delta: float) -> void:
 		elif body.has_method("take_damage") and not _run_over.has(body):
 			_run_over[body] = _clock
 			body.take_damage(linear_velocity.length() * 12.0, body.global_position, linear_velocity.normalized())
+
+
+## A barrier it drives into snaps off, a coil of wire it drives over lies
+## flat: it goes through, a little slower for it.
+func _crush() -> void:
+	if linear_velocity.length() < 0.5:
+		return
+	var box := BoxShape3D.new()
+	box.size = _hull.size + Vector3(0.2, 0.0, 0.2)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = box
+	query.transform = global_transform * Transform3D(Basis(), _hull.get_center())
+	query.transform.origin += linear_velocity * 0.05
+	query.collision_mask = BREAKABLE
+	var skip: Array[RID] = [get_rid()]
+	query.exclude = skip
+	for hit in get_world_3d().direct_space_state.intersect_shape(query, 8):
+		var body: Object = hit.collider
+		if body is Node and (body as Node).is_in_group(CRUSHABLE) and body.has_method("run_into"):
+			linear_velocity *= float(body.run_into(self, linear_velocity.length(), linear_velocity, mass))
 
 
 ## Whoever stands in its way as it comes at speed is run down.

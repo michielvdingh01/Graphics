@@ -4064,6 +4064,16 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 - Rupsen draaien niet mee; de loopwielen wel.
 - De ruit van de jeep is van binnen grauw; ik heb het oog boven de ruit gezet.
 
+**Slagboom en prikkeldraad** (18 oktober, na Michiels eerste rit). Bij poort 2 kwam de tank er niet uit. Het "onzichtbare voorwerp" was de botsvorm van de rol prikkeldraad 15 m voor de poort: een blok van 1,45 m hoog over de hele rol, dwars op de weg naar buiten (de opening in die rij ligt op x 54 tot 64, de poort op x 69). Daarachter ligt nog een rij op z 82, en daarvoor de slagboom op 0,97 m, die elk voertuig tegenhield als een betonnen paal.
+
+- De slagboom (`scripts/barrier.gd`) en elke rol prikkeldraad (`scripts/wire.gd`) zijn nu een eigen lichaam met een eigen mesh, in de groep `crushable` onder `Level/Crushables`: 2 slagbomen en 15 rollen in de duinen. `barrier_pole()` en `wire_coil()` in `tools/kit/field.gd` bouwen ze zo voor elk level, met `_breakable_into()`.
+- Een voertuig botst er niet mee, maar ziet ze elke stap voor zich (`_crush()` in `scripts/vehicle.gd`): de slagboom knapt af en vliegt als los stuk weg (met splinters en geluid), het draad wordt platgedrukt en houdt daarna niemand meer tegen. Het voertuig verliest er wat snelheid bij: een jeep een vijfde door het draad, een tank bijna niets. Een granaat of raket hoort de slagboom ook af te knappen (niet getest).
+- Wie loopt, wordt door allebei nog tegengehouden.
+- De zandzakstelling op 12 m binnen de poort staat er met opzet; daar rijd je omheen.
+- Niet veranderd: de tank kan met een gedraaide koepel nog met zijn loop tegen de poortvleugels slaan. Een gebroken slagboom blijft kapot tot het level opnieuw laadt, en wie bij samen spelen later meedoet, ziet hem nog heel.
+- De duinen opnieuw gebouwd (geen lightmap); de showroom niet, daar staan ze nog vast.
+- Getest: `tools/test_vehicles.sh --only=gate` (18 controles). De speler loopt vast tegen slagboom en draad; een jeep, een vrachtwagen en een tank rijden elk recht door poort 2 naar buiten, langs beide rijen draad, en breken onderweg alles. De hele test heeft nu 133 controles in 5 minuten, en de selftest slaagt. Niet op de GPU bekeken en niet gespeeld.
+
 **Nog open**
 
 - Samen spelen: het voertuig van wie rijdt over de lijn sturen (positie, wielen, koepel), instappen op de host vragen.
@@ -4077,7 +4087,7 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 | Wat | Hoe |
 |---|---|
 | Rijden in de duinen | het spel, Dunes, naar een voertuig lopen en E |
-| De voertuigen testen | `tools/test_vehicles.sh` (2,5 minuut), `--only=jeep`, `truck`, `tank`, `wear`, `run_over`, `dunes` of `match` |
+| De voertuigen testen | `tools/test_vehicles.sh` (5 minuten), `--only=jeep`, `truck`, `tank`, `wear`, `run_over`, `dunes`, `gate` of `match` |
 | Een rit horen | `tools/hear.py drive jeep`, `drive truck crash`, `drive truck wreck`, `drive tank gun`, met `b` erachter de varianten |
 | De modellen opnieuw bouwen | `tools/build_model.sh vehicles`; het level hoeft daarvoor niet opnieuw, behalve als `vehicle()` of het nummer verandert |
 | Een nieuw voertuig | een model in `tools/models/vehicles.gd` met `_touches`, `_sits` en `_solid`, een `vehicles/<soort>.tres`, en `vehicle("<soort>", ...)` in het level |
