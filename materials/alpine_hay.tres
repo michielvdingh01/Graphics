@@ -1,0 +1,12 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/alpine_hay.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/sparse_grass/sparse_grass_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/sparse_grass/sparse_grass_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/albedo_tex = ExtResource("diff")
+shader_parameter/normal_tex = ExtResource("nor")
+shader_parameter/wear_mask = ExtResource("mask")
