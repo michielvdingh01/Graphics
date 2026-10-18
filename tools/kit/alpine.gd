@@ -525,10 +525,10 @@ func hay_barn(at: Vector2, yaw_deg: float, size := "middle", walls := "", roof :
 	dim.eaves = eaves
 	_alp_barn_footing(xf, dim, footing)
 	var ridge := _alp_roof(xf, wide, long, eaves, pitch, over_eave, over_gable, roof)
-	_alp_barn_gables(xf, dim, pitch, walls)
+	_alp_barn_gables(xf, dim, pitch)
 	_alp_barn_door(xf, dim)
-	_alp_barn_inside(xf, dim, pitch)
-	_alp_barn_ramp(xf, dim, at)
+	_alp_barn_inside(xf, dim)
+	_alp_barn_ramp(xf, dim)
 	# From afar: the walls on their footing, the gables, the dark of the
 	# doorway and the roof.
 	var wall_colour := ALP_FAR_LOGS if walls == "logs" else ALP_FAR_BOARDS
@@ -867,7 +867,7 @@ func _alp_roof(xf: Transform3D, wide: float, long: float, eaves: float, pitch_de
 ## The gables of a barn above its walls: boards from the top log or plate up
 ## under the roof, tight, with the hatch of the loft in the back one of a
 ## barn that has a stair.
-func _alp_barn_gables(xf: Transform3D, dim: Dictionary, pitch_deg: float, _walls: String) -> void:
+func _alp_barn_gables(xf: Transform3D, dim: Dictionary, pitch_deg: float) -> void:
 	var hw := float(dim.wide) * 0.5
 	var hl := float(dim.long) * 0.5
 	var eaves: float = dim.eaves
@@ -937,7 +937,7 @@ func _alp_wings(xf: Transform3D, wide: float, high: float, mat := ALP_LARCH) -> 
 ## Inside a barn: its floor of boards, hay on it, and over the back the loft
 ## on its beams with more hay. A large barn has a steep stair up to the loft
 ## along one side.
-func _alp_barn_inside(xf: Transform3D, dim: Dictionary, _pitch_deg: float) -> void:
+func _alp_barn_inside(xf: Transform3D, dim: Dictionary) -> void:
 	var hw := float(dim.wide) * 0.5
 	var hl := float(dim.long) * 0.5
 	var inner := Vector2(hw - ALP_LOG.x, hl - ALP_LOG.x)
@@ -1011,7 +1011,7 @@ func _alp_barn_stair(xf: Transform3D, foot: Vector3, high: float) -> void:
 
 ## A ramp of boards up to the door of a barn whose floor lies above the
 ## meadow in front of it.
-func _alp_barn_ramp(xf: Transform3D, dim: Dictionary, _at: Vector2) -> void:
+func _alp_barn_ramp(xf: Transform3D, dim: Dictionary) -> void:
 	_alp_ramp(xf * Transform3D(Basis(), Vector3(0, 0, float(dim.long) * 0.5 + 0.05)), dim.door)
 
 
@@ -1522,7 +1522,7 @@ func chapel(at: Vector2, yaw_deg: float) -> void:
 	# the choir's own, three faces of shingles up to the end of the ridge.
 	var over := 0.45
 	var ridge := _alp_roof(xf * Transform3D(Basis(), Vector3(0, 0, over * 0.5)), wide, long + over, eaves, pitch, 0.4, 0.0, "shingles", 1.0)
-	_alp_chapel_choir_roof(xf, choir, eaves, Vector3(0, ridge - 0.03, -hl), rise)
+	_alp_chapel_choir_roof(xf, choir, eaves, Vector3(0, ridge - 0.03, -hl))
 	_alp_chapel_tower(xf, Vector3(0, eaves + hw * rise, hl - 0.85), ridge)
 	# The bench, against the side the sun stands on in the afternoon.
 	_alp_bench(_alp_face(xf, Vector3.LEFT, hw + 0.05) * Transform3D(Basis(), Vector3(0, 0, 0)), 1.8)
@@ -1605,7 +1605,7 @@ func _alp_arch(xf: Transform3D, hole: Rect2, thick: float, what: String) -> void
 ## The roof of the choir of a chapel: a face of shingles over each of the
 ## walls `choir` (from one corner of the nave round to the other), all up to
 ## `apex`, the end of the ridge of the nave, and a face of boards under each.
-func _alp_chapel_choir_roof(xf: Transform3D, choir: Array[Vector2], eaves: float, apex: Vector3, _rise: float) -> void:
+func _alp_chapel_choir_roof(xf: Transform3D, choir: Array[Vector2], eaves: float, apex: Vector3) -> void:
 	var middle := Vector2(0, -3.3 - 0.4)
 	for i in 3:
 		var a := choir[i]

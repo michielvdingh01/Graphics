@@ -31,7 +31,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 11
+const VERSION := 12
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -422,7 +422,9 @@ func damage(target: Object, amount: float, at: Vector3, direction: Vector3) -> b
 	if not is_guest():
 		return target.take_damage(amount, at, direction)
 	ask(target, &"take_damage", [amount, at, direction])
-	if target.get(&"dead") != false:
+	# Somebody else's player, run down by a vehicle this machine drives, keeps
+	# no count of its own here.
+	if target.get(&"dead") != false or target.get(&"health") == null:
 		return false
 	# Counted off here too, so that the next shot knows where it stands
 	# before the host has answered.

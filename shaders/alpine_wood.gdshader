@@ -27,8 +27,8 @@ uniform float scan_mean = 0.06;
 uniform float grain : hint_range(0.0, 2.0) = 0.9;
 // The grey wood weathers to where the rain beats on it and the sun does not
 // stand long, and the brown it burns to where the sun stands all day.
-uniform vec3 grey : source_color = vec3(0.4, 0.385, 0.36);
-uniform vec3 burnt : source_color = vec3(0.27, 0.19, 0.13);
+uniform vec3 grey : source_color = vec3(0.38, 0.365, 0.34);
+uniform vec3 burnt : source_color = vec3(0.28, 0.215, 0.16);
 // The way the sun stands at noon over the ground, x and z: south.
 uniform vec2 sun_side = vec2(0.15, 0.99);
 // How much one timber differs from the next.

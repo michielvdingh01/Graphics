@@ -1280,7 +1280,8 @@ func _draw_conifer(tree: String) -> void:
 			_comb_cards(bough, ["side"] if i % 2 == 0 else ["front"], 1.15, 1.6)
 			if i % 6 == 0:
 				_comb_cards(bough, ["front"], 1.15, 1.6)
-		elif bough.whorl % 8 == 1:
+		elif bough.whorl % 8 == 1 and _leaf == SPRUCE:
+			# Something to see from above: a larch is open enough without.
 			_comb_cards(bough, ["plan"], 1.1)
 	_spire(1.15)
 

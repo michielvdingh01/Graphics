@@ -13,6 +13,12 @@ func _describe() -> void:
 	# The camps at either end are kept clear of the wood.
 	for camp: Vector2 in [Vector2(330, 905), Vector2(2880, 760)]:
 		keep_open(Rect2(camp - Vector2(70, 60), Vector2(140, 120)))
-	woods()
+	# The barns, the chapel and the farm the route is fought round, then the
+	# vehicles and the route, then the barns about the meadows where they
+	# leave room; the woods, and last what grows between the meadows.
+	build("valley")
 	build("bases")
-	route_start(ground(400, 900), ground(1600, 900))
+	build("route")
+	build("valley", &"_scatter")
+	woods()
+	build("valley", &"_meadow_cover")

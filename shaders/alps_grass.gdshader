@@ -21,26 +21,50 @@ uniform float hole = 0.0;
 uniform float reach = 16.0;
 uniform sampler2D land_height : filter_nearest, repeat_disable;
 uniform sampler2D land_a : filter_linear, repeat_disable;
+uniform sampler2D land_b : filter_linear, repeat_disable;
 uniform vec4 land_rect = vec4(0.0);
 uniform float land_cell = 2.0;
 
 uniform sampler2D blades_tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform sampler2D blades_normal : hint_normal, filter_linear_mipmap, repeat_disable;
-uniform vec3 tint : source_color = vec3(0.55, 0.8, 0.32);
+uniform vec3 tint : source_color = vec3(0.42, 0.72, 0.2);
 uniform vec3 straw_tint : source_color = vec3(0.86, 0.72, 0.42);
 uniform float cut_near : hint_range(0.0, 1.0) = 0.42;
 uniform float cut_far : hint_range(0.0, 1.0) = 0.16;
 uniform vec2 wind = vec2(0.6, 0.8);
 uniform float sway = 0.08;
-uniform float through : hint_range(0.0, 1.0) = 0.35;
+uniform float through : hint_range(0.0, 1.0) = 0.12;
 // How large a tuft of the nearest ring is, in metres, the least and the most.
-uniform vec2 size = vec2(0.24, 0.4);
+uniform vec2 size = vec2(0.32, 0.55);
 
 varying float straw;
 varying float sky;
+// The strip of the floor it grows on, as the ground has it
+// (shaders/alps_ground.gdshader): how lately it was mown.
+varying float mown;
+varying float on_floor;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// The noise of the ground's strips, as shaders/alps_ground.gdshader has it.
+float noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+float fbm(vec2 p) {
+	float sum = 0.0;
+	float amp = 0.5;
+	for (int i = 0; i < 4; i++) {
+		sum += noise(p) * amp;
+		p = p * 2.03 + vec2(17.1, 9.3);
+		amp *= 0.5;
+	}
+	return sum;
 }
 
 float height_at(vec2 at) {
@@ -77,6 +101,13 @@ void vertex() {
 	vec2 on_land = (at - land_rect.xy) * land_rect.zw;
 	vec4 map = textureLod(land_a, on_land, 0.0);
 	float meadow = (1.0 - smoothstep(0.15, 0.5, map.b)) * (1.0 - smoothstep(0.2, 0.5, map.a));
+	// None on a road, but along the middle of a track.
+	vec4 ways = textureLod(land_b, on_land, 0.0);
+	float from_middle = ways.r * 16.0;
+	float half_wide = ways.g * 4.0;
+	float on_road = 1.0 - smoothstep(half_wide - 0.3, half_wide + 0.3, from_middle);
+	on_road *= 1.0 - (1.0 - smoothstep(0.2, 0.45, from_middle)) * step(half_wide, 1.9);
+	meadow *= 1.0 - on_road;
 	if (on_land.x < 0.0 || on_land.y < 0.0 || on_land.x > 1.0 || on_land.y > 1.0) {
 		meadow = 0.0;
 	}
@@ -84,6 +115,10 @@ void vertex() {
 	float grown = mix(size.x, size.y, d4) * spacing / 0.26 * kept;
 	straw = smoothstep(0.7, 1.0, hash(square + 5.3)) * 0.6 + smoothstep(0.5, 0.0, meadow) * 0.3;
 	sky = map.g;
+	on_floor = 1.0 - smoothstep(100.0, 140.0, height_at(at));
+	float across_strips = (at.x + (fbm(at * 0.0025) - 0.5) * 70.0) / 31.0;
+	float strip = floor(across_strips);
+	mown = mix(fract(sin(strip * 12.9898) * 43758.5453), fract(sin((strip + 1.0) * 12.9898) * 43758.5453), smoothstep(0.93, 1.0, fract(across_strips)));
 	float turn = d1 * 6.2831853;
 	mat3 spin = mat3(vec3(cos(turn), 0.0, -sin(turn)), vec3(0.0, 1.0, 0.0), vec3(sin(turn), 0.0, cos(turn)));
 	vec3 local = spin * (VERTEX * vec3(1.15, 0.7, 1.15)) * grown;
@@ -105,11 +140,15 @@ void fragment() {
 	vec3 colour = blade.rgb * tint;
 	colour = mix(colour, vec3(dot(blade.rgb, vec3(0.3, 0.6, 0.1))) * 2.0 * straw_tint, straw);
 	colour *= COLOR.b;
+	colour *= mix(1.0, mix(0.84, 1.12, mown), on_floor);
+	colour = mix(colour, colour * vec3(1.12, 1.03, 0.72), smoothstep(0.72, 0.85, mown) * on_floor * 0.7);
 	ALBEDO = colour;
 	ALPHA = blade.a;
 	ALPHA_SCISSOR_THRESHOLD = mix(cut_near, cut_far, smoothstep(5.0, 40.0, depth));
-	ROUGHNESS = 0.8;
-	SPECULAR = 0.25;
+	// Blades are dull: against the low sun a shine on them would turn the
+	// meadow white.
+	ROUGHNESS = 0.9;
+	SPECULAR = 0.08;
 	BACKLIGHT = colour * through * 2.0;
 	AO = sky;
 	AO_LIGHT_AFFECT = 0.0;

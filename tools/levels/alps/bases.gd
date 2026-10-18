@@ -39,5 +39,16 @@ func _camp(at: Vector2, facing: float) -> void:
 	vehicle("motorcycle", row + across * 4.0, facing)
 	vehicle("truck", row + across * 10.0 - ahead * 4.0, facing)
 	vehicle("tank", row + across * 20.0 - ahead * 6.0, facing)
-	tent(at - ahead * 30.0 + across * -4.0, facing + 90.0)
+	var camp_tent := at - ahead * 30.0 + across * -4.0
+	tent(camp_tent, facing + 90.0)
+	# A bulb under the ridge of the tent, for the evening.
+	bulb(ground(camp_tent.x, camp_tent.y, 2.5), false)
 	sandbag_post(at + ahead * 18.0 + across * 2.0, facing + 180.0)
+	# What a camp keeps by its vehicles: fuel in drums and cans, and crates
+	# of what it eats and shoots.
+	var store := at - ahead * 22.0 + across * 14.0
+	for i in 3:
+		barrel(ground(store.x + i * 0.75, store.y))
+	fuel(ground(store.x + 0.4, store.y + 1.4))
+	fuel(ground(store.x + 1.1, store.y + 1.5))
+	crates(ground(store.x - 3.0, store.y + 2.0), 4)

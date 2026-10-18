@@ -33,6 +33,7 @@ signal died(enemy: Node3D)
 ## Something hit it, whether that hurt it or not.
 signal disturbed
 
+const WAY := preload("res://scripts/way.gd")
 const ACCEL := 22.0
 const SIGHT_RANGE := 45.0
 const ALERT_RADIUS := 14.0
@@ -821,7 +822,7 @@ func _run_about(delta: float) -> Vector3:
 	if _bolt <= 0.0 or _flat(_bolt_to) < 1.0:
 		_bolt = randf_range(PANIC_TIME.x, PANIC_TIME.y)
 		var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU) * randf_range(PANIC_RUN.x, PANIC_RUN.y)
-		_bolt_to = NavigationServer3D.map_get_closest_point(agent.get_navigation_map(), global_position + way)
+		_bolt_to = WAY.closest(agent.get_navigation_map(), global_position + way)
 	var step := _go_to(_bolt_to, speed * panic_pace)
 	if step.length_squared() > 0.01:
 		_face = step

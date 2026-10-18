@@ -438,6 +438,21 @@ func _host_ride() -> void:
 	await _wait(0.5)
 	bike.take_damage(150.0, bike.global_position, Vector3.FORWARD)
 	_check("a hit wears it down", bike.health < bike.data.health)
+	# Now the other way round: the guest drives, the host rides along.
+	bike.request_leave(player)
+	_check("the host gets off, and runs it with nobody at the handlebars", bike.driver() == null and bike.runs_here())
+	_check("the guest takes the handlebars, and its machine runs it now", await _until(func() -> bool: return bike.driver() == puppet and not bike.runs_here(), 30.0))
+	player.global_position = bike.global_position + bike.global_basis.x * 2.2 + Vector3.UP
+	await _wait(0.3)
+	bike.request_seat(player, 1)
+	_check("the host gets into the sidecar", await _until(func() -> bool: return bike.occupants[1] == player and player.riding == bike, 5.0))
+	var still := bike.global_position
+	_check("and is carried off as the guest rides", await _until(func() -> bool: return bike.global_position.distance_to(still) > 8.0, 30.0))
+	print("  seen here, the guest's motorcycle went %.1f m; the eyes of the host are %.2f m from those of the sidecar" % [bike.global_position.distance_to(still), (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin)])
+	_check("with the eyes where the sidecar has them", (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin) < 0.3)
+	await _until(func() -> bool: return bike.speed < 1.0, 15.0)
+	bike.request_leave(player)
+	_check("and gets out", player.riding == null and bike.occupants[1] == null)
 	# The guest says when it has seen it; leaving before would end its game.
 	await _until(func() -> bool: return game.puppets.is_empty(), 40.0)
 
@@ -480,6 +495,22 @@ func _join_ride() -> void:
 	bike.request_leave(player)
 	_check("and gets out", player.riding == null and bike.occupants[1] == null)
 	_check("sees the motorcycle worn down by the host", await _until(func() -> bool: return bike.health < bike.data.health, 20.0))
+	# Now the guest drives and the host rides along.
+	_check("the host gets off", await _until(func() -> bool: return bike.driver() == null, 20.0))
+	player.global_position = bike.global_position + bike.global_basis.x * -1.4 + Vector3.UP
+	await _wait(0.3)
+	bike.request_seat(player, 0)
+	_check("the guest takes the handlebars, and runs it here", await _until(func() -> bool: return bike.driver() == player, 5.0) and bike.runs_here())
+	_check("the host gets into the sidecar", await _until(func() -> bool: return host != null and bike.occupants[1] == host, 20.0))
+	var from_here := bike.global_position
+	Input.action_press("move_forward")
+	await _wait(4.0)
+	Input.action_release("move_forward")
+	print("  the guest rode %.1f m, at %.1f m/s at the end" % [bike.global_position.distance_to(from_here), bike.speed])
+	_check("rides off with the host in the sidecar", bike.global_position.distance_to(from_here) > 8.0 and bike.occupants[1] == host)
+	_check("the host is carried along here", host.global_position.distance_to(bike.seat_frame(1).origin) < 1.2)
+	_check("the host gets out again", await _until(func() -> bool: return bike.occupants[1] == null, 30.0))
+	bike.request_leave(player)
 	await _wait(0.5)
 
 

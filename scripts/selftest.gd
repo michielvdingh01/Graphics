@@ -18,6 +18,7 @@ extends Node
 ## switched off.
 
 const ARMORY := preload("res://scripts/armory.gd")
+const WAY := preload("res://scripts/way.gd")
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
@@ -2178,7 +2179,7 @@ func _walk(game: Node) -> PackedVector3Array:
 		if not _reaches(map, stops[i], stops[i + 1]):
 			print("    no way from %s to %s" % [stops[i], stops[i + 1]])
 			return PackedVector3Array()
-		var leg := NavigationServer3D.map_get_path(map, stops[i], stops[i + 1], true)
+		var leg := WAY.between(map, stops[i], stops[i + 1])
 		for j in leg.size() - 1:
 			var steps := maxi(1, ceili(leg[j].distance_to(leg[j + 1]) / STRIDE))
 			for k in steps:
@@ -2366,7 +2367,7 @@ func _kinds(enemies: Array) -> Array:
 
 ## True if the navmesh has a way from one point to the other.
 func _reaches(map: RID, from: Vector3, to: Vector3) -> bool:
-	var route := NavigationServer3D.map_get_path(map, from, to, true)
+	var route := WAY.between(map, from, to)
 	return route.size() > 1 and route[0].distance_to(from) < 1.0 and route[-1].distance_to(to) < 1.0
 
 

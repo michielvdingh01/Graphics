@@ -128,6 +128,106 @@ func lie_of(at: Vector2, high: float, normal: Vector3) -> Dictionary:
 	return {"forest": clampf(forest, 0.0, 1.0), "snow": snow, "rock": rock}
 
 
+## The roads of the land. A gravel road from camp to camp, past the farm, on
+## to Ehrwald; a cart track over the Moos from the south; and a track up the
+## slope in the north to the hunter's stand.
+const ROADS := [
+	[4.6, [Vector2(300, 905), Vector2(520, 900), Vector2(820, 905), Vector2(1100, 930), Vector2(1350, 880), Vector2(1600, 840), Vector2(1850, 860), Vector2(2100, 880), Vector2(2380, 820), Vector2(2650, 780), Vector2(2880, 765), Vector2(3170, 770)]],
+	[3.2, [Vector2(940, 1760), Vector2(980, 1500), Vector2(1060, 1250), Vector2(1120, 1060), Vector2(1100, 930)]],
+	[3.2, [Vector2(2100, 880), Vector2(2140, 760), Vector2(2120, 650), Vector2(2200, 560), Vector2(2260, 470), Vector2(2250, 400)]],
+]
+## How far from the middle of a road the map of the land keeps count, in
+## metres: see _land_map().
+const ROAD_REACH := 16.0
+## The roads that were cut: {path, width}.
+var _roads_cut: Array[Dictionary] = []
+
+
+## Cuts ROADS into the land.
+func _roads() -> void:
+	for way: Array in ROADS:
+		road(way[1], way[0])
+
+
+## A road along `points`, `width` wide: the land along it evened out
+## lengthwise, laid level across it and eased into the land over `margin`
+## either side. As track() of tools/kit/land.gd does, but from the road out:
+## that one looks at every spot of the land round it for the nearest spot of
+## the road, which over kilometres takes minutes.
+func road(points: Array, width: float, margin := 5.0, ease := 12) -> void:
+	var way := curve(points, 1.0)
+	var level := PackedFloat32Array()
+	for point in way:
+		level.append(ground_height(point.x, point.y))
+	for pass_ in 3:
+		var evened := PackedFloat32Array()
+		for i in level.size():
+			var sum := 0.0
+			var count := 0
+			for j in range(maxi(i - ease, 0), mini(i + ease, level.size() - 1) + 1):
+				sum += level[j]
+				count += 1
+			evened.append(sum / count)
+		level = evened
+	var half := width * 0.5
+	var reach := half + margin
+	var nearest := {}
+	for k in way.size():
+		var box := _spots_in(Rect2(way[k] - Vector2.ONE * reach, Vector2.ONE * reach * 2.0))
+		for row in range(box[1], box[3] + 1):
+			for column in range(box[0], box[2] + 1):
+				var gap := _spot(column, row).distance_to(way[k])
+				var i := row * _across() + column
+				if gap <= reach and (not nearest.has(i) or gap < nearest[i][0]):
+					nearest[i] = [gap, level[k]]
+	for i: int in nearest:
+		var hold := 1.0 - smoothstep(half, reach, nearest[i][0])
+		_heights[i] = lerpf(_heights[i], nearest[i][1], hold)
+		_firm[i] = maxf(_firm[i], hold)
+	_roads_cut.append({"path": way, "width": width})
+
+
+## How far from the middle of the nearest road the spot `at` lies, up to
+## ROAD_REACH, to the nearest spot of the land.
+func road_gap(at: Vector2) -> float:
+	if _road_gaps.is_empty():
+		_road_gaps = _road_distances()[0]
+	var spots := _spots_in(Rect2(at, Vector2.ZERO))
+	return _road_gaps[spots[1] * _across() + spots[0]]
+
+
+var _road_gaps := PackedFloat32Array()
+
+
+## How far from the middle of the nearest road every spot of the land lies, up
+## to ROAD_REACH, and how wide that road is: two grids the size of the land.
+func _road_distances() -> Array[PackedFloat32Array]:
+	var gaps := PackedFloat32Array()
+	gaps.resize(_across() * _down())
+	gaps.fill(ROAD_REACH)
+	var widths := PackedFloat32Array()
+	widths.resize(gaps.size())
+	for cut: Dictionary in _roads_cut:
+		var way: PackedVector2Array = cut.path
+		for k in way.size():
+			var box := _spots_in(Rect2(way[k] - Vector2.ONE * ROAD_REACH, Vector2.ONE * ROAD_REACH * 2.0))
+			for row in range(box[1], box[3] + 1):
+				for column in range(box[0], box[2] + 1):
+					var i := row * _across() + column
+					# The nearest spot of the road between this point and the
+					# next, not the point itself.
+					var at := _spot(column, row)
+					var gap := at.distance_to(way[k])
+					if k + 1 < way.size():
+						var along := way[k + 1] - way[k]
+						var share := clampf((at - way[k]).dot(along) / maxf(along.length_squared(), 0.0001), 0.0, 1.0)
+						gap = at.distance_to(way[k] + along * share)
+					if gap < gaps[i]:
+						gaps[i] = gap
+						widths[i] = cut.width
+	return [gaps, widths]
+
+
 ## The land of the basin as it is.
 func _lie_of_the_land() -> void:
 	land(LAND, 0.0, CELL, COVER)
@@ -140,6 +240,7 @@ func _lie_of_the_land() -> void:
 	# The two camps at the ends, levelled where their vehicles stand.
 	for camp: Vector2 in [Vector2(330, 905), Vector2(2880, 760)]:
 		level_off(Rect2(camp - Vector2(45, 35), Vector2(90, 70)), NAN, 18.0)
+	_roads()
 	lay_ground("alps_ground")
 
 
@@ -189,6 +290,7 @@ func ground_look() -> ShaderMaterial:
 		_look.set_shader_parameter("far_rect", _far_rect)
 	if not _land_maps.is_empty():
 		_look.set_shader_parameter("land_a", _land_maps[0])
+		_look.set_shader_parameter("land_b", _land_maps[1])
 		_look.set_shader_parameter("land_rect", Vector4(_land.position.x, _land.position.y, 1.0 / _land.size.x, 1.0 / _land.size.y))
 	return _look
 
@@ -206,7 +308,17 @@ func _land_map() -> void:
 	var far := (_far_maps[0] as ImageTexture).get_image()
 	if far.has_mipmaps():
 		far.clear_mipmaps()
+	var roads := _road_distances()
+	# What is kept open of the wood (keep_open()) is meadow on the ground too.
+	var kept_open := PackedByteArray()
+	kept_open.resize(across * down)
+	for area: Rect2 in _open:
+		var box := _spots_in(area)
+		for row in range(box[1], box[3] + 1):
+			for column in range(box[0], box[2] + 1):
+				kept_open[row * across + column] = 1
 	var map := Image.create(across, down, false, Image.FORMAT_RGBA8)
+	var ways := Image.create(across, down, false, Image.FORMAT_RGBA8)
 	for row in down:
 		for column in across:
 			var i := row * across + column
@@ -215,9 +327,13 @@ func _land_map() -> void:
 			var cover := lie_of(at, _heights[i] + SEA, normal)
 			var uv := (at - Vector2(_far_rect.x, _far_rect.y)) * Vector2(_far_rect.z, _far_rect.w) * Vector2(far.get_size()) - Vector2(0.5, 0.5)
 			var mountains := _bilinear(far, uv).r
-			map.set_pixel(column, row, Color(minf(lit[i], mountains), open[i], cover.forest, cover.rock))
+			var by_road := roads[0][i] / ROAD_REACH
+			# No wood on a road, nor right beside it.
+			var forest: float = cover.forest * smoothstep(0.25, 0.45, by_road) * float(1 - kept_open[i])
+			map.set_pixel(column, row, Color(minf(lit[i], mountains), open[i], forest, cover.rock))
+			ways.set_pixel(column, row, Color(by_road, roads[1][i] / 8.0, 0.0, 0.0))
 	map.generate_mipmaps()
-	_land_maps = [ImageTexture.create_from_image(map)]
+	_land_maps = [ImageTexture.create_from_image(map), ImageTexture.create_from_image(ways)]
 	print("Land map: %d x %d dots, in %.1f s" % [across, down, (Time.get_ticks_msec() - began) / 1000.0])
 
 
@@ -295,13 +411,17 @@ func _finish_zones() -> void:
 		var walk_path := "%s%s_walk.res" % [OUT_DIR, _level_name()]
 		ResourceSaver.save(_walk, walk_path, ResourceSaver.FLAG_COMPRESS)
 		_walk.take_over_path(walk_path)
-		_root.set_meta(&"walk", _walk)
-		_root.set_meta(&"walk_cell", WALK_CELL)
+		var tiles := Resource.new()
+		tiles.set_meta(&"tiles", _walk_tiles)
+		tiles.set_meta(&"square", WALK_CHUNK)
+		var tiles_path := "%s%s_walk_tiles.res" % [OUT_DIR, _level_name()]
+		ResourceSaver.save(tiles, tiles_path, ResourceSaver.FLAG_COMPRESS)
+		tiles.take_over_path(tiles_path)
 	if _land_mesh == null:
 		return
 	# The maps and the material that reads them, as files of their own.
 	ground_look()
-	var maps := {"far_a": _far_maps[0], "far_b": _far_maps[1], "land_a": _land_maps[0]}
+	var maps := {"far_a": _far_maps[0], "far_b": _far_maps[1], "land_a": _land_maps[0], "land_b": _land_maps[1]}
 	for map_name: String in maps:
 		var map_path := "%s%s_%s.res" % [OUT_DIR, _level_name(), map_name]
 		ResourceSaver.save(maps[map_name], map_path, ResourceSaver.FLAG_COMPRESS)
@@ -324,6 +444,7 @@ func _finish_zones() -> void:
 		var grass := (load("res://materials/alps_grass.tres") as ShaderMaterial).duplicate() as ShaderMaterial
 		grass.set_shader_parameter("land_height", height_map)
 		grass.set_shader_parameter("land_a", maps.land_a)
+		grass.set_shader_parameter("land_b", maps.land_b)
 		grass.set_shader_parameter("land_rect", _lifted.get_shader_parameter("land_rect"))
 		grass.set_shader_parameter("land_cell", _cell)
 		var grass_path := "%s%s_grass.res" % [OUT_DIR, _level_name()]
@@ -349,15 +470,19 @@ func _finish_zones() -> void:
 ## The navmesh of the land: baked here, once, and not by the game when the
 ## level loads (see scripts/game.gd), which on land of kilometres would take
 ## minutes. Its cells are four times as coarse as those of the other levels,
-## and the game sets the map of the level to match. Recast takes no more than
-## 65 536 corners in one bake; the land takes some eight thousand. Should it
-## ever take more, WALK_CHUNK smaller bakes it in squares, each with what lies
-## WALK_MARGIN round it, sewn together into one navmesh: where two meet, each
-## edge along the seam gets the corners of the other side's edges. That was
-## tried with squares of 256 m and a twentieth of the step it has now, and
-## the game did not find its way across every seam.
+## and the game sets the map of the level to match. It is baked in squares of
+## WALK_CHUNK metres, each with what lies WALK_MARGIN round it, and every
+## square is a region of its own in the game, which the map joins where
+## their edges meet. Baked in one piece, Recast made polygons as large as the
+## open land let it, a triangle of four hundred metres over the Moos lying
+## flat a metre and a half over a hollow, where a bot never reaches the point
+## of its way it is making for; a square keeps a polygon to its own size, and
+## its corners are laid on the ground. The squares sewn together into one
+## navmesh are what the game reads to know the floor (scripts/arena.gd,
+## scripts/squad.gd). A way across the land then crosses tens of thousands of
+## polygons, more than Godot searches by itself: see scripts/way.gd.
 const WALK_CELL := 1.0
-const WALK_CHUNK := 4000.0
+const WALK_CHUNK := 128.0
 ## How high a step one may take from one cell to the next: on land as steep
 ## as one can walk up, 45 degrees, that is a cell. With the quarter of a metre
 ## of the other levels every slope over 26 degrees fell apart into scraps.
@@ -389,7 +514,11 @@ func _bake_walk() -> NavigationMesh:
 		if x < _land.end.x - 0.1:
 			seams_x.append(x)
 	var navmesh := _sew(chunks, seams_x, seams_z)
-	print("Walk: %d polygons, %d corners from %d squares, in %.1f s" % [navmesh.get_polygon_count(), navmesh.get_vertices().size(), chunks.size(), (Time.get_ticks_msec() - began) / 1000.0])
+	_walk_tiles = chunks
+	var polygons := 0
+	for chunk in chunks:
+		polygons += chunk.get_polygon_count()
+	print("Walk: %d squares of %d m, %d polygons; sewn into one of %d polygons, in %.1f s" % [chunks.size(), int(WALK_CHUNK), polygons, navmesh.get_polygon_count(), (Time.get_ticks_msec() - began) / 1000.0])
 	return navmesh
 
 
@@ -400,8 +529,13 @@ func _walk_settings() -> NavigationMesh:
 	navmesh.geometry_collision_mask = 1
 	navmesh.cell_size = WALK_CELL
 	navmesh.cell_height = 0.25
-	navmesh.agent_radius = 0.5
+	# A whole cell: the bake rounds half a metre up to one anyway, and says so
+	# for every square.
+	navmesh.agent_radius = WALK_CELL
 	navmesh.agent_max_climb = WALK_CLIMB
+	# Small regions into their neighbours: an open meadow in a few polygons.
+	navmesh.region_min_size = 8.0
+	navmesh.region_merge_size = 400.0
 	navmesh.edge_max_error = 1.0
 	navmesh.border_size = 2.0
 	return navmesh
@@ -475,8 +609,22 @@ func _bake_chunk(box: Rect2, obstacles: PackedVector3Array) -> NavigationMesh:
 	var source := NavigationMeshSourceGeometryData3D.new()
 	source.add_faces(faces, Transform3D())
 	var navmesh := _walk_settings()
-	navmesh.filter_baking_aabb = AABB(Vector3(box.position.x, -1000.0, box.position.y), Vector3(box.size.x, 4000.0, box.size.y))
+	# The border is left out inside the box that is baked: the box reaches
+	# that far beyond the square, so that the square's navmesh ends where
+	# the square does, against that of the next.
+	var baked := box.grow(navmesh.border_size)
+	navmesh.filter_baking_aabb = AABB(Vector3(baked.position.x, -1000.0, baked.position.y), Vector3(baked.size.x, 4000.0, baked.size.y))
 	NavigationServer3D.bake_from_source_geometry_data(navmesh, source)
+	# Its corners on the ground itself, where Recast has them to a quarter
+	# of a metre: two squares that meet then have the same height along the
+	# edge, and the map joins them. Not where something stands over the
+	# ground, on a wall of sandbags.
+	var corners := navmesh.get_vertices()
+	for i in corners.size():
+		var floor_at := ground_height(corners[i].x, corners[i].z)
+		if absf(corners[i].y - floor_at) < 0.6:
+			corners[i].y = floor_at + 0.05
+	navmesh.set_vertices(corners)
 	return navmesh
 
 
@@ -602,6 +750,9 @@ func _survey() -> bool:
 
 
 var _walk: NavigationMesh
+## The squares the navmesh was baked in, each a region of its own in the
+## game: see scripts/game.gd.
+var _walk_tiles: Array[NavigationMesh] = []
 
 
 # --- The wood -----------------------------------------------------------------------
@@ -612,12 +763,45 @@ const GROVE := preload("res://scripts/grove.gd")
 const WOOD_SPACING := 6.0
 ## The kinds of tree, as models of tools/models/trees.gd, for the dense wood,
 ## its edge and young growth, the larches, and the dwarf pine above the line.
-## Until the spruces and larches of the Alps are built the pines of the dunes
-## stand in for them.
-const SPRUCES := [["pine_a", 3.0], ["pine_b", 2.0], ["pine_c", 2.0]]
-const YOUNG := [["pine_young", 2.0], ["pine_d", 1.0]]
-const LARCHES := [["pine_c", 1.0]]
-const DWARF_PINES := [["scrub_a", 1.0], ["scrub_b", 1.0]]
+const SPRUCES := [["spruce_old", 3.0], ["spruce_mid", 2.0]]
+const YOUNG := [["spruce_young", 2.0], ["spruce_mid", 1.0]]
+const LARCHES := [["larch_old", 1.0], ["larch_young", 1.0]]
+const DWARF_PINES := [["dwarf_pine_a", 1.0], ["dwarf_pine_b", 1.0]]
+
+## Spots nothing grows on, [x, z, radius], filed by CLEAR_CELL squares: where
+## an enemy of the route stands, a checkpoint, a vehicle. See keep_bare().
+var _clear := {}
+const CLEAR_CELL := 32.0
+
+
+## Keeps `radius` round `at` clear of trees.
+func keep_bare(at: Vector2, radius: float) -> void:
+	var low := Vector2i(((at - Vector2.ONE * radius) / CLEAR_CELL).floor())
+	var high := Vector2i(((at + Vector2.ONE * radius) / CLEAR_CELL).floor())
+	for cz in range(low.y, high.y + 1):
+		for cx in range(low.x, high.x + 1):
+			var cell := Vector2i(cx, cz)
+			if not _clear.has(cell):
+				_clear[cell] = []
+			(_clear[cell] as Array).append(Vector3(at.x, at.y, radius))
+
+
+## Whether a tree can stand at `at`: as the kit has it, off the roads, and
+## not on a spot kept clear.
+func _tree_fits(at: Vector2) -> bool:
+	if not super(at) or road_gap(at) < 5.0:
+		return false
+	for spot: Vector3 in _clear.get(Vector2i((at / CLEAR_CELL).floor()), []):
+		if at.distance_squared_to(Vector2(spot.x, spot.y)) < spot.z * spot.z:
+			return false
+	return true
+
+
+## A vehicle as the kit stands it, with the ground round it kept clear.
+func vehicle(kind: String, at: Vector2, yaw_deg: float, parked := false) -> void:
+	super(kind, at, yaw_deg, parked)
+	keep_bare(at, 8.0)
+
 
 ## The trees planted so far, by kind: {"cells": {Vector2i: twelve numbers a
 ## tree}}, see scripts/grove.gd. And every trunk, [foot, radius], for the navmesh.
@@ -676,7 +860,7 @@ func woods() -> void:
 			if dense <= 0.02 or dice.randf() > dense:
 				continue
 			var kinds: Array = SPRUCES
-			var size := dice.randf_range(0.85, 1.2)
+			var size := dice.randf_range(0.8, 1.1)
 			if high > TREE_LINE + 40.0 and dice.randf() < 0.7:
 				kinds = DWARF_PINES
 				size = dice.randf_range(0.8, 1.3)
@@ -721,6 +905,9 @@ func _write_grove() -> void:
 	node.name = "Grove"
 	node.set_script(GROVE)
 	node.set("plantings", plantings)
+	if not _far_maps.is_empty():
+		node.set("sun_map", _far_maps[0])
+		node.set("sun_rect", _far_rect)
 	_add(node, _root)
 
 

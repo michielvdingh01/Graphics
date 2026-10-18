@@ -14,6 +14,7 @@ extends Node
 ## pause after each: the others wait behind something or move. That is what
 ## leaves the player room to move as well, and what makes a fight read as one.
 
+const WAY := preload("res://scripts/way.gd")
 const WORLD := 1
 ## Distance between the spots the survey looks at.
 const GRID := 1.0
@@ -316,7 +317,7 @@ func find_refuge(seeker: Node3D, from_what: Dictionary) -> Vector3:
 		out = seeker.global_basis.z
 	var map := seeker.get_world_3d().navigation_map
 	# If nothing better turns up: straight away from it.
-	var refuge := NavigationServer3D.map_get_closest_point(map, from + out.normalized() * maxf(clear - out.length() + 1.0, 2.0))
+	var refuge := WAY.closest(map, from + out.normalized() * maxf(clear - out.length() + 1.0, 2.0))
 	if not _survey():
 		return refuge
 	var space := seeker.get_world_3d().direct_space_state
@@ -408,7 +409,10 @@ func _survey() -> bool:
 	var corners := navmesh.get_vertices()
 	# A navmesh that has just been baked is only on the map a few frames
 	# later. Until then the map knows of no floor to put a spot on.
-	if corners.is_empty() or NavigationServer3D.map_get_closest_point_owner(map, to_world * corners[0]) != region.get_rid():
+	# A navmesh that finds the way in squares of its own (see scripts/game.gd)
+	# is read whole, and is on the map as those squares.
+	var owner := NavigationServer3D.map_get_closest_point_owner(map, to_world * corners[0]) if not corners.is_empty() else RID()
+	if corners.is_empty() or (region.enabled and owner != region.get_rid()) or (not region.enabled and not owner.is_valid()):
 		return false
 	_surveyed = [scene.get_instance_id(), made]
 	_spots.clear()
@@ -494,7 +498,7 @@ func _survey_near_things(space: PhysicsDirectSpaceState3D, map: RID, scene: Node
 					if ground.is_empty():
 						continue
 					var at: Vector3 = ground.position
-					var on_map := NavigationServer3D.map_get_closest_point(map, at)
+					var on_map := WAY.closest(map, at)
 					if _flat(on_map, at) > 0.3 or absf(on_map.y - at.y) > HOVER:
 						continue
 					_look_at(space, map, at, kept)
@@ -521,7 +525,7 @@ func _look_at(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, kept: Dic
 		# Asked from a hair beside it as well: a spot that walks up to a
 		# pillar on its own line would otherwise end up left or right of it
 		# by the last digit.
-		var moved := NavigationServer3D.map_get_closest_point(map, at + towards * (closest - HUG) + ASIDE)
+		var moved := WAY.closest(map, at + towards * (closest - HUG) + ASIDE)
 		if _flat(moved, at) < NEAR and absf(moved.y - at.y) < HOVER:
 			at = _on_floor(space, moved)
 	# Two spots that were moved up against the same thing may have met.
@@ -574,7 +578,7 @@ func _suits(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, foe: Vector
 	if _hides(space, foe, at, across, [eyes + 0.15, eyes * 0.7]):
 		# Hidden standing up: it shoots from a step to the side.
 		for step: Vector3 in [across * 1.2, -across * 1.2, across * 1.9, -across * 1.9, across * 1.2 + ahead * 0.8, -across * 1.2 + ahead * 0.8]:
-			var spot := NavigationServer3D.map_get_closest_point(map, at + step)
+			var spot := WAY.closest(map, at + step)
 			if _flat(spot, at + step) > 0.45 or absf(spot.y - at.y) > HOVER:
 				continue
 			spot = _on_floor(space, spot)

@@ -15,6 +15,7 @@ extends RefCounted
 ## Distances are as the crow flies, not walked. scripts/match.gd makes one
 ## when a level has become an arena.
 
+const WAY := preload("res://scripts/way.gd")
 const WORLD := 1
 const GRID := 2.0
 const EYE := 1.6
@@ -469,7 +470,7 @@ func _room(at: Vector3) -> bool:
 ## sets out on it looks at, which is never the wall that the place itself
 ## lies behind.
 func _ahead(from: Vector3, to: Vector3) -> Vector3:
-	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	var path := WAY.between(_map, from, to)
 	var walked := 0.0
 	for i in range(1, path.size()):
 		walked += path[i - 1].distance_to(path[i])
@@ -492,7 +493,7 @@ func _middle() -> Vector3:
 
 ## How far it is to walk from `from` to `to`; NO_WAY where there is no way.
 func walk(from: Vector3, to: Vector3) -> float:
-	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	var path := WAY.between(_map, from, to)
 	if path.is_empty() or path[-1].distance_to(to) > 1.5:
 		return NO_WAY
 	var length := 0.0
@@ -505,7 +506,7 @@ func walk(from: Vector3, to: Vector3) -> float:
 func _walks_from(from: Vector3) -> PackedFloat32Array:
 	var lengths := PackedFloat32Array()
 	for spot in spots:
-		var path := NavigationServer3D.map_get_path(_map, from, spot, true)
+		var path := WAY.between(_map, from, spot)
 		var length := NO_WAY
 		if not path.is_empty() and path[-1].distance_to(spot) < 1.5:
 			length = 0.0

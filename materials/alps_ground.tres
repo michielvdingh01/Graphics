@@ -11,6 +11,9 @@
 [ext_resource type="Texture2D" path="res://assets/textures/snow_02/snow_02_diff.jpg" id="snow"]
 [ext_resource type="Texture2D" path="res://assets/textures/aerial_rocks_02/aerial_rocks_02_diff.jpg" id="far_rock"]
 [ext_resource type="Texture2D" path="res://assets/textures/snow_field_aerial/snow_field_aerial_diff.jpg" id="far_snow"]
+[ext_resource type="Texture2D" path="res://assets/textures/gravel_ground_01/gravel_ground_01_diff.jpg" id="gravel"]
+[ext_resource type="Texture2D" path="res://assets/textures/gravel_ground_01/gravel_ground_01_nor_gl.jpg" id="gravel_nor"]
+[ext_resource type="Texture2D" path="res://assets/noise/alps_fbm.png" id="noise"]
 
 [resource]
 shader = ExtResource("shader")
@@ -24,3 +27,6 @@ shader_parameter/scree_tex = ExtResource("scree")
 shader_parameter/snow_tex = ExtResource("snow")
 shader_parameter/far_rock_tex = ExtResource("far_rock")
 shader_parameter/far_snow_tex = ExtResource("far_snow")
+shader_parameter/gravel_tex = ExtResource("gravel")
+shader_parameter/gravel_nor = ExtResource("gravel_nor")
+shader_parameter/noise_tex = ExtResource("noise")

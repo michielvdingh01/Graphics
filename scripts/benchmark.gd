@@ -559,6 +559,11 @@ func _profile_targets() -> Dictionary:
 				if not targets.has("trees"):
 					targets["trees"] = []
 				targets["trees"].append([level.get_node(planted), "visible"])
+		# A level of kilometres: the grass drawn round the eye
+		# (scripts/meadow.gd) and the land itself, lifted grids.
+		for part: String in ["Meadow", "LandMesh"]:
+			if level.has_node(part):
+				targets[part.to_lower()] = [[level.get_node(part), "visible"]]
 		for mesh in level.get_children():
 			if mesh is MeshInstance3D:
 				var kind := String(mesh.name).rstrip("0123456789").to_lower()

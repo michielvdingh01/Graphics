@@ -20,6 +20,9 @@ uniform sampler2D far_a : filter_linear_mipmap, repeat_disable;
 uniform sampler2D far_b : filter_linear_mipmap, repeat_disable;
 uniform vec4 far_rect = vec4(0.0, 0.0, 1.0, 1.0);
 uniform sampler2D land_a : filter_linear_mipmap, repeat_disable;
+// The roads: how far a spot is from the middle of the nearest one (0 to 1
+// for 0 to 16 m), and how wide that one is (0 to 1 for 0 to 8 m).
+uniform sampler2D land_b : filter_linear, repeat_disable;
 uniform vec4 land_rect = vec4(0.0, 0.0, 0.0, 0.0);
 // The land is drawn as flat grids lifted to its heights: a height for every
 // cell of it (in metres over the level's nought), and how large a cell is.
@@ -35,12 +38,15 @@ uniform sampler2D forest_nor : hint_normal, filter_linear_mipmap_anisotropic, re
 uniform sampler2D rock_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D rock_nor : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D scree_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D gravel_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D gravel_nor : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform vec3 gravel_far : source_color = vec3(0.46, 0.43, 0.37);
 uniform sampler2D snow_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D far_rock_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D far_snow_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 
 // The colour each layer is seen as from afar.
-uniform vec3 meadow_far : source_color = vec3(0.24, 0.29, 0.12);
+uniform vec3 meadow_far : source_color = vec3(0.2, 0.28, 0.09);
 uniform vec3 autumn : source_color = vec3(0.42, 0.33, 0.15);
 uniform vec3 crowns : source_color = vec3(0.04, 0.06, 0.035);
 uniform vec3 larch : source_color = vec3(0.5, 0.33, 0.07);
@@ -59,26 +65,14 @@ varying vec3 world;
 varying vec3 world_normal;
 varying float sun_seen;
 
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+// Four octaves of value noise, read from a picture of it that tiles
+// (tools/gen_noise.gd), a cell of the first octave a unit of `p` across:
+// worked out here it was sixteen sines a call, and there are a dozen calls.
+// Its spread is set to that of the noise it stands in for.
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 
 float fbm(vec2 p) {
-	float sum = 0.0;
-	float amp = 0.5;
-	for (int i = 0; i < 4; i++) {
-		sum += noise(p) * amp;
-		p = p * 2.03 + vec2(17.1, 9.3);
-		amp *= 0.5;
-	}
-	return sum;
+	return 0.468 + (texture(noise_tex, p * (1.0 / 64.0)).r - 0.497) * 0.94;
 }
 
 float lift(ivec2 cell, ivec2 size) {
@@ -142,46 +136,112 @@ void fragment() {
 	vec3 mapped = normalize(vec3((fb.r - 0.5) * 2.0, 0.0, (fb.g - 0.5) * 2.0));
 	mapped.y = sqrt(max(0.0, 1.0 - mapped.x * mapped.x - mapped.z * mapped.z));
 	vec3 n = normalize(mix(mapped, normalize(world_normal), max(inland, smoothstep(3000.0, 1500.0, depth))));
-	float up = n.y;
-	float wobble = fbm(p * 0.004) - 0.5;
 	float fine = fbm(p * 0.03) - 0.5;
 	// Close by, the steepness of the mesh itself says where rock shows.
 	rock = max(rock, near * (1.0 - smoothstep(0.62, 0.74, normalize(world_normal).y + fine * 0.1)));
 	rock = clamp(rock + fine * 0.3 * rock, 0.0, 1.0);
 
+	// Every layer is only looked at where there is some of it: the most of
+	// the land is meadow and nothing else.
 	// The meadow: green on the floor, going over to the tawny of October in
-	// patches and on the alps higher up.
-	vec3 meadow = mix(texture(meadow_tex, p * 0.25).rgb * vec3(0.8, 1.12, 0.55) * 1.15, meadow_far, 1.0 - near);
+	// patches and on the alps higher up. Close by the picture of the grass,
+	// its bare earth grown over: where it is dark, the green of the sward.
+	vec3 meadow = meadow_far;
+	if (near > 0.0) {
+		vec3 sward = texture(meadow_tex, p * 0.25).rgb;
+		float sward_light = dot(sward, vec3(0.3, 0.6, 0.1));
+		sward = mix(sward * vec3(0.8, 1.12, 0.55) * 1.15, meadow_far * (0.55 + sward_light * 2.2), 0.6);
+		meadow = mix(sward, meadow_far, 1.0 - near);
+	}
 	float browned = smoothstep(0.6, 0.9, fbm(p * 0.006 + 7.7)) * 0.25 + smoothstep(1300.0, 1800.0, world.y + sea) * 0.75;
 	meadow = mix(meadow, meadow * autumn / meadow_far, clamp(browned, 0.0, 1.0));
+	// The floor of the basin is cut in strips from north to south, each mown
+	// on a day of its own: one a little lighter than the next, one gone
+	// yellow, one still long and dark.
+	float on_floor = 1.0 - smoothstep(1000.0, 1040.0, world.y + sea);
+	if (on_floor > 0.0) {
+		float across_strips = (p.x + (fbm(p * 0.0025) - 0.5) * 70.0) / 31.0;
+		float strip = floor(across_strips);
+		float edge = smoothstep(0.93, 1.0, fract(across_strips));
+		float mown = mix(fract(sin(strip * 12.9898) * 43758.5453), fract(sin((strip + 1.0) * 12.9898) * 43758.5453), edge);
+		meadow *= mix(1.0, mix(0.84, 1.12, mown), on_floor);
+		meadow = mix(meadow, meadow * vec3(1.12, 1.03, 0.72), smoothstep(0.72, 0.85, mown) * on_floor * 0.7);
+	}
+	vec3 colour = meadow;
+	// Scree below the rock of the mountains.
+	if (scree > 0.0) {
+		vec3 gravel = scree_far * mix(0.85, 1.1, fbm(p * 0.02));
+		if (near > 0.0) {
+			gravel = mix(texture(scree_tex, p * 0.2).rgb, gravel, 1.0 - near);
+		}
+		colour = mix(colour, gravel, scree);
+	}
 	// The wood: where the map says how much of it there is, crowns stand in
 	// clumps that many, with the shade between them; from far off that is
 	// one tone. A larch gone gold here and there, more of them lower down;
 	// above the tree line the dwarf pine, darker and lower.
-	float clumps = fbm(p * 0.14 + 3.0);
-	float blur = smoothstep(700.0, 2600.0, depth);
-	float stands = mix(smoothstep(0.42, 0.58, forest + (clumps - 0.5) * 0.9), forest, blur);
-	float gaps = mix(smoothstep(0.3, 0.55, clumps), 0.55, blur);
-	vec3 canopy = crowns * mix(0.55, 1.3, gaps) * mix(0.85, 1.15, fbm(p * 0.015));
-	float larches = smoothstep(0.66, 0.74, fbm(p * 0.08 + 11.0)) * smoothstep(1950.0, 1700.0, world.y + sea) * smoothstep(1050.0, 1250.0, world.y + sea);
-	canopy = mix(canopy, larch * mix(0.7, 1.2, gaps), larches * 0.45);
-	vec3 litter = texture(forest_tex, p * 0.3).rgb * 0.75;
-	vec3 wood = mix(litter, canopy, 1.0 - near);
-	forest = stands;
-	vec3 stone_near = biplanar(rock_tex, world, n, 0.11) * vec3(1.05, 1.04, 1.02);
-	vec3 stone_far = biplanar(far_rock_tex, world, n, 0.0035);
-	stone_far = mix(rock_far, stone_far * 1.15, 0.55) * mix(0.8, 1.15, fbm(p * 0.01 + 5.0));
-	vec3 stone = mix(stone_near, stone_far, 1.0 - near);
-	vec3 gravel = mix(texture(scree_tex, p * 0.2).rgb, scree_far * mix(0.85, 1.1, fbm(p * 0.02)), 1.0 - near);
-	vec3 white = mix(texture(snow_tex, p * 0.15).rgb, snow_far * mix(0.92, 1.0, texture(far_snow_tex, p * 0.002).r), 1.0 - near);
-
-	vec3 colour = meadow;
-	colour = mix(colour, gravel, scree);
-	colour = mix(colour, wood, forest);
-	colour = mix(colour, stone, rock);
+	if (forest > 0.0) {
+		float clumps = fbm(p * 0.14 + 3.0);
+		float blur = smoothstep(700.0, 2600.0, depth);
+		float stands = mix(smoothstep(0.42, 0.58, forest + (clumps - 0.5) * 0.9), forest, blur);
+		float gaps = mix(smoothstep(0.3, 0.55, clumps), 0.55, blur);
+		vec3 canopy = crowns * mix(0.55, 1.3, gaps) * mix(0.85, 1.15, fbm(p * 0.015));
+		float larches = smoothstep(0.66, 0.74, fbm(p * 0.08 + 11.0)) * smoothstep(1950.0, 1700.0, world.y + sea) * smoothstep(1050.0, 1250.0, world.y + sea);
+		canopy = mix(canopy, larch * mix(0.7, 1.2, gaps), larches * 0.45);
+		vec3 wood = canopy;
+		if (near > 0.0) {
+			wood = mix(texture(forest_tex, p * 0.3).rgb * 0.75, canopy, 1.0 - near);
+		}
+		forest = stands;
+		colour = mix(colour, wood, forest);
+	}
+	if (rock > 0.0) {
+		vec3 stone = vec3(0.0);
+		if (near < 1.0) {
+			vec3 stone_far = biplanar(far_rock_tex, world, n, 0.0035);
+			stone = mix(rock_far, stone_far * 1.15, 0.55) * mix(0.8, 1.15, fbm(p * 0.01 + 5.0));
+		}
+		if (near > 0.0) {
+			stone = mix(biplanar(rock_tex, world, n, 0.11) * vec3(1.05, 1.04, 1.02), stone, 1.0 - near);
+		}
+		colour = mix(colour, stone, rock);
+	}
+	// A road: two ruts of gravel, the stones pressed into the earth between
+	// them, grass along the middle of a track and at the edges; worn into
+	// the meadow, with the earth showing at the verges.
+	float road = 0.0;
+	if (inland > 0.0) {
+		vec4 lb = texture(land_b, clamp(at_land, vec2(0.0), vec2(1.0)));
+		float from_middle = lb.r * 16.0;
+		float half_wide = lb.g * 8.0 * 0.5;
+		if (half_wide > 0.0 && from_middle < half_wide + 2.0) {
+			float edge = half_wide + (fbm(p * 0.6) - 0.5) * 0.5;
+			road = (1.0 - smoothstep(edge - 0.35, edge + 0.25, from_middle)) * inland;
+			vec3 stones = gravel_far;
+			if (near > 0.0) {
+				stones = mix(texture(gravel_tex, p * 0.5).rgb, gravel_far, 1.0 - near);
+			}
+			float rut = smoothstep(0.42, 0.12, abs(from_middle - half_wide * 0.5));
+			float spine = (1.0 - smoothstep(0.25, 0.55, from_middle)) * step(half_wide, 1.9);
+			vec3 earth_road = mix(stones * 0.85, stones * 0.62, rut);
+			earth_road = mix(earth_road, meadow * 0.9, spine * 0.85);
+			// The verge: trodden earth where the road ends.
+			float verge = smoothstep(edge - 0.2, edge + 0.4, from_middle) * (1.0 - smoothstep(edge + 0.4, edge + 1.3, from_middle));
+			colour = mix(colour, colour * vec3(0.78, 0.72, 0.6), verge * 0.6 * inland);
+			colour = mix(colour, earth_road, road);
+		}
+	}
+	forest *= 1.0 - road;
 	// Snow lies on the ledges of a face, and thins where it is steep.
-	float lying = snow * mix(1.0, 0.45 + 0.4 * smoothstep(0.35, 0.65, fbm(p * 0.03)), rock);
-	colour = mix(colour, white, clamp(lying, 0.0, 1.0));
+	float lying = 0.0;
+	if (snow > 0.0) {
+		lying = clamp(snow * mix(1.0, 0.45 + 0.4 * smoothstep(0.35, 0.65, fbm(p * 0.03)), rock), 0.0, 1.0);
+		vec3 white = snow_far * mix(0.92, 1.0, texture(far_snow_tex, p * 0.002).r);
+		if (near > 0.0) {
+			white = mix(texture(snow_tex, p * 0.15).rgb, white, 1.0 - near);
+		}
+		colour = mix(colour, white, lying);
+	}
 	ALBEDO = colour;
 	ROUGHNESS = mix(mix(0.92, 0.85, rock), 0.6, lying);
 	SPECULAR = mix(0.3, 0.5, lying);
@@ -196,8 +256,15 @@ void fragment() {
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	if (near > 0.0) {
 		vec3 nm = texture(meadow_nor, p * 0.25).rgb;
-		nm = mix(nm, texture(forest_nor, p * 0.3).rgb, forest);
-		nm = mix(nm, texture(rock_nor, p * 0.11).rgb, rock);
+		if (forest > 0.0) {
+			nm = mix(nm, texture(forest_nor, p * 0.3).rgb, forest);
+		}
+		if (rock > 0.0) {
+			nm = mix(nm, texture(rock_nor, p * 0.11).rgb, rock);
+		}
+		if (road > 0.0) {
+			nm = mix(nm, texture(gravel_nor, p * 0.5).rgb, road);
+		}
 		NORMAL_MAP = mix(vec3(0.5, 0.5, 1.0), nm, near * (1.0 - lying * 0.7));
 	}
 }

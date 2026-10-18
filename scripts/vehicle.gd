@@ -1617,6 +1617,9 @@ func _hand_over() -> void:
 	run_by = now
 	_reports.clear()
 	if runs_here():
+		# It goes on from how it went where it was followed: that is no crash.
+		_last_velocity = linear_velocity
+		_bumped = 0.5
 		freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		wake()
 	else:
@@ -1694,6 +1697,7 @@ func _follow() -> void:
 	global_transform = Transform3D(Basis(turned), at)
 	linear_velocity = from[2]
 	angular_velocity = from[3]
+	_last_velocity = linear_velocity
 	_steer = from[4]
 	rpm = from[5]
 	gear = from[6]

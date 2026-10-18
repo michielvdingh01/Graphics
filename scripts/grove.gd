@@ -28,6 +28,12 @@ const TRUNK := 6.0
 
 ## The trees as the builder planted them.
 @export var plantings: Resource
+## Where the sun reaches the land, as the ground reads it far off, and the
+## rect of the land it covers (x, z, 1/width, 1/depth): the pictures of trees
+## far off read it too, so that the trees in the shadow of the mountains are
+## in it (shaders/tree_far.gdshader).
+@export var sun_map: Texture2D
+@export var sun_rect := Vector4()
 
 ## How many trees stand, and how many cells hold them.
 var trees := 0
@@ -93,6 +99,10 @@ func _parts_of(model: Node) -> Array[Dictionary]:
 			var material := part.get_surface_override_material(i)
 			if material == null and part.material_override:
 				material = part.material_override
+			if material and sun_map and material is ShaderMaterial and (material as ShaderMaterial).shader.resource_path.ends_with("tree_far.gdshader"):
+				material = material.duplicate()
+				material.set_shader_parameter(&"sun_map", sun_map)
+				material.set_shader_parameter(&"sun_rect", sun_rect)
 			if material:
 				mesh.surface_set_material(i, material)
 		parts.append({"mesh": mesh, "begin": part.visibility_range_begin, "end": part.visibility_range_end, "shadow": part.cast_shadow})
