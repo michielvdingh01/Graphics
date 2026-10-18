@@ -786,7 +786,7 @@ func _fire(data: WeaponData) -> void:
 			var direction := camera.global_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)
 			direction = direction.normalized()
 			var end := origin + direction * data.max_range
-			var query := PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()])
+			var query := PhysicsRayQueryParameters3D.create(origin, end, mask, _ours())
 			var hit := space.intersect_ray(query)
 			if hit:
 				end = hit.position
@@ -871,7 +871,7 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	var off := sqrt(randf()) * spread
 	var direction := (camera.global_basis * Vector3(cos(angle) * off, sin(angle) * off, -1.0)).normalized()
 	var start := origin + camera.global_basis * Vector3(0.06, -0.05, -0.7)
-	var query := PhysicsRayQueryParameters3D.create(origin, start, HIT_MASK, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(origin, start, HIT_MASK, _ours())
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		start = origin
 	var rocket: Node3D = data.projectile.instantiate()
@@ -879,6 +879,8 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	rocket.direct = data.damage
 	rocket.thrower = Match.number(player) if Match.active else 0
 	rocket.shooter = player
+	if player.riding:
+		rocket.passes = player.riding.get_rid()
 	rocket.weapon = ARMORY.index(data)
 	get_tree().current_scene.add_child(rocket)
 	rocket.global_position = start
@@ -975,6 +977,15 @@ func _kick_view(data: WeaponData) -> void:
 
 
 ## Where the shots of the weapon in hand leave it.
+## What a shot of the player's passes through: the player, and the vehicle
+## the player rides in.
+func _ours() -> Array[RID]:
+	var ours: Array[RID] = [player.get_rid()]
+	if player.riding:
+		ours.append(player.riding.get_rid())
+	return ours
+
+
 func muzzle_position() -> Vector3:
 	return _models[_index].muzzle.global_position
 
@@ -1099,7 +1110,7 @@ func _release_grenade() -> void:
 	var aim := camera.global_basis
 	# It leaves from the left hand, unless there is a wall where that is.
 	var from := eye + aim * Vector3(-0.22, -0.1, -0.45)
-	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, _ours())
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		from = eye
 	var grenade: RigidBody3D = ARMORY.thrown(grenade_kind).instantiate()
@@ -1138,7 +1149,7 @@ func _land_blow() -> void:
 	var mask := HIT_MASK | (Match.foes_of(player) if Match.active else 0)
 	for off: Vector2 in [Vector2.ZERO, Vector2(-0.22, 0), Vector2(0.22, 0), Vector2(0, -0.25), Vector2(0, 0.18)]:
 		var end := origin + aim * Vector3(off.x, off.y, -1.0).normalized() * MELEE_REACH
-		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()]))
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, mask, _ours()))
 		if hit and (found.is_empty() or (hit.collider.has_method("is_headshot") and not found.collider.has_method("is_headshot"))):
 			found = hit
 	if found.is_empty():
@@ -1228,7 +1239,7 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	# Up against a wall it is drawn back with the muzzle up, instead of poking
 	# through to the other side.
 	var eye := camera.global_position
-	var query := PhysicsRayQueryParameters3D.create(eye, eye - camera.global_basis.z * REACH, 1, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(eye, eye - camera.global_basis.z * REACH, 1, _ours())
 	var wall := get_world_3d().direct_space_state.intersect_ray(query)
 	var room := eye.distance_to(wall.position) / REACH if wall else 1.0
 	_crowded = lerpf(_crowded, 1.0 - smoothstep(0.3, 1.0, room), 1.0 - exp(-12.0 * delta))

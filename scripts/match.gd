@@ -456,6 +456,8 @@ func score() -> Vector2i:
 func hit(by: Node, target: Object, amount: float, at: Vector3, direction: Vector3, weapon := -1, head := false) -> bool:
 	if plays(target):
 		return harm(number(target), amount, at, direction, number(by), weapon, head)
+	if target.has_method("struck_by"):
+		target.struck_by(number(by))
 	return Net.damage(target, amount, at, direction)
 
 
