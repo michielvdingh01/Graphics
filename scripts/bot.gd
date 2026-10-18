@@ -79,6 +79,11 @@ const EYE := 1.6
 ## A weapon of the arena that is there to be taken this near, in metres, and
 ## in sight, it goes and takes.
 const NOTICES := 10.0
+## By night, the share of how far it sees that is left for somebody who
+## stands in the dark; in the light of a lamp it sees as far as by day. See
+## light_at() in scripts/land.gd.
+const DARK_SIGHT := 0.25
+const LAND := preload("res://scripts/land.gd")
 ## With barrels that spin: a burst ends once they are this hot, from 0 to 1,
 ## and the next does not begin before they have cooled to the second number.
 ## Overheated they could not fire for seconds.
@@ -423,6 +428,8 @@ func _look_around() -> void:
 	var eye: Vector3 = _body.head.global_position
 	var ahead := -_body.global_basis.z
 	var sight: float = _data.bot_sight
+	var land: Node = LAND.of(get_tree())
+	var dark: bool = land != null and land.by_night()
 	var sideways := cos(deg_to_rad(float(_level.fov) * 0.5))
 	var nearest := INF
 	var found: RefCounted = null
@@ -433,6 +440,8 @@ func _look_around() -> void:
 		var to := head - eye
 		var distance := to.length()
 		if distance > sight or (distance > AT_ITS_SHOULDER and to.normalized().dot(ahead) < sideways):
+			continue
+		if dark and distance > sight * DARK_SIGHT and distance > sight * lerpf(DARK_SIGHT, 1.0, land.light_at(other.body.global_position)):
 			continue
 		# The head or the chest, with nothing of the level in between; who sits
 		# in a vehicle is seen in it, and it is the vehicle that is shot.

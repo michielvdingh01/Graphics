@@ -353,7 +353,9 @@ func _watch(delta: float, half_height: float) -> void:
 	_watchers.visible = not _player.dead
 	_watchers.queue_redraw()
 	var land := LAND.of(get_tree())
-	var hidden: bool = near and not _player.dead and land != null and land.shade_around(_player.global_position) > 0.5
+	var hidden: bool = near and not _player.dead and land != null and land.hidden_at(_player.global_position)
+	if land != null:
+		_shade_label.text = "IN THE DARK" if land.by_night() else "IN THE SHADE"
 	_shade_label.modulate.a = move_toward(_shade_label.modulate.a, 0.7 if hidden else 0.0, delta * 3.0)
 
 

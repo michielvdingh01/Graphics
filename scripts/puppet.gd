@@ -328,7 +328,7 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 		# Thirty rounds a second are one roar, see _spin_barrels().
 		_roars_until = Time.get_ticks_msec() * 0.001 + ROAR_GAP
 	else:
-		Sfx.play_at(data.shot_sound, muzzle)
+		Sfx.play_at(data.shot_sound, muzzle, data.shot_db)
 	if Match.active and not ends.is_empty():
 		# Whoever it was meant for hears it go by.
 		Sfx.passing(muzzle, ends[0])

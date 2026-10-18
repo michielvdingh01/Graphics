@@ -164,6 +164,9 @@ enum Mode { HUNT, TO_COVER, COVER, PEEK, FLEE, PANIC }
 ## somebody who stands in the shade. A crouching player counts for less.
 @export var sight_lit := 34.0
 @export var sight_shade := 7.5
+## How far it makes out somebody who stands in the dark by night: in neither
+## moonlight nor the light of a lamp. See light_at() in scripts/land.gd.
+@export var sight_dark := 5.0
 @export var sight_crouched := 0.7
 ## How far to either side of its nose it sees, in degrees.
 @export var sight_side := 58.0
@@ -916,8 +919,9 @@ func _sees_as_far_as(to: Vector3) -> float:
 	if flat.dot(-global_basis.z) < cos(deg_to_rad(sight_side)):
 		return HEARS_RUNNING if runs else AT_ITS_SHOULDER
 	var land := LAND.of(get_tree())
-	var shade: float = land.shade_around(_player.global_position) if land else 0.0
-	var reach := lerpf(sight_lit, sight_shade, shade) * (sight_crouched if crouched else 1.0)
+	var light: float = land.light_at(_player.global_position) if land else 1.0
+	var least := sight_dark if land and land.by_night() else sight_shade
+	var reach := lerpf(least, sight_lit, light) * (sight_crouched if crouched else 1.0)
 	return maxf(reach, HEARS_RUNNING) if runs else reach
 
 

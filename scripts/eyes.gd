@@ -131,9 +131,14 @@ func _falls_on(camera: Camera3D) -> float:
 	return lerpf(here, out / AHEAD.size(), LOOKED_AT)
 
 
-## How much of the ground within `reach` of `at` lies in the sun, 0 to 1.
+## How much of the ground within `reach` of `at` lies in the sun, 0 to 1. By
+## night, how well it is lit by the moon and the lamps (scripts/land.gd),
+## leaving out what stands between a lamp and the ground: the eye takes in
+## the light of a place, not of each spot in it.
 func _lit(at: Vector3, reach: float) -> float:
 	var sum := 0.0
+	var night: bool = _land.by_night()
 	for spot in _ring:
-		sum += 0.0 if _land.shaded(at + Vector3(spot.x, 0.0, spot.y) * reach) else 1.0
+		var on := at + Vector3(spot.x, 0.0, spot.y) * reach
+		sum += _land.light_at(on, false) if night else (0.0 if _land.shaded(on) else 1.0)
 	return sum / _ring.size()

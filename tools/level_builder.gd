@@ -90,6 +90,16 @@ var _lights: Node3D
 var _decals: Node3D
 var _props: Node3D
 var _explosives: Node3D
+## What is there by night only: the lamps that burn then, and what goes with
+## them. It is written as a scene of its own, <level>_night.tscn, which the
+## scene of a level by night puts into its level and the day leaves out. Its
+## lamps hang under its node Lights, so that scripts/breakables.gd makes
+## lamps of them that can be shot out. See night_light().
+var _night: Node3D
+## Whether the level is also played by night, and so has a night (_night).
+## Without it the kit leaves out what is there for the night alone: the
+## lamps, and the lanterns and bulbs they burn in.
+var _by_night := false
 ## Body the next collider goes into instead of the level's own, see
 ## _explosive() and _build_into().
 var _into: StaticBody3D
@@ -213,6 +223,33 @@ func _build() -> void:
 	scene.pack(_root)
 	var err := ResourceSaver.save(scene, OUT_DIR + _level_name() + "_level.tscn")
 	print("Saved level: ", error_string(err))
+	if _night:
+		var night := PackedScene.new()
+		night.pack(_night)
+		err = ResourceSaver.save(night, OUT_DIR + _level_name() + "_night.tscn")
+		print("Saved the night of the level, %d lamps: %s" % [_night.get_node(^"Lights").get_child_count(), error_string(err)])
+
+
+## Puts `node` into the night of the level (see _night): a lamp under its
+## Lights, anything else beside them. Whatever hangs under `node` goes along.
+func night_light(node: Node3D) -> void:
+	if not _by_night:
+		node.free()
+		return
+	if _night == null:
+		_night = Node3D.new()
+		_night.name = "Night"
+		var lights := Node3D.new()
+		lights.name = "Lights"
+		_night.add_child(lights)
+		lights.owner = _night
+	(_night.get_node(^"Lights") if node is Light3D else _night).add_child(node, true)
+	node.owner = _night
+	# To be found together, by a benchmark that weighs what they cost.
+	if node is Light3D:
+		node.add_to_group(&"night_lamps", true)
+	for child in node.find_children("*", "", true, false):
+		child.owner = _night
 
 
 ## File name stem of the level, e.g. "factory".

@@ -103,7 +103,7 @@ func _lit_as(cloud: MeshInstance3D, light: Dictionary) -> bool:
 ## A lamp that is the key light of smoke two metres under it, if the level
 ## has one.
 func _lamp_over_smoke(fx: Node, sun: DirectionalLight3D) -> Light3D:
-	for lamp: Light3D in fx._level_lamps():
+	for lamp: Light3D in fx.level_lamps():
 		var under := lamp.global_position + Vector3.DOWN * 2.0
 		var key: Vector3 = fx.smoke_light(under).key
 		if key.dot((lamp.global_position - under).normalized()) > 0.999 and key.dot(sun.global_basis.z) < 0.99:

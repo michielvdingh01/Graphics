@@ -351,8 +351,12 @@ var _smoke_due := false
 func _ready() -> void:
 	add_child(_rig)
 	# In a match everybody carries the pack of the match, see scripts/armory.gd;
-	# elsewhere the standard pack, or the one --pack=<name> asks for.
-	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else ARMORY.STANDARD
+	# elsewhere the pack the level says it is played with (metadata/pack on
+	# its scene, as the dunes by night carry the silenced one), else the
+	# standard pack; or the one --pack=<name> asks for.
+	var game := get_tree().get_first_node_in_group(&"game")
+	var own: String = game.get_meta(&"pack", ARMORY.STANDARD) if game else ARMORY.STANDARD
+	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else (own if ARMORY.names().has(own) else ARMORY.STANDARD)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
 			pack = arg.get_slice("=", 1)
@@ -849,7 +853,7 @@ func _fire(data: WeaponData) -> void:
 
 	# Barrels that spin roar as long as they fire, see _spin_barrels().
 	if data.spin_up <= 0.0:
-		Sfx.play(data.shot_sound)
+		Sfx.play(data.shot_sound, data.shot_db)
 	_rounds += 1
 	get_tree().call_group(&"watch", &"hears", camera.global_position, data.flash_size * HEARD)
 	Save.tally("shots")
@@ -1039,7 +1043,8 @@ func _update_pump(data: WeaponData) -> void:
 ## share ("mag_in"), else `fallback`. Recording a step for one weapon and
 ## adding it to the manifest is all it takes to give that weapon its own.
 func _handling(data: WeaponData, step: String, fallback: StringName) -> StringName:
-	var own := StringName("%s_%s" % [String(data.shot_sound).trim_suffix("_shot"), step])
+	var named := String(data.handled_as) if data.handled_as else String(data.shot_sound).trim_suffix("_shot")
+	var own := StringName("%s_%s" % [named, step])
 	if Sfx.has(own):
 		return own
 	return StringName(step) if Sfx.has(StringName(step)) else fallback
