@@ -7,7 +7,9 @@ shader_type spatial;
 // shows the stones.
 //
 // A face has its position in metres for UV, and the builder writes into UV2.y
-// how high the ground lies that it stands on: see tools/kit/alpine.gd.
+// how high the ground lies that it stands on, and into UV2.x 4 or more for
+// a face inside a building, where the light of the sky hardly comes: see
+// tools/kit/alpine.gd.
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D stone_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -20,6 +22,7 @@ uniform vec2 sun_side = vec2(0.15, 0.99);
 // How high the splashes reach, and how much of the coat has come away there.
 uniform float splash_high = 0.7;
 uniform float spalled : hint_range(0.0, 1.0) = 0.5;
+uniform float sheltered : hint_range(0.0, 1.0) = 0.2;
 
 varying vec3 world_normal;
 varying float height;
@@ -56,6 +59,7 @@ void fragment() {
 
 	ALBEDO = clamp(albedo, vec3(0.0), vec3(1.0));
 	ROUGHNESS = 0.93;
+	AO = mix(1.0, sheltered, step(3.5, UV2.x));
 	NORMAL_MAP = mix(texture(normal_tex, uv).rgb, texture(stone_normal, UV * 0.5).rgb, gone);
 	NORMAL_MAP_DEPTH = 0.8;
 }

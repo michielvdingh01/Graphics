@@ -81,13 +81,14 @@ const LOG := Vector3(0.15, 0.25, 0.3)
 const LOG_ENDS_OUT := 0.2
 ## How the colours of the drawings from afar are chosen: what each looks like
 ## from a few hundred metres, in the sun of an afternoon. sRGB.
-const FAR_LOGS := Color(0.44, 0.39, 0.33)
-const FAR_BOARDS := Color(0.42, 0.37, 0.31)
+const FAR_LOGS := Color(0.39, 0.35, 0.31)
+const FAR_BOARDS := Color(0.38, 0.34, 0.3)
 const FAR_DARK := Color(0.07, 0.06, 0.05)
-const FAR_ROOFS := {"boards": Color(0.42, 0.4, 0.37), "shingles": Color(0.38, 0.37, 0.35), "tin": Color(0.46, 0.33, 0.24)}
-const FAR_STONE := Color(0.52, 0.5, 0.46)
-const FAR_LIME := Color(0.86, 0.85, 0.81)
-const FAR_BROWN := Color(0.26, 0.19, 0.14)
+const FAR_WINDOW := Color(0.2, 0.22, 0.2)
+const FAR_ROOFS := {"boards": Color(0.4, 0.385, 0.36), "shingles": Color(0.36, 0.35, 0.335), "tin": Color(0.42, 0.35, 0.3)}
+const FAR_LIME := Color(0.84, 0.83, 0.8)
+const FAR_BROWN := Color(0.27, 0.2, 0.15)
+const FAR_STONE_CAP := Color(0.45, 0.44, 0.42)
 
 ## What is being built, if anything: the distance it is drawn to (a key of
 ## ALPINE_REACH), the block of ground it goes into, and its own dice.
@@ -197,9 +198,11 @@ func _alp_inside(spot: Vector3) -> float:
 ## end towards -along and 2 for the other, 0 for neither where nothing sees
 ## them. `tone` is how light it is among the rest, from 0 to 1, and the dice
 ## say if it is less than nought. `rounded` shades its long faces as if its
-## edges were rounded off, a log hewn by hand more than a sawn board. It is
-## in nobody's way: a piece says itself what is.
-func _alp_timber(mat: String, xf: Transform3D, size: Vector3, along := 2, tone := -1.0, squeeze := SQUEEZE, ends := 3, rounded := 0.0) -> void:
+## edges were rounded off, a log hewn by hand more than a sawn board. A
+## piece of a `whole` wall has the place of its corners in the world for UV,
+## so that what is drawn on it runs on into the next piece, and no end
+## grain. It is in nobody's way: a piece says itself what is.
+func _alp_timber(mat: String, xf: Transform3D, size: Vector3, along := 2, tone := -1.0, squeeze := SQUEEZE, ends := 3, rounded := 0.0, whole := false) -> void:
 	if tone < 0.0:
 		tone = _alp_own.randf()
 	var st := _tool(mat, DETAIL | NO_COLLIDE, xf.origin)
@@ -220,15 +223,19 @@ func _alp_timber(mat: String, xf: Transform3D, size: Vector3, along := 2, tone :
 		var uvs := []
 		var normals := []
 		var across := (xf.basis * right).normalized()
+		var rises := (xf.basis * up).normalized()
 		for p: Vector3 in [c - r - u, c + r - u, c + r + u, c - r + u]:
 			points.append(xf * p)
-			if end:
+			if whole:
+				uvs.append(Vector2((xf * p).dot(across), -(xf * p).dot(rises)))
+				normals.append(normal)
+			elif end:
 				uvs.append(Vector2(p.dot(right), -p.dot(up)))
 				normals.append(normal)
 			else:
 				uvs.append(Vector2(p.dot(right) * squeeze + shift.x, -p.dot(up) + shift.y))
 				normals.append((normal + across * signf(p.dot(right)) * rounded).normalized())
-		st.set_uv2(Vector2(tone + (2.0 if end else 0.0) + _alp_inside(xf * c), _alp_uv2.y))
+		st.set_uv2(Vector2(tone + (2.0 if end and not whole else 0.0) + _alp_inside(xf * c), _alp_uv2.y))
 		var face := Vector2(r.length(), u.length()) * 2.0
 		_quad(st, points, normals, uvs, [_edge(Vector2(0, 0), face), _edge(Vector2(1, 0), face), _edge(Vector2(1, 1), face), _edge(Vector2(0, 1), face)])
 	st.set_uv2(_alp_uv2)
@@ -236,9 +243,10 @@ func _alp_timber(mat: String, xf: Transform3D, size: Vector3, along := 2, tone :
 
 ## Boards cut to `outline`, convex and counter-clockwise in the XY of the
 ## frame `xf` as seen from its +Z, `thick` thick along Z: a gable, a door
-## with a slanted top. The boards stand up and down. With `collide` they are
-## in the way, as wood.
-func _alp_boarding(mat: String, outline: PackedVector2Array, thick: float, xf: Transform3D, tone := -1.0, collide := true) -> void:
+## with a slanted top. The boards stand up and down. A piece of a `whole`
+## wall, of lime, has the place of its corners in the world for UV, as in
+## _alp_timber(). With `collide` it is in the way, as what it is made of.
+func _alp_boarding(mat: String, outline: PackedVector2Array, thick: float, xf: Transform3D, tone := -1.0, collide := true, whole := false) -> void:
 	if tone < 0.0:
 		tone = _alp_own.randf()
 	var st := _tool(mat, DETAIL | NO_COLLIDE, xf.origin)
@@ -258,8 +266,12 @@ func _alp_boarding(mat: String, outline: PackedVector2Array, thick: float, xf: T
 			var points := []
 			var uvs := []
 			for corner in corners:
-				points.append(xf * Vector3(corner.x, corner.y, face * thick * 0.5))
-				uvs.append(Vector2(corner.x * face, -corner.y) + shift)
+				var point := xf * Vector3(corner.x, corner.y, face * thick * 0.5)
+				points.append(point)
+				if whole:
+					uvs.append(Vector2(point.dot(xf.basis.x * face), -point.dot(xf.basis.y)))
+				else:
+					uvs.append(Vector2(corner.x * face, -corner.y) + shift)
 			_tri(st, points, [normal, normal, normal], uvs)
 	st.set_uv2(Vector2(tone + 2.0, _alp_uv2.y))
 	var hull := PackedVector3Array()
@@ -865,7 +877,7 @@ func _barn_gables(xf: Transform3D, dim: Dictionary, pitch_deg: float, _walls: St
 			for x: float in [-1.0, 1.0]:
 				_alp_timber(LARCH, frame * Transform3D(Basis(), Vector3(x * (half + 0.04), (low + high) * 0.5, 0.02)), Vector3(0.08, high - low + 0.08, 0.07), 1)
 			_alp_timber(LARCH, frame * Transform3D(Basis(), Vector3(0, low - 0.04, 0.03)), Vector3(half * 2.0 + 0.16, 0.08, 0.1), 0)
-			var swung := frame * Transform3D(Basis(Vector3.UP, -2.6), Vector3(half + 0.08, (low + high) * 0.5, 0.05))
+			var swung := frame * Transform3D(Basis(Vector3.UP, -0.25), Vector3(half + 0.08, (low + high) * 0.5, 0.05))
 			_alp_timber(LARCH, swung * Transform3D(Basis(), Vector3(0.5, 0, 0)), Vector3(1.0, high - low, 0.035), 1, -1.0, 1.0)
 		else:
 			polygons.append(PackedVector2Array([Vector2(-hw, base), Vector2(hw, base), Vector2(hw, eaves), Vector2(0, ridge), Vector2(-hw, eaves)]))
@@ -877,23 +889,27 @@ func _barn_gables(xf: Transform3D, dim: Dictionary, pitch_deg: float, _walls: St
 ## The doorway of a barn: both wings of its door stand open, swung out past
 ## square so that they keep clear of whoever goes in.
 func _barn_door(xf: Transform3D, dim: Dictionary) -> void:
-	var door: float = dim.door
 	var hl := float(dim.long) * 0.5
-	var high := float(dim.door_top) - 0.04
-	var wing := door * 0.5
+	_alp_wings(xf * Transform3D(Basis(), Vector3(0, 0, hl + 0.04)), dim.door, float(dim.door_top) - 0.04)
+
+
+## The two wings of a door `wide` and `high`, hung either side of a doorway
+## whose foot is the origin of the frame `xf`, facing its +Z: boards on two
+## ledges and a brace, swung open outwards past square. Each is in the way.
+func _alp_wings(xf: Transform3D, wide: float, high: float, mat := LARCH) -> void:
+	var wing := wide * 0.5
 	for side: float in [-1.0, 1.0]:
 		var swing := _alp_own.randf_range(1.75, 2.5)
-		var hinge := Vector3(side * door * 0.5, 0.02, hl + 0.04)
-		var frame := xf * Transform3D(Basis(Vector3.UP, side * swing), hinge)
+		var frame := xf * Transform3D(Basis(Vector3.UP, side * swing), Vector3(side * wing, 0.02, 0))
 		# The wing reaches from its hinge towards the middle of the doorway
 		# when it is shut: -X for the right one, +X for the left.
 		var middle := Vector3(-side * wing * 0.5, high * 0.5, 0)
-		_alp_timber(LARCH, frame * Transform3D(Basis(), middle), Vector3(wing - 0.02, high, 0.04), 1, -1.0, 1.0)
+		_alp_timber(mat, frame * Transform3D(Basis(), middle), Vector3(wing - 0.02, high, 0.04), 1, -1.0, 1.0)
 		for y: float in [0.25, high - 0.25]:
-			_alp_timber(LARCH, frame * Transform3D(Basis(), Vector3(-side * wing * 0.5, y, -0.04)), Vector3(wing - 0.1, 0.12, 0.04), 0)
+			_alp_timber(mat, frame * Transform3D(Basis(), Vector3(-side * wing * 0.5, y, -0.04)), Vector3(wing - 0.1, 0.12, 0.04), 0)
 		var brace_from := frame * Vector3(-side * 0.08, 0.3, -0.04)
 		var brace_to := frame * Vector3(-side * (wing - 0.1), high - 0.3, -0.04)
-		_alp_beam(LARCH, brace_from, brace_to, 0.1, 0.04)
+		_alp_beam(mat, brace_from, brace_to, 0.1, 0.04)
 		_collide_box(frame * Transform3D(Basis(), middle), Vector3(wing, high, 0.06), "wood")
 
 
@@ -971,24 +987,1211 @@ func _barn_stair(xf: Transform3D, foot: Vector3, high: float) -> void:
 
 
 ## A ramp of boards up to the door of a barn whose floor lies above the
-## meadow in front of it, on two bearers, as long as it has to be not to be
-## steep.
+## meadow in front of it.
 func _barn_ramp(xf: Transform3D, dim: Dictionary, _at: Vector2) -> void:
-	var hl := float(dim.long) * 0.5
-	var door: float = dim.door
-	var front := xf * Vector3(0, 0, hl + 0.3)
+	_alp_ramp(xf * Transform3D(Basis(), Vector3(0, 0, float(dim.long) * 0.5 + 0.05)), dim.door)
+
+
+## A ramp of boards `wide`, on two bearers, from the threshold at the origin
+## of the frame `xf` out along its +Z down to the ground, as long as it has
+## to be not to be steep; nothing where the threshold lies on the ground.
+## Whoever walks goes up it, and so do bots.
+func _alp_ramp(xf: Transform3D, wide: float) -> void:
+	var front := xf * Vector3(0, 0, 0.3)
 	var rise := xf.origin.y - ground_height(front.x, front.z)
 	if rise < 0.12:
 		return
 	var run := maxf(rise / tan(deg_to_rad(16.0)), 0.8)
-	var out_there := xf * Vector3(0, 0, hl + run)
+	var out_there := xf * Vector3(0, 0, run)
 	var foot := xf.affine_inverse() * ground(out_there.x, out_there.z, 0.02)
-	var head := Vector3(0, 0.0, hl + 0.05)
+	var head := Vector3.ZERO
 	var slant := atan2(head.y - foot.y, foot.z - head.z)
 	var middle := (head + foot) * 0.5 + Vector3(0, -0.03, 0)
 	var length := head.distance_to(foot)
 	var frame := xf * Transform3D(Basis(Vector3.RIGHT, slant), middle)
-	_alp_timber(LARCH, frame, Vector3(door - 0.1, 0.05, length), 2, -1.0, 1.0)
+	_alp_timber(LARCH, frame, Vector3(wide - 0.1, 0.05, length), 2, -1.0, 1.0)
 	for x: float in [-0.35, 0.35]:
-		_alp_timber(LARCH, frame * Transform3D(Basis(), Vector3(x * door, -0.08, 0)), Vector3(0.12, 0.1, length), 2)
-	_collide_box(frame, Vector3(door - 0.1, 0.08, length), "wood")
+		_alp_timber(LARCH, frame * Transform3D(Basis(), Vector3(x * wide, -0.08, 0)), Vector3(0.12, 0.1, length), 2)
+	_collide_box(frame, Vector3(wide - 0.1, 0.08, length), "wood")
+
+
+# --- What walls are built with -------------------------------------------------------
+
+
+## The frame of the face of a wall that looks along `out` (level), `off` out
+## from the origin of `xf`: X along the wall (left to right seen from
+## outside), Y up and Z out of it.
+func _alp_face(xf: Transform3D, out: Vector3, off: float) -> Transform3D:
+	return xf * Transform3D(Basis(Vector3.UP.cross(out), Vector3.UP, out), out * off)
+
+
+## A wall of `mat` in the frame `xf` of its face (see _alp_face()), from
+## `from` to `to` along it and from `low` to `high`, `thick` thick behind its
+## face, with the openings `holes` through it, each a Rect2 of where along it
+## and how high. What is drawn on it runs on from piece to piece, and the
+## grain of wood lies along it. It is in the way, as `surface`.
+func _alp_wall(mat: String, xf: Transform3D, from: float, to: float, low: float, high: float, thick: float, holes: Array, surface := "") -> void:
+	var sorted := holes.duplicate()
+	sorted.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
+	var pieces: Array[Rect2] = []
+	var x := from
+	for hole: Rect2 in sorted:
+		if hole.position.x > x:
+			pieces.append(Rect2(x, low, hole.position.x - x, high - low))
+		pieces.append(Rect2(hole.position.x, low, hole.size.x, hole.position.y - low))
+		pieces.append(Rect2(hole.position.x, hole.end.y, hole.size.x, high - hole.end.y))
+		x = hole.end.x
+	if to > x:
+		pieces.append(Rect2(x, low, to - x, high - low))
+	var tone := _alp_own.randf()
+	for piece in pieces:
+		if piece.size.x < 0.005 or piece.size.y < 0.005:
+			continue
+		var frame := xf * Transform3D(Basis(), Vector3(piece.get_center().x, piece.get_center().y, -thick * 0.5))
+		var size := Vector3(piece.size.x, piece.size.y, thick)
+		_alp_timber(mat, frame, size, 0, tone, 1.0, 3, 0.0, true)
+		_collide_box(frame, size, surface)
+
+
+## A window in a wall of the frame `xf` of its face, in the opening `hole`:
+## a frame painted white `inset` behind the face, the panes dark behind it
+## with a cross of glazing bars, a sill, and two shutters of `paint` (see
+## PAINTS) opened flat against the wall either side, or none.
+func _alp_window(xf: Transform3D, hole: Rect2, inset: float, shutters := "green", sill := LIME) -> void:
+	var middle := hole.get_center()
+	var depth := -inset
+	_alp_uv2.x = PAINTS.white / 10.0
+	for side: float in [-1.0, 1.0]:
+		_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(middle.x + side * (hole.size.x * 0.5 - 0.03), middle.y, depth)), Vector3(0.06, hole.size.y, 0.08), 1, PAINTS.white / 10.0, 1.0, 0)
+		_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(middle.x, middle.y + side * (hole.size.y * 0.5 - 0.03), depth)), Vector3(hole.size.x - 0.12, 0.06, 0.08), 0, PAINTS.white / 10.0, 1.0, 0)
+	_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(middle.x, middle.y, depth + 0.01)), Vector3(0.04, hole.size.y - 0.1, 0.05), 1, PAINTS.white / 10.0, 1.0, 0)
+	_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(middle.x, middle.y + hole.size.y * 0.12, depth + 0.01)), Vector3(hole.size.x - 0.1, 0.04, 0.05), 0, PAINTS.white / 10.0, 1.0, 0)
+	_alp_uv2.x = 0.5
+	var st := _tool(PANE, DETAIL | NO_COLLIDE, xf.origin)
+	var out := xf.basis.z
+	var corners: Array[Vector3] = []
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		corners.append(xf * Vector3(middle.x + corner.x * hole.size.x * 0.5, middle.y + corner.y * hole.size.y * 0.5, depth - 0.02))
+	_quad(st, corners, [out, out, out, out], [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)])
+	_collide_box(xf * Transform3D(Basis(), Vector3(middle.x, middle.y, depth - 0.02)), Vector3(hole.size.x, hole.size.y, 0.04))
+	_alp_timber(sill, xf * Transform3D(Basis(), Vector3(middle.x, hole.position.y - 0.03, -inset * 0.5 + 0.03)), Vector3(hole.size.x + 0.1, 0.06, inset + 0.06), 0, 0.5, 1.0, 3, 0.0, sill == LIME)
+	if shutters != "":
+		var leaf := Vector3(hole.size.x * 0.5 + 0.03, hole.size.y + 0.06, 0.035)
+		for side: float in [-1.0, 1.0]:
+			var at := Vector3(middle.x + side * (hole.size.x * 0.5 + leaf.x * 0.5 + 0.04), middle.y, 0.03)
+			_alp_timber(PAINT, xf * Transform3D(Basis(), at), leaf, 1, PAINTS[shutters] / 10.0, 1.0)
+
+
+## Boards in runs of three, `run` wide with a slot between one run and the
+## next, on the face of the frame `xf` from `from` to `to` along it and from
+## `low` to `high`: the wall of a barn that lets the air through to the hay.
+## Each run is in the way.
+func _alp_slats(xf: Transform3D, from: float, to: float, low: float, high: float, run := 0.6, slot := 0.05) -> void:
+	var count := maxi(int(round((to - from + slot) / (run + slot))), 1)
+	var each := (to - from - (count - 1) * slot) / count
+	for i in count:
+		var board := xf * Transform3D(Basis(), Vector3(from + each * 0.5 + i * (each + slot), (low + high) * 0.5, -0.015))
+		_alp_timber(LARCH, board, Vector3(each, high - low, 0.03), 1, -1.0, 1.0)
+		_collide_box(board, Vector3(each, high - low, 0.06), "wood")
+
+
+## A plinth of grey stone round a building whose walls stand on the
+## rectangle `half` (half its length and depth) round the origin of `xf`, a
+## hand proud of them: from a little under the ground, which it follows in
+## lengths of a few metres, up to `top`.
+func _alp_plinth(xf: Transform3D, half: Vector2, top: float) -> void:
+	for out: Vector3 in [Vector3.BACK, Vector3.FORWARD, Vector3.RIGHT, Vector3.LEFT]:
+		var reach := half.x if absf(out.z) > 0.5 else half.y
+		var off := half.y if absf(out.z) > 0.5 else half.x
+		var face := _alp_face(xf, out, off + 0.05)
+		var lengths := maxi(int(round(reach * 2.0 / 3.5)), 1)
+		for i in lengths:
+			var a := -reach - 0.05 + (reach * 2.0 + 0.1) * i / lengths
+			var b := -reach - 0.05 + (reach * 2.0 + 0.1) * (i + 1) / lengths
+			var low := INF
+			for x: float in [a, b]:
+				var spot := face * Vector3(x, 0, 0)
+				low = minf(low, ground_height(spot.x, spot.z) - xf.origin.y)
+			var frame := face * Transform3D(Basis(), Vector3((a + b) * 0.5, (top + low - 0.2) * 0.5, -0.2))
+			var size := Vector3(b - a, top - low + 0.2, 0.4)
+			_alp_timber(STONE, frame, size, 0, 0.5, 1.0, 3, 0.0, true)
+			_collide_box(frame, size, "brick")
+
+
+# --- The farmhouse -------------------------------------------------------------------
+
+
+## How a farmhouse is laid out: how deep it is across its ridge, how long the
+## house and the barn under the same roof are, how high its ground floor of
+## stone and its upper floor of wood are, how steep its roof is and how far
+## it stands out.
+const FARM := {"deep": 10.4, "house": 10.0, "barn": 9.0, "ground": 2.9, "upper": 2.6, "pitch": 22.0, "over_eave": 1.35, "over_gable": 1.2}
+
+
+## A farmhouse of Tyrol (an Einhof) at `at`, its long front with the balcony
+## facing `yaw_deg` (0 looks along +Z): the house and its barn in line under
+## one flat roof that stands far out, the house to the left seen from the
+## front. The ground floor is rubble stone under white lime on a plinth of
+## grey stone, with small windows behind green shutters; the upper floor is
+## of logs gone dark brown in the sun, and along it runs the balcony on its
+## brackets, its boards sawn into balusters. The barn above the stable is of
+## boards that let the air through. In front of the door a bench, and
+## firewood stacked under the eaves of the gable. The house has no inside
+## and its door is shut; the stable is open, to be gone into. Its roof is
+## "shingles", "boards" weighed with stones, or "tin".
+func farmhouse(at: Vector2, yaw_deg: float, roof := "shingles") -> void:
+	_alp_begin(at, "near", 7)
+	var colliders := _alp_colliders()
+	var deep: float = FARM.deep
+	var long := float(FARM.house) + float(FARM.barn)
+	var hl := long * 0.5
+	var hd := deep * 0.5
+	var ground: float = FARM.ground
+	var eaves := ground + float(FARM.upper)
+	var pitch: float = FARM.pitch
+	var rise := tan(deg_to_rad(pitch))
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw_deg))
+	var highest := -INF
+	var lowest := INF
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		var spot := turn * Vector3(corner.x * hl, 0, corner.y * hd)
+		highest = maxf(highest, ground_height(at.x + spot.x, at.y + spot.z))
+		lowest = minf(lowest, ground_height(at.x + spot.x, at.y + spot.z))
+	var xf := Transform3D(turn, Vector3(at.x, highest + 0.25, at.y))
+	# Where the house ends and the barn begins, along X.
+	var split := -hl + float(FARM.house)
+	# The stable and the barn over it are the inside of this piece.
+	_alp_room_xf = xf
+	_alp_room = AABB(Vector3(split + 0.25, -0.02, -hd + 0.025), Vector3(hl - split - 0.25 - 0.025, eaves + hd * rise + 1.0, deep - 0.05))
+	_alp_plinth(xf, Vector2(hl, hd), 0.0)
+	_farm_ground_floor(xf, hl, hd, split)
+	_farm_upper_floor(xf, hl, hd, split, eaves, rise)
+	_farm_balcony(xf, hd, -hl + 0.35, split - 0.35)
+	_farm_stable(xf, hl, hd, split)
+	var roof_frame := xf * Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3.ZERO)
+	var ridge := _alp_roof(roof_frame, deep, long, eaves, pitch, FARM.over_eave, FARM.over_gable, roof, 1.8)
+	_farm_chimney(xf, -hl + 3.6, -1.6, eaves, rise, hd, ridge)
+	_alp_room = AABB()
+	# By the door a bench, and under the eaves of the gable the wood for the
+	# winter.
+	_alp_bench(xf * Transform3D(Basis(), Vector3(-5.6, 0, hd + 0.25)), 1.7)
+	_alp_reach = "small"
+	_woodpile(xf * Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(-hl - 0.4, 0, 0.3)), 6.5, 1.7, 0.55, false)
+	_alp_reach = "near"
+	# From afar: the white ground floor with its windows, the brown upper floor
+	# of the house, the grey of the barn, the balcony, and the roof.
+	var foot := lowest - xf.origin.y - 0.1
+	_far_box(xf, Vector3(0, (ground + foot) * 0.5, 0), Vector3(long, ground - foot, deep), FAR_LIME, FAR_LIME, 0.8)
+	_far_box(xf, Vector3((-hl + split) * 0.5, (ground + eaves) * 0.5, 0), Vector3(split + hl, eaves - ground, deep), FAR_BROWN, FAR_BROWN)
+	_far_box(xf, Vector3((hl + split) * 0.5, (ground + eaves) * 0.5, 0), Vector3(hl - split, eaves - ground, deep), FAR_BOARDS, FAR_BOARDS)
+	for end: float in [-1.0, 1.0]:
+		var colour := FAR_BROWN if end < 0.0 else FAR_BOARDS
+		_far_tri([xf * Vector3(end * hl, eaves, end * hd), xf * Vector3(end * hl, eaves, -end * hd), xf * Vector3(end * hl, eaves + hd * rise, 0)], colour)
+	# The windows of the front, as the panes between their shutters look from
+	# afar, and the doorway of the stable.
+	for hole: Rect2 in [Rect2(-8.25, 1.15, 0.5, 0.7), Rect2(-6.45, 1.15, 0.5, 0.7), Rect2(-1.45, 1.15, 0.5, 0.7),
+			Rect2(-8.25, 3.95, 0.5, 0.65), Rect2(-6.45, 3.95, 0.5, 0.65), Rect2(-2.85, 3.95, 0.5, 0.65), Rect2(-1.45, 3.95, 0.5, 0.65)]:
+		_far_quad([xf * Vector3(hole.position.x, hole.position.y, hd + 0.02), xf * Vector3(hole.end.x, hole.position.y, hd + 0.02), xf * Vector3(hole.end.x, hole.end.y, hd + 0.02), xf * Vector3(hole.position.x, hole.end.y, hd + 0.02)], [FAR_WINDOW])
+	_far_quad([xf * Vector3(3.45, 0.0, hd + 0.02), xf * Vector3(5.75, 0.0, hd + 0.02), xf * Vector3(5.75, 2.35, hd + 0.02), xf * Vector3(3.45, 2.35, hd + 0.02)], [FAR_DARK])
+	_far_quad([xf * Vector3(-hl + 0.35, ground, hd + 1.15), xf * Vector3(split - 0.35, ground, hd + 1.15), xf * Vector3(split - 0.35, ground + 1.15, hd + 1.15), xf * Vector3(-hl + 0.35, ground + 1.15, hd + 1.15)], [FAR_BROWN])
+	_far_box(xf, Vector3(-hl + 3.6, ridge + 0.1, -1.6), Vector3(0.62, 1.8, 0.62), FAR_LIME, FAR_STONE_CAP)
+	var over_eave: float = FARM.over_eave
+	var far_roof := xf * Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3.ZERO)
+	_far_roof(far_roof, hd + over_eave, hl + float(FARM.over_gable), eaves + 0.2 - over_eave * rise, ridge, FAR_ROOFS[roof])
+	_alp_end("farmhouse, %s" % roof, at, _alp_colliders() - colliders)
+
+
+## The ground floor of a farmhouse: lime over stone, 0.6 m thick, with the
+## door of the house and its windows, the door and the windows of the stable,
+## and the wall between them.
+func _farm_ground_floor(xf: Transform3D, hl: float, hd: float, split: float) -> void:
+	var ground: float = FARM.ground
+	var thick := 0.6
+	var window := Vector2(0.8, 1.0)
+	var small := Vector2(0.6, 0.5)
+	# Each side as which way it looks, its windows of the house, those of the
+	# stable, and its doors: [along, wide, high].
+	var sides := [
+		[Vector3.BACK, [-8.0, -6.2, -1.2], [1.6, 7.9], [[-3.6, 1.0, 2.1], [4.6, 2.3, 2.35]]],
+		[Vector3.FORWARD, [7.6, 4.4, 1.4], [-2.5, -6.8], []],
+		[Vector3.LEFT, [-2.4, 2.4], [], []],
+		[Vector3.RIGHT, [], [-1.5], []],
+	]
+	for side: Array in sides:
+		var out: Vector3 = side[0]
+		var lengthwise := absf(out.z) > 0.5
+		var face := _alp_face(xf, out, hd if lengthwise else hl)
+		var reach := hl if lengthwise else hd - thick
+		var holes: Array = []
+		for x: float in side[1]:
+			holes.append(Rect2(x - window.x * 0.5, 1.0, window.x, window.y))
+		for x: float in side[2]:
+			holes.append(Rect2(x - small.x * 0.5, 1.5, small.x, small.y))
+		for door: Array in side[3]:
+			holes.append(Rect2(door[0] - door[1] * 0.5, 0.0, door[1], door[2]))
+		if lengthwise:
+			# In two, at the wall between the house and the stable: the part of
+			# the stable is inside the piece, that of the house is not.
+			var cut := (split + 0.25) * out.z
+			var before := holes.filter(func(hole: Rect2) -> bool: return hole.end.x <= cut)
+			var after := holes.filter(func(hole: Rect2) -> bool: return hole.position.x >= cut)
+			_alp_wall(LIME, face, -reach, cut, -0.2, ground, thick, before)
+			_alp_wall(LIME, face, cut, reach, -0.2, ground, thick, after)
+		else:
+			_alp_wall(LIME, face, -reach, reach, -0.2, ground, thick, holes)
+		for x: float in side[1]:
+			_alp_window(face, Rect2(x - window.x * 0.5, 1.0, window.x, window.y), 0.14)
+		for x: float in side[2]:
+			_alp_window(face, Rect2(x - small.x * 0.5, 1.5, small.x, small.y), 0.2, "")
+	# The door of the house, shut, under a lintel of stone, with steps up to
+	# it; and the doorway of the stable, its wings open, with a ramp.
+	var front := _alp_face(xf, Vector3.BACK, hd)
+	_alp_door(front, Rect2(-4.1, 0.0, 1.0, 2.1))
+	var stable := front * Transform3D(Basis(), Vector3(4.6, 0, 0.02))
+	_alp_wings(stable, 2.3, 2.3)
+	_alp_ramp(stable * Transform3D(Basis(), Vector3(0, 0, 0.05)), 2.3)
+	# The wall between the house and the stable.
+	var between := xf * Transform3D(Basis(), Vector3(split + 0.25, ground * 0.5 - 0.1, 0))
+	_alp_timber(LIME, between, Vector3(0.5, ground + 0.2, hd * 2.0 - thick * 2.0), 2, 0.5, 1.0, 3, 0.0, true)
+	_collide_box(between, Vector3(0.5, ground + 0.2, hd * 2.0 - thick * 2.0))
+
+
+## The door of a house in the opening `hole` of the wall of the frame `xf`:
+## boards painted the red-brown of a door, shut, in a frame, a hand behind
+## the face, with stone steps from the ground up to it.
+func _alp_door(xf: Transform3D, hole: Rect2) -> void:
+	var middle := hole.get_center()
+	_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(middle.x, middle.y, -0.12)), Vector3(hole.size.x, hole.size.y, 0.06), 1, PAINTS.oxblood / 10.0, 1.0)
+	for x: float in [-1.0, 1.0]:
+		_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), Vector3(middle.x + x * (hole.size.x * 0.5 - 0.05), middle.y, -0.07)), Vector3(0.1, hole.size.y, 0.1), 1, -1.0, SQUEEZE, 0)
+	_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), Vector3(middle.x, hole.end.y - 0.05, -0.07)), Vector3(hole.size.x, 0.1, 0.1), 0, -1.0, SQUEEZE, 0)
+	# Panels on the door, and its handle.
+	for y: float in [0.6, 1.5]:
+		_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(middle.x, hole.position.y + y, -0.085)), Vector3(hole.size.x - 0.3, 0.6, 0.02), 1, PAINTS.oxblood / 10.0, 1.0)
+	_alp_timber("dark_steel", xf * Transform3D(Basis(), Vector3(middle.x + hole.size.x * 0.35, hole.position.y + 1.05, -0.07)), Vector3(0.12, 0.025, 0.04), 0)
+	_collide_box(xf * Transform3D(Basis(), Vector3(middle.x, middle.y, -0.12)), Vector3(hole.size.x, hole.size.y, 0.08), "wood")
+	var below := xf * Vector3(middle.x, 0, 0.6)
+	var drop := xf.origin.y - ground_height(below.x, below.z)
+	var steps := int(ceil(drop / 0.18))
+	for i in steps:
+		var top := -i * 0.18
+		var frame := xf * Transform3D(Basis(), Vector3(middle.x, top - 0.12, 0.15 + 0.3 * i + 0.0))
+		_alp_timber(STONE, frame, Vector3(hole.size.x + 0.5 + 0.1 * i, 0.24, 0.32 + 0.6 * i), 0, 0.5, 1.0, 3, 0.0, true)
+		_collide_box(frame, Vector3(hole.size.x + 0.5 + 0.1 * i, 0.24, 0.32 + 0.6 * i), "brick")
+
+
+## The upper floor of a farmhouse: over the house logs gone dark, with its
+## windows and the door to the balcony, and a gable of boards with a small
+## window; over the stable the barn, of boards in runs with slots between
+## them, and a gable with the door the hay goes in by.
+func _farm_upper_floor(xf: Transform3D, hl: float, hd: float, split: float, eaves: float, rise: float) -> void:
+	var ground: float = FARM.ground
+	var thick := 0.25
+	var window := Vector2(0.8, 0.95)
+	var low := ground + 0.9
+	var front := _alp_face(xf, Vector3.BACK, hd)
+	var back := _alp_face(xf, Vector3.FORWARD, hd)
+	var west := _alp_face(xf, Vector3.LEFT, hl)
+	var east := _alp_face(xf, Vector3.RIGHT, hl)
+	var balcony_door := Rect2(-4.55, ground + 0.12, 0.9, 2.0)
+	var holes := [balcony_door]
+	for x: float in [-8.0, -6.2, -2.6, -1.2]:
+		holes.append(Rect2(x - window.x * 0.5, low, window.x, window.y))
+	_alp_wall(DARK_WOOD, front, -hl, split, ground, eaves, thick, holes, "wood")
+	for x: float in [-8.0, -6.2, -2.6, -1.2]:
+		_alp_window(front, Rect2(x - window.x * 0.5, low, window.x, window.y), 0.08, "green", DARK_WOOD)
+	_alp_timber(DARK_WOOD, front * Transform3D(Basis(), Vector3(balcony_door.get_center().x, balcony_door.get_center().y, -0.1)), Vector3(balcony_door.size.x, balcony_door.size.y, 0.05), 1, 0.3, 1.0)
+	holes = []
+	for x: float in [7.6, 4.4, 1.4]:
+		holes.append(Rect2(x - window.x * 0.5, low, window.x, window.y))
+	_alp_wall(DARK_WOOD, back, -split, hl, ground, eaves, thick, holes, "wood")
+	for x: float in [7.6, 4.4, 1.4]:
+		_alp_window(back, Rect2(x - window.x * 0.5, low, window.x, window.y), 0.08, "green", DARK_WOOD)
+	holes = []
+	for x: float in [-2.4, 2.4]:
+		holes.append(Rect2(x - window.x * 0.5, low, window.x, window.y))
+	_alp_wall(DARK_WOOD, west, -hd + thick, hd - thick, ground, eaves, thick, holes, "wood")
+	for x: float in [-2.4, 2.4]:
+		_alp_window(west, Rect2(x - window.x * 0.5, low, window.x, window.y), 0.08, "green", DARK_WOOD)
+	# The ends of the logs where the walls cross at the corners of the house.
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(-1, 1)]:
+		for y in int((eaves - ground) / 0.3):
+			var at := Vector3(corner.x * (hl + 0.12) , ground + 0.15 + y * 0.3, corner.y * (hd - 0.12))
+			_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), at), Vector3(0.24, 0.27, 0.24), 0, -1.0, SQUEEZE, 3)
+	# The gables above the eaves, of boards: the house's own and the barn's,
+	# and between them the wall that closes the barn off from the house.
+	var gable := PackedVector2Array([Vector2(-hd, eaves - 0.02), Vector2(hd, eaves - 0.02), Vector2(0, eaves + hd * rise)])
+	_alp_boarding(DARK_WOOD, gable, 0.04, west * Transform3D(Basis(), Vector3(0, 0, -0.1)))
+	_alp_boarding(LARCH, gable, 0.04, east * Transform3D(Basis(), Vector3(0, 0, -0.03)))
+	_alp_boarding(DARK_WOOD, gable, 0.04, xf * Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(split, 0, 0)), -1.0, true)
+	_alp_window(west * Transform3D(Basis(), Vector3(0, 0, -0.055)), Rect2(-0.35, eaves + 0.6, 0.7, 0.6), 0.0, "", DARK_WOOD)
+	# The hay door in the barn's gable, shut, and its beam for the pulley.
+	_alp_timber(LARCH, east * Transform3D(Basis(), Vector3(0, eaves + 0.75, 0.02)), Vector3(1.4, 1.3, 0.04), 1, -1.0, 1.0)
+	_alp_timber(LARCH, east * Transform3D(Basis(), Vector3(0, eaves + 1.65, 0.3)), Vector3(0.14, 0.16, 0.9), 2)
+	# The barn: walls of boards over the stable, front, back and gable.
+	_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), Vector3(split + 0.125, (ground + eaves) * 0.5, 0)), Vector3(0.25, eaves - ground, hd * 2.0 - 0.1), 2, 0.4, 1.0)
+	_alp_slats(front, split, hl, ground, eaves)
+	_alp_slats(back, -hl, -split, ground, eaves)
+	_alp_slats(east, -hd, hd, ground, eaves)
+	# A plate over each run of slats, on which the roof rests.
+	for face: Transform3D in [front, back]:
+		_alp_timber(LARCH, face * Transform3D(Basis(), Vector3((split + hl) * 0.5 * (1.0 if face == front else -1.0), eaves - 0.08, -0.1)), Vector3(hl - split, 0.16, 0.16), 0)
+
+
+## The balcony along the front of the upper floor of a farmhouse, from
+## `from` to `to` along it: boards on brackets that stand out of the wall,
+## and a parapet of boards sawn into balusters under a rail, with its ends.
+## It stops a shot.
+func _farm_balcony(xf: Transform3D, hd: float, from: float, to: float) -> void:
+	var ground: float = FARM.ground
+	var deep := 1.1
+	var floor_y := ground + 0.1
+	var front := _alp_face(xf, Vector3.BACK, hd)
+	var length := to - from
+	var middle := (from + to) * 0.5
+	var floor_frame := front * Transform3D(Basis(), Vector3(middle, floor_y, deep * 0.5))
+	_alp_timber(DARK_WOOD, floor_frame, Vector3(length, 0.06, deep), 0, 0.4, 1.0)
+	_collide_box(floor_frame, Vector3(length, 0.12, deep), "wood")
+	var brackets := int(length / 1.3) + 1
+	for i in brackets:
+		var x := from + 0.1 + (length - 0.2) * i / (brackets - 1)
+		_alp_timber(DARK_WOOD, front * Transform3D(Basis(), Vector3(x, floor_y - 0.14, deep * 0.5 - 0.05)), Vector3(0.14, 0.2, deep + 0.1), 2)
+	# The parapet: sawn boards on the front and at either end, a rail on top
+	# of them and a post at each corner.
+	var high := 0.95
+	_alp_fret(front * Transform3D(Basis(), Vector3(middle, floor_y + 0.03, deep - 0.04)), length - 0.1, high)
+	for end: float in [-1.0, 1.0]:
+		var at := from if end < 0.0 else to
+		var side := front * Transform3D(Basis(Vector3.UP, -end * PI * 0.5), Vector3(at + end * -0.04, floor_y + 0.03, deep * 0.5))
+		_alp_fret(side, deep - 0.1, high)
+		_alp_timber(DARK_WOOD, front * Transform3D(Basis(), Vector3(at - end * 0.05, floor_y + high * 0.5 + 0.05, deep - 0.05)), Vector3(0.1, high + 0.1, 0.1), 1)
+		_alp_timber(DARK_WOOD, front * Transform3D(Basis(), Vector3(at - end * 0.04, floor_y + high + 0.12, deep * 0.5)), Vector3(0.1, 0.06, deep), 2)
+	_alp_timber(DARK_WOOD, front * Transform3D(Basis(), Vector3(middle, floor_y + high + 0.12, deep - 0.04)), Vector3(length, 0.06, 0.12), 0)
+	_collide_box(front * Transform3D(Basis(), Vector3(middle, floor_y + 0.55, deep - 0.04)), Vector3(length, 1.1, 0.08), "wood")
+
+
+## A board `long` along the X of `xf` and `high` from its origin up, its
+## middle at the origin along X, both faces of it sawn into balusters: see
+## shaders/alpine_fretwork.gdshader.
+func _alp_fret(xf: Transform3D, long: float, high: float) -> void:
+	var st := _tool("alpine_fretwork", DETAIL | NO_COLLIDE, xf.origin)
+	var out := xf.basis.z
+	var corners: Array[Vector3] = [xf * Vector3(-long * 0.5, 0, 0), xf * Vector3(long * 0.5, 0, 0), xf * Vector3(long * 0.5, high, 0), xf * Vector3(-long * 0.5, high, 0)]
+	var uvs := [Vector2(0, high), Vector2(long, high), Vector2(long, 0), Vector2(0, 0)]
+	_quad(st, corners, [out, out, out, out], uvs)
+
+
+## The stable under the barn of a farmhouse: its floor of stones, its
+## ceiling of boards on beams, a post under them, a manger along the back
+## wall and hay.
+func _farm_stable(xf: Transform3D, hl: float, hd: float, split: float) -> void:
+	var ground: float = FARM.ground
+	var inner := Rect2(split + 0.5, -hd + 0.6, hl - 0.6 - split - 0.5, hd * 2.0 - 1.2)
+	var middle := inner.get_center()
+	_alp_timber(STONE, xf * Transform3D(Basis(), Vector3(middle.x, -0.03, middle.y)), Vector3(inner.size.x, 0.06, inner.size.y), 0, 0.5, 1.0, 0, 0.0, true)
+	var ceiling := xf * Transform3D(Basis(), Vector3(middle.x, ground - 0.03, 0))
+	_alp_timber(LARCH, ceiling, Vector3(hl - split, 0.06, hd * 2.0 - 0.1), 0, 0.5, 1.0)
+	_collide_box(ceiling, Vector3(hl - split, 0.1, hd * 2.0 - 0.1), "wood")
+	for z: float in [-2.0, 2.0]:
+		_alp_timber(LARCH, xf * Transform3D(Basis(), Vector3(middle.x, ground - 0.16, z)), Vector3(inner.size.x, 0.2, 0.18), 0)
+	var post := xf * Transform3D(Basis(), Vector3(middle.x, ground * 0.5 - 0.1, -2.0))
+	_alp_timber(LARCH, post, Vector3(0.18, ground - 0.2, 0.18), 1)
+	_collide_box(post, Vector3(0.18, ground - 0.2, 0.18), "wood")
+	var manger := xf * Transform3D(Basis(), Vector3(middle.x, 0.4, inner.position.y + 0.35))
+	_alp_timber(LARCH, manger, Vector3(inner.size.x - 0.4, 0.8, 0.6), 0)
+	_collide_box(manger, Vector3(inner.size.x - 0.4, 0.8, 0.6), "wood")
+	_alp_uv2.x = 4.5
+	_alp_heap(xf, Vector3(middle.x, 0.8, inner.position.y + 0.35), Vector2(inner.size.x - 0.6, 0.5), 0.25)
+	_alp_heap(xf, Vector3(inner.end.x - 1.2, 0.0, inner.end.y - 1.4), Vector2(1.8, 2.2), 0.9, true)
+	_alp_uv2.x = 0.5
+
+
+## The chimney of a farmhouse at `x` and `z`, through the roof from under it
+## to over the ridge: lime over stone, with a slab on four stones over it to
+## keep the rain out.
+func _farm_chimney(xf: Transform3D, x: float, z: float, eaves: float, rise: float, hd: float, ridge: float) -> void:
+	var low := eaves + (hd - absf(z)) * rise - 0.3
+	var top := ridge + 0.9
+	var stack := xf * Transform3D(Basis(), Vector3(x, (low + top) * 0.5, z))
+	_alp_timber(LIME, stack, Vector3(0.62, top - low, 0.62), 1, 0.5, 1.0, 3, 0.0, true)
+	_collide_box(stack, Vector3(0.62, top - low, 0.62))
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		_alp_stone(ROCK, xf * Transform3D(Basis(), Vector3(x + corner.x * 0.24, top + 0.08, z + corner.y * 0.24)), Vector3(0.12, 0.16, 0.12))
+	_alp_timber(STONE, xf * Transform3D(Basis(), Vector3(x, top + 0.19, z)), Vector3(0.8, 0.07, 0.8), 0, 0.5, 1.0, 3, 0.0, true)
+
+
+## A bench against a wall, its back to the origin of `xf` and facing its +Z,
+## `long` along it: a thick board on two legs, worn smooth.
+func _alp_bench(xf: Transform3D, long: float) -> void:
+	var under := xf * Vector3(0, 0, 0.25)
+	var low := ground_height(under.x, under.z) - xf.origin.y
+	var seat := xf * Transform3D(Basis(), Vector3(0, low + 0.44, 0.2))
+	_alp_timber(DARK_WOOD, seat, Vector3(long, 0.06, 0.36), 0, 0.2, SQUEEZE, 3, 0.3)
+	for x: float in [-1.0, 1.0]:
+		_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), Vector3(x * (long * 0.5 - 0.2), low + 0.21, 0.2)), Vector3(0.06, 0.44, 0.3), 1, 0.3)
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, low + 0.24, 0.2)), Vector3(long, 0.48, 0.36), "wood")
+
+
+# --- The chapel ----------------------------------------------------------------------
+
+
+## A chapel by the way at `at`, its door in the gable that faces `yaw_deg`
+## (0 looks along +Z): small and white, lime over stone on a grey plinth,
+## a steep roof of shingles and at its back a choir of three sides under a
+## roof of its own. Over the door, astride the ridge, a little tower of
+## boards with a bell in it, an onion of shingles on it and a cross on top.
+## The door of boards is round at the top and shut; two round-headed windows
+## light either side. A bench stands against its sunny side. It is cover,
+## and there is nothing inside.
+func chapel(at: Vector2, yaw_deg: float) -> void:
+	_alp_begin(at, "near", 11)
+	var colliders := _alp_colliders()
+	var wide := 5.0
+	var long := 6.6
+	var hw := wide * 0.5
+	var hl := long * 0.5
+	var eaves := 3.9
+	var thick := 0.55
+	var pitch := 45.0
+	var rise := tan(deg_to_rad(pitch))
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw_deg))
+	var highest := -INF
+	var lowest := INF
+	for corner: Vector2 in [Vector2(-1, -1.5), Vector2(1, -1.5), Vector2(1, 1), Vector2(-1, 1)]:
+		var spot := turn * Vector3(corner.x * hw, 0, corner.y * hl)
+		highest = maxf(highest, ground_height(at.x + spot.x, at.y + spot.z))
+		lowest = minf(lowest, ground_height(at.x + spot.x, at.y + spot.z))
+	var xf := Transform3D(turn, Vector3(at.x, highest + 0.2, at.y))
+	_alp_plinth(xf, Vector2(hw, hl), 0.0)
+	var front := _alp_face(xf, Vector3.BACK, hl)
+	var door := Rect2(-0.55, 0.0, 1.1, 2.75)
+	_alp_wall(LIME, front, -hw, hw, -0.2, eaves, thick, [door])
+	_alp_arch(front, door, thick, "door")
+	for out: Vector3 in [Vector3.RIGHT, Vector3.LEFT]:
+		var side := _alp_face(xf, out, hw)
+		var holes: Array = []
+		for x: float in [-1.3, 1.3]:
+			holes.append(Rect2(x - 0.3, 1.7, 0.6, 1.5))
+		# Along the left side the wall runs from the back to the front wall,
+		# along the right the other way.
+		var back_end := -hl if out.x < 0.0 else -(hl - thick)
+		_alp_wall(LIME, side, back_end, back_end + long - thick, -0.2, eaves, thick, holes)
+		for hole: Rect2 in holes:
+			_alp_arch(side, hole, thick, "window")
+	# The choir: three walls round the back, and the gable over the front.
+	var choir: Array[Vector2] = [Vector2(-hw, -hl), Vector2(-hw + 1.15, -hl - 1.5), Vector2(hw - 1.15, -hl - 1.5), Vector2(hw, -hl)]
+	for i in 3:
+		var a := choir[i]
+		var b := choir[i + 1]
+		var along := Vector3(b.x - a.x, 0, b.y - a.y)
+		var out := Vector3.UP.cross(along).normalized()
+		var face := xf * Transform3D(Basis(Vector3.UP.cross(out), Vector3.UP, out), Vector3((a.x + b.x) * 0.5, 0, (a.y + b.y) * 0.5))
+		var holes: Array = []
+		if i == 1:
+			holes.append(Rect2(-0.25, 1.9, 0.5, 1.1))
+		_alp_wall(LIME, face, -along.length() * 0.5 - 0.12, along.length() * 0.5 + 0.12, -0.2, eaves, thick, holes)
+		if i == 1:
+			_alp_arch(face, holes[0], thick, "window")
+	var gable := PackedVector2Array([Vector2(-hw, eaves - 0.02), Vector2(hw, eaves - 0.02), Vector2(0, eaves + hw * rise)])
+	_alp_boarding(LIME, gable, thick, front * Transform3D(Basis(), Vector3(0, 0, -thick * 0.5)), 0.5, true, true)
+	# The roof of the nave, from the choir to its overhang over the door, and
+	# the choir's own, three faces of shingles up to the end of the ridge.
+	var over := 0.45
+	var ridge := _alp_roof(xf * Transform3D(Basis(), Vector3(0, 0, over * 0.5)), wide, long + over, eaves, pitch, 0.4, 0.0, "shingles", 1.0)
+	_chapel_choir_roof(xf, choir, eaves, Vector3(0, ridge - 0.03, -hl), rise)
+	_chapel_tower(xf, Vector3(0, eaves + hw * rise, hl - 0.85), ridge)
+	# The bench, against the side the sun stands on in the afternoon.
+	_alp_bench(_alp_face(xf, Vector3.LEFT, hw + 0.05) * Transform3D(Basis(), Vector3(0, 0, 0)), 1.8)
+	# From afar.
+	var foot := lowest - xf.origin.y - 0.1
+	_far_box(xf, Vector3(0, (eaves + foot) * 0.5, 0), Vector3(wide, eaves - foot, long), FAR_LIME, FAR_LIME, 0.85)
+	_far_box(xf, Vector3(0, (eaves + foot) * 0.5, -hl - 0.7), Vector3(wide - 1.4, eaves - foot, 1.4), FAR_LIME, FAR_LIME, 0.85)
+	_far_tri([xf * Vector3(-hw, eaves, hl), xf * Vector3(hw, eaves, hl), xf * Vector3(0, eaves + hw * rise, hl)], FAR_LIME)
+	_far_quad([xf * Vector3(-0.55, 0, hl + 0.02), xf * Vector3(0.55, 0, hl + 0.02), xf * Vector3(0.55, 2.6, hl + 0.02), xf * Vector3(-0.55, 2.6, hl + 0.02)], [FAR_DARK])
+	_far_roof(xf * Transform3D(Basis(), Vector3(0, 0, -0.75 + over * 0.5)), hw + 0.4, hl + 0.75 + over * 0.5, eaves + 0.2 - 0.4 * rise, ridge, FAR_ROOFS.shingles)
+	var tower := xf * Vector3(0, ridge, hl - 0.85)
+	_far_box(Transform3D(xf.basis, tower), Vector3(0, 0.9, 0), Vector3(1.1, 1.8, 1.1), FAR_BOARDS, FAR_ROOFS.shingles)
+	var tip := Transform3D(xf.basis, tower) * Vector3(0, 3.6, 0)
+	for side in 4:
+		var a := Transform3D(xf.basis, tower) * (Basis(Vector3.UP, PI * 0.5 * side) * Vector3(0.6, 1.8, 0.6))
+		var b := Transform3D(xf.basis, tower) * (Basis(Vector3.UP, PI * 0.5 * (side + 1)) * Vector3(0.6, 1.8, 0.6))
+		_far_tri([b, a, tip], FAR_ROOFS.shingles)
+	_alp_end("chapel", at, _alp_colliders() - colliders)
+
+
+## A round-headed opening in a wall of the frame `xf` of its face: `hole` is
+## the rectangle it was cut as, the round head in the top of it, and the
+## wall `thick`. The corners above the round are filled with the wall again,
+## its underside follows the round through the wall, and in it is a door of
+## boards, shut, or a window, its panes dark behind a frame.
+func _alp_arch(xf: Transform3D, hole: Rect2, thick: float, what: String) -> void:
+	var radius := hole.size.x * 0.5
+	var spring := hole.end.y - radius
+	var middle := hole.get_center().x
+	var steps := 6
+	var arc := PackedVector2Array()
+	for i in steps + 1:
+		var angle := PI * i / steps
+		arc.append(Vector2(middle + cos(angle) * radius, spring + sin(angle) * radius))
+	# The corners over the round, in slices with upright sides, and under the
+	# round, faces from the wall's face to its back.
+	var st := _tool(LIME, DETAIL | NO_COLLIDE, xf.origin)
+	for i in steps:
+		var a := arc[i]
+		var b := arc[i + 1]
+		var slice := PackedVector2Array([a, b, Vector2(b.x, hole.end.y), Vector2(a.x, hole.end.y)])
+		if a.x > b.x:
+			slice = PackedVector2Array([b, a, Vector2(a.x, hole.end.y), Vector2(b.x, hole.end.y)])
+		if absf(hole.end.y - minf(a.y, b.y)) > 0.01:
+			_alp_boarding(LIME, slice, thick, xf * Transform3D(Basis(), Vector3(0, 0, -thick * 0.5)), 0.5, false, true)
+		var down := ((a + b) * 0.5 - Vector2(middle, spring)).normalized() * -1.0
+		var normal := xf.basis * Vector3(down.x, down.y, 0)
+		var corners := [xf * Vector3(a.x, a.y, 0.0), xf * Vector3(b.x, b.y, 0.0), xf * Vector3(b.x, b.y, -thick), xf * Vector3(a.x, a.y, -thick)]
+		var uvs := []
+		for corner: Vector3 in corners:
+			uvs.append(Vector2(corner.x + corner.z, -corner.y))
+		_quad(st, corners, [normal, normal, normal, normal], uvs)
+	var outline := PackedVector2Array([Vector2(hole.position.x, hole.position.y), Vector2(hole.end.x, hole.position.y)])
+	for i in steps + 1:
+		outline.append(arc[i])
+	# The arc ran from right to left over the top: the outline is counter-
+	# clockwise seen from outside.
+	if what == "door":
+		var leaf := xf * Transform3D(Basis(), Vector3(0, 0, -0.18))
+		_alp_boarding(PAINT, outline, 0.06, leaf, PAINTS.oxblood / 10.0, true)
+		for y: float in [0.5, 1.6]:
+			_alp_timber(DARK_WOOD, leaf * Transform3D(Basis(), Vector3(middle, hole.position.y + y, 0.045)), Vector3(hole.size.x - 0.1, 0.1, 0.03), 0)
+		_alp_timber("dark_steel", leaf * Transform3D(Basis(), Vector3(middle + radius * 0.65, 1.1, 0.06)), Vector3(0.03, 0.18, 0.03), 1)
+		var below := xf * Vector3(middle, 0, 0.5)
+		var step := xf * Transform3D(Basis(), Vector3(middle, -0.1, 0.25))
+		if xf.origin.y - ground_height(below.x, below.z) > 0.1:
+			_alp_timber(STONE, step, Vector3(hole.size.x + 0.6, 0.2, 0.5), 0, 0.5, 1.0, 3, 0.0, true)
+	else:
+		var pane := xf * Transform3D(Basis(), Vector3(0, 0, -thick * 0.45))
+		var glass := _tool(PANE, DETAIL | NO_COLLIDE, pane.origin)
+		var out := xf.basis.z
+		for i in range(1, outline.size() - 1):
+			var corners := [pane * Vector3(outline[0].x, outline[0].y, 0), pane * Vector3(outline[i].x, outline[i].y, 0), pane * Vector3(outline[i + 1].x, outline[i + 1].y, 0)]
+			_tri(glass, corners, [out, out, out], [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+		_alp_timber(PAINT, pane * Transform3D(Basis(), Vector3(middle, hole.get_center().y, 0.02)), Vector3(0.04, hole.size.y, 0.04), 1, PAINTS.white / 10.0, 1.0, 0)
+		_alp_timber(PAINT, pane * Transform3D(Basis(), Vector3(middle, spring, 0.02)), Vector3(hole.size.x, 0.04, 0.04), 0, PAINTS.white / 10.0, 1.0, 0)
+		_collide_box(pane * Transform3D(Basis(), Vector3(middle, hole.get_center().y, 0)), Vector3(hole.size.x, hole.size.y, 0.05))
+
+
+## The roof of the choir of a chapel: a face of shingles over each of the
+## walls `choir` (from one corner of the nave round to the other), all up to
+## `apex`, the end of the ridge of the nave, and a face of boards under each.
+func _chapel_choir_roof(xf: Transform3D, choir: Array[Vector2], eaves: float, apex: Vector3, _rise: float) -> void:
+	var middle := Vector2(0, -3.3 - 0.4)
+	for i in 3:
+		var a := choir[i]
+		var b := choir[i + 1]
+		# Out over the wall by the overhang, and down by as much as that.
+		var out_a := a + (a - middle).normalized() * 0.45
+		var out_b := b + (b - middle).normalized() * 0.45
+		var low := eaves + 0.12 - 0.4
+		var pa := xf * Vector3(out_a.x, low, out_a.y)
+		var pb := xf * Vector3(out_b.x, low, out_b.y)
+		var top := xf * apex
+		for under: bool in [false, true]:
+			var lift := Vector3.UP * (-0.14 if under else 0.0)
+			var corners := [pb + lift, pa + lift, top + lift]
+			if under:
+				corners = [pa + lift, pb + lift, top + lift]
+			var normal: Vector3 = ((corners[1] as Vector3) - (corners[0] as Vector3)).cross((corners[2] as Vector3) - (corners[0] as Vector3)).normalized()
+			var along: Vector3 = ((corners[1] as Vector3) - (corners[0] as Vector3)).normalized()
+			var downhill := normal.cross(along) * -1.0
+			var uvs := []
+			for corner: Vector3 in corners:
+				uvs.append(Vector2(corner.dot(along), corner.dot(downhill)))
+			var st := _tool(LARCH if under else SHINGLES, DETAIL | NO_COLLIDE, top)
+			_tri(st, corners, [normal, normal, normal], uvs)
+	var choir_box := xf * Transform3D(Basis(), Vector3(0, eaves + 0.8, -3.3 - 0.75))
+	_collide_box(choir_box, Vector3(3.2, 1.6, 1.5), "wood")
+
+
+## The little tower astride the ridge of a chapel, its foot at `foot` on the
+## ridge: a box of boards with an opening on each side and the bell hung in
+## it, a skirt of shingles over it, the onion on that and the cross on top.
+func _chapel_tower(xf: Transform3D, foot: Vector3, ridge: float) -> void:
+	var half := 0.55
+	var high := 1.9
+	var low := foot.y - 0.6
+	var base := xf * Transform3D(Basis(), Vector3(foot.x, 0, foot.z))
+	for out: Vector3 in [Vector3.BACK, Vector3.FORWARD, Vector3.RIGHT, Vector3.LEFT]:
+		var face := _alp_face(base, out, half)
+		var opening := Rect2(-0.22, ridge + 0.55, 0.44, 0.75)
+		_alp_wall(LARCH, face, -half + (0.05 if absf(out.x) > 0.5 else 0.0), half - (0.05 if absf(out.x) > 0.5 else 0.0), low, ridge + high, 0.05, [opening], "wood")
+	# The bell, on its beam, and its clapper.
+	_alp_timber(LARCH, base * Transform3D(Basis(), Vector3(0, ridge + 1.55, 0)), Vector3(half * 2.0 - 0.1, 0.1, 0.1), 0)
+	revolve("brass", base * Transform3D(Basis(), Vector3(0, ridge + 1.1, 0)), PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.21, 0.0), Vector2(0.2, 0.02), Vector2(0.15, 0.12), Vector2(0.13, 0.3), Vector2(0.09, 0.41), Vector2(0.0, 0.42)]), DETAIL | NO_COLLIDE, 10)
+	_collide_box(base * Transform3D(Basis(), Vector3(0, (low + ridge + high) * 0.5, 0)), Vector3(half * 2.0, ridge + high - low, half * 2.0), "wood")
+	# The skirt: four faces of shingles from over the boards up to the foot of
+	# the onion.
+	var top := ridge + high
+	var skirt := 0.78
+	var neck := 0.42
+	for side in 4:
+		var turn := Basis(Vector3.UP, PI * 0.5 * side)
+		var a := base * (turn * Vector3(-skirt, top - 0.05, skirt))
+		var b := base * (turn * Vector3(skirt, top - 0.05, skirt))
+		var c := base * (turn * Vector3(neck, top + 0.35, neck))
+		var d := base * (turn * Vector3(-neck, top + 0.35, neck))
+		var normal := (b - a).cross(d - a).normalized()
+		var along := (b - a).normalized()
+		var downhill := normal.cross(along) * -1.0
+		var uvs := []
+		for corner: Vector3 in [a, b, c, d]:
+			uvs.append(Vector2(corner.dot(along), corner.dot(downhill)))
+		_quad(_tool(SHINGLES, DETAIL | NO_COLLIDE, a), [a, b, c, d], [normal, normal, normal, normal], uvs)
+	# The onion, from its neck up to the spire, shingled: its profile from
+	# the top down, turned round for revolve(), which wants it from the foot
+	# up and lays the courses down it.
+	var onion := PackedVector2Array([Vector2(0.0, 1.95), Vector2(0.04, 1.55), Vector2(0.09, 1.32), Vector2(0.24, 1.12), Vector2(0.46, 0.86), Vector2(0.58, 0.6), Vector2(0.56, 0.36), Vector2(0.44, 0.16), Vector2(0.4, 0.0)])
+	var flipped := PackedVector2Array()
+	for i in onion.size():
+		flipped.append(Vector2(onion[onion.size() - 1 - i].x, onion[onion.size() - 1 - i].y))
+	revolve(SHINGLES, base * Transform3D(Basis(), Vector3(0, top + 0.3, 0)), flipped, DETAIL | NO_COLLIDE, 12, true)
+	# The cross on the spire, gilt.
+	var spire := top + 0.3 + 1.95
+	_alp_timber(PAINT, base * Transform3D(Basis(), Vector3(0, spire + 0.35, 0)), Vector3(0.05, 0.7, 0.05), 1, PAINTS.gold / 10.0, 1.0)
+	_alp_timber(PAINT, base * Transform3D(Basis(), Vector3(0, spire + 0.48, 0)), Vector3(0.36, 0.05, 0.05), 0, PAINTS.gold / 10.0, 1.0)
+
+
+# --- By the way ----------------------------------------------------------------------
+
+
+## A cross by the way (Wegkreuz) at `at`, facing `yaw_deg` (0 looks along
+## +Z): a post of dark wood on a stone, its arms, a little roof of boards over
+## the top, and the carved figure on it, painted, with the board over its
+## head. It stands in the way only as a post.
+func wayside_cross(at: Vector2, yaw_deg: float) -> void:
+	_alp_begin(at, "small", 13)
+	var colliders := _alp_colliders()
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
+	var stone := xf * Transform3D(Basis(), Vector3(0, 0.12, 0))
+	_alp_stone(STONE, stone, Vector3(0.7, 0.5, 0.6))
+	var post := xf * Transform3D(Basis(), Vector3(0, 1.85, 0))
+	_alp_timber(DARK_WOOD, post, Vector3(0.15, 3.4, 0.12), 1, -1.0, SQUEEZE, 2)
+	_collide_box(post, Vector3(0.18, 3.4, 0.16), "wood")
+	_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), Vector3(0, 2.75, 0)), Vector3(1.5, 0.13, 0.11), 0)
+	# The roof over the top: two boards in a gable, its eaves forward and back.
+	for side: float in [-1.0, 1.0]:
+		var board := xf * Transform3D(Basis(Vector3.BACK, -side * 0.7), Vector3(side * 0.16, 3.56, 0.02))
+		_alp_timber(DARK_WOOD, board, Vector3(0.46, 0.025, 0.42), 0, -1.0, 1.0)
+	_alp_timber(DARK_WOOD, xf * Transform3D(Basis(), Vector3(0, 3.5, 0.2)), Vector3(0.6, 0.12, 0.02), 0, -1.0, 1.0)
+	# The figure, its arms along the cross and its head bowed, and the board.
+	_alp_figure(xf * Transform3D(Basis(), Vector3(0, 2.75, 0.085)), 1.0)
+	_alp_timber(PAINT, xf * Transform3D(Basis(), Vector3(0, 3.2, 0.075)), Vector3(0.24, 0.1, 0.02), 0, PAINTS.white / 10.0, 1.0)
+	_alp_end("wayside_cross", at, _alp_colliders() - colliders)
+
+
+## A figure on a cross, `scale` times life size of a carving by the way (a
+## metre and a quarter tall), its hands at the ends of the arms of the cross
+## whose middle is the origin of `xf`, facing its +Z: pale, with a white
+## cloth round its loins, its head bowed to its right.
+func _alp_figure(xf: Transform3D, scale: float) -> void:
+	var pale := PAINTS.pale / 10.0
+	var at := func(x: float, y: float) -> Transform3D: return xf * Transform3D(Basis(), Vector3(x, y, 0) * scale)
+	_alp_timber(PAINT, at.call(0, -0.2), Vector3(0.19, 0.4, 0.1) * scale, 1, pale, 1.0)
+	_alp_timber(PAINT, at.call(0, -0.43), Vector3(0.22, 0.14, 0.11) * scale, 0, PAINTS.white / 10.0, 1.0)
+	_alp_timber(PAINT, xf * Transform3D(Basis(Vector3.BACK, 0.4), Vector3(0.035, 0.07, 0.04) * scale), Vector3(0.1, 0.13, 0.11) * scale, 1, pale, 1.0)
+	for side: float in [-1.0, 1.0]:
+		var shoulder := Vector3(side * 0.08, -0.04, 0) * scale
+		var hand := Vector3(side * 0.62, 0.02, 0) * scale
+		_alp_beam(PAINT, xf * shoulder, xf * hand, 0.05 * scale, 0.05 * scale, pale)
+		var hip := Vector3(side * 0.05, -0.48, 0) * scale
+		var foot := Vector3(-side * 0.01, -1.05, 0.02) * scale
+		_alp_beam(PAINT, xf * hip, xf * foot, 0.07 * scale, 0.07 * scale, pale)
+
+
+## A shrine on a post by the way (Marterl) at `at`, facing `yaw_deg`: a box
+## of boards open at the front under a little roof of shingles, with a
+## picture painted blue in it, a small cross before it and a candle. In the
+## way only as a post.
+func marterl(at: Vector2, yaw_deg: float) -> void:
+	_alp_begin(at, "small", 17)
+	var colliders := _alp_colliders()
+	var own := _alp_own
+	var lean := Basis.from_euler(Vector3(own.randf_range(-0.03, 0.03), 0, own.randf_range(-0.03, 0.03)))
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)) * lean, ground(at.x, at.y, -0.3))
+	var post := xf * Transform3D(Basis(), Vector3(0, 0.95, 0))
+	_alp_timber(LARCH, post, Vector3(0.14, 1.9, 0.14), 1, -1.0, SQUEEZE, 0)
+	_collide_box(post, Vector3(0.16, 1.9, 0.16), "wood")
+	var box := xf * Transform3D(Basis(), Vector3(0, 2.2, 0))
+	_alp_timber(LARCH, box * Transform3D(Basis(), Vector3(0, -0.3, 0.0)), Vector3(0.56, 0.04, 0.34), 0)
+	_alp_timber(LARCH, box * Transform3D(Basis(), Vector3(0, 0, -0.15)), Vector3(0.56, 0.6, 0.03), 1, -1.0, 1.0)
+	for x: float in [-1.0, 1.0]:
+		_alp_timber(LARCH, box * Transform3D(Basis(), Vector3(x * 0.265, 0, 0.0)), Vector3(0.03, 0.6, 0.3), 1, -1.0, 1.0)
+	_alp_timber(PAINT, box * Transform3D(Basis(), Vector3(0, 0.0, -0.13)), Vector3(0.44, 0.46, 0.01), 1, PAINTS.blue / 10.0, 1.0)
+	_alp_timber(PAINT, box * Transform3D(Basis(), Vector3(0, 0.02, -0.12)), Vector3(0.12, 0.3, 0.01), 1, PAINTS.gold / 10.0, 1.0)
+	_alp_timber(DARK_WOOD, box * Transform3D(Basis(), Vector3(0, -0.06, -0.07)), Vector3(0.03, 0.4, 0.03), 1)
+	_alp_timber(DARK_WOOD, box * Transform3D(Basis(), Vector3(0, 0.04, -0.07)), Vector3(0.2, 0.03, 0.03), 0)
+	_alp_figure(box * Transform3D(Basis(), Vector3(0, 0.04, -0.05)), 0.15)
+	_alp_timber(PAINT, box * Transform3D(Basis(), Vector3(0.15, -0.22, 0.05)), Vector3(0.04, 0.12, 0.04), 1, PAINTS.oxblood / 10.0, 1.0)
+	for side: float in [-1.0, 1.0]:
+		var board := box * Transform3D(Basis(Vector3.BACK, -side * 0.75), Vector3(side * 0.19, 0.41, 0.02))
+		_alp_timber(SHINGLES, board, Vector3(0.5, 0.03, 0.5), 0, 0.5, 1.0)
+	_alp_end("marterl", at, _alp_colliders() - colliders)
+
+
+# --- The hunter's stand --------------------------------------------------------------
+
+
+## A hunter's stand (Hochstand) at `at`, looking out the way `yaw_deg` faces:
+## four legs of peeled poles, splayed and braced, a floor `high` over the
+## ground, a cabin with a parapet of boards to the chest and the rest open to
+## shoot from, under a roof of boards; and at the back a steep stair of
+## treads between two strings up to the floor, with a rail. A place for a
+## sniper: whoever stands up there sees over the meadow and the parapet
+## stops what is shot at him when he ducks. The stair is a slope to whoever
+## walks, wide enough for bots to climb.
+func hunting_stand(at: Vector2, yaw_deg: float, high := 4.5) -> void:
+	_alp_begin(at, "near", 19)
+	var colliders := _alp_colliders()
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
+	var half := 1.25
+	var foot := 1.55
+	var cabin := 2.15
+	var roof_at := high + cabin
+	# The legs, from the ground under each up to the roof, which they carry.
+	var tops: Array[Vector3] = []
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		var world := xf * Vector3(corner.x * foot, 0, corner.y * foot)
+		var low := xf.affine_inverse() * ground(world.x, world.z, -0.3)
+		var top := Vector3(corner.x * half, roof_at, corner.y * half)
+		_alp_pole(LARCH, xf * low, xf * top, 0.1, 0.075, 7, true)
+		tops.append(top)
+	# Braces crosswise on the two sides and the front, under the floor.
+	for pair: Array in [[0, 3], [1, 2], [2, 3]]:
+		var a: Vector3 = tops[pair[0]]
+		var b: Vector3 = tops[pair[1]]
+		var a_low := Vector3(a.x / half * foot, 0.5, a.z / half * foot)
+		var b_low := Vector3(b.x / half * foot, 0.5, b.z / half * foot)
+		var a_high := a_low.lerp(a, (high - 0.4) / roof_at)
+		var b_high := b_low.lerp(b, (high - 0.4) / roof_at)
+		a_high.y = high - 0.4
+		b_high.y = high - 0.4
+		_alp_pole(LARCH, xf * a_low, xf * b_high, 0.045, -1.0, 5)
+		_alp_pole(LARCH, xf * b_low, xf * a_high, 0.045, -1.0, 5)
+	# The floor on two beams.
+	for x: float in [-1.0, 1.0]:
+		_alp_timber(LARCH, xf * Transform3D(Basis(), Vector3(x * (half - 0.1), high - 0.12, 0)), Vector3(0.12, 0.16, half * 2.0 + 0.3), 2)
+	var floor_frame := xf * Transform3D(Basis(), Vector3(0, high - 0.02, 0))
+	_alp_timber(LARCH, floor_frame, Vector3(half * 2.0 + 0.1, 0.04, half * 2.0 + 0.1), 2, -1.0, 1.0)
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, high - 0.06, 0)), Vector3(half * 2.0 + 0.1, 0.12, half * 2.0 + 0.1), "wood")
+	# The parapet, to the chest of whoever stands, on all sides but where
+	# the stair comes up at the back; a sill on it to rest a rifle on.
+	var stair_wide := 1.6
+	var parapet := 1.0
+	for out: Vector3 in [Vector3.BACK, Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD]:
+		var face := _alp_face(xf, out, half + 0.06)
+		var spans: Array[Vector2] = [Vector2(-half - 0.06, half + 0.06)]
+		if out.z < -0.5:
+			spans = [Vector2(-half - 0.06, -stair_wide * 0.5), Vector2(stair_wide * 0.5, half + 0.06)]
+		for span in spans:
+			var board := face * Transform3D(Basis(), Vector3((span.x + span.y) * 0.5, high + parapet * 0.5, -0.015))
+			_alp_timber(LARCH, board, Vector3(span.y - span.x, parapet, 0.03), 1, -1.0, 1.0)
+			_collide_box(board, Vector3(span.y - span.x, parapet, 0.06), "wood")
+			_alp_timber(LARCH, face * Transform3D(Basis(), Vector3((span.x + span.y) * 0.5, high + parapet + 0.02, -0.06)), Vector3(span.y - span.x, 0.04, 0.16), 0, -1.0, 1.0)
+	# The roof: boards falling to the back, under a sheet of tin.
+	var slope := atan2(0.25, half * 2.0)
+	var roof := xf * Transform3D(Basis(Vector3.RIGHT, -slope), Vector3(0, roof_at + 0.1, 0))
+	_alp_timber(LARCH, roof, Vector3(half * 2.0 + 0.7, 0.03, half * 2.0 + 0.8), 2, -1.0, 1.0)
+	_alp_timber(TIN, roof * Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(0, 0.025, 0)), Vector3(half * 2.0 + 0.9, 0.015, half * 2.0 + 0.74), 0, 0.5, 1.0)
+	_collide_box(roof, Vector3(half * 2.0 + 0.7, 0.1, half * 2.0 + 0.8), "metal")
+	for z: float in [-1.0, 1.0]:
+		_alp_timber(LARCH, xf * Transform3D(Basis(), Vector3(0, roof_at + 0.02 - z * 0.12, z * (half - 0.05))), Vector3(half * 2.0 + 0.3, 0.12, 0.1), 0)
+	_hunting_stair(xf, Vector3(0, high, -half - 0.06), stair_wide)
+	# From afar: the legs, the cabin and its roof.
+	for i in 4:
+		var top: Vector3 = tops[i]
+		var low := Vector3(top.x / half * foot, -0.2, top.z / half * foot)
+		_far_box(Transform3D(xf.basis, xf * ((low + top) * 0.5)), Vector3.ZERO, Vector3(0.13, roof_at + 0.2, 0.13), FAR_BOARDS, FAR_BOARDS)
+	_far_box(xf, Vector3(0, high + parapet * 0.5, 0), Vector3(half * 2.0 + 0.1, parapet, half * 2.0 + 0.1), FAR_BOARDS, FAR_BOARDS)
+	_far_box(xf, Vector3(0, roof_at + 0.12, 0), Vector3(half * 2.0 + 0.7, 0.06, half * 2.0 + 0.8), FAR_ROOFS.tin, FAR_ROOFS.tin)
+	_alp_end("hunting_stand", at, _alp_colliders() - colliders)
+
+
+## The stair of a hunter's stand: from the edge of its floor at `top` down
+## and back to the ground, `wide`, at 38 degrees: two strings, treads, and a
+## rail on the left. To whoever walks it is a slope.
+func _hunting_stair(xf: Transform3D, top: Vector3, wide: float) -> void:
+	var steep := deg_to_rad(38.0)
+	var run := top.y / tan(steep)
+	var reach := xf * Vector3(0, 0, top.z - run)
+	var low := ground_height(reach.x, reach.z) - xf.origin.y
+	run = (top.y - low) / tan(steep)
+	var bottom := Vector3(0, low, top.z - run)
+	for x: float in [-1.0, 1.0]:
+		var side := Vector3(x * (wide * 0.5 + 0.04), 0, 0)
+		_alp_beam(LARCH, xf * (bottom + side + Vector3(0, 0.06, -0.1)), xf * (top + side + Vector3(0, 0.1, 0.05)), 0.06, 0.22)
+	var steps := int(round((top.y - low) / 0.32))
+	for i in range(1, steps):
+		var tread := bottom.lerp(top, float(i) / steps)
+		_alp_timber(LARCH, xf * Transform3D(Basis(), tread + Vector3(0, 0.0, 0.04)), Vector3(wide, 0.045, 0.24), 0)
+	# The rail, on posts at the foot and the head.
+	for at: Vector3 in [bottom + Vector3(-wide * 0.5 - 0.08, 0, 0.2), top + Vector3(-wide * 0.5 - 0.08, 0, 0)]:
+		_alp_pole(LARCH, xf * at, xf * (at + Vector3.UP * 1.0), 0.035, -1.0, 5)
+	_alp_pole(LARCH, xf * (bottom + Vector3(-wide * 0.5 - 0.08, 0.95, 0.2)), xf * (top + Vector3(-wide * 0.5 - 0.08, 0.95, 0)), 0.03, -1.0, 5)
+	var ramp := Transform3D(Basis(Vector3.RIGHT, -steep), (bottom + top) * 0.5 + Vector3(0, -0.05, 0))
+	_collide_box(xf * ramp, Vector3(wide, 0.1, (top - bottom).length() + 0.1), "wood")
+
+
+# --- Fences, hay, wood ---------------------------------------------------------------
+
+
+## A fence of Tyrol (Kreuzzaun) along `path` (points x and z): pairs of
+## stakes every metre and a half, and between the stakes of each pair split
+## laths that lean all the same way, each across the next few, `high` at the
+## top. Nobody walks through it; a shot over it goes on.
+func slant_fence(path: Array, high := 1.15) -> void:
+	var way := curve(path, 1.6)
+	var middle: Vector2 = way[way.size() / 2]
+	_alp_begin(middle, "small", 23)
+	var colliders := _alp_colliders()
+	var own := _alp_own
+	for i in way.size():
+		var at := way[i]
+		_alp_block = Vector2i(floori(at.x / ALPINE_BLOCK), floori(at.y / ALPINE_BLOCK))
+		var ahead := (way[mini(i + 1, way.size() - 1)] - way[maxi(i - 1, 0)]).normalized()
+		var across := Vector3(-ahead.y, 0, ahead.x)
+		var foot := ground(at.x, at.y, -0.2)
+		for side: float in [-1.0, 1.0]:
+			var stake := Transform3D(Basis(Vector3.UP, atan2(ahead.x, ahead.y)) * Basis.from_euler(Vector3(own.randf_range(-0.04, 0.04), 0, own.randf_range(-0.04, 0.04))), foot + across * side * 0.055 + Vector3.UP * (high + 0.35) * 0.5)
+			_alp_timber(LARCH, stake, Vector3(0.05, high + 0.35, 0.05), 1, -1.0, SQUEEZE, 2)
+		if i == 0:
+			continue
+		var from := way[i - 1]
+		var length := from.distance_to(at)
+		var dir := Vector3(at.x - from.x, 0, at.y - from.y).normalized()
+		# Laths leaning forward along the fence, three or four to a length,
+		# their feet in the grass and their heads over the stakes.
+		var laths := int(round(length / 0.38))
+		for k in laths:
+			var share := (k + own.randf_range(0.3, 0.7)) / laths
+			var spot := from.lerp(at, share)
+			var base := ground(spot.x, spot.y, 0.05)
+			var lean := deg_to_rad(own.randf_range(38.0, 46.0))
+			var reach := (high + 0.1) / sin(lean)
+			var axis := (dir * cos(lean) + Vector3.UP * sin(lean)).normalized()
+			var lath := base + axis * reach * 0.5 - dir * reach * cos(lean) * 0.5
+			_alp_timber(LARCH, Transform3D(_along(axis), lath), Vector3(0.075, 0.018, reach), 2, -1.0, SQUEEZE, 2)
+		var a := ground(from.x, from.y)
+		var b := ground(at.x, at.y)
+		_collide_box(Transform3D(Basis.looking_at(dir), (a + b) * 0.5 + Vector3.UP * high * 0.5), Vector3(0.14, high, length), "wood")
+	_alp_end("slant_fence, %d m" % roundi(_length_of(way)), middle, _alp_colliders() - colliders)
+
+
+## A fence of rails along `path`: round posts every two and a half metres
+## and `rails` poles between them, the top one `high`. Nobody walks through
+## it, and a shot goes between the rails.
+func rail_fence(path: Array, rails := 2, high := 1.1) -> void:
+	var way := curve(path, 2.5)
+	var middle: Vector2 = way[way.size() / 2]
+	_alp_begin(middle, "small", 29)
+	var colliders := _alp_colliders()
+	var own := _alp_own
+	var tops: Array[Vector3] = []
+	for i in way.size():
+		var at := way[i]
+		_alp_block = Vector2i(floori(at.x / ALPINE_BLOCK), floori(at.y / ALPINE_BLOCK))
+		var foot := ground(at.x, at.y, -0.25)
+		var top := foot + Vector3(own.randf_range(-0.03, 0.03), high + 0.38, own.randf_range(-0.03, 0.03))
+		_alp_pole(LARCH, foot, top, 0.065, 0.055, 6, true)
+		tops.append(top)
+		if i == 0:
+			continue
+		for r in rails:
+			var lift := high * (r + 1) / rails - high + 0.25
+			var a := tops[i - 1] + Vector3.UP * (lift - 0.05)
+			var b := top + Vector3.UP * lift
+			_alp_pole(LARCH, a, b, 0.04, 0.035, 5)
+			_collide_box(Transform3D(_along(b - a), (a + b) * 0.5), Vector3(0.1, 0.1, a.distance_to(b)), "wood")
+	_alp_end("rail_fence, %d m" % roundi(_length_of(way)), middle, _alp_colliders() - colliders)
+
+
+## A pole hung with hay to dry (Heumandl) at `at`: a stake with two arms
+## across it, and the hay heaped round it to over a man's height, thick at
+## the foot, narrowing to a head under the end of the stake. It is in the
+## way, and stops a shot.
+func hay_pole(at: Vector2) -> void:
+	_alp_begin(at, "small", 31)
+	var colliders := _alp_colliders()
+	var own := _alp_own
+	var foot := ground(at.x, at.y)
+	var high := own.randf_range(1.75, 2.0)
+	_alp_pole(LARCH, foot + Vector3.DOWN * 0.3, foot + Vector3.UP * (high + 0.3), 0.04, 0.03, 5)
+	# The heap: rings round the stake, each a little out of round.
+	var rings: Array[Vector2] = [Vector2(0.5, -0.05), Vector2(0.6, 0.2), Vector2(0.56, 0.65), Vector2(0.46, 1.1), Vector2(0.34, 1.45), Vector2(0.17, high - 0.1), Vector2(0.03, high)]
+	var around := 9
+	var lumps: Array[float] = []
+	for i in around:
+		lumps.append(own.randf_range(0.85, 1.15))
+	var spin := own.randf() * TAU
+	var spot := func(ring: int, step: int) -> Vector3:
+		var angle := spin + TAU * step / around
+		var r := rings[ring].x * lumps[step % around] * (1.0 if ring < rings.size() - 1 else 1.0)
+		return foot + Vector3(cos(angle) * r, rings[ring].y, sin(angle) * r)
+	_alp_uv2.x = 0.5
+	var st := _tool(HAY, DETAIL | NO_COLLIDE, foot)
+	for ring in rings.size() - 1:
+		for step in around:
+			var p: Array[Vector3] = [spot.call(ring, step + 1), spot.call(ring, step), spot.call(ring + 1, step), spot.call(ring + 1, step + 1)]
+			var normals := []
+			var uvs := []
+			for q in p:
+				var out := Vector3(q.x - foot.x, 0.0, q.z - foot.z).normalized()
+				var lean := (rings[ring].x - rings[ring + 1].x) / maxf(rings[ring + 1].y - rings[ring].y, 0.05)
+				normals.append((out + Vector3.UP * lean).normalized())
+				uvs.append(Vector2(atan2(q.z - foot.z, q.x - foot.x) * 0.6, -(q.y - foot.y)))
+			_quad(st, p, normals, uvs)
+	_collide_cylinder(Transform3D(Basis(), foot + Vector3.UP * high * 0.45), 0.45, high * 0.9, "soft")
+	_alp_end("hay_pole", at, _alp_colliders() - colliders)
+
+
+## A stack of firewood at `at`, `long` along the way `yaw_deg` faces turned
+## a quarter to the left, `high` and `deep`: the ends of split logs on its
+## two faces, held at either end by stakes, on two bearers, and if `roofed`
+## under a roof of boards. It is in the way, and stops a shot.
+func woodpile(at: Vector2, yaw_deg: float, long := 3.0, high := 1.5, deep := 0.5, roofed := true) -> void:
+	_alp_begin(at, "small", 37)
+	var colliders := _alp_colliders()
+	_woodpile(Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y)), long, high, deep, roofed)
+	_alp_end("woodpile", at, _alp_colliders() - colliders)
+
+
+## The same in the frame `xf`, whose origin is on the ground in the middle of
+## the stack and whose X runs along it: as part of whatever is being built.
+func _woodpile(xf: Transform3D, long: float, high: float, deep: float, roofed: bool) -> void:
+	var under := xf * Vector3.ZERO
+	var low := ground_height(under.x, under.z) - xf.origin.y
+	var frame := xf * Transform3D(Basis(), Vector3(0, low, 0))
+	for z: float in [-1.0, 1.0]:
+		_alp_pole(BARK, frame * Vector3(-long * 0.5 - 0.1, 0.06, z * deep * 0.3), frame * Vector3(long * 0.5 + 0.1, 0.06, z * deep * 0.3), 0.06, -1.0, 5)
+	var bottom := 0.12
+	var h := Vector3(long * 0.5, 0, deep * 0.5)
+	# The two faces of ends, and over and at the ends of the stack the round
+	# sides of the logs.
+	for side: Array in [
+		[LOG_ENDS, Vector3.BACK, [Vector3(-h.x, bottom, h.z), Vector3(h.x, bottom, h.z), Vector3(h.x, high, h.z), Vector3(-h.x, high, h.z)]],
+		[LOG_ENDS, Vector3.FORWARD, [Vector3(h.x, bottom, -h.z), Vector3(-h.x, bottom, -h.z), Vector3(-h.x, high, -h.z), Vector3(h.x, high, -h.z)]],
+		[BARK, Vector3.UP, [Vector3(-h.x, high, h.z), Vector3(h.x, high, h.z), Vector3(h.x, high, -h.z), Vector3(-h.x, high, -h.z)]],
+		[BARK, Vector3.RIGHT, [Vector3(h.x, bottom, h.z), Vector3(h.x, bottom, -h.z), Vector3(h.x, high, -h.z), Vector3(h.x, high, h.z)]],
+		[BARK, Vector3.LEFT, [Vector3(-h.x, bottom, -h.z), Vector3(-h.x, bottom, h.z), Vector3(-h.x, high, h.z), Vector3(-h.x, high, -h.z)]],
+	]:
+		var points := []
+		var uvs := []
+		var normal: Vector3 = frame.basis * (side[1] as Vector3)
+		var right := ((side[2][1] as Vector3) - (side[2][0] as Vector3)).normalized()
+		var up := ((side[2][3] as Vector3) - (side[2][0] as Vector3)).normalized()
+		for corner: Vector3 in side[2]:
+			points.append(frame * corner)
+			uvs.append(Vector2(corner.dot(right), -corner.dot(up)) + Vector2(frame.origin.x, frame.origin.z))
+		_quad(_tool(side[0], DETAIL | NO_COLLIDE, frame.origin), points, [normal, normal, normal, normal], uvs)
+	for x: float in [-1.0, 1.0]:
+		for z: float in [-1.0, 1.0]:
+			_alp_timber(LARCH, frame * Transform3D(Basis(), Vector3(x * (h.x + 0.04), (high + 0.1) * 0.5 - 0.05, z * (h.z - 0.06))), Vector3(0.06, high + 0.15, 0.06), 1, -1.0, SQUEEZE, 2)
+	if roofed:
+		var roof := frame * Transform3D(Basis(Vector3.RIGHT, 0.18), Vector3(0, high + 0.12, 0))
+		_alp_timber(LARCH, roof, Vector3(long + 0.4, 0.03, deep + 0.4), 0, -1.0, 1.0)
+	_collide_box(frame * Transform3D(Basis(), Vector3(0, (high + bottom) * 0.5, 0)), Vector3(long, high - bottom, deep), "wood")
+
+
+## A bridge of boards over a brook from `from` to `to` (x and z), on the
+## banks at either end: two logs laid across, boards nailed over them, and a
+## rail on posts either side; a stone under each end of the logs. It lies
+## straight from one bank to the other, a hand over each.
+func footbridge(from: Vector2, to: Vector2, wide := 1.3) -> void:
+	var middle := (from + to) * 0.5
+	_alp_begin(middle, "small", 41)
+	var colliders := _alp_colliders()
+	var a := ground(from.x, from.y, 0.18)
+	var b := ground(to.x, to.y, 0.18)
+	var along := b - a
+	var xf := Transform3D(_along(along), (a + b) * 0.5)
+	var length := along.length()
+	# In the frame of the bridge -Z runs from `from` to `to`.
+	for x: float in [-1.0, 1.0]:
+		var side := Vector3(x * (wide * 0.5 - 0.2), -0.16, 0)
+		_alp_pole(BARK, xf * (side + Vector3(0, 0, length * 0.5 + 0.5)), xf * (side + Vector3(0, 0, -length * 0.5 - 0.5)), 0.14, 0.12, 7)
+		for end: float in [-1.0, 1.0]:
+			var stone := xf * (side + Vector3(0, -0.3, end * (length * 0.5 + 0.3)))
+			_alp_stone(ROCK, Transform3D(Basis(Vector3.UP, _alp_own.randf_range(0, TAU)), stone), Vector3(0.6, 0.45, 0.6))
+	var deck := xf * Transform3D(Basis(), Vector3(0, -0.01, 0))
+	_alp_timber(LARCH, deck, Vector3(wide, 0.05, length + 0.6), 0, -1.0, 1.0)
+	_collide_box(deck, Vector3(wide, 0.08, length + 0.6), "wood")
+	var posts := maxi(int(round(length / 1.6)), 1)
+	for x: float in [-1.0, 1.0]:
+		var heads: Array[Vector3] = []
+		for i in posts + 1:
+			var z := -length * 0.5 + length * i / posts
+			var post := Vector3(x * (wide * 0.5 + 0.04), 0.0, z)
+			_alp_timber(LARCH, xf * Transform3D(Basis(), post + Vector3(0, 0.4, 0)), Vector3(0.08, 1.0, 0.08), 1, -1.0, SQUEEZE, 2)
+			heads.append(post + Vector3(0, 0.95, 0))
+		_alp_pole(LARCH, xf * heads[0], xf * heads[heads.size() - 1], 0.035, -1.0, 5)
+		_collide_box(xf * Transform3D(Basis(), Vector3(x * (wide * 0.5 + 0.04), 0.5, 0)), Vector3(0.08, 1.0, length), "wood")
+	_alp_end("footbridge, %d m" % roundi(length), middle, _alp_colliders() - colliders)
+
+
+# --- Poles and wires -----------------------------------------------------------------
+
+
+## A line of wooden poles that carries `wires` wires over the land, a pole at
+## each of `points` (x and z): poles of dark wood soaked against the rot,
+## `high` out of the ground, each with an arm across the line and on it the
+## white insulators, and the wires hanging between one pole and the next. A
+## pole is seen from further off than a wire; each is in the way.
+func pole_line(points: Array, high := 8.0, wires := 3) -> void:
+	_alp_begin(points[0], "tall", 43)
+	var colliders := _alp_colliders()
+	var heads: Array = []
+	for i in points.size():
+		var at: Vector2 = points[i]
+		_alp_block = Vector2i(floori(at.x / ALPINE_BLOCK), floori(at.y / ALPINE_BLOCK))
+		var before: Vector2 = points[maxi(i - 1, 0)]
+		var after: Vector2 = points[mini(i + 1, points.size() - 1)]
+		var ahead := (after - before).normalized()
+		var foot := ground(at.x, at.y, -0.5)
+		var top := foot + Vector3(_alp_own.randf_range(-0.05, 0.05), high + 0.5, _alp_own.randf_range(-0.05, 0.05))
+		_alp_pole(DARK_WOOD, foot, top, 0.14, 0.1, 7, true)
+		var across := Vector3(-ahead.y, 0, ahead.x)
+		var arm := Transform3D(Basis(across, Vector3.UP, across.cross(Vector3.UP)), top + Vector3.DOWN * 0.35)
+		_alp_timber(DARK_WOOD, arm, Vector3(1.7, 0.1, 0.1), 0)
+		_alp_beam(DARK_WOOD, top + Vector3.DOWN * 0.9, arm * Vector3(0.55, -0.04, 0), 0.06)
+		var own_heads: Array[Vector3] = []
+		for w in wires:
+			var x := -0.7 + 1.4 * w / maxf(wires - 1, 1)
+			var seat := arm * Vector3(x, 0.05, 0)
+			_cylinder("porcelain", Transform3D(Basis(), seat), 0.045, 0.14, DETAIL | NO_COLLIDE, 0.03, 6)
+			own_heads.append(seat + Vector3.UP * 0.12)
+		heads.append(own_heads)
+	# The wires, each sagging between one insulator and the next.
+	_alp_reach = "wire"
+	for i in range(1, points.size()):
+		var middle: Vector2 = ((points[i - 1] as Vector2) + (points[i] as Vector2)) * 0.5
+		_alp_block = Vector2i(floori(middle.x / ALPINE_BLOCK), floori(middle.y / ALPINE_BLOCK))
+		for w in wires:
+			var a: Vector3 = heads[i - 1][w]
+			var b: Vector3 = heads[i][w]
+			_alp_wire(a, b, 0.012 * a.distance_to(b) + 0.25)
+	_alp_reach = "tall"
+	_alp_end("pole_line, %d poles" % points.size(), points[0], _alp_colliders() - colliders)
+
+
+## A wire from `a` to `b` that hangs `sag` lower in its middle: a thin bar of
+## three sides, bent in a dozen lengths.
+func _alp_wire(a: Vector3, b: Vector3, sag: float) -> void:
+	var st := _tool("dark_steel", DETAIL | NO_COLLIDE, (a + b) * 0.5)
+	var lengths := 12
+	var radius := 0.011
+	var spots: Array[Vector3] = []
+	for i in lengths + 1:
+		var t := float(i) / lengths
+		spots.append(a.lerp(b, t) + Vector3.DOWN * sag * 4.0 * t * (1.0 - t))
+	for i in lengths:
+		var p := spots[i]
+		var q := spots[i + 1]
+		var basis := _up_along(q - p)
+		for k in 3:
+			var a0 := TAU * k / 3.0
+			var a1 := TAU * (k + 1) / 3.0
+			var d0 := basis * Vector3(cos(a1), 0, sin(a1))
+			var d1 := basis * Vector3(cos(a0), 0, sin(a0))
+			_quad(st, [p + d0 * radius, p + d1 * radius, q + d1 * radius, q + d0 * radius], [d0, d1, d1, d0], [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+
+
+# --- The trough ----------------------------------------------------------------------
+
+
+## A trough by the way at `at`, `long` along the way `yaw_deg` faces turned a
+## quarter to the left: a log hollowed out and lying on two stones, full of
+## water, and at one end a post with an iron pipe that runs into it. It is
+## in the way, and stops a shot.
+func trough(at: Vector2, yaw_deg: float, long := 2.6) -> void:
+	_alp_begin(at, "small", 47)
+	var colliders := _alp_colliders()
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), ground(at.x, at.y))
+	var radius := 0.34
+	var axis := Vector3(0, radius + 0.08, 0)
+	var cut := radius * 0.55
+	var wall := 0.07
+	var end_wall := 0.12
+	var h := long * 0.5
+	# The outside, round under the cut, and the inside, as points of the
+	# plane across it: x out of its front (+Z), y up. Each runs from the rim
+	# at the front down round under it to the rim at the back.
+	var outer: Array[Vector2] = []
+	var inner: Array[Vector2] = []
+	var steps := 10
+	for ring: Array in [[outer, radius], [inner, radius - wall]]:
+		var r: float = ring[1]
+		var rim := asin(cut / r)
+		for i in steps + 1:
+			var angle := lerpf(rim, -PI - rim, float(i) / steps)
+			(ring[0] as Array).append(Vector2(cos(angle), sin(angle)) * r)
+	var at_x := func(x: float, p: Vector2) -> Vector3: return xf * (axis + Vector3(x, p.y, p.x))
+	var hi := h - end_wall
+	var wood := _tool(LARCH, DETAIL | NO_COLLIDE, xf.origin)
+	var wet := _tool(DARK_WOOD, DETAIL | NO_COLLIDE, xf.origin)
+	wood.set_uv2(Vector2(0.3, _alp_uv2.y))
+	wet.set_uv2(Vector2(0.7, _alp_uv2.y))
+	for i in steps:
+		var p := outer[i]
+		var q := outer[i + 1]
+		var np := xf.basis * Vector3(0, p.y, p.x).normalized()
+		var nq := xf.basis * Vector3(0, q.y, q.x).normalized()
+		_quad(wood, [at_x.call(h, p), at_x.call(-h, p), at_x.call(-h, q), at_x.call(h, q)], [np, np, nq, nq], [Vector2(i * 0.11, -long), Vector2(i * 0.11, 0), Vector2((i + 1) * 0.11, 0), Vector2((i + 1) * 0.11, -long)])
+		p = inner[i]
+		q = inner[i + 1]
+		np = xf.basis * -Vector3(0, p.y, p.x).normalized()
+		nq = xf.basis * -Vector3(0, q.y, q.x).normalized()
+		_quad(wet, [at_x.call(-hi, p), at_x.call(hi, p), at_x.call(hi, q), at_x.call(-hi, q)], [np, np, nq, nq], [Vector2(i * 0.1, 0), Vector2(i * 0.1, -long), Vector2((i + 1) * 0.1, -long), Vector2((i + 1) * 0.1, 0)])
+	# The rims along the top, front and back, and the tops of its ends.
+	var up := xf.basis.y
+	var front := [outer[0], inner[0]]
+	var back := [inner[steps], outer[steps]]
+	for rim: Array in [front, back]:
+		_quad(wood, [at_x.call(-h, rim[0]), at_x.call(h, rim[0]), at_x.call(h, rim[1]), at_x.call(-h, rim[1])], [up, up, up, up], [Vector2(0, 0), Vector2(long, 0), Vector2(long, 0.07), Vector2(0, 0.07)])
+	for span: Vector2 in [Vector2(hi, h), Vector2(-h, -hi)]:
+		_quad(wood, [at_x.call(span.x, inner[0]), at_x.call(span.y, inner[0]), at_x.call(span.y, inner[steps]), at_x.call(span.x, inner[steps])], [up, up, up, up], [Vector2(0, 0), Vector2(0.1, 0), Vector2(0.1, 0.4), Vector2(0, 0.4)])
+	# The ends, which show the rings of the log, and the ends of the hollow.
+	wood.set_uv2(Vector2(2.3, _alp_uv2.y))
+	for end: float in [-1.0, 1.0]:
+		for ring: Array in [[outer, h, wood, 1.0], [inner, hi, wet, -1.0]]:
+			var points: Array[Vector2] = ring[0]
+			var x: float = end * float(ring[1])
+			var faces: float = end * float(ring[3])
+			var normal := xf.basis * Vector3(faces, 0, 0)
+			var centre := Vector2(0, cut)
+			for i in steps:
+				var tri := [at_x.call(x, centre), at_x.call(x, points[i]), at_x.call(x, points[i + 1])]
+				var uvs := [Vector2(0, -cut), Vector2(points[i].x, -points[i].y), Vector2(points[i + 1].x, -points[i + 1].y)]
+				if faces < 0.0:
+					tri = [tri[0], tri[2], tri[1]]
+					uvs = [uvs[0], uvs[2], uvs[1]]
+				_tri(ring[2], tri, [normal, normal, normal], uvs)
+	wood.set_uv2(_alp_uv2)
+	wet.set_uv2(_alp_uv2)
+	# The water, a hand under the rim.
+	var level := cut - 0.08
+	var spread := sqrt(pow(radius - wall, 2.0) - level * level)
+	var water := _tool(WATER, DETAIL | NO_COLLIDE, xf.origin)
+	_quad(water, [xf * (axis + Vector3(-hi, level, spread)), xf * (axis + Vector3(hi, level, spread)), xf * (axis + Vector3(hi, level, -spread)), xf * (axis + Vector3(-hi, level, -spread))], [up, up, up, up], [Vector2.ZERO, Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+	# The stones it lies on, and the post with the pipe at its far end.
+	for x: float in [-0.6, 0.6]:
+		_alp_stone(ROCK, xf * Transform3D(Basis(Vector3.UP, _alp_own.randf()), Vector3(x * long, 0.04, 0)), Vector3(0.4, 0.22, 0.6))
+	var post := xf * Transform3D(Basis(), Vector3(h + 0.18, 0.55, 0))
+	_alp_timber(LARCH, post, Vector3(0.16, 1.4, 0.16), 1, -1.0, SQUEEZE, 2)
+	var spout := xf * Vector3(h - 0.25, axis.y + cut + 0.35, 0)
+	hose("dark_steel", PackedVector3Array([xf * Vector3(h + 0.18, axis.y + cut + 0.4, 0), xf * Vector3(h - 0.05, axis.y + cut + 0.4, 0), spout]), 0.022, DETAIL | NO_COLLIDE, 6)
+	# The water that runs from it.
+	var stream := _tool(WATER, DETAIL | NO_COLLIDE, spout)
+	var fall := xf * Vector3(h - 0.3, axis.y + level, 0)
+	var side := xf.basis.z * 0.012
+	var facing := xf.basis.x
+	_quad(stream, [fall - side, fall + side, spout + side, spout - side], [facing, facing, facing, facing], [Vector2.ZERO, Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+	_quad(stream, [fall + side, fall - side, spout - side, spout + side], [-facing, -facing, -facing, -facing], [Vector2.ZERO, Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+	_collide_box(xf * Transform3D(Basis(), Vector3(0, (axis.y + cut) * 0.5, 0)), Vector3(long, axis.y + cut, radius * 2.0), "wood")
+	_collide_box(post, Vector3(0.16, 1.4, 0.16), "wood")
+	_alp_end("trough", at, _alp_colliders() - colliders)
