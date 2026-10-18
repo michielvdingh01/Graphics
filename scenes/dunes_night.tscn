@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://codrrw63bxvgr" path="res://scripts/game.gd" id="game"]
 [ext_resource type="Script" uid="uid://v3mx0n2xm2fi" path="res://scripts/hud.gd" id="hud"]
 [ext_resource type="PackedScene" path="res://scenes/levels/dunes_level.tscn" id="level"]
+[ext_resource type="PackedScene" path="res://scenes/levels/dunes_night.tscn" id="night_layer"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
 [ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
 [ext_resource type="Shader" path="res://shaders/night_sky.gdshader" id="sky_shader"]
@@ -30,9 +31,6 @@ ambient_light_energy = 2.5
 tonemap_mode = 4
 tonemap_exposure = 1.6
 tonemap_agx_contrast = 1.2
-ssao_enabled = true
-ssao_radius = 2.5
-ssao_intensity = 5.0
 glow_enabled = true
 glow_intensity = 0.8
 glow_bloom = 0.04
@@ -70,10 +68,13 @@ light_energy = 0.45
 light_bake_mode = 0
 shadow_enabled = true
 shadow_blur = 1.5
+directional_shadow_mode = 1
 directional_shadow_blend_splits = false
-directional_shadow_max_distance = 70.0
+directional_shadow_max_distance = 50.0
 
 [node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
+
+[node name="NightLamps" parent="Level" instance=ExtResource("night_layer")]
 
 [node name="Hidden" type="Node3D" parent="."]
 script = ExtResource("hidden")

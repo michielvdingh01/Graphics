@@ -526,6 +526,14 @@ func _profile_targets() -> Dictionary:
 		var node := scene.find_child(part, true, false)
 		if node:
 			targets[part.to_lower()] = [[node, "visible"]]
+	# By night: the lamps that burn then only, and the beams of the
+	# searchlights in the air.
+	var night := scene.get_node_or_null("Level/NightLamps")
+	if night:
+		targets["night_lamps"] = [[night, "visible"]]
+		targets["beams"] = []
+		for beam in night.find_children("Beam", "MeshInstance3D", true, false):
+			targets["beams"].append([beam, "visible"])
 	# In a level that is cut into zones, every zone has such parts of its own,
 	# and "zones" is drawing only the zones in sight: off draws all of them.
 	var level := scene.get_node_or_null("Level")

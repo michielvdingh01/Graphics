@@ -489,12 +489,13 @@ func _run() -> void:
 	var pack_was: String = Settings.pack
 	var weapons_button: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Weapons"))[0]
 	var packs_seen := [weapons_button.text]
-	for i in 6:
+	for i in 7:
 		weapons_button.pressed.emit()
 		if not packs_seen.has(weapons_button.text):
 			packs_seen.append(weapons_button.text)
 	print("  the packs on the screen: %s" % [packs_seen])
-	_check("and another through the packs of weapons, all six of them", packs_seen.size() == 6 and packs_seen.has("Weapons  ·  1944") and packs_seen.has("Weapons  ·  Pistols only"))
+	_check("and another through the packs of weapons, all seven of them", packs_seen.size() == 7 and packs_seen.has("Weapons  ·  1944") and packs_seen.has("Weapons  ·  Pistols only")
+		and packs_seen.has("Weapons  ·  Silenced"))
 	Settings.pack = pack_was
 	Menu.MATCH_MENU.chosen.pack = pack_was
 	var arenas: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Arena"))[0]

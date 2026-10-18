@@ -828,8 +828,8 @@ func smoke_light(position: Vector3) -> Dictionary:
 	var sun := _sun()
 	if sun and sun.visible:
 		lights.append([sun.light_energy, sun.global_basis.z, sun.light_color, 80.0])
-	for lamp in _level_lamps():
-		var strength := _lamp_strength(lamp, position)
+	for lamp in level_lamps():
+		var strength := lamp_strength(lamp, position)
 		if strength > 0.0:
 			var to := lamp.global_position - position
 			lights.append([strength, to.normalized(), lamp.light_color, to.length() - SMOKE_CLEAR])
@@ -849,7 +849,7 @@ func smoke_light(position: Vector3) -> Dictionary:
 ## How brightly a lamp lights a point, by the renderer's own reckoning: its
 ## energy, less what is lost over the distance and, for a spot, towards the
 ## edge of its beam. Nothing for a lamp that is out or out of reach.
-func _lamp_strength(lamp: Light3D, position: Vector3) -> float:
+func lamp_strength(lamp: Light3D, position: Vector3) -> float:
 	if not is_instance_valid(lamp) or not lamp.visible:
 		return 0.0
 	var reach := lamp.get_param(Light3D.PARAM_RANGE)
@@ -866,7 +866,7 @@ func _lamp_strength(lamp: Light3D, position: Vector3) -> float:
 
 
 ## The lamps the level builder put in the level, looked up once per level.
-func _level_lamps() -> Array[Light3D]:
+func level_lamps() -> Array[Light3D]:
 	var scene := get_tree().current_scene
 	if scene.get_instance_id() != _lamps_of:
 		_lamps_of = scene.get_instance_id()
@@ -905,12 +905,13 @@ func _rgb(colour: Color) -> Vector3:
 
 
 ## A fire that burns for `seconds` on a patch `across` metres wide around
-## `position`: the flames, the light they throw and the smoke that rises off
-## them. Freeing what it returns puts it out.
-func fire(position: Vector3, across: float, seconds: float) -> Node3D:
+## `position`: the flames, the light they throw and, unless `smokes` is
+## false, the smoke that rises off them (a campfire has a column of its own).
+## Freeing what it returns puts it out.
+func fire(position: Vector3, across: float, seconds: float, smokes := true) -> Node3D:
 	var scale := clampf(across, 0.5, 1.6)
 	var flames := _burst(_flames, Transform3D(Basis(), position), seconds, {&"life": seconds, &"radius": across * 0.5, &"size": Vector2(0.24, 1.3) * scale})
-	_burn(flames, Vector3.UP * 0.5 * scale, 1.6 * scale, 3.5 + across * 2.0, seconds, time + 0.3)
+	_burn(flames, Vector3.UP * 0.5 * scale, 1.6 * scale, 3.5 + across * 2.0, seconds, time + 0.3 if smokes else INF)
 	return flames
 
 

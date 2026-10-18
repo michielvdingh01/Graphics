@@ -8,6 +8,10 @@ extends Node
 ## tent, under a net and in the sheds the light from round about is the light
 ## of that roof by day (shelter() in tools/kit/field.gd). By night that is
 ## what the moon lets in, which is nearly nothing.
+##
+## The lamps that burn by night only are in a scene of their own that the
+## builder wrote beside the level (<level>_night.tscn, see night_light() in
+## tools/level_builder.gd), which the scene by night puts into its Level.
 
 ## What is left of the light under a roof by night, and the colour it takes.
 @export var shelter_left := 0.05
