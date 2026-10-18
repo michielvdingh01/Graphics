@@ -21,7 +21,9 @@
 uniform vec4 shown = vec4(0.0);
 
 // True for what of this drawing is left to another one, at `node` the foot
-// of the tree, from `eye`. `tuft` is the number of the tuft it belongs to,
+// of the tree, from `eye`. The foot is where the tree's own transform puts
+// it (MODEL_MATRIX[3]), which for a tree drawn as one of a MultiMesh is that
+// tree and not the node that holds them all (scripts/grove.gd). `tuft` is the number of the tuft it belongs to,
 // 0 to 1. What is left to another is folded up into a point where it
 // stands, so that nothing of it is drawn, and its shadow goes with it: the
 // eye is that of the camera also when the sun draws its shadows.

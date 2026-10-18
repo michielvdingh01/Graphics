@@ -193,7 +193,15 @@ func _ready() -> void:
 		if not is_inside_tree():
 			# The sandbox or a match has sent the player on to another level.
 			return
-	nav_region.bake_navigation_mesh(false)
+	if nav_region.get_meta(&"prebaked", false):
+		# A level of kilometres brings its navmesh with it, baked in squares
+		# and on a coarser grid (see tools/levels/alps/plan.gd): the map takes
+		# the grid of the navmesh.
+		var map := get_world_3d().navigation_map
+		NavigationServer3D.map_set_cell_size(map, nav_region.navigation_mesh.cell_size)
+		NavigationServer3D.map_set_cell_height(map, nav_region.navigation_mesh.cell_height)
+	else:
+		nav_region.bake_navigation_mesh(false)
 	baked.emit()
 	# Cover is only looked for where there is fighting: in the zones.
 	var grounds: Array[AABB] = []

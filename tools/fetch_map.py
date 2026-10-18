@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Fetches the map of a stretch of town that a level is drawn after, as listed
-under "maps" in assets/manifest.json: the BGT (Basisregistratie Grootschalige
+"""Fetches the map of a stretch of land that a level is drawn after, as listed
+under "maps" in assets/manifest.json. For the Alps those are elevation tiles
+(see fetch_tiles()); for the canals the BGT (Basisregistratie Grootschalige
 Topografie, by PDOK, CC0 1.0), with every quay, building, bridge, lamp post
 and tree, and from the 3DBAG (TU Delft and 3DGI, CC BY 4.0) the heights of
 every building. It lands in assets/maps/.source/<id>/, which is not in git:
@@ -65,14 +66,37 @@ def fetch_3dbag(entry: dict, folder: pathlib.Path) -> None:
     print("  3dbag lod13 %5d  %5.1f MB" % (len(features), size / 1e6))
 
 
+def fetch_tiles(entry: dict) -> None:
+    """Elevation tiles, as [zoom, first x, first y, across, down] each. They
+    are small and land in the folder the entry names, which is in git; a
+    .gdignore there keeps Godot from importing them as textures."""
+    folder = ROOT / entry["folder"]
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / ".gdignore").touch()
+    count, size = 0, 0
+    for zoom, x0, y0, across, down in entry["tiles"]:
+        for x in range(x0, x0 + across):
+            for y in range(y0, y0 + down):
+                target = folder / ("%d_%d_%d.png" % (zoom, x, y))
+                if target.exists():
+                    continue
+                body = get(entry["url"].format(z=zoom, x=x, y=y))
+                target.write_bytes(body)
+                count, size = count + 1, size + len(body)
+    print("  %d tiles  %.1f MB" % (count, size / 1e6))
+
+
 def main() -> None:
     manifest = json.loads((ROOT / "assets/manifest.json").read_text())
     for entry in manifest.get("maps", []):
         if len(sys.argv) > 1 and entry["id"] not in sys.argv[1:]:
             continue
+        print(entry["id"])
+        if "tiles" in entry:
+            fetch_tiles(entry)
+            continue
         folder = ROOT / "assets/maps/.source" / entry["id"]
         folder.mkdir(parents=True, exist_ok=True)
-        print(entry["id"])
         fetch_bgt(entry, folder)
         fetch_3dbag(entry, folder)
 

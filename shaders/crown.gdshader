@@ -83,7 +83,7 @@ void vertex() {
 	own = vec3(1.0 + vary * warm, 1.0 + vary * 0.35 * warm, 1.0 - vary * 0.8 * warm) * (1.0 + vary * light);
 	// Each tuft has a number of its own, the green of its corners; wood that
 	// is drawn with the needles goes along with the bark.
-	if (given_way(NODE_POSITION_WORLD, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, abs(COLOR.a - 0.5) < 0.25 ? 0.5 : COLOR.g)) {
+	if (given_way(MODEL_MATRIX[3].xyz, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, abs(COLOR.a - 0.5) < 0.25 ? 0.5 : COLOR.g)) {
 		VERTEX = vec3(0.0);
 	}
 }

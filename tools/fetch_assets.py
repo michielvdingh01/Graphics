@@ -36,7 +36,7 @@ def download(entry: dict, target: pathlib.Path) -> None:
 def main() -> None:
     manifest = json.loads((ROOT / "assets/manifest.json").read_text())
     for asset in manifest["assets"]:
-        if asset["source"] != "polyhaven":
+        if asset["source"] != "polyhaven" or asset["type"] not in ("texture", "hdri", "model"):
             continue
         name, res = asset["id"], asset["resolution"]
         print(name)
