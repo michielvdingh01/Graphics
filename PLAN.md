@@ -4181,7 +4181,7 @@ Op de trunk kwamen de vrachtwagen en de tank meestal niet eens tot de voet van d
 
 ## De duinen bij nacht
 
-Op 18 oktober 2026 gevraagd: van precies dezelfde map van de duinen een tweede versie bij nacht, zoals Call of Duty dat weleens doet: donker, met lichtbronnen bij de tenten, de verzamelpunten en het complex. Het plan is dezelfde dag goedgekeurd ("Ja, alles zoals je aanraadt, begin maar"), met een wapenset erbij: het standaardpakket, maar elk wapen met een demper, om stiller te blijven. Gebouwd op de branch `duinnacht`, in een eigen worktree, vanaf de trunk `4ce741c`; niet gemerged.
+Op 18 oktober 2026 gevraagd: van precies dezelfde map van de duinen een tweede versie bij nacht, zoals Call of Duty dat weleens doet: donker, met lichtbronnen bij de tenten, de verzamelpunten en het complex. Het plan is dezelfde dag goedgekeurd ("Ja, alles zoals je aanraadt, begin maar"), met een wapenset erbij: het standaardpakket, maar elk wapen met een demper, om stiller te blijven. Gebouwd op de branch `duinnacht`, in een eigen worktree, vanaf de trunk `4ce741c`. Michiel speelde het vanuit de worktree en liet het dezelfde avond in `fase-2-vertical-slice` zetten ("merge het maar, het is geweldig gemaakt!"): `f0fbb42`; niet gepusht.
 
 **Wat Michiel koos** (uit mijn voorstel): de lucht zelf rekenen in plaats van een gescande nachtlucht te downloaden; maanlicht in plaats van een maanloze nacht; geen zaklamp of nachtkijker; en het level mag op deze branch opnieuw gebouwd en meegecommit worden (de duinen hebben geen lightmap). Onder "verzamelpunten" heb ik de kampen en posten verstaan.
 
