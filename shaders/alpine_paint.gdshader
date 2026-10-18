@@ -6,7 +6,7 @@ shader_type spatial;
 // wood under it, whose grain shows through what is left.
 //
 // Which paint a piece has is the builder's: UV2.x is the number of a colour
-// of PAINTS over ten, plus 4 for a face inside a building, where the light
+// of ALP_PAINTS over ten, plus 4 for a face inside a building, where the light
 // of the sky hardly comes, and UV2.y how high the ground lies. A face has metres
 // for UV with the grain down V, and the vertex colour says where a point lies
 // between the edges of its face: see tools/kit/alpine.gd.

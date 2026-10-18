@@ -8,7 +8,7 @@ render_mode cull_disabled;
 //
 // The face has metres for UV: U along the balcony and V down from the top of
 // its boards, the boards `board` wide and the figure in the middle `high` of
-// them. See _farm_balcony() in tools/kit/alpine.gd.
+// them. See _alp_farm_balcony() in tools/kit/alpine.gd.
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float scan_mean = 0.06;
