@@ -103,7 +103,7 @@ func _run() -> void:
 		tree.change_scene_to_file(levels[0].scene)
 		await tree.scene_changed
 		await _wait(0.5)
-		await _play_through(levels[0], Menu.LEVELS[at + 1].scene if at + 1 < Menu.LEVELS.size() else "")
+		await _play_through(levels[0], _after(at))
 		_ran([levels[0].name])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
@@ -145,8 +145,14 @@ func _run() -> void:
 	tree.change_scene_to_file(Menu.LEVELS[0].scene)
 	await tree.scene_changed
 	for i in Menu.LEVELS.size():
+		if Menu.LEVELS[i].get("variant", false):
+			# The same level played another way is not on the route: it is
+			# entered from the menu.
+			Save.clear()
+			tree.change_scene_to_file(Menu.LEVELS[i].scene)
+			await tree.scene_changed
 		await _wait(0.5)
-		await _play_through(Menu.LEVELS[i], Menu.LEVELS[i + 1].scene if i + 1 < Menu.LEVELS.size() else "")
+		await _play_through(Menu.LEVELS[i], _after(i))
 	_ran(Menu.LEVELS.map(func(level: Dictionary) -> String: return level.name))
 
 	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
@@ -1930,6 +1936,16 @@ func _glows(mesh: MeshInstance3D) -> bool:
 		if material and material.emission_enabled:
 			return true
 	return false
+
+
+## The scene the exit of Menu.LEVELS[i] leads to: the next level on the
+## route, "" after the last. A variant of a level (the dunes by night) is not
+## on the route; it follows the level it is a variant of, whose exit it has.
+func _after(i: int) -> String:
+	for later in range(i + 1, Menu.LEVELS.size()):
+		if not Menu.LEVELS[later].get("variant", false):
+			return Menu.LEVELS[later].scene
+	return ""
 
 
 ## Plays the level that is loaded from its start to its exit: zone by zone

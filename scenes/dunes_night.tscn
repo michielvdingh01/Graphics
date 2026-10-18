@@ -1,0 +1,113 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://codrrw63bxvgr" path="res://scripts/game.gd" id="game"]
+[ext_resource type="Script" uid="uid://v3mx0n2xm2fi" path="res://scripts/hud.gd" id="hud"]
+[ext_resource type="PackedScene" path="res://scenes/levels/dunes_level.tscn" id="level"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
+[ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
+[ext_resource type="Shader" path="res://shaders/night_sky.gdshader" id="sky_shader"]
+[ext_resource type="Script" path="res://scripts/hidden.gd" id="hidden"]
+[ext_resource type="Script" path="res://scripts/eyes.gd" id="eyes"]
+[ext_resource type="Script" path="res://scripts/cloud.gd" id="cloud"]
+[ext_resource type="Script" path="res://scripts/night.gd" id="night"]
+
+[sub_resource type="NavigationMesh" id="navmesh"]
+geometry_parsed_geometry_type = 1
+geometry_collision_mask = 1
+geometry_source_geometry_mode = 1
+geometry_source_group_name = &"navigation_source"
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("sky_shader")
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_energy = 2.5
+tonemap_mode = 4
+tonemap_exposure = 1.6
+tonemap_agx_contrast = 1.2
+ssao_enabled = true
+ssao_radius = 2.5
+ssao_intensity = 5.0
+glow_enabled = true
+glow_intensity = 0.8
+glow_bloom = 0.04
+glow_hdr_threshold = 1.0
+fog_enabled = true
+fog_light_color = Color(0.05, 0.065, 0.1, 1)
+fog_density = 0.0025
+fog_aerial_perspective = 0.5
+fog_sun_scatter = 0.25
+adjustment_enabled = true
+adjustment_contrast = 1.05
+adjustment_saturation = 0.8
+metadata/open_sky = true
+metadata/night = true
+
+[sub_resource type="ShaderMaterial" id="post_mat"]
+shader = ExtResource("post")
+shader_parameter/vignette = 0.32
+shader_parameter/grain = 0.04
+
+[node name="DunesNight" type="Node3D" groups=["game"]]
+script = ExtResource("game")
+metadata/pack = "silenced"
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8280603, 0.2683733, -0.4922315, 0, 0.877983, 0.4786919, 0.560639, -0.3963857, 0.7270228, 0, 0, 0)
+light_color = Color(0.62, 0.72, 1, 1)
+light_energy = 0.45
+light_bake_mode = 0
+shadow_enabled = true
+shadow_blur = 1.5
+directional_shadow_blend_splits = false
+directional_shadow_max_distance = 70.0
+
+[node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
+
+[node name="Hidden" type="Node3D" parent="."]
+script = ExtResource("hidden")
+
+[node name="Eyes" type="Node" parent="."]
+script = ExtResource("eyes")
+
+[node name="Clouds" type="Node" parent="."]
+script = ExtResource("cloud")
+veiled = Color(0.6, 0.68, 0.9, 1)
+
+[node name="Night" type="Node" parent="."]
+script = ExtResource("night")
+
+[node name="Post" type="CanvasLayer" parent="."]
+layer = 0
+
+[node name="Lens" type="ColorRect" parent="Post" groups=["lens"]]
+material = SubResource("post_mat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="HUD" type="CanvasLayer" parent="." groups=["hud"]]
+script = ExtResource("hud")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 8, 199)
+
+[node name="BenchmarkViews" type="Node3D" parent="."]
+
+[node name="Pass" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(0.3420201, 0.09822463, -0.9345449, 0, 0.9945219, 0.1045285, 0.9396926, -0.03575084, 0.3401465, 140, 13.5, 186)
+
+[node name="Wood" type="Marker3D" parent="BenchmarkViews" groups=["benchmark_view"]]
+transform = Transform3D(0.1736482, 0.05154086, -0.9834581, 0, 0.9986295, 0.05233596, 0.9848078, -0.009088043, 0.1734102, 30, 8, 200)

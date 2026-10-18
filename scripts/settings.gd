@@ -275,6 +275,10 @@ func apply() -> void:
 	var world := viewport.find_world_3d().environment
 	var open_sky: bool = world != null and world.get_meta(&"open_sky", false)
 	RenderingServer.directional_shadow_atlas_set_size(SUN_ATLAS_BEFORE[quality] if undone("sun_atlas") else (SUN_ATLAS_OPEN if open_sky else SUN_ATLAS), true)
+	# A level by night says so on its environment too, and what is drawn
+	# differently by night reads it from the global shader value "night":
+	# the rooms behind the windows, the glass of the lamps.
+	RenderingServer.global_shader_parameter_set(&"night", 1.0 if world != null and world.get_meta(&"night", false) else 0.0)
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset[5])
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset[5] if ultra and undone("lamp_filter") else preset[6])
 	if undone("glow"):

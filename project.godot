@@ -260,3 +260,7 @@ fx_time={
 "type": "float",
 "value": 0.0
 }
+night={
+"type": "float",
+"value": 0.0
+}
