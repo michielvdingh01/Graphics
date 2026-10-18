@@ -167,6 +167,21 @@ func _solid_round(points: PackedVector3Array, turns_with := "") -> void:
 		_layout.hull.append({"points": points, "part": turns_with})
 
 
+## The corners of a box at `at` of `size` with its lower edge at one end
+## cut away, `cut.x` along and `cut.y` up: the front (-Z) for `end` -1, the
+## back for 1.
+func _cut_box(at: Vector3, size: Vector3, cut: Vector2, end: float) -> PackedVector3Array:
+	var low := at - size * 0.5
+	var high := at + size * 0.5
+	var near := high.z if end < 0.0 else low.z
+	var far := low.z if end < 0.0 else high.z
+	var points := PackedVector3Array()
+	for x: float in [low.x, high.x]:
+		for corner: Vector2 in [Vector2(near, low.y), Vector2(far - end * cut.x, low.y), Vector2(far, low.y + cut.y), Vector2(far, high.y), Vector2(near, high.y)]:
+			points.append(Vector3(x, corner.y, corner.x))
+	return points
+
+
 ## A seat, for scripts/vehicle.gd: see _layout.
 func _sits(role: String, at: Vector3, eye: Vector3, out: Vector3, exposed: bool, on_turret := false) -> void:
 	if not _far:
@@ -528,8 +543,11 @@ func _jeep() -> void:
 ## open at the back. Ten wheels, the rear eight two by two on two axles.
 func _truck() -> void:
 	model("truck")
-	_solid(Vector3(0, 1.5, -2.1), Vector3(2.2, 1.7, 2.5))
-	_solid(Vector3(0, 1.95, 1.55), Vector3(2.4, 2.5, 4.0))
+	# The bonnet and the cab, and the bed, their lower edges cut away in
+	# front of the front wheels and behind the back ones: up the face of a
+	# dune the tyres meet the sand before the body does.
+	_solid_round(_cut_box(Vector3(0, 1.5, -2.1), Vector3(2.2, 1.7, 2.5), Vector2(0.6, 0.65), -1.0))
+	_solid_round(_cut_box(Vector3(0, 1.95, 1.55), Vector3(2.4, 2.5, 4.0), Vector2(0.6, 0.6), 1.0))
 	_dye = Color(0.25, 0.5, 0.85, 0.0)
 	var r := 0.5
 	for x: float in [-1.0, 1.0]:
@@ -803,8 +821,10 @@ func _tank(tank: String, traverse_deg: float) -> void:
 		for corner: Vector2 in [Vector2(-2.2, 0.35), Vector2(2.1, 0.35), Vector2(-3.0, 0.85), Vector2(-3.0, 1.25), Vector2(-2.05, 1.55), Vector2(3.0, 0.8), Vector2(3.0, 1.25), Vector2(2.55, 1.55)]:
 			hull.append(Vector3(x, corner.y, corner.x))
 	_solid_round(hull)
+	# The turret is in the way, the gun is not: it would dig into the face of
+	# a dune ahead and hold the tank there, or knock against a gate as the
+	# turret turns.
 	_solid(Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0), "Turret")
-	_solid(Vector3(0, 2.0, -3.3), Vector3(0.3, 0.3, 3.6), "Gun")
 	_dye = Color(0.3, 0.55, 0.8, 0.0)
 	for side: float in [-1.0, 1.0]:
 		var x := side * 1.22
@@ -821,6 +841,10 @@ func _tank(tank: String, traverse_deg: float) -> void:
 			_turned(ARMY, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.28, 0.46), Vector2(0.25, 0.4), Vector2(0.14, 0.4), Vector2(0.11, 0.5), Vector2(0, 0.5)]), 10)
 			_touches("Road%s%d" % [lr, i], Vector3(x, 0.43, z), 0.41, false)
 		_on("Idler" + lr, Transform3D(Basis(), Vector3(x, 0.64, -2.82)))
+		# The idler and the sprocket hang clear of flat ground, but the face
+		# of a dune meets the track where it goes round them first.
+		_touches("Idler" + lr, Vector3(x, 0.64, -2.82), 0.31, false, false)
+		_touches("Sprocket" + lr, Vector3(x, 0.64, 2.74), 0.3, false, false)
 		_turned(ARMY, Vector3(x - side * 0.22, 0.64, -2.82), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.31, 0.0), Vector2(0.31, 0.46), Vector2(0.24, 0.4), Vector2(0.1, 0.44), Vector2(0, 0.44)]), 14)
 		_on("Sprocket" + lr, Transform3D(Basis(), Vector3(x, 0.64, 2.74)))
 		_turned(IRON, Vector3(x - side * 0.2, 0.64, 2.74), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.3, 0.0), Vector2(0.3, 0.42), Vector2(0.16, 0.42), Vector2(0.12, 0.5), Vector2(0, 0.5)]), 14)

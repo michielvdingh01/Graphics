@@ -9,8 +9,8 @@ extends SceneTree
 ## drives out of gate 2 through its barrier and its wire.
 ##
 ##   tools/test_vehicles.sh             all of it
-##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, wear,
-##                                      run_over, dunes, gate, match
+##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, hills,
+##                                      wear, run_over, dunes, gate, match
 
 const LIMIT := 600.0
 ## Loaded once the game runs, not as this is read: the autoloads they name
@@ -46,7 +46,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--only="):
 			only = argument.trim_prefix("--only=")
-	for part: String in ["jeep", "truck", "tank", "wear", "run_over", "dunes", "gate", "match"]:
+	for part: String in ["jeep", "truck", "tank", "hills", "wear", "run_over", "dunes", "gate", "match"]:
 		if only == "" or only == part:
 			print("-- ", part)
 			await call("_" + part)
@@ -251,6 +251,24 @@ func _jeep() -> void:
 	Input.action_release("move_forward")
 	check(jeep.health < health, "jeep: driven into a wall it is hurt (%d of %d left)" % [jeep.health, jeep.data.health])
 	check(player.riding == jeep, "jeep: and whoever drives is still in it")
+	# Whoever drives fires their own weapon where the view is: turned round,
+	# at somebody standing behind the car.
+	var view: Node3D = jeep.view()
+	view.look(Vector2(PI, 0.0))
+	await seconds(0.3)
+	var target := _dummy(view.aim_point() * Vector3(1, 0, 1))
+	await seconds(0.2)
+	check(player.fires_from_the_wheel() and player.weapons.can_process(), "jeep: whoever drives has their weapon in hand")
+	var aimed: Vector3 = view.aim_point()
+	var looks: Vector3 = -player.camera.global_basis.z
+	var off := rad_to_deg(looks.angle_to(aimed - player.camera.global_position))
+	check(off < 2.0, "jeep: and looks where the middle of the view is (%.1f degrees off)" % off)
+	Input.action_press("fire")
+	await seconds(0.4)
+	Input.action_release("fire")
+	await seconds(0.2)
+	check(target.health < 100.0, "jeep: and hits who stands in the middle of the view (%.0f left)" % target.health)
+	target.queue_free()
 	# Passengers.
 	await _press("vehicle_seat")
 	check(player.seat == 1 and player.weapons.visible, "jeep: Q moves on to the next seat, where the weapons are out")
@@ -323,6 +341,79 @@ func _tank() -> void:
 		tank.take_damage(30.0, tank.global_position, Vector3.FORWARD)
 	check(tank.health > health - 30.0, "tank: twenty rounds from a rifle take off %.0f of %.0f" % [health - tank.health, tank.data.health])
 	await _press("use")
+
+
+## Up the dunes. Their sand rises on its long side to about 30 degrees, and
+## falls away on the other, the slip face, at up to 55 degrees over five or
+## six metres. Each kind climbs a slope of sand six metres high from a
+## standstill at its foot, as steep as SLOPES says; the field car also gets
+## over a slip face as steep as the steepest of the dunes, from a run-up.
+## A slope here has sharp edges at its foot and its top, which the dunes do
+## not: how each kind does on the dunes themselves, tools/vehicle_ridges.gd
+## finds out.
+##   SLOPES=30,40,50 tools/test_vehicles.sh --only=hills   other angles
+const SLOPES := {"jeep": 45.0, "truck": 40.0, "tank": 45.0}
+const SLIP_FACE := 55.0
+const SLIP_HIGH := 6.0
+
+
+func _hills() -> void:
+	var explore := OS.get_environment("SLOPES")
+	for kind: String in ["jeep", "truck", "tank"]:
+		var angles: Array = [SLOPES[kind]]
+		if explore != "":
+			angles = Array(explore.split(",")).map(func(each: String) -> float: return each.to_float())
+		for angle: float in angles:
+			var got: Dictionary = await _climb(kind, angle, SLIP_HIGH, 0.0)
+			check(got.over, "hills: a %s climbs %.0f degrees of sand from a standstill (%.1f of %.1f m up in %.1f s)" % [kind, angle, got.high, SLIP_HIGH, got.time])
+	var face: Dictionary = await _climb("jeep", SLIP_FACE, SLIP_HIGH, 30.0)
+	check(face.over, "hills: a jeep gets over a slip face of %.0f degrees and %.0f m with a run-up (%.1f m up in %.1f s)" % [SLIP_FACE, SLIP_HIGH, face.high, face.time])
+
+
+## A slope of sand `angle` degrees steep and `high` metres high, `run_up`
+## metres ahead of a vehicle of `kind`, with flat sand on top. The vehicle
+## drives at it flat out: "over" if it is up and on along the top within
+## twenty seconds, "high" the most it got up.
+func _climb(kind: String, angle: float, high: float, run_up: float) -> Dictionary:
+	var vehicle := await _yard(kind)
+	var foot := 4.0 + run_up
+	var top := foot + high / tan(deg_to_rad(angle))
+	var hill := StaticBody3D.new()
+	var face := CollisionShape3D.new()
+	var wedge := ConvexPolygonShape3D.new()
+	wedge.points = PackedVector3Array([
+		Vector3(-12, 0, foot), Vector3(12, 0, foot), Vector3(-12, 0, top + 0.01), Vector3(12, 0, top + 0.01),
+		Vector3(-12, high, top + 0.01), Vector3(12, high, top + 0.01),
+	])
+	face.shape = wedge
+	face.set_meta(&"surface", "sand")
+	hill.add_child(face)
+	var plateau := CollisionShape3D.new()
+	var slab := BoxShape3D.new()
+	slab.size = Vector3(24, 1.0, 30)
+	plateau.shape = slab
+	plateau.position = Vector3(0, high - 0.5, top + 15.0)
+	plateau.set_meta(&"surface", "sand")
+	hill.add_child(plateau)
+	world.add_child(hill)
+	vehicle.wake()
+	vehicle.autopilot = true
+	vehicle.hand_brake = false
+	vehicle.engine_on = true
+	vehicle.ask_forward = 1.0
+	var best := 0.0
+	var time := 0.0
+	var over := false
+	while time < 20.0 and not over:
+		await frames(12)
+		time += 12.0 / Engine.physics_ticks_per_second
+		best = maxf(best, vehicle.global_position.y)
+		over = vehicle.global_position.z > top + 4.0 and vehicle.global_position.y > high - 0.5
+	if OS.get_environment("DEBUG_VEHICLE") != "":
+		print("    %s %.0f deg: speed %.1f gear %d rpm %d push %.0f touching %d up %.2f" % [kind, angle, vehicle.speed, vehicle.gear, vehicle.rpm, vehicle._push(), vehicle._touching(), vehicle.global_basis.y.y])
+	vehicle.ask_forward = 0.0
+	vehicle.autopilot = false
+	return {"over": over, "high": best - 0.05, "time": time}
 
 
 ## Worn down by rockets: hit, alight, and gone up with somebody in it.

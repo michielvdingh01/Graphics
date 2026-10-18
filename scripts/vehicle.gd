@@ -101,6 +101,13 @@ const PUFF := 0.12
 ## runs between two at the least and the most, in seconds.
 const MISFIRE := 0.16
 const MISFIRES := Vector2(0.6, 2.4)
+## From how fast, in m/s, the extra weight no longer leans with the body,
+## and over how much more it stops doing so: see _drive().
+const LEAN_FROM := 6.0
+const LEAN_SPAN := 8.0
+## How far ahead of the axle and behind it a wheel that leads feels for the
+## ground, as a share of its radius: see Wheel.leads.
+const TYRE_EDGE := 0.8
 
 ## What kind of vehicle it is: the name of its model and its file.
 @export var kind := "jeep"
@@ -169,6 +176,8 @@ var _turning_shapes: Array[Array] = []
 var _hull := AABB()
 var _drive_radius := 0.5
 var _driven := 0
+## How many wheels carry it on flat ground: those that are no guide.
+var _bearing := 1
 var _steer := 0.0
 var _starting := 0.0
 var _shifting := 0.0
@@ -204,6 +213,13 @@ class Wheel:
 	var steers := false
 	var drives := true
 	var side := 1.0
+	## In the first or the last row, or under a track: the ground ahead of
+	## it or behind it is felt at the edge of the tyre, see _ground_under().
+	var leads := false
+	## It hangs clear of flat ground and carries nothing there, as the idler
+	## and the sprocket of a track do; it only takes the vehicle up the face
+	## of a dune or over a ledge.
+	var guide := false
 	## How far its spring is pressed in, in metres, now and a step ago.
 	var pressed := 0.0
 	var was_pressed := 0.0
@@ -271,6 +287,12 @@ func _ready() -> void:
 			_driven += 1
 			_drive_radius += w.radius
 	_drive_radius = (_drive_radius - 0.5) / maxf(_driven, 1)
+	var rows := _wheels.map(func(w: Wheel) -> float: return w.at.z)
+	for w in _wheels:
+		# Under a track the ground is felt along the whole of its length.
+		w.leads = data.tracked or is_equal_approx(w.at.z, rows.min()) or is_equal_approx(w.at.z, rows.max())
+		w.guide = w.at.y - w.radius > 0.05
+	_bearing = maxi(_wheels.filter(func(w: Wheel) -> bool: return not w.guide).size(), 1)
 	for part: String in ["Turret", "Gun", "Steering"]:
 		var node := _model.find_child(part, true, false) as Node3D
 		if node:
@@ -757,10 +779,21 @@ func _run_engine(delta: float) -> void:
 	var follow := 9.0 if target > rpm else 5.0
 	rpm = minf(lerpf(rpm, target, 1.0 - exp(-follow * delta)), data.max_rpm * 1.03)
 	if gear > 0 and _shifting <= 0.0 and _touching() > 0:
-		if wheels > data.shift_up * data.max_rpm and gear < data.gears.size():
+		if wheels > data.shift_up * data.max_rpm and gear < data.gears.size() and _pulls_in(gear + 1):
 			_shift(gear + 1)
 		elif gear > 1 and wheels < data.shift_down * data.max_rpm and _wheel_rpm(_ratio(gear - 1)) < data.shift_up * data.max_rpm * 0.9:
 			_shift(gear - 1)
+
+
+## Whether gear `which` would still pull it up the slope it is on. Up a
+## steep one it keeps to the gear it is in: a shift is a moment without
+## power, in which it would roll back to where the lower gear was needed.
+func _pulls_in(which: int) -> bool:
+	var climb := mass * GRAVITY * maxf(-global_basis.z.normalized().y, 0.0)
+	if climb <= 0.0:
+		return true
+	var at := maxf(_wheel_rpm(_ratio(which)), data.idle_rpm)
+	return data.torque * _curve(at) * _ratio(which) * data.efficiency / _drive_radius > climb * 1.2
 
 
 func _shift(to: int) -> void:
@@ -798,8 +831,18 @@ func _push() -> float:
 	if not engine_on or _shifting > 0.0 or _misfire > 0.0:
 		return 0.0
 	var power := 0.55 if condition == Condition.DAMAGED else (0.35 if condition == Condition.BURNING else 1.0)
-	var force := data.torque * _curve(rpm) * gas * _ratio(gear) * data.efficiency / _drive_radius * power
+	var force := data.torque * _curve(rpm) * gas * _ratio(gear) * data.efficiency / _drive_radius * power * _converted()
 	return force if gear > 0 else -force
+
+
+## What the torque converter makes of the torque: as much as `data.stall`
+## times it while the wheels turn far slower than the engine, as they do
+## pulling away or crawling up a dune; once they turn with it, the torque
+## itself.
+func _converted() -> float:
+	if rpm <= 0.0:
+		return 1.0
+	return lerpf(data.stall, 1.0, clampf(_wheel_rpm(_ratio(gear)) / rpm / 0.85, 0.0, 1.0))
 
 
 func _touching() -> int:
@@ -817,20 +860,27 @@ func _drive(delta: float) -> void:
 	speed = linear_velocity.dot(ahead)
 	var space := get_world_3d().direct_space_state
 	var middle := xf * center_of_mass
-	var share := mass / maxf(_wheels.size(), 1)
+	var share := mass / _bearing
 	var weight := (1.0 + data.weight) * GRAVITY
 	var stiff := share * pow(TAU * data.spring_hz, 2.0)
 	var damper := 2.0 * data.damping * sqrt(stiff * share)
-	apply_central_force(Vector3.DOWN * data.weight * GRAVITY * mass)
+	# The extra weight that keeps it on its wheels presses it into the ground
+	# under it, not down the hill: going up it would otherwise pull it back
+	# as if it weighed half as much again. Fast, it presses square to its
+	# length and straight down across it: leaning in a bend, it would push
+	# it over.
+	var into := Vector3.DOWN
+	if _touching() > 0:
+		var level := -(Vector3.UP - ahead * ahead.y).normalized()
+		into = (-up).lerp(level, clampf((absf(speed) - LEAN_FROM) / LEAN_SPAN, 0.0, 1.0)).normalized()
+	apply_central_force(into * data.weight * GRAVITY * mass)
 	# The air, which only matters at speed.
 	apply_central_force(-linear_velocity * linear_velocity.length() * data.drag)
 	var turn := deg_to_rad(data.steer_deg) * lerpf(1.0, data.steer_at_speed, clampf(absf(speed) / data.top_speed, 0.0, 1.0))
 	var steer_to := 0.0 if data.tracked else steering * turn
 	_steer = move_toward(_steer, steer_to, deg_to_rad(data.steer_deg) / data.steer_time * delta)
 	for wheel in _wheels:
-		var top := xf * (wheel.at + Vector3.UP * data.travel)
-		var reach := 2.0 * data.travel + wheel.radius
-		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(top, top - up * reach, WORLD, [get_rid()]))
+		var hit := _ground_under(wheel, space, xf, up, ahead)
 		wheel.was_pressed = wheel.pressed
 		wheel.touching = not hit.is_empty()
 		if not wheel.touching:
@@ -839,7 +889,7 @@ func _drive(delta: float) -> void:
 			continue
 		wheel.point = hit.position
 		wheel.normal = hit.normal
-		wheel.pressed = clampf(2.0 * data.travel - (top.distance_to(hit.position) - wheel.radius), 0.0, 2.0 * data.travel)
+		wheel.pressed = hit.pressed
 		if Engine.get_physics_frames() % 15 == 0:
 			wheel.surface = Fx.surface_of(hit)
 	# The springs, with the bar between those of an axle.
@@ -851,12 +901,24 @@ func _drive(delta: float) -> void:
 			if other != wheel and absf(other.at.z - wheel.at.z) < 0.05 and other.side != wheel.side:
 				bar = (wheel.pressed - other.pressed) * stiff * data.anti_roll
 		var rate := (wheel.pressed - wheel.was_pressed) / delta
-		wheel.load = maxf(share * weight + stiff * (wheel.pressed - data.travel) + damper * rate + bar, 0.0)
+		if wheel.guide:
+			wheel.load = maxf(stiff * wheel.pressed + damper * rate, 0.0)
+		else:
+			wheel.load = maxf(share * weight + stiff * (wheel.pressed - data.travel) + damper * rate + bar, 0.0)
 		apply_force(up * wheel.load, wheel.point - xf.origin)
-	# The tyres or the tracks.
+	# The tyres or the tracks. A track pulls with all of its engine wherever
+	# it lies on the ground, round the idler and the sprocket as well; a
+	# wheel in the air spins its share away.
 	var push := _push()
 	var touching := _touching()
+	var pulling := _driven
+	if data.tracked:
+		pulling = _wheels.filter(func(w: Wheel) -> bool: return w.touching and (w.drives or w.guide)).size()
 	for wheel in _wheels:
+		if not wheel.touching and wheel.guide:
+			# The track turns it.
+			wheel.spin = speed / wheel.radius
+			continue
 		if not wheel.touching:
 			wheel.spin = lerpf(wheel.spin, gas * 30.0 * signf(float(gear)), 1.0 - exp(-2.0 * delta)) if wheel.drives else wheel.spin * exp(-delta)
 			continue
@@ -874,8 +936,8 @@ func _drive(delta: float) -> void:
 		var holds := grip * (data.drift_grip if hand_brake and rear and not data.tracked else 1.0)
 		var side_force := clampf(-sideways * share / delta * data.bite, -holds, holds)
 		var long_force := 0.0
-		if wheel.drives and _driven > 0:
-			long_force += push / _driven
+		if (wheel.drives or (data.tracked and wheel.guide)) and pulling > 0:
+			long_force += push / pulling
 		var stop := braking * data.brake
 		if hand_brake and (rear or data.tracked):
 			stop = maxf(stop, 1.0)
@@ -911,7 +973,7 @@ func _drive(delta: float) -> void:
 		var rate := deg_to_rad(lerpf(data.turn_rate, data.turn_at_speed, clampf(absf(speed) / data.top_speed, 0.0, 1.0)))
 		var wanted := -steering * rate * (-1.0 if speed < -0.5 else 1.0) if engine_on else 0.0
 		var power := 0.5 if condition != Condition.SOUND else 1.0
-		apply_torque(up * (wanted - yaw) * heft.y * 5.0 * power * float(touching) / _wheels.size())
+		apply_torque(up * (wanted - yaw) * heft.y * 5.0 * power * float(mini(touching, _bearing)) / _bearing)
 	elif absf(yaw) > YAW_LIMIT and not hand_brake:
 		apply_torque(-up * signf(yaw) * (absf(yaw) - YAW_LIMIT) * heft.y * 8.0)
 	# It rights itself if it lies on its side or its roof.
@@ -919,6 +981,28 @@ func _drive(delta: float) -> void:
 		_over_for += delta
 	else:
 		_over_for = 0.0
+
+
+## Where `wheel` meets the ground, as a hit of a ray with how far that
+## presses its spring in, or empty if it hangs free. Under the axle, and for
+## a wheel that leads also at the front and the back of the tyre: a slope
+## that rises before it, the face of a dune, is met there first, and the
+## wheel rides up onto it instead of the body running into it.
+func _ground_under(wheel: Wheel, space: PhysicsDirectSpaceState3D, xf: Transform3D, up: Vector3, ahead: Vector3) -> Dictionary:
+	var top := xf * (wheel.at + Vector3.UP * data.travel)
+	var best := {}
+	for edge: float in ([0.0, -TYRE_EDGE, TYRE_EDGE] if wheel.leads else [0.0]):
+		# How far above the bottom of the tyre its surface is, that far along.
+		var lift := wheel.radius * (1.0 - sqrt(1.0 - edge * edge))
+		var from := top + ahead * edge * wheel.radius
+		var reach := 2.0 * data.travel + wheel.radius - lift
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from - up * reach, WORLD, [get_rid()]))
+		if hit.is_empty():
+			continue
+		hit.pressed = clampf(reach - from.distance_to(hit.position), 0.0, 2.0 * data.travel)
+		if best.is_empty() or hit.pressed > best.pressed:
+			best = hit
+	return best
 
 
 ## How hard it is to turn about each of its axes.
@@ -1295,6 +1379,8 @@ func _belly() -> void:
 	var low := INF
 	var box := AABB(_wheels[0].at, Vector3.ZERO)
 	for wheel in _wheels:
+		if wheel.guide:
+			continue
 		box = box.expand(wheel.at)
 		low = minf(low, wheel.at.y - wheel.radius * 0.8)
 	var shape := CollisionShape3D.new()
@@ -1369,7 +1455,8 @@ func _turn_wheels(delta: float) -> void:
 		var drop := 0.0
 		var tilt := 0.0
 		for wheel: Wheel in on:
-			drop += (wheel.pressed - data.travel) if wheel.touching else -data.travel
+			if not wheel.guide:
+				drop += (wheel.pressed - data.travel) if wheel.touching else -data.travel
 		drop /= on.size()
 		if on.size() == 2:
 			# An axle with a wheel either side: it tilts as one side rises.

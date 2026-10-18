@@ -315,9 +315,11 @@ func vehicle_in_reach() -> Dictionary:
 
 
 ## Into seat `which` of `vehicle`; scripts/vehicle.gd calls this once it has
-## room. Whoever drives puts the weapons away and sees through the camera of
-## the vehicle; whoever rides keeps them and their own eyes. Where no shot
-## reaches a seat, none reaches the player in it.
+## room. Whoever drives sees through the camera of the vehicle and puts the
+## weapons away, unless it is a car that is driven with one hand (see
+## VehicleData.driver_fires): then they stay in hand, out of sight, and fire
+## where the middle of that view is. Whoever rides keeps them and their own
+## eyes. Where no shot reaches a seat, none reaches the player in it.
 func sit(vehicle: Node3D, which: int) -> void:
 	if riding == null:
 		_layer = collision_layer
@@ -329,7 +331,7 @@ func sit(vehicle: Node3D, which: int) -> void:
 	collision_layer = _layer if vehicle.exposed(which) else 0
 	var drives := which == 0
 	weapons.visible = not drives
-	weapons.process_mode = Node.PROCESS_MODE_DISABLED if drives else Node.PROCESS_MODE_INHERIT
+	weapons.process_mode = Node.PROCESS_MODE_DISABLED if drives and not vehicle.data.driver_fires else Node.PROCESS_MODE_INHERIT
 	ride(Transform3D())
 
 
@@ -350,14 +352,31 @@ func stand(pose: Transform3D, going: Vector3) -> void:
 
 ## Where the vehicle carries the player: the eyes where the eyes of its seat
 ## are, looking where the vehicle looks and as far round from there as the
-## player has turned.
+## player has turned. Whoever drives and fires looks where the view of the
+## vehicle is, see fires_from_the_wheel().
 func ride(_frame: Transform3D) -> void:
 	if riding == null:
 		return
 	var eye: Transform3D = riding.eye_frame(seat)
+	if fires_from_the_wheel():
+		var way: Vector3 = riding.view().aim_point() - eye.origin
+		if way.length() > 1.0:
+			_seat_yaw = angle_difference(eye.basis.get_euler().y, atan2(-way.x, -way.z))
+			head.rotation.x = clampf(atan2(way.y, Vector2(way.x, way.z).length()), -MAX_PITCH, MAX_PITCH)
 	var facing: float = eye.basis.get_euler().y + _seat_yaw
 	rotation = Vector3(0.0, facing, 0.0)
 	global_position = eye.origin - Vector3.UP * _eye_height
+
+
+## True while the player drives a vehicle with their own weapon in hand.
+func fires_from_the_wheel() -> bool:
+	return riding != null and seat == 0 and riding.data.driver_fires and riding.view() != null
+
+
+## How far the last shots have thrown the aim up and aside, in radians: for
+## a view that is not the player's own, see scripts/vehicle_view.gd.
+func kick() -> Vector3:
+	return _recoil
 
 
 ## Turns the view by the given yaw and pitch in radians at the base field of view.
