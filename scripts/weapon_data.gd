@@ -61,6 +61,15 @@ extends Resource
 ## splits it into: 0 for a bare muzzle, 2 for a brake that blows to the sides.
 @export var flash_size := 0.34
 @export var flash_prongs := 4
+## How much quieter its shot is played than the sound is in its file, in dB.
+## Every shot is cut to the same peak; one with a silencer has lost its bang
+## and is played lower. How far it is heard by a guard or a bot is
+## flash_size: a flash that small goes with a shot that quiet.
+@export var shot_db := 0.0
+## The weapon whose sounds of handling it has (its magazine, its bolt), by
+## the name of its shot without "_shot"; empty for its own. A weapon with a
+## silencer is handled as the one without.
+@export var handled_as := &""
 
 @export_group("Viewmodel")
 @export var hip_offset := Vector3(0.2, -0.2, -0.4)
