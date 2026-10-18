@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/crown.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/foliage/mugo_sprigs.png" id="leaf"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/leaf_tex = ExtResource("leaf")
+shader_parameter/tint = Color(0.7, 0.74, 0.72, 1)
+shader_parameter/cut = 0.4
+shader_parameter/cut_far = 0.26
+shader_parameter/cut_shadow = 0.35
+shader_parameter/sway = 0.03
+shader_parameter/through = 0.15
+shader_parameter/scatter = 0.2
+shader_parameter/wrap = 0.35
+shader_parameter/roughness = 0.8
+shader_parameter/deep = 0.5
+shader_parameter/vary = 0.1
+shader_parameter/lift = 0.2
+shader_parameter/edge = 0.3
+shader_parameter/sharp = 1.0
