@@ -49,6 +49,7 @@ const DATA := "res://vehicles/%s.tres"
 const VIEW := preload("res://scripts/vehicle_view.gd")
 const SOUND := preload("res://scripts/vehicle_sound.gd")
 const SHELL := preload("res://scripts/shell.gd")
+const RIDER := preload("res://scripts/rider.gd")
 ## The layer of the level, on which a vehicle is as well: a shot stops on
 ## it, a wheel stands on it and people walk into it. Its own layer says it
 ## is a vehicle, and is one that a blast reaches.
@@ -61,6 +62,9 @@ const GRAVITY := 9.8
 ## speed in m/s under which it counts as still.
 const SETTLES := 1.5
 const STILL := 0.12
+## How much further than its sides the navmesh keeps off a vehicle, in
+## metres: as far as somebody who walks it is wide.
+const NAV_ROOM := 0.5
 ## How far from a seat, in metres, somebody can still get into it.
 const REACH := 2.4
 ## Seconds it lies on its side or its roof, nearly still, before it rights
@@ -85,8 +89,8 @@ const COMES_BACK := 45.0
 ## Seconds a wreck burns.
 const WRECK_BURNS := 30.0
 ## Where the sight of the gun is, in the frame of the gun: to its left over
-## the mantlet.
-const SIGHT_AT := Vector3(-0.55, 0.38, 0.25)
+## the front of the mantlet, where nothing of the turret is in the way.
+const SIGHT_AT := Vector3(-0.32, 0.3, -0.75)
 ## What of it burns away, by the name of its material.
 const BURNS_AWAY: Array[String] = ["glass", "canvas", "camo_net", "field_marks", "sandbag"]
 ## Seconds between two puffs of smoke from an engine that is hit.
@@ -140,6 +144,9 @@ var spawn := Transform3D()
 ## Drives itself without anybody in the seat: for the tests, who set
 ## ask_forward and the rest themselves.
 var autopilot := false
+## Seconds a wreck of it lies in a match before a new one stands where it
+## stood.
+var comes_back_after := COMES_BACK
 
 var _wheels: Array[Wheel] = []
 var _model: Node3D
@@ -148,6 +155,8 @@ var _gun: Node3D
 var _muzzle: Node3D
 var _steering_wheel: Node3D
 var _rests := {}
+## What turns with the wheels: [the part, how it is at rest, its wheels].
+var _axles: Array[Array] = []
 ## Colliders that turn with the turret or the gun, with where they are in
 ## the frame of what they turn with.
 var _turning_shapes: Array[Array] = []
@@ -174,6 +183,8 @@ var _comes_back := 0.0
 var _clock := 0.0
 var _sound: Node3D
 var _view: Node3D
+## The player of this machine at the wheel, as the view from behind shows it.
+var _rider: Node3D
 var _pristine: Node
 var _braked_hard := false
 var _turret_moving := 0.0
@@ -263,11 +274,17 @@ func _ready() -> void:
 	_gun = _model.find_child("Gun", true, false)
 	_muzzle = _model.find_child("Muzzle", true, false)
 	_steering_wheel = _model.find_child("Steering", true, false)
+	var on := {}
 	for wheel in _wheels:
-		var node := _model.find_child(wheel.part, true, false) as Node3D
-		if node and not _rests.has(node):
-			_rests[node] = node.transform
+		if not on.has(wheel.part):
+			on[wheel.part] = []
+		on[wheel.part].append(wheel)
+	for part: String in on:
+		var node := _model.find_child(part, true, false) as Node3D
+		if node:
+			_axles.append([node, node.transform, on[part]])
 	_make_hull()
+	_keep_off_navmesh()
 	# What the level put on the turret goes round with it.
 	for child in get_children():
 		if child.has_meta(&"on_turret") and _turret:
@@ -281,7 +298,7 @@ func _ready() -> void:
 	add_child(_sound)
 	_sound.setup(self)
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
-	freeze = true
+	_rest()
 	_last_velocity = Vector3.ZERO
 
 
@@ -309,6 +326,28 @@ func _make_hull() -> void:
 			var box := AABB(child.position - size * 0.5, size)
 			if not child.has_meta(&"turns_with"):
 				_hull = box if _hull.size == Vector3.ZERO else _hull.merge(box)
+
+
+## The navmesh is baked from the level as it loads, and a body that moves is
+## no part of it: where a vehicle stands is cut out of it, as a parked one
+## was. Where it goes later the robots and the bots walk round it as they
+## would round anything else they bump into.
+func _keep_off_navmesh() -> void:
+	var obstacle := NavigationObstacle3D.new()
+	obstacle.name = "Obstacle"
+	obstacle.top_level = true
+	var corners := PackedVector3Array()
+	var room := _hull.grow(NAV_ROOM)
+	for corner: Vector2 in [Vector2(room.position.x, room.position.z), Vector2(room.end.x, room.position.z), Vector2(room.end.x, room.end.z), Vector2(room.position.x, room.end.z)]:
+		var at := global_basis * Vector3(corner.x, 0.0, corner.y)
+		corners.append(Vector3(at.x, 0.0, at.z))
+	obstacle.vertices = corners
+	obstacle.height = _hull.end.y + 0.5
+	obstacle.affect_navigation_mesh = true
+	obstacle.carve_navigation_mesh = true
+	obstacle.avoidance_enabled = false
+	add_child(obstacle)
+	obstacle.global_transform = Transform3D(Basis(), global_position + Vector3.DOWN * 0.5)
 
 
 func _remember_turning_shapes() -> void:
@@ -477,6 +516,14 @@ func _take_the_wheel(body: Node3D) -> void:
 		_view.name = "View"
 		add_child(_view)
 		_view.setup(self, body)
+		if seats[0].exposed:
+			_rider = RIDER.new()
+			_rider.name = "Rider"
+			add_child(_rider)
+			_rider.position = seats[0].at
+			if not _rider.setup(body, "drive"):
+				_rider.queue_free()
+				_rider = null
 
 
 func _leave_the_wheel(_body: Node3D) -> void:
@@ -486,6 +533,9 @@ func _leave_the_wheel(_body: Node3D) -> void:
 	if is_instance_valid(_view):
 		_view.close()
 	_view = null
+	if is_instance_valid(_rider):
+		_rider.queue_free()
+	_rider = null
 	if engine_on or _starting > 0.0:
 		_stop_engine()
 
@@ -531,6 +581,20 @@ func _way_out(seat: int, body: Node3D) -> Transform3D:
 func wake() -> void:
 	freeze = false
 	_still_for = 0.0
+	set_physics_process(true)
+	set_process(true)
+
+
+## Frozen where it stands: as long as nothing has happened to it, it neither
+## thinks nor is heard.
+func _rest() -> void:
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	if condition == Condition.SOUND and not engine_on:
+		set_physics_process(false)
+		set_process(false)
+		_sound.hush()
 
 
 func _settle(delta: float) -> void:
@@ -539,9 +603,7 @@ func _settle(delta: float) -> void:
 		return
 	_still_for += delta
 	if _still_for > SETTLES and condition != Condition.BURNING:
-		freeze = true
-		linear_velocity = Vector3.ZERO
-		angular_velocity = Vector3.ZERO
+		_rest()
 
 
 # --- Driving -------------------------------------------------------------------------
@@ -899,7 +961,7 @@ func _run_over_people(_delta: float) -> void:
 		var away := (linear_velocity.normalized() + Vector3.UP * 0.35).normalized()
 		var who := driver()
 		if Match.active and who:
-			Match.hit(who, body, harm, at, away)
+			Match.hit(who, body, harm, at, away, Match.RUN_OVER)
 		else:
 			Net.damage(body, harm, at, away)
 		if body.has_method("shove"):
@@ -942,10 +1004,9 @@ func _lay_gun_toward(delta: float) -> void:
 	_turret_moving = 0.0
 	if not data.has_turret or _turret == null:
 		return
-	loaded = minf(loaded + delta / data.reload_time, 1.0) if loaded < 1.0 else 1.0
-	if loaded >= 1.0 and loaded - delta / data.reload_time < 1.0:
-		pass
-	if aim == Vector3.ZERO or condition == Condition.WRECKED:
+	loaded = minf(loaded + delta / data.reload_time, 1.0)
+	# Nobody lays it, and it stays as it is on the hull.
+	if aim == Vector3.ZERO or condition == Condition.WRECKED or (driver() == null and not autopilot):
 		return
 	var local := (global_basis.inverse() * aim).normalized()
 	var wanted := atan2(-local.x, -local.z)
@@ -956,7 +1017,8 @@ func _lay_gun_toward(delta: float) -> void:
 	var lift := clampf(atan2(level.y, Vector2(level.x, level.z).length()), -deg_to_rad(data.gun_depression), deg_to_rad(data.gun_elevation))
 	gun_pitch = move_toward(gun_pitch, lift, deg_to_rad(data.gun_rate) * delta)
 	_turret_moving = absf(angle_difference(before, turret_yaw)) / maxf(rate * delta, 1e-6)
-	_lay_gun()
+	if _turret_moving > 0.0 or absf(gun_pitch - lift) > 0.0 or not freeze:
+		_lay_gun()
 
 
 func _lay_gun() -> void:
@@ -1131,7 +1193,7 @@ func _go_up() -> void:
 		_view.close()
 	_view = null
 	if Match.active:
-		_comes_back = COMES_BACK
+		_comes_back = comes_back_after
 	went_up.emit()
 
 
@@ -1234,23 +1296,19 @@ func _come_back() -> void:
 func _process(delta: float) -> void:
 	if condition != Condition.WRECKED:
 		_turn_wheels(delta)
+	if is_instance_valid(_rider):
+		_rider.visible = is_instance_valid(_view) and not _view.first_person
 	_sound.listen(delta)
 
 
 ## The wheels turn as fast as they roll, the front ones steer, and each hangs
 ## as far down as its spring lets it; the steering wheel turns with them.
 func _turn_wheels(delta: float) -> void:
-	var axles := {}
 	for wheel in _wheels:
 		wheel.turned = fposmod(wheel.turned - wheel.spin * delta, TAU)
-		if not axles.has(wheel.part):
-			axles[wheel.part] = []
-		axles[wheel.part].append(wheel)
-	for part: String in axles:
-		var node := _model.find_child(part, true, false) as Node3D
-		if node == null or not _rests.has(node):
-			continue
-		var on: Array = axles[part]
+	for axle: Array in _axles:
+		var node: Node3D = axle[0]
+		var on: Array = axle[2]
 		var drop := 0.0
 		var tilt := 0.0
 		for wheel: Wheel in on:
@@ -1262,7 +1320,7 @@ func _turn_wheels(delta: float) -> void:
 			var right: Wheel = on[1] if on[0].side < 0.0 else on[0]
 			tilt = atan2((right.pressed if right.touching else 0.0) - (left.pressed if left.touching else 0.0), absf(right.at.x - left.at.x))
 		var steer := Basis(Vector3.UP, -_steer) if (on[0] as Wheel).steers else Basis()
-		var rest: Transform3D = _rests[node]
+		var rest: Transform3D = axle[1]
 		node.transform = Transform3D(rest.basis * steer * Basis(Vector3.FORWARD, tilt) * Basis(Vector3.RIGHT, (on[0] as Wheel).turned), rest.origin + Vector3.UP * drop * 0.8)
 	if _steering_wheel:
 		_steering_wheel.transform = (_rests[_steering_wheel] as Transform3D) * Transform3D(Basis(Vector3.UP, _steer * 9.0), Vector3.ZERO)
@@ -1306,6 +1364,11 @@ func view() -> Node3D:
 ## The middle of what of it is in the way, in its own coordinates.
 func middle() -> Vector3:
 	return _hull.get_center()
+
+
+## The box around what of it is in the way, in its own coordinates.
+func hull() -> AABB:
+	return _hull
 
 
 ## Where the one who lays the gun looks from: beside it, turning and lifting

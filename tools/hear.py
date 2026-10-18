@@ -38,6 +38,12 @@ plays a footstep or an enemy's shot, unless --at says from how far.
                                           and goes. --layer=<file> tries another file as that layer
     tools/hear.py level_music             where the pieces of a level take turns: the last ten
                                           seconds of each and the first ten of the one after it
+    tools/hear.py drive jeep              a ride as its driver hears it, played by the game itself
+                                          (tools/hear_drive.gd): get in, start, pull away through
+                                          the gears, brake hard to a stop, get out. jeep, truck or tank
+    tools/hear.py drive tank crash        flat out into a wall; `wreck` is the engine hit, alight
+                                          and going up, `gun` the turret turning and the gun firing
+    tools/hear.py drive jeep drive b      the same with variant b of every sound that has one
 
 Only recorded sounds, those with a folder in assets/audio/.
 """
@@ -452,6 +458,26 @@ def mixed(name: str, events: list, tuning: list = None, length: float = 0.0) -> 
     return out
 
 
+def drive(kind: str, ride: str, variant: str) -> pathlib.Path:
+    """A ride recorded from the game as it plays it: see tools/hear_drive.gd.
+    It runs the game's own project, with a home of its own, so that nothing
+    of whoever plays here is read or written."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    out = OUT / f"drive_{kind}_{ride}_{variant}.wav"
+    home = ROOT / ".godot/vehicles_home"
+    home.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [GODOT, "--headless", "--path", str(ROOT), "--log-file", str(OUT / "godot.log"), "--script", "res://tools/hear_drive.gd", "--", kind, ride, variant, str(out)],
+        env=dict(os.environ, HOME=str(home)), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
+    )
+    if result.returncode != 0 or not out.exists():
+        raise SystemExit(result.stdout)
+    for line in result.stdout.splitlines():
+        if line.startswith("  ") and " s  " in line:
+            print(line)
+    return out
+
+
 def main() -> None:
     args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     options = dict(arg[2:].partition("=")[::2] for arg in sys.argv[1:] if arg.startswith("--"))
@@ -489,6 +515,12 @@ def main() -> None:
     elif args[0] == "level_music":
         name = "level_music"
         events, length = level_music()
+    elif args[0] == "drive" and len(args) > 1:
+        out = drive(args[1], args[2] if len(args) > 2 else "drive", args[3] if len(args) > 3 else "a")
+        print(out.relative_to(ROOT))
+        if "quiet" not in options:
+            subprocess.run(["afplay", str(out)], check=True)
+        return
     elif args[0] == "music" and len(args) > 1:
         name, events, length = f"music_{args[1]}", music(args[1], options.get("layer", "")), 20.0
     else:

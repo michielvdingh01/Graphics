@@ -1073,7 +1073,8 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 func _ray_hits_player(from: Vector3, to: Vector3) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to, LOS_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	return not hit.is_empty() and hit.collider == _player
+	# A player in a vehicle is seen in it, and the vehicle is what is shot.
+	return not hit.is_empty() and (hit.collider == _player or (hit.collider == _player.get(&"riding") and hit.collider != null))
 
 
 func _die() -> void:

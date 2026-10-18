@@ -70,6 +70,14 @@ func _loop(sound: StringName) -> AudioStreamPlayer3D:
 	return player
 
 
+## Silent at once: the vehicle has come to rest.
+func hush() -> void:
+	_running = 0.0
+	_pull = 0.0
+	for player: AudioStreamPlayer3D in find_children("*", "AudioStreamPlayer3D", false, false):
+		player.stop()
+
+
 ## The engine drops out for a moment, with a bang.
 func misfire() -> void:
 	_cut = MISFIRE_DB

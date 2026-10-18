@@ -18,6 +18,8 @@ const SWING := 2.2
 const PITCH := Vector2(-1.0, 0.45)
 const SEAT_PITCH := Vector2(-0.9, 0.7)
 const SEAT_YAW := 1.9
+## How much nearer the gunner's sight brings what is in it.
+const SIGHT_ZOOM := 2.0
 ## How far a shot of the gun is looked for along the view, in metres.
 const SIGHT := 600.0
 ## How far the camera keeps off what is behind it, in metres.
@@ -89,7 +91,10 @@ func _process(delta: float) -> void:
 		vehicle.aim = _aim()
 		if player.has_control() and Input.is_action_pressed("fire"):
 			vehicle.fire()
-	camera.fov = Settings.fov
+	var fov: float = Settings.fov
+	if first_person and data.has_turret:
+		fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(fov) * 0.5) / SIGHT_ZOOM))
+	camera.fov = fov
 
 
 func _place(delta: float) -> void:

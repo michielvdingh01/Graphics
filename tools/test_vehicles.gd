@@ -8,7 +8,8 @@ extends SceneTree
 ## are loaded, where every vehicle has to stand on its wheels.
 ##
 ##   tools/test_vehicles.sh             all of it
-##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, wear, dunes
+##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, wear,
+##                                      run_over, dunes, match
 
 const LIMIT := 420.0
 ## Loaded once the game runs, not as this is read: the autoloads they name
@@ -44,7 +45,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--only="):
 			only = argument.trim_prefix("--only=")
-	for part: String in ["jeep", "truck", "tank", "wear", "run_over", "dunes"]:
+	for part: String in ["jeep", "truck", "tank", "wear", "run_over", "dunes", "match"]:
 		if only == "" or only == part:
 			print("-- ", part)
 			await call("_" + part)
@@ -74,9 +75,12 @@ func seconds(time: float) -> void:
 ## A floor of FLOOR metres, a wall across it at WALL_AT, the player, and a
 ## vehicle of `kind` at the start, its nose along +Z.
 func _yard(kind: String) -> RigidBody3D:
+	# Whatever was played before goes: a yard of a part before, or a level.
+	if current_scene and current_scene != world:
+		current_scene.queue_free()
 	if world:
 		world.queue_free()
-		await process_frame
+	await process_frame
 	Input.action_release("move_forward")
 	Input.action_release("move_back")
 	Input.action_release("move_left")
@@ -150,6 +154,15 @@ func _drive_wheels(vehicle: RigidBody3D, title: String, top: float) -> void:
 	check(player.riding == vehicle and player.seat == 0, "%s: E puts the player in the driver's seat" % title)
 	check(vehicle.view() != null and vehicle.view().camera.current, "%s: the driver sees through the vehicle's camera" % title)
 	check(not vehicle.freeze, "%s: getting in wakes it" % title)
+	var rider: Node3D = vehicle.get_node_or_null("Rider")
+	check(rider != null and rider.visible and rider.get_child_count() > 0, "%s: from behind, a soldier sits at the wheel" % title)
+	vehicle.view().first_person = true
+	await process_frame
+	await process_frame
+	check(rider == null or not rider.visible, "%s: and from the seat there is nobody in the way" % title)
+	var eye: Vector3 = vehicle.global_transform.affine_inverse() * vehicle.view().camera.global_position
+	check(eye.distance_to(vehicle.seats[0].eye) < 0.05, "%s: from the seat the driver looks out of the driver's eyes (%s)" % [title, eye])
+	vehicle.view().first_person = false
 	await seconds(data.start_time + 0.3)
 	check(vehicle.engine_on, "%s: the engine has started after %.1f s" % [title, data.start_time])
 	var idle: float = vehicle.rpm
@@ -373,6 +386,18 @@ func _dunes() -> void:
 	check(off == 0, "dunes: all of them stand upright")
 	var settled := vehicles.filter(func(vehicle: Node) -> bool: return vehicle.freeze)
 	check(settled.size() == vehicles.size(), "dunes: all of them are frozen, and cost nothing (%d of %d)" % [settled.size(), vehicles.size()])
+	# Nobody's way goes through where a vehicle stands: the nearest the
+	# navmesh comes to its middle is outside it.
+	var map: RID = (current_scene as Node3D).get_world_3d().navigation_map
+	var through := 0
+	for vehicle: Node3D in vehicles:
+		var middle: Vector3 = vehicle.global_transform * vehicle.middle()
+		var nearest: Vector3 = vehicle.global_transform.affine_inverse() * NavigationServer3D.map_get_closest_point(map, middle)
+		var box: AABB = vehicle.hull().grow(-0.1)
+		if nearest.x > box.position.x and nearest.x < box.end.x and nearest.z > box.position.z and nearest.z < box.end.z:
+			through += 1
+			print("    the navmesh runs under %s: nearest %s in its own coordinates, box %s" % [vehicle.name, nearest, box])
+	check(through == 0, "dunes: the navmesh goes round every vehicle (%d it does not)" % through)
 	var parked := current_scene.get_node("Level/Vehicles").get_children().filter(func(node: Node) -> bool: return not node.is_in_group("vehicle"))
 	check(parked.size() == 1 and String(parked[0].name).begins_with("Tank"), "dunes: the tank under the sheet in the shed is parked")
 	# Woken, each settles on its wheels where it stands, on sand that is not
@@ -393,6 +418,92 @@ func _dunes() -> void:
 	check(settled.size() == vehicles.size(), "dunes: and freezes again (%d of %d)" % [settled.size(), vehicles.size()])
 	for vehicle: Node in vehicles:
 		check(not vehicle.find_children("Load*", "MeshInstance3D", false).is_empty() or vehicle.kind == "tank", "dunes: %s carries its number" % vehicle.name)
+
+
+## A match in the dunes with the player in a tank: the bots of the other side
+## see the player in it and shoot at it, one of them is run over and the
+## kill is said to be that, and a tank that goes up is back where it stood.
+func _match() -> void:
+	var match_ := autoload("Match")
+	# Opening a match changes the scene from the one that is played now.
+	if current_scene == null:
+		await _yard("jeep")
+	check(match_.open({"mode": "tdm", "level": "dunes", "size": 4}), "match: a match in the dunes opens")
+	await scene_changed
+	world = null
+	var waited := 0.0
+	while match_.state != match_.State.PLAYING and waited < 20.0:
+		await seconds(0.5)
+		waited += 0.5
+	check(match_.state == match_.State.PLAYING, "match: it is played")
+	await seconds(1.0)
+	player = get_first_node_in_group("player")
+	player.force_control = true
+	var me: RefCounted = match_.me()
+	var tanks := get_nodes_in_group("vehicle").filter(func(vehicle: Node) -> bool: return vehicle.kind == "tank")
+	var tank: RigidBody3D = tanks[0]
+	player.global_position = tank.global_transform * Vector3(2.6, 0, 0)
+	await _press("use")
+	check(player.riding == tank, "match: the player gets into a tank")
+	await seconds(tank.data.start_time + 0.5)
+	# Two of the other side in front of it, in the open.
+	var foes: Array = match_.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot and who.team != me.team)
+	var ahead: Vector3 = -tank.global_basis.z
+	for i in mini(foes.size(), 2):
+		var at: Vector3 = tank.global_position + ahead * 22.0 + tank.global_basis.x * (i * 4.0 - 2.0)
+		var space := (tank as Node3D).get_world_3d().direct_space_state
+		var down := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3.UP * 30.0, at + Vector3.DOWN * 30.0, 1))
+		foes[i].body.global_position = down.position if down else at
+	var health: float = tank.health
+	await seconds(6.0)
+	check(tank.health < health and tank.last_hurt_by != 0, "match: the bots see the player in the tank and shoot at it (%.0f off)" % (health - tank.health))
+	check(player.health >= 100.0, "match: and hit the tank, not the player in it")
+	await _press("use")
+	# Run one of them over. The field car is open, and they would shoot its
+	# driver first.
+	player.invulnerable = true
+	# A field car with the way ahead of it clear for twenty metres.
+	var jeeps := get_nodes_in_group("vehicle").filter(func(vehicle: Node) -> bool:
+		if vehicle.kind != "jeep":
+			return false
+		var from: Vector3 = (vehicle as Node3D).global_transform * Vector3(0, 1.0, -2.0)
+		var to: Vector3 = (vehicle as Node3D).global_transform * Vector3(0, 1.0, -22.0)
+		return (vehicle as Node3D).get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, 1)).is_empty())
+	check(not jeeps.is_empty(), "match: a field car has the way clear ahead of it")
+	var jeep: RigidBody3D = jeeps[0]
+	player.global_position = jeep.global_transform * Vector3(-1.6, 0, 0)
+	await _press("use")
+	await seconds(jeep.data.start_time + 0.3)
+	var felled := []
+	var counted := func(by: int, fallen: int, weapon: int, _head: bool) -> void: felled.append([by, fallen, weapon])
+	match_.felled.connect(counted)
+	var victim: RefCounted = foes[0]
+	var spot: Vector3 = jeep.global_transform * Vector3(0, 0.3, -16.0)
+	Input.action_press("move_forward")
+	waited = 0.0
+	while waited < 8.0 and not felled.any(func(f: Array) -> bool: return f[1] == victim.id):
+		if victim.out <= 0.0:
+			victim.body.global_position = spot
+		await frames(1)
+		waited += 1.0 / Engine.physics_ticks_per_second
+		if OS.get_environment("DEBUG_VEHICLE") != "" and Engine.get_physics_frames() % 60 == 0:
+			print("    speed %.1f gear %d gas %.2f brake %.2f touching %d freeze %s rpm %d riding %s control %s" % [jeep.speed, jeep.gear, jeep.gas, jeep.braking, jeep._touching(), jeep.freeze, jeep.rpm, player.riding, player.has_control()])
+	Input.action_release("move_forward")
+	match_.felled.disconnect(counted)
+	var by_car := felled.filter(func(f: Array) -> bool: return f[1] == victim.id and f[2] == match_.RUN_OVER and f[0] == me.id)
+	check(not by_car.is_empty(), "match: a bot in the way is run over, and the kill is the player's, run over (%.0f km/h)" % (jeep.speed * 3.6))
+	if by_car.is_empty():
+		print("    felled %s; the victim %d has %.0f health, out %.1f, safe %.1f, at %s; the jeep at %s, the spot %s; player riding %s dead %s" % [felled, victim.id, victim.health, victim.out, victim.safe, victim.body.global_position, jeep.global_position, spot, player.riding, player.dead])
+	await _press("use")
+	# A tank that goes up is back where it stood.
+	tank.comes_back_after = 2.0
+	var stood: Transform3D = tank.spawn
+	tank.take_damage(1e5, tank.global_position, Vector3.FORWARD)
+	await seconds(4.0)
+	var back := get_nodes_in_group("vehicle").filter(func(vehicle: Node) -> bool: return vehicle.kind == "tank" and (vehicle as Node3D).global_position.distance_to(stood.origin) < 0.5 and vehicle.condition == vehicle.Condition.SOUND)
+	check(not is_instance_valid(tank) or tank.is_queued_for_deletion(), "match: the wreck makes way")
+	check(back.size() == 1, "match: and a new tank stands where it stood")
+	match_.close()
 
 
 ## Somebody who stands there to be hit: on the layer of a robot, with a body
