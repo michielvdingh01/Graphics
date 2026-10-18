@@ -93,6 +93,8 @@ func _show_riding() -> void:
 		keys += "   [C] view   [Space] hand brake"
 		if data.has_turret:
 			keys += "   [mouse] gun"
+		elif data.driver_fires:
+			keys += "   [mouse] shoot"
 	_keys.text = keys
 
 

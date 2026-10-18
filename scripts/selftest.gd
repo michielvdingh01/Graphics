@@ -103,6 +103,7 @@ func _run() -> void:
 		tree.change_scene_to_file(levels[0].scene)
 		await tree.scene_changed
 		await _wait(0.5)
+		await _baked()
 		await _play_through(levels[0], Menu.LEVELS[at + 1].scene if at + 1 < Menu.LEVELS.size() else "")
 		_ran([levels[0].name])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
@@ -146,6 +147,7 @@ func _run() -> void:
 	await tree.scene_changed
 	for i in Menu.LEVELS.size():
 		await _wait(0.5)
+		await _baked()
 		await _play_through(Menu.LEVELS[i], Menu.LEVELS[i + 1].scene if i + 1 < Menu.LEVELS.size() else "")
 	_ran(Menu.LEVELS.map(func(level: Dictionary) -> String: return level.name))
 
@@ -2404,3 +2406,16 @@ func _check(label: String, ok: bool) -> void:
 
 func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds, true, true).timeout
+
+
+## Waits for the level that has loaded to have baked its navmesh, which it
+## does on a thread of its own, and for the server that finds the ways over
+## it to have it: at most ten seconds.
+func _baked() -> void:
+	var game := get_tree().current_scene
+	var waited := 0.0
+	while not game.get(&"is_baked") and waited < 10.0:
+		await _wait(0.1)
+		waited += 0.1
+	for i in 3:
+		await get_tree().physics_frame

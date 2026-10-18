@@ -7,7 +7,8 @@ extends Node3D
 ## In a tank the view is where the gun is to go: the turret turns after it as
 ## fast as it can, and the button fires. From the seat that is the gunner's
 ## sight, which turns with the gun, so that the view comes round with the
-## turret and no faster.
+## turret and no faster. In a field car the driver fires their own weapon at
+## the middle of the view, which kicks with it and zooms as they aim.
 
 ## Seconds after the mouse has been let go that the view swings back behind
 ## the vehicle, and how fast it does, per second.
@@ -22,6 +23,9 @@ const SEAT_YAW := 1.9
 const SIGHT_ZOOM := 2.0
 ## How far a shot of the gun is looked for along the view, in metres.
 const SIGHT := 600.0
+## What a shot from the view can land on: the level, enemies, what breaks,
+## and either side of a match.
+const AIMS_AT := WORLD | 4 | 32 | (1 << 8) | (1 << 9)
 ## How far the camera keeps off what is behind it, in metres.
 const CLEAR := 0.3
 const WORLD := 1
@@ -89,6 +93,9 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(vehicle):
 		return
 	_idle += delta
+	if player.fires_from_the_wheel() and (Input.is_action_pressed("fire") or Input.is_action_pressed("ads")):
+		# Whoever is firing keeps the view where they hold it.
+		_idle = 0.0
 	_place(delta)
 	var data: VehicleData = vehicle.data
 	if data.has_turret:
@@ -98,6 +105,8 @@ func _process(delta: float) -> void:
 	var fov: float = Settings.fov
 	if first_person and data.has_turret:
 		fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(fov) * 0.5) / SIGHT_ZOOM))
+	elif player.fires_from_the_wheel():
+		fov = lerpf(fov, player.weapons.ads_fov(), smoothstep(0.0, 1.0, player.weapons.ads_blend))
 	camera.fov = fov
 
 
@@ -111,7 +120,7 @@ func _place(delta: float) -> void:
 			if _idle > BACK_AFTER:
 				seat_yaw = lerpf(seat_yaw, 0.0, 1.0 - exp(-SWING * delta))
 			var eye: Transform3D = vehicle.eye_frame(0)
-			camera.global_transform = Transform3D(eye.basis.orthonormalized() * Basis(Vector3.UP, seat_yaw) * Basis(Vector3.RIGHT, pitch), eye.origin)
+			camera.global_transform = Transform3D(eye.basis.orthonormalized() * Basis(Vector3.UP, seat_yaw) * Basis(Vector3.RIGHT, pitch) * _kick(), eye.origin)
 		return
 	# From behind: back along the view from a point over the middle of the
 	# vehicle, and no further than what is behind it lets the camera go.
@@ -126,7 +135,22 @@ func _place(delta: float) -> void:
 	var hit := space.intersect_ray(query)
 	if hit:
 		want = hit.position + (pivot - want).normalized() * CLEAR
-	camera.global_transform = Transform3D(view, want)
+	camera.global_transform = Transform3D(view * _kick(), want)
+
+
+## The kick of the driver's own weapon, see Player.kick().
+func _kick() -> Basis:
+	return Basis.from_euler(player.kick()) if player.fires_from_the_wheel() else Basis()
+
+
+## What is in the middle of the view, without the kick of a shot: where a
+## shot from the vehicle is to go.
+func aim_point() -> Vector3:
+	var from := camera.global_position
+	var ahead := -(camera.global_basis * _kick().inverse()).z
+	var query := PhysicsRayQueryParameters3D.create(from, from + ahead * SIGHT, AIMS_AT, [vehicle.get_rid(), player.get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position if hit else from + ahead * SIGHT
 
 
 ## The way the gun is to point: at whatever is in the middle of the view.
