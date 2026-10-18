@@ -14,6 +14,24 @@ const SECOND := "res://assets/characters/soldier_01_desert/soldier_01_desert.glb
 var _figure: Node3D
 
 
+## What a rider is drawn with, for Fx.rehearse(): the meshes of both
+## uniforms, without their skeletons.
+static func looks() -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	for path: String in [SOLDIER, SECOND]:
+		if not ResourceLoader.exists(path):
+			continue
+		var figure: Node = (load(path) as PackedScene).instantiate()
+		for mesh: MeshInstance3D in figure.find_children("*", "MeshInstance3D", true, false):
+			var copy := MeshInstance3D.new()
+			copy.mesh = mesh.mesh
+			for i in mesh.get_surface_override_material_count():
+				copy.set_surface_override_material(i, mesh.get_surface_override_material(i))
+			found.append(copy)
+		figure.free()
+	return found
+
+
 ## Dresses it as `who` would be dressed and poses it with `move`. False if
 ## that cannot be done, and then it shows nothing.
 func setup(who: Node3D, move: String) -> bool:

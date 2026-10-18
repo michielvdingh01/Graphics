@@ -27,28 +27,37 @@ var shooter: CollisionObject3D
 var skip := RID()
 
 var _age := 0.0
+static var _ball: SphereMesh
 
 
 func _ready() -> void:
-	var glow := MeshInstance3D.new()
-	var ball := SphereMesh.new()
-	ball.radius = 0.06
-	ball.height = 0.12
-	ball.radial_segments = 8
-	ball.rings = 4
-	glow.mesh = ball
-	glow.scale = Vector3(1.0, 1.0, 6.0)
-	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var hot := StandardMaterial3D.new()
-	hot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	hot.albedo_color = Color(1.0, 0.8, 0.5)
-	hot.emission_enabled = true
-	hot.emission = Color(1.0, 0.55, 0.2)
-	hot.emission_energy_multiplier = 6.0
-	glow.material_override = hot
-	add_child(glow)
+	add_child(glow())
 	if velocity != Vector3.ZERO:
 		look_at(global_position + velocity)
+
+
+## What it is drawn with: a glow drawn out along the way it flies, of one
+## mesh and one material for every shell. Also for Fx.rehearse(), see
+## looks() in scripts/vehicle.gd.
+static func glow() -> MeshInstance3D:
+	if _ball == null:
+		_ball = SphereMesh.new()
+		_ball.radius = 0.06
+		_ball.height = 0.12
+		_ball.radial_segments = 8
+		_ball.rings = 4
+		var hot := StandardMaterial3D.new()
+		hot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hot.albedo_color = Color(1.0, 0.8, 0.5)
+		hot.emission_enabled = true
+		hot.emission = Color(1.0, 0.55, 0.2)
+		hot.emission_energy_multiplier = 6.0
+		_ball.material = hot
+	var shine := MeshInstance3D.new()
+	shine.mesh = _ball
+	shine.scale = Vector3(1.0, 1.0, 6.0)
+	shine.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return shine
 
 
 func _physics_process(delta: float) -> void:

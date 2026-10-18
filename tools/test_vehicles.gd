@@ -18,8 +18,8 @@ const PLAYER := "res://scenes/player.tscn"
 const VEHICLE := "res://scripts/vehicle.gd"
 const DUNES := "res://scenes/dunes.tscn"
 ## Where the wall stands, along +Z from the start, and how long the floor is.
-const WALL_AT := 160.0
-const FLOOR := 400.0
+const WALL_AT := 300.0
+const FLOOR := 700.0
 
 var passed := 0
 var failed := 0
@@ -99,7 +99,7 @@ func _yard(kind: String) -> RigidBody3D:
 	floor_body.add_child(floor_shape)
 	var wall := CollisionShape3D.new()
 	var block := BoxShape3D.new()
-	block.size = Vector3(40.0, 4.0, 2.0)
+	block.size = Vector3(FLOOR, 4.0, 2.0)
 	wall.shape = block
 	wall.position = Vector3(0, 2.0, WALL_AT)
 	floor_body.add_child(wall)
@@ -150,6 +150,11 @@ func _drive_wheels(vehicle: RigidBody3D, title: String, top: float) -> void:
 	check(vehicle.freeze, "%s: standing still with nobody in it, it is frozen" % title)
 	check(absf(vehicle.global_position.y - 0.05) < 0.25, "%s: it stands on its wheels at the height of its model (%.2f m)" % [title, vehicle.global_position.y])
 	check(_vehicle_script.within_reach(player).get("vehicle") == vehicle, "%s: the player beside it can get in" % title)
+	var parked := 0.0
+	for i in 120:
+		await physics_frame
+		parked += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	print("    %s: %.3f ms a physics frame with it parked" % [title, parked / 120.0 * 1000.0])
 	await _press("use")
 	check(player.riding == vehicle and player.seat == 0, "%s: E puts the player in the driver's seat" % title)
 	check(vehicle.view() != null and vehicle.view().camera.current, "%s: the driver sees through the vehicle's camera" % title)
@@ -171,6 +176,12 @@ func _drive_wheels(vehicle: RigidBody3D, title: String, top: float) -> void:
 	Input.action_press("move_forward")
 	await seconds(3.0)
 	var after_three: float = vehicle.speed
+	# What driving it costs the processor, in ms of physics scripts a step.
+	var spent := 0.0
+	for i in 120:
+		await physics_frame
+		spent += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	print("    %s: %.3f ms a physics frame while it drives" % [title, spent / 120.0 * 1000.0])
 	for i in 7:
 		await seconds(1.0)
 		if OS.get_environment("DEBUG_VEHICLE") != "":
@@ -232,7 +243,7 @@ func _jeep() -> void:
 	var health: float = jeep.health
 	Input.action_press("move_forward")
 	var waited := 0.0
-	while jeep.global_position.z < WALL_AT - 4.0 and waited < 25.0:
+	while jeep.global_position.z < WALL_AT - 4.0 and waited < 45.0:
 		await frames(12)
 		waited += 0.1
 	await seconds(1.0)
@@ -418,6 +429,30 @@ func _dunes() -> void:
 	check(settled.size() == vehicles.size(), "dunes: and freezes again (%d of %d)" % [settled.size(), vehicles.size()])
 	for vehicle: Node in vehicles:
 		check(not vehicle.find_children("Load*", "MeshInstance3D", false).is_empty() or vehicle.kind == "tank", "dunes: %s carries its number" % vehicle.name)
+	# Each can be driven away from where it stands, forward or back.
+	var stuck: Array[String] = []
+	for vehicle: Node in vehicles:
+		var from: Vector3 = (vehicle as Node3D).global_position
+		vehicle.wake()
+		vehicle.autopilot = true
+		vehicle.hand_brake = false
+		vehicle.engine_on = true
+		for way: String in ["ask_forward", "ask_back"]:
+			vehicle.set(way, 1.0)
+			await seconds(1.0)
+			if OS.get_environment("DEBUG_VEHICLE") != "":
+				print("    %s %s: speed %.1f gas %.2f brake %.2f push %.0f freeze %s physics %s gear %d rpm %d engine %s touching %d" % [vehicle.name, way, vehicle.speed, vehicle.gas, vehicle.braking, vehicle._push(), vehicle.freeze, vehicle.is_physics_processing(), vehicle.gear, vehicle.rpm, vehicle.engine_on, vehicle._touching()])
+			await seconds(3.0)
+			vehicle.set(way, 0.0)
+			if (vehicle as Node3D).global_position.distance_to(from) > 3.0:
+				break
+			await seconds(1.0)
+		var went: float = (vehicle as Node3D).global_position.distance_to(from)
+		if went < 3.0:
+			stuck.append("%s at %s (%.1f m)" % [vehicle.name, from.snappedf(0.1), went])
+		vehicle.autopilot = false
+		vehicle.engine_on = false
+	check(stuck.is_empty(), "dunes: every vehicle can be driven away from where it stands (stuck: %s)" % ", ".join(stuck))
 
 
 ## A match in the dunes with the player in a tank: the bots of the other side

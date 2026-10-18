@@ -87,7 +87,8 @@ var _dye := Color(0.2, 0.5, 0.9, 0.0)
 ## and whether the seat turns with the turret. A role is "driver" (who on a
 ## tank lays the gun as well) or "passenger" (who has their own weapons).
 ## And "hull": what of it is in the way, as boxes {at, size, part}, with the
-## part they turn with if they do, "Turret" or "Gun".
+## part they turn with if they do, "Turret" or "Gun", or as the corners of a
+## shape that is not a box {points, part}.
 var _layout := {}
 
 
@@ -157,6 +158,13 @@ func _touches(part_name: String, at: Vector3, radius: float, steers: bool, drive
 func _solid(at: Vector3, size: Vector3, turns_with := "") -> void:
 	if not _far:
 		_layout.hull.append({"at": at, "size": size, "part": turns_with})
+
+
+## What is in the way as the smallest shape round `points`: a hull with its
+## ends sloped, as a box is not.
+func _solid_round(points: PackedVector3Array, turns_with := "") -> void:
+	if not _far:
+		_layout.hull.append({"points": points, "part": turns_with})
 
 
 ## A seat, for scripts/vehicle.gd: see _layout.
@@ -474,8 +482,10 @@ func _jeep() -> void:
 		_seat(Vector3(x, 0.8, -0.02), 0.44)
 	# The driver on the left, behind the wheel; one beside him, two on the
 	# bench behind. Nothing keeps a shot off any of them.
-	_sits("driver", Vector3(-0.36, 0.92, 0.02), Vector3(-0.36, 1.62, 0.0), Vector3(-1.45, 0.0, -0.1), true)
-	_sits("passenger", Vector3(0.36, 0.92, 0.02), Vector3(0.36, 1.62, 0.0), Vector3(1.45, 0.0, -0.1), true)
+	# The eyes a little over the top of the screen, which would otherwise
+	# cut the view in two.
+	_sits("driver", Vector3(-0.36, 0.92, 0.02), Vector3(-0.36, 1.74, 0.02), Vector3(-1.45, 0.0, -0.1), true)
+	_sits("passenger", Vector3(0.36, 0.92, 0.02), Vector3(0.36, 1.74, 0.02), Vector3(1.45, 0.0, -0.1), true)
 	for x: float in [-0.3, 0.3]:
 		_sits("passenger", Vector3(x, 0.95, 1.06), Vector3(x, 1.66, 1.05), Vector3(signf(x) * 1.45, 0.0, 1.1), true)
 	_block(CANVAS, Vector3(0, 0.88, 1.02), Vector3(1.06, 0.1, 0.4), 0.035)
@@ -785,7 +795,14 @@ func _track(x: float) -> void:
 ## its right. Its number is its own, and the level paints it on.
 func _tank(tank: String, traverse_deg: float) -> void:
 	model(tank)
-	_solid(Vector3(0, 0.95, 0), Vector3(3.0, 1.2, 6.0))
+	# The hull, its belly between the tracks and its ends sloped as the
+	# tracks rise to the idler and the sprocket: it rides up out of a pit
+	# instead of digging its corners into the side of it.
+	var hull := PackedVector3Array()
+	for x: float in [-1.5, 1.5]:
+		for corner: Vector2 in [Vector2(-2.2, 0.35), Vector2(2.1, 0.35), Vector2(-3.0, 0.85), Vector2(-3.0, 1.25), Vector2(-2.05, 1.55), Vector2(3.0, 0.8), Vector2(3.0, 1.25), Vector2(2.55, 1.55)]:
+			hull.append(Vector3(x, corner.y, corner.x))
+	_solid_round(hull)
 	_solid(Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0), "Turret")
 	_solid(Vector3(0, 2.0, -3.3), Vector3(0.3, 0.3, 3.6), "Gun")
 	_dye = Color(0.3, 0.55, 0.8, 0.0)

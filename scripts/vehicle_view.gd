@@ -78,6 +78,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		first_person = not first_person
 		if not first_person:
 			pitch = clampf(pitch, PITCH.x, PITCH.y)
+		elif not vehicle.data.has_turret:
+			# From the seat it looks ahead, over the bonnet.
+			pitch = 0.0
+			seat_yaw = 0.0
 		get_viewport().set_input_as_handled()
 
 

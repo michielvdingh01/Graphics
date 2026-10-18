@@ -1072,6 +1072,14 @@ func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
 		{&"tint": Color(0.62, 0.62, 0.64, 0.42), &"speed": 0.9, &"spread": 0.3, &"size": Vector2(0.015, 0.17), &"life": 1.0, &"rise": 0.3, &"amount": lerpf(0.45, 1.0, amount)})
 
 
+## A puff of the smoke out of an engine that is hit, carried along `drift`:
+## grey while it only smokes, black and thick as `thick` goes to 1, once it
+## burns.
+func engine_smoke(position: Vector3, drift: Vector3, thick := 0.0) -> void:
+	_burst(_puffs, Transform3D(_up_along(drift), position), 3.2,
+		{&"tint": Color(0.3, 0.29, 0.28, 0.7).lerp(Color(0.07, 0.065, 0.06, 0.9), thick), &"speed": 1.2, &"spread": 0.4, &"size": Vector2(0.35, 1.8 + 1.0 * thick), &"life": 3.0, &"rise": 0.7, &"amount": 1.0})
+
+
 ## A puff of the smoke a rocket leaves behind it, `direction` the way it flies:
 ## thicker than a barrel's, slow to spread and slow to go.
 func rocket_trail(position: Vector3, direction: Vector3) -> void:

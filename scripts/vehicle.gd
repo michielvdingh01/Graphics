@@ -91,10 +91,8 @@ const WRECK_BURNS := 30.0
 ## Where the sight of the gun is, in the frame of the gun: to its left over
 ## the front of the mantlet, where nothing of the turret is in the way.
 const SIGHT_AT := Vector3(-0.32, 0.3, -0.75)
-## What of it burns away, by the name of its material.
-const BURNS_AWAY: Array[String] = ["glass", "canvas", "camo_net", "field_marks", "sandbag"]
 ## Seconds between two puffs of smoke from an engine that is hit.
-const PUFF := 0.09
+const PUFF := 0.12
 ## What a misfire is: how long the engine gives nothing, and how long it
 ## runs between two at the least and the most, in seconds.
 const MISFIRE := 0.16
@@ -147,6 +145,9 @@ var autopilot := false
 ## Seconds a wreck of it lies in a match before a new one stands where it
 ## stood.
 var comes_back_after := COMES_BACK
+
+## The level whose vehicles have been rehearsed, see looks().
+static var _rehearsed := {}
 
 var _wheels: Array[Wheel] = []
 var _model: Node3D
@@ -298,8 +299,21 @@ func _ready() -> void:
 	add_child(_sound)
 	_sound.setup(self)
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	Net.changed.connect(_on_net_changed)
+	if not _rehearsed.has(get_tree().current_scene):
+		_rehearsed = {get_tree().current_scene: true}
+		Fx.rehearse.call_deferred(looks())
 	_rest()
 	_last_velocity = Vector3.ZERO
+
+
+## What a vehicle shows of itself only once it is used, for Fx.rehearse():
+## the soldier at the wheel and the shell of a gun. Drawn for the first time
+## in the middle of play, each made the renderer stop to make what it needs.
+static func looks() -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = RIDER.looks()
+	found.append(SHELL.glow())
+	return found
 
 
 ## The colliders: the boxes the model says are in the way, unless the level
@@ -312,20 +326,35 @@ func _make_hull() -> void:
 	if not made:
 		for box: Dictionary in _model.get_meta(&"hull", []):
 			var shape := CollisionShape3D.new()
-			var cube := BoxShape3D.new()
-			cube.size = box.size
-			shape.shape = cube
-			shape.position = box.at
+			if box.has("points"):
+				var outline := ConvexPolygonShape3D.new()
+				outline.points = box.points
+				shape.shape = outline
+			else:
+				var cube := BoxShape3D.new()
+				cube.size = box.size
+				shape.shape = cube
+				shape.position = box.at
 			shape.set_meta(&"surface", "metal")
 			if box.part != "":
 				shape.set_meta(&"turns_with", box.part)
 			add_child(shape)
 	for child in get_children():
-		if child is CollisionShape3D and (child as CollisionShape3D).shape is BoxShape3D:
-			var size: Vector3 = ((child as CollisionShape3D).shape as BoxShape3D).size
-			var box := AABB(child.position - size * 0.5, size)
-			if not child.has_meta(&"turns_with"):
-				_hull = box if _hull.size == Vector3.ZERO else _hull.merge(box)
+		if not child is CollisionShape3D or child.has_meta(&"turns_with"):
+			continue
+		var shape: Shape3D = (child as CollisionShape3D).shape
+		var box := AABB()
+		if shape is BoxShape3D:
+			box = AABB(child.position - (shape as BoxShape3D).size * 0.5, (shape as BoxShape3D).size)
+		elif shape is ConvexPolygonShape3D:
+			var points := (shape as ConvexPolygonShape3D).points
+			box = AABB(points[0], Vector3.ZERO)
+			for point in points:
+				box = box.expand(point)
+			box.position += child.position
+		else:
+			continue
+		_hull = box if _hull.size == Vector3.ZERO else _hull.merge(box)
 
 
 ## The navmesh is baked from the level as it loads, and a body that moves is
@@ -575,6 +604,15 @@ func _way_out(seat: int, body: Node3D) -> Transform3D:
 
 
 # --- Waking and resting -------------------------------------------------------------
+
+
+## Somebody joined: the others would not see this vehicle move, so whoever
+## is in it gets out.
+func _on_net_changed() -> void:
+	if Net.active and Net.players.size() > 1:
+		for body in occupants.duplicate():
+			if body:
+				leave(body)
 
 
 ## Lets it move: it is frozen while it stands still with nobody in it.
@@ -1131,7 +1169,7 @@ func _wear(delta: float) -> void:
 	var engine := global_transform * data.engine_at
 	if _puff <= 0.0:
 		_puff = PUFF * (0.6 if condition == Condition.BURNING else 1.0)
-		Fx.gun_smoke(engine, (Vector3.UP * 2.0 - linear_velocity * 0.15).normalized(), 1.0)
+		Fx.engine_smoke(engine, (Vector3.UP * 2.0 - linear_velocity * 0.15).normalized(), 1.0 if condition == Condition.BURNING else 0.0)
 	if engine_on:
 		_misfire_in -= delta
 		if _misfire_in <= 0.0:
@@ -1197,22 +1235,19 @@ func _go_up() -> void:
 	went_up.emit()
 
 
-## Everything of it black and burnt: the paint gone, the canvas, the glass
-## and what is stencilled on it burnt away.
+## Everything of it black and burnt: the paint gone, and what was not steel
+## charred as black as the rest.
 func _char() -> void:
 	var black := StandardMaterial3D.new()
 	black.albedo_color = Color(0.045, 0.04, 0.037)
 	black.roughness = 1.0
-	var gone := _gone()
 	for mesh: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
 		if mesh.mesh == null:
 			continue
 		for i in mesh.mesh.get_surface_count():
 			var material := mesh.mesh.surface_get_material(i)
 			var stem := material.resource_path.get_file().get_basename() if material else ""
-			if stem in BURNS_AWAY:
-				mesh.set_surface_override_material(i, gone)
-			elif material is ShaderMaterial and (material as ShaderMaterial).shader.resource_path.contains("field_paint"):
+			if material is ShaderMaterial and (material as ShaderMaterial).shader.resource_path.contains("field_paint"):
 				var burnt := material.duplicate() as ShaderMaterial
 				burnt.set_shader_parameter(&"paint", Color(0.05, 0.045, 0.04))
 				burnt.set_shader_parameter(&"rust", 0.55)
@@ -1245,14 +1280,6 @@ func _belly() -> void:
 func _play(sound: StringName, at: Vector3, db: float) -> void:
 	if sound != &"" and Sfx.has(sound):
 		Sfx.play_on(sound, self, at, db)
-
-
-## What is drawn of what burnt away: nothing.
-static func _gone() -> Material:
-	var nothing := StandardMaterial3D.new()
-	nothing.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	nothing.albedo_color = Color(0, 0, 0, 0)
-	return nothing
 
 
 func _lie_as_wreck(delta: float) -> void:
