@@ -70,9 +70,9 @@ const ALPINE_SURFACES := {
 ## the loft lies, how wide the doorway is, and how deep the loft reaches from
 ## the back.
 const BARNS := {
-	"small": {"wide": 4.4, "long": 5.2, "eaves": 2.6, "loft": 1.95, "door": 2.0, "loft_deep": 2.2},
-	"middle": {"wide": 5.4, "long": 6.6, "eaves": 2.95, "loft": 2.2, "door": 2.1, "loft_deep": 2.9},
-	"large": {"wide": 6.6, "long": 8.2, "eaves": 3.3, "loft": 2.45, "door": 2.4, "loft_deep": 3.6},
+	"small": {"wide": 4.4, "long": 5.2, "eaves": 2.6, "loft": 1.95, "door": 2.3, "loft_deep": 2.2},
+	"middle": {"wide": 5.4, "long": 6.6, "eaves": 2.95, "loft": 2.2, "door": 2.4, "loft_deep": 2.9},
+	"large": {"wide": 6.6, "long": 8.2, "eaves": 3.3, "loft": 2.45, "door": 2.6, "loft_deep": 3.6},
 }
 ## A log of a barn's wall: how deep, how high, and how far one lies over the
 ## last, which leaves a gap between them for the air to dry the hay. How far
@@ -132,6 +132,24 @@ func _alp_end(what: String, at: Vector2, colliders := 0) -> void:
 			counts.append("%d %s" % [_alp_count[key], key])
 		print("%s at (%.0f, %.0f): %s triangles, %d colliders" % [what, at.x, at.y, ", ".join(counts), colliders])
 	_alp_reach = ""
+
+
+## A way for bots from `from` to `to` where the navmesh of a level of
+## kilometres cannot see one: up a stair steeper or narrower than its cells
+## take. Whoever follows it walks it, both ways, as a player would.
+func _alp_link(from: Vector3, to: Vector3) -> void:
+	var links := _root.get_node_or_null("AlpineLinks")
+	if links == null:
+		links = Node3D.new()
+		links.name = "AlpineLinks"
+		_add(links, _root)
+	var link := NavigationLink3D.new()
+	link.name = "Link%d" % links.get_child_count()
+	link.position = from
+	link.start_position = Vector3.ZERO
+	link.end_position = to - from
+	link.bidirectional = true
+	_add(link, links)
 
 
 ## How many colliders the level has so far: what a piece added is the
@@ -709,11 +727,12 @@ func _barn_boards(xf: Transform3D, dim: Dictionary) -> float:
 
 
 ## The shutter of a hatch in the side `side` of a barn (-1 its left, 1 its
-## right), whose top is at `top`: boards on two ledges, hung from the top
-## and propped open on a stick, or swung back flat against the wall.
+## right), whose top is at `top`: boards on a ledge, hung from the top and
+## propped up on a stick nearly level, so that it keeps the rain off and not
+## the eye or the shot of whoever looks out from under it.
 func _barn_shutter(xf: Transform3D, top: Vector3, side: float, size: Vector2) -> void:
 	var out := Vector3(side, 0, 0)
-	var open := _alp_own.randf_range(0.9, 1.25)
+	var open := _alp_own.randf_range(1.35, 1.48)
 	var hang := xf * Transform3D(Basis(Vector3.BACK, side * open), top + out * 0.03)
 	_alp_timber(LARCH, hang * Transform3D(Basis(), Vector3(0, -size.y * 0.5, 0)), Vector3(0.035, size.y, size.x + 0.06), 1, -1.0, 1.0)
 	_alp_timber(LARCH, hang * Transform3D(Basis(), Vector3(-0.03, -size.y * 0.5, 0)), Vector3(0.03, 0.09, size.x - 0.04), 2)
@@ -939,10 +958,11 @@ func _barn_inside(xf: Transform3D, dim: Dictionary, _pitch_deg: float) -> void:
 	var loft_heap := Vector2(inner.x * 2.0 - 0.3, deep - 0.25)
 	var heap_at := Vector3(0, loft + 0.04, -inner.y + deep * 0.5 - 0.05)
 	if dim.stair:
-		# Along the far side only: from the top of the stair to the hatch in
-		# the back gable the loft is clear.
-		loft_heap.x = inner.x - 0.6
-		heap_at.x = -stair_side * (inner.x + 0.6) * 0.5
+		# Along the far side only: from the top of the stair, beside the
+		# middle where the roof is high enough to stand under, back to the
+		# hatch in the gable the loft is clear.
+		loft_heap.x = inner.x - 0.7
+		heap_at.x = -stair_side * (inner.x + 0.7) * 0.5
 	_alp_uv2.x = 4.5
 	_alp_heap(xf, heap_at, loft_heap, minf(1.3, float(dim.eaves) - loft + 0.6), false)
 	_alp_heap(xf, Vector3(-stair_side * inner.x * 0.35, 0.0, -inner.y + 0.75), Vector2(inner.x * 1.1, 1.3), 0.75, true)
@@ -961,7 +981,7 @@ func _barn_inside(xf: Transform3D, dim: Dictionary, _pitch_deg: float) -> void:
 		_tri(st, [middle, a, b], [up, up, up], [Vector2(middle.x, middle.z), Vector2(a.x, a.z), Vector2(b.x, b.z)])
 	_alp_uv2.x = 0.5
 	if dim.stair:
-		_barn_stair(xf, Vector3(stair_side * (inner.x - 0.5), 0.0, edge + 0.02), loft + 0.04)
+		_barn_stair(xf, Vector3(stair_side * 0.75, 0.0, edge + 0.02), loft + 0.04)
 
 
 ## A steep stair of a barn from the floor at `foot`'s height up to `high`,
@@ -984,6 +1004,7 @@ func _barn_stair(xf: Transform3D, foot: Vector3, high: float) -> void:
 		_alp_timber(LARCH, xf * Transform3D(Basis(), tread + Vector3(0, 0.0, 0.05)), Vector3(wide, 0.04, 0.22), 0)
 	var ramp := Transform3D(Basis(Vector3.RIGHT, steep), (bottom + top) * 0.5 + Vector3(0, -0.04, 0))
 	_collide_box(xf * ramp, Vector3(wide, 0.08, run / cos(steep) + 0.1), "wood")
+	_alp_link(xf * (bottom + Vector3(0, 0.05, 0.6)), xf * (top + Vector3(-top.x * 0.6, 0.05, -0.9)))
 
 
 ## A ramp of boards up to the door of a barn whose floor lies above the
@@ -1389,6 +1410,7 @@ func _farm_stable(xf: Transform3D, hl: float, hd: float, split: float) -> void:
 	var inner := Rect2(split + 0.5, -hd + 0.6, hl - 0.6 - split - 0.5, hd * 2.0 - 1.2)
 	var middle := inner.get_center()
 	_alp_timber(STONE, xf * Transform3D(Basis(), Vector3(middle.x, -0.03, middle.y)), Vector3(inner.size.x, 0.06, inner.size.y), 0, 0.5, 1.0, 0, 0.0, true)
+	_collide_box(xf * Transform3D(Basis(), Vector3(middle.x, -0.5, middle.y)), Vector3(inner.size.x, 1.0, inner.size.y), "brick")
 	var ceiling := xf * Transform3D(Basis(), Vector3(middle.x, ground - 0.03, 0))
 	_alp_timber(LARCH, ceiling, Vector3(hl - split, 0.06, hd * 2.0 - 0.1), 0, 0.5, 1.0)
 	_collide_box(ceiling, Vector3(hl - split, 0.1, hd * 2.0 - 0.1), "wood")
@@ -1836,6 +1858,7 @@ func _hunting_stair(xf: Transform3D, top: Vector3, wide: float) -> void:
 	_alp_pole(LARCH, xf * (bottom + Vector3(-wide * 0.5 - 0.08, 0.95, 0.2)), xf * (top + Vector3(-wide * 0.5 - 0.08, 0.95, 0)), 0.03, -1.0, 5)
 	var ramp := Transform3D(Basis(Vector3.RIGHT, -steep), (bottom + top) * 0.5 + Vector3(0, -0.05, 0))
 	_collide_box(xf * ramp, Vector3(wide, 0.1, (top - bottom).length() + 0.1), "wood")
+	_alp_link(xf * (bottom + Vector3(0, 0.05, -0.7)), xf * (top + Vector3(0, 0.05, 0.9)))
 
 
 # --- Fences, hay, wood ---------------------------------------------------------------
