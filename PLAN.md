@@ -4004,3 +4004,81 @@ Op 17 oktober 2026 gevraagd: een nieuwe trailer van ongeveer 20 seconden, met in
 - **Bewegend gezien ook niet**: ik heb bladen met zes beelden per seconde bekeken en losse beelden op volle grootte. Of de snelheid van de cuts prettig is en of het geluid synchroon voelt, weet ik niet.
 - De lucht boven de minigun is wit: hij kijkt naar het zuiden, in de zon. Naar het noorden was het licht vlak; ik koos de lange schaduwen.
 - De laptop stond op de accu (73 tot 60%); er draaide geen andere Godot. Voor beelden van Movie Maker maakt dat niets uit, alleen voor hoe lang het duurt.
+
+## Voertuigen: rijden in de duinen
+
+Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden zoals in Battlefield, met passende geluiden voor het starten van de motor, optrekken, schakelen, remmen, uitstappen, botsen, een kapotte motor en een motor die ontploft; generiek, omdat er meer maps met voertuigen komen. Branch `voertuigen`. Michiel koos: de duinen op deze branch opnieuw bouwen (zodat een voertuig met zijn nummer en lading wegrijdt), de tank met koepel en kanon, eerst een CC0-pak zoeken voor de geluiden, en het moet werken in wedstrijden met bots en met passagiers. Over het netwerk en bots die zelf rijden komt later.
+
+**Wat er nu is**
+
+- **Een voertuig is een model en een bestand.** `scripts/vehicle.gd` rijdt elk voertuig; wat het soort is, staat in `vehicles/<soort>.tres` (`scripts/vehicle_data.gd`: gewicht, vering, grip, motor en versnellingen, schade, kanon, camera, geluiden) en in het model (`tools/models/vehicles.gd`), dat op zijn wortel zegt waar de wielen de grond raken en welke sturen en aandrijven, waar de stoelen zijn en wat er in de weg zit. Wielen, assen, stuur, loopwielen, koepel en kanon zijn delen die draaien. Een level zet een voertuig neer met `vehicle()` in `tools/kit/field.gd`; `parked = true` laat het staan als deel van het level (de tank onder het zeil in de loods). Een nieuw voertuig voor een nieuwe map is dus een model, een `.tres` en een regel in het level.
+- **Rijden.** Per wiel gaat een straal naar de grond met een veer en een demper; de band houdt zijwaarts en trekt zo ver als zijn grip gaat, de motor duwt via een automatische bak. Rupsen draaien de tank op de plaats. Een beetje extra gewicht houdt het voertuig op de grond, een stabilisator houdt het in de bocht op zijn wielen, en ligt het op zijn kant of dak, dan richt het zich na twee seconden op. Zonder bestuurder staat de handrem erop.
+- **Bediening.** E stapt in en uit (de bestuurdersstoel eerst), Q gaat naar de volgende stoel, C wisselt tussen achter het voertuig en de stoel, W/S gas en rem en achteruit, A/D sturen, spatie de handrem. Op de controller: kruistoets omhoog, rechts en omlaag. Wie rijdt heeft geen wapen in handen; passagiers houden hun wapens en schieten door hun eigen voertuig heen. Van achteren zit er een soldaat achter het stuur (`scripts/rider.gd`, de nieuwe bewegingen `drive` en `sit` in `assets/animations/moves.res`). Op het scherm: "[E] Drive FIELD CAR" naast een voertuig, en tijdens het rijden snelheid, versnelling, hoe het voertuig ervoor staat en de toetsen (`scripts/vehicle_hud.gd`).
+- **De tank.** De koepel draait naar waar je kijkt (40 graden per seconde), het kanon richt mee; een ring toont waar het nu wijst, een stip waar het heen moet. De knop vuurt een granaat (`scripts/shell.gd`, 190 m/s, valt licht), met een explosie groter dan een raket. Laden duurt 4 s. Met C kijk je door het vizier naast het kanon, twee keer ingezoomd. De commandant in de koepel steekt half boven de tank uit en houdt zijn wapen.
+- **Slijten.** Een kogel doet een deel: 35% bij de jeep, 30% bij de vrachtwagen, 2% bij de tank. Een granaat, raket of explosie doet alles; een klap van 100 of meer telt als zwaar. Botsen doet schade naar hoe hard. Onder 45% is de motor geraakt: rook, haperen met een knal, ruim de helft van het vermogen. Onder 15% brandt hij en brandt hij vanzelf af; bij nul ontploft hij, wie erin zit gaat dood, en er blijft een zwartgeblakerd brandend wrak liggen. In een wedstrijd staat er 45 s later een nieuw voertuig waar het eerste stond. Explosies smijten een jeep, laten een tank schudden.
+- **Overrijden.** Vanaf 3,5 m/s (jeep) doet een aanrijding schade, vanaf 9 m/s is het dodelijk; de tank al vanaf 2 en 5 m/s. In een wedstrijd heet dat in de killfeed "run over".
+- **Bots en robots** zien de speler in een voertuig en schieten op het voertuig; wie in de tank zit, raken ze niet. Een voertuig is uit het navmesh gesneden, met een halve meter speling.
+- **Samen spelen** nog niet: in een spel met anderen stap je niet in, en wie rijdt als er iemand bij komt, stapt uit.
+- **Wat stilstaat kost niets.** Zonder bestuurder bevriest een voertuig na anderhalve seconde stilstand; dan rekent en klinkt het niet, tot iemand instapt of het iets raakt.
+
+**De duinen opnieuw gebouwd** (op Michiels woord, geen lightmap). 22 voertuigen zijn te besturen: 8 jeeps, 10 vrachtwagens en 4 tanks (twee daarvan met gedraaide koepel). Hun nummer en lading zitten in een eigen mesh die meerijdt (`dunes_vehicle_*.res`); wat op de koepel ligt, draait mee. Hun botsvormen maakt het script, dus het level heeft 38 botsvormen minder. Daardoor tellen de voertuigen niet meer mee in de uitgerekende schaduw (sluipen naast een voertuig) en voor de dekking van robots, en de standpunten van de laatste vier zones zijn bij het bouwen anders uitgekomen. De tank in de loods onder het zeil staat geparkeerd. De tank heeft een romp met schuine einden, anders kwam hij niet uit zijn kuil.
+
+**Geluid.** Er was geen pak met motoren. Op Michiels woord 66 CC0-opnamen van Freesound gehaald (de openbare MP3's van 128 kbps, 35 MB, in `.cache/sounds/freesound_vehicles`; bron, maker en pagina per opname in `assets/manifest.json` onder `credits`), en daaruit 35 geluiden gesneden:
+
+| Geluid | Waar het vandaan komt |
+|---|---|
+| Motor stationair en onder last, per voertuig (`jeep_idle/high`, `truck_idle/high`, `tank_idle/high`) | een Jeep Wrangler stationair en een jeep die over ruw terrein rijdt; een Ford LTL 9000 en een diesel die een heuvel op werkt; een tank stationair (met een brom op zijn grondtoon) en een M4 die langzaam rijdt. Het spel speelt de twee rond, op toonhoogte gezet naar het toerental en in elkaar overvloeiend; met gas is hij luider |
+| Starten en afzetten (`*_start`, `*_stop`, varianten `_b`) | de opnamen zelf; de tank lager en met een dreun en een rommel als hij aanslaat |
+| Schakelen (`vehicle_shift`) | de pook van een auto, lager, over een zware klonk |
+| Remmen (`brake_squeal`, `air_brake`) | piepende remmen van een bus; de vrachtwagen laat lucht af als hij stilstaat |
+| In- en uitstappen (`jeep_climb`, `truck_door`, `tank_hatch`) | een jeepdeur, een dichtgeslagen pick-updeur, en een klap op metaal vertraagd tot een luik |
+| Botsen (`vehicle_crash`) | vijf botsingen, elk over een diepe dreun en een rommel |
+| Motor kapot (`engine_damaged`, `engine_backfire`) | een sputterende oude vrachtwagen met een kloppend lager, en een knal bij elke hapering |
+| Ontploffen en branden (`vehicle_explode`, `vehicle_fire`) | een uitbrandende auto die ontploft, over de knal van het spel, een dreun, een rommel van vier seconden en een vallend stuk; een brandende auto |
+| Rollen (`tyre_roll`, `tyre_skid`, `tank_tracks`) | banden op grind, slippen op zand, de rupsen van een T-26 |
+| De koepel en het kanon (`tank_turret`, `tank_cannon`, `tank_load`) | de elektromotor van een koepel; een tankschot met een zwaar stuk geschut erover, dreun en rommel; een granaat in het staartstuk |
+
+`tools/hear.py drive jeep` speelt een rit zoals de bestuurder hem hoort, door het spel zelf (`tools/hear_drive.gd`); `crash`, `wreck` en `gun` erachter voor de botsing, het slijten tot een wrak en het kanon, en `b` voor de varianten.
+
+**Gemeten** op 18 oktober 2026 tussen 10:20 en 10:45, M1 Pro aan de lader (94 W, accu vol), load 1,4 tot 1,8, geen andere Godot. Het contactblad van de duinen (`tools/zone_sheet.py dunes`), om en om vanuit een kopie van de trunk (`fd79880`) en deze branch, twee rondes per stand.
+
+| | Tekenopdrachten (standpunt 1-19) | Fps gemiddeld (standpunt 1-19), trunk / nu |
+|---|---|---|
+| 1440p met FSR 2 op 67% | gelijk tot 93 meer (11 van de 19 meer); driehoeken gelijk | 95,5 / 96,1 (ronde voor ronde binnen 1 fps per standpunt) |
+| 3456×2160, MetalFX, schaal vanzelf | hetzelfde | 47,6 / 47,6 |
+
+- De extra tekenopdrachten zijn de lading en het nummer per voertuig, die eerst in de blokken van het level zaten, en van dichtbij de wielen, die nu losse delen zijn. In fps is het niet te zien.
+- Standpunt 20 tot 23 zijn niet te vergelijken: de bouwer kiest die standpunten uit wat er in de weg staat, en ze staan nu ergens anders.
+- Een rijdend voertuig kost zonder beeld ongeveer 0,1 ms per physicsstap meer dan een geparkeerd (gemeten in de test, binnen de ruis van één meting).
+- **De eerste keer.** Vanaf het titelscherm geteld: instappen, rijden, de stoel, rook, brand, ontploffen, de tank, het schot en het vizier maken samen geen pipeline meer tijdens het tekenen. Eerst kostte instappen er twee (de soldaat achter het stuur) en elk schot twee (de gloed van de granaat, die per schot een eigen materiaal had). Nu oefent `Fx.rehearse()` de soldaat en de granaat bij het laden, en delen alle granaten één materiaal. De raket van de raketwerper maakt zijn staart op dezelfde manier als de granaat eerst deed; dat heb ik niet gemeten.
+
+**Getest**, zonder GPU: `tools/test_vehicles.sh`, 115 controles. Op een vlakke vloer: de jeep trekt op tot 40 km/u in 3 s en 80 km/u in 10 s en schakelt door tot de vierde, de vrachtwagen 26 en 60 km/u, de tank draait 72 graden in 2 s op de plaats en rijdt 33 km/u na 8 s; remmen, achteruit, uitstappen naast het voertuig, botsen tegen een muur, van stoel wisselen, de koepel die het beeld volgt, een granaat die raakt, twintig geweerkogels die de tank 12 van de 1400 kosten, slijten tot een wrak, overrijden. In de duinen: alle 22 staan op hun wielen, bewegen niet bij het laden en na wakker worden, bevriezen weer, het navmesh gaat om elk heen en elk kan wegrijden. In een wedstrijd: bots schieten op de tank en niet op de speler erin, een overreden bot telt als "run over" voor de speler, en een opgeblazen tank komt terug. `tools/selftest.sh` (428), `tools/test_effects.sh` (265), `tools/test_match.sh`, `tools/nettest.sh`, `tools/test_sandbox.sh`, `tools/test_sound.sh` (38) en `tools/test_humanoid.sh` slagen.
+
+**Bekeken**: beelden uit het spel op de GPU (`benchmark/results/voertuigen/voertuigen.jpg`, niet in git): de jeep van achteren en vanuit de stoel, de aanwijzing naast de tank, de koepel, het schot, het vizier, en een vrachtwagen die rookt, brandt en als wrak ligt.
+
+**Wat ik niet kon beoordelen**
+
+- **Gehoord is niets.** Elke opname heb ik gekozen en geknipt op spectrogrammen en een toonhoogtemeter, niet op het oor. De motoren zijn twee lussen per voertuig uit verschillende opnamen; of de overgang tussen stationair en onder last klinkt als één motor, weet ik niet. Van starten, afzetten, botsen, remmen, het kanon en de lucht in de remmen is er een variant `b` om tegen te luisteren.
+- **Gespeeld is het niet.** Hoe het rijdt (grip op zand, sturen, remmen, hoe snel de tank draait), hoe ver de camera erachter hangt en of de schade goed voelt, zijn eerste getallen in `vehicles/*.tres`.
+- De vrachtwagens in het wagenpark staan met hun neus naar het steile duin: vooruit rij je er na acht meter tegenaan, achteruit kom je weg. Onder een net zit de camera van achteren in het net.
+- Rupsen draaien niet mee; de loopwielen wel.
+- De ruit van de jeep is van binnen grauw; ik heb het oog boven de ruit gezet.
+
+**Nog open**
+
+- Samen spelen: het voertuig van wie rijdt over de lijn sturen (positie, wielen, koepel), instappen op de host vragen.
+- Bots die instappen en rijden, en bots die de tank met raketten aanpakken in plaats van met geweren.
+- Rupsen die bewegen; sporen in het zand achter wielen en rupsen; stof achter een rijdend voertuig.
+- Een mitrailleur op de koepel en op de jeep voor de passagier.
+- De schaduwkaart en de dekking van robots zonder de voertuigen erin.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| Rijden in de duinen | het spel, Dunes, naar een voertuig lopen en E |
+| De voertuigen testen | `tools/test_vehicles.sh` (2,5 minuut), `--only=jeep`, `truck`, `tank`, `wear`, `run_over`, `dunes` of `match` |
+| Een rit horen | `tools/hear.py drive jeep`, `drive truck crash`, `drive truck wreck`, `drive tank gun`, met `b` erachter de varianten |
+| De modellen opnieuw bouwen | `tools/build_model.sh vehicles`; het level hoeft daarvoor niet opnieuw, behalve als `vehicle()` of het nummer verandert |
+| Een nieuw voertuig | een model in `tools/models/vehicles.gd` met `_touches`, `_sits` en `_solid`, een `vehicles/<soort>.tres`, en `vehicle("<soort>", ...)` in het level |
+| De geluiden opnieuw snijden | `tools/build_sounds.py <id>`; de opnamen staan in `.cache/sounds/freesound_vehicles` |

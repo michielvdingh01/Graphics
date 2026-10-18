@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3]
+
+[ext_resource type="Script" path="res://scripts/vehicle_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/truck.scn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Lorry"
+model = ExtResource("2")
+mass = 6500.0
+center_of_mass = Vector3(0, 0.95, -0.4)
+weight = 0.5
+engine_at = Vector3(0, 1.45, -2.55)
+travel = 0.24
+spring_hz = 1.4
+damping = 0.5
+anti_roll = 0.7
+grip = 1.0
+bite = 0.35
+drift_grip = 0.45
+steer_deg = 30.0
+steer_at_speed = 0.35
+steer_time = 0.35
+idle_rpm = 650.0
+max_rpm = 3000.0
+torque = 520.0
+peak_rpm = 1500.0
+efficiency = 0.85
+gears = PackedFloat32Array(6.0, 3.5, 2.0, 1.3, 1.0)
+reverse = 6.4
+final_drive = 6.6
+shift_time = 0.45
+shift_up = 0.85
+shift_down = 0.45
+top_speed = 20.0
+reverse_speed = 5.0
+start_time = 1.6
+brake = 0.5
+drag = 1.2
+rolling = 0.025
+health = 480.0
+bullet_share = 0.3
+blast_share = 0.9
+heavy_hit = 100.0
+crash_from = 7.0
+crash_damage = 12.0
+blast_radius = 7.5
+blast_damage = 160.0
+blast_size = 2.0
+run_over_from = 3.0
+run_over_kills = 7.0
+camera_back = 9.5
+camera_up = 3.6
+camera_aim = 1.6
+engine_loops = Array[StringName]([&"truck_idle", &"truck_low", &"truck_high"])
+engine_rpms = PackedFloat32Array(650, 1400, 2400)
+engine_idle_db = -6.0
+engine_load_db = 2.0
+start_sound = &"truck_start"
+stop_sound = &"truck_stop"
+shift_sound = &"vehicle_shift"
+brake_sound = &"air_brake"
+door_sound = &"truck_door"
+crash_sound = &"vehicle_crash"
+damaged_sound = &"engine_damaged"
+explode_sound = &"vehicle_explode"
+roll_sound = &"tyre_roll"

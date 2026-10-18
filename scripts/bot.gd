@@ -434,10 +434,15 @@ func _look_around() -> void:
 		var distance := to.length()
 		if distance > sight or (distance > AT_ITS_SHOULDER and to.normalized().dot(ahead) < sideways):
 			continue
-		# The head or the chest, with nothing of the level in between.
+		# The head or the chest, with nothing of the level in between; who sits
+		# in a vehicle is seen in it, and it is the vehicle that is shot.
 		var seen := false
+		var through: Array[RID] = []
+		var riding: Variant = other.body.get(&"riding")
+		if riding is CollisionObject3D:
+			through.append((riding as CollisionObject3D).get_rid())
 		for drop: float in [0.0, 0.5]:
-			if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, head + Vector3.DOWN * drop, WORLD)).is_empty():
+			if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, head + Vector3.DOWN * drop, WORLD, through)).is_empty():
 				seen = true
 				break
 		if not seen:

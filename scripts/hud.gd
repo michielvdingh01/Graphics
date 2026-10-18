@@ -22,6 +22,7 @@ const ARC_SAME := deg_to_rad(20.0)
 const WATCH_RADIUS := 0.105
 const WATCH_NEAR := 70.0
 const LAND := preload("res://scripts/land.gd")
+const VEHICLE_HUD := preload("res://scripts/vehicle_hud.gd")
 ## Under this share of full health the red at the edges of the screen
 ## breathes: this many times a second, by this much of its strength either way.
 const PULSE_BELOW := 0.3
@@ -166,6 +167,7 @@ var _hit_arcs := HitArcs.new()
 ## the word for a player who stands where the watch does not see him.
 var _watchers := Watchers.new()
 var _shade_label := Label.new()
+var _vehicle_hud: Control = VEHICLE_HUD.new()
 ## The hits that still show where they came from. For each: `bearing`, the
 ## direction it came from in the world, level with the floor, which the arc
 ## keeps pointing at while the player turns; `age` in seconds; and `strength`,
@@ -269,6 +271,8 @@ func _ready() -> void:
 	_shade_label.modulate.a = 0.0
 	_place(_shade_label, Control.PRESET_CENTER_BOTTOM, 96)
 
+	_place(_vehicle_hud, Control.PRESET_FULL_RECT, 0)
+
 	_curtain.color = Color.BLACK
 	_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place(_curtain, Control.PRESET_FULL_RECT, 0)
@@ -290,6 +294,7 @@ func _place(control: Control, preset: Control.LayoutPreset, margin := MARGIN) ->
 
 func _bind() -> void:
 	_player = get_tree().get_first_node_in_group("player")
+	_vehicle_hud.player = _player
 	_player.health_changed.connect(_on_health_changed)
 	_player.damaged.connect(func(amount: float) -> void: _hurt = minf(_hurt + amount / 25.0, 1.0))
 	_player.hit_from.connect(_on_hit_from)
@@ -347,8 +352,12 @@ func _process(delta: float) -> void:
 	var spread := tan(deg_to_rad(weapons.current_spread_deg()))
 	_crosshair.gap = 3.0 + spread / tan(deg_to_rad(_player.camera.fov * 0.5)) * half_height
 	_crosshair.opacity = 1.0 - weapons.ads_blend
-	_crosshair.visible = not _player.dead
+	# Whoever drives has no weapon in hand: the vehicle says what there is.
+	var driving: bool = _player.riding != null and _player.seat == 0
+	_crosshair.visible = not _player.dead and not driving
 	_crosshair.queue_redraw()
+	for label: Control in [_ammo_label, _weapon_label, _grenades]:
+		label.visible = not driving
 
 	# Aiming a scoped weapon, the view goes black and opens again as a circle.
 	var scope: float = weapons.scope_blend()

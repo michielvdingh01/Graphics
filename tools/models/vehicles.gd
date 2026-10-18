@@ -17,6 +17,15 @@ extends "res://tools/model_builder.gd"
 ## and "Far" the same vehicle from FAR_FROM metres on, put together from the
 ## same description with everything small left out of it and everything
 ## round made coarse: see _twice().
+##
+## What turns when it is driven is a part of its own, with its pivot where
+## it turns: a wheel ("Wheel..."), an axle with the wheels on it ("Axle..."),
+## the wheels a track runs over ("Road...", "Idler...", "Sprocket..."), the
+## steering wheel, and a turret with its gun. Of those only the turret and
+## the gun have a far model of their own, under the near one: from afar a
+## wheel that does not turn is a wheel. A model says on its root what
+## scripts/vehicle.gd has to know of it (see _layout): where its wheels touch
+## the ground and which of them steer and drive, and where its seats are.
 
 const ARMY := "army_green"
 ## Steel that was never painted, or not for long: a chassis, a track.
@@ -57,6 +66,8 @@ const FAR_BAR := 0.07
 const FAR_ROUND := 0.2
 ## How many sides something round has in the far model, at most.
 const FAR_SIDES := 8
+## The parts that have a far model of their own, which hangs under them.
+const FAR_PARTS := {"Turret": "TurretFar", "Gun": "GunFar"}
 
 ## True while the far model of a vehicle is being built, and true if that
 ## one keeps its bare iron: a tank is half tracks, under a lorry nobody looks.
@@ -68,6 +79,17 @@ var _far_iron := false
 ## of the sun comes through it.
 var _cloths := {}
 var _dye := Color(0.2, 0.5, 0.9, 0.0)
+## What the vehicle being built says of itself on its root, once it is
+## built: "wheels", each {part, at, radius, steers, drives, side}, where
+## `at` is the middle of the wheel as it hangs and `side` is -1 on its left;
+## and "seats", each {role, at, eye, out, exposed, turret}: the hips of who
+## sits there, the eyes, where they get out, whether a shot reaches them,
+## and whether the seat turns with the turret. A role is "driver" (who on a
+## tank lays the gun as well) or "passenger" (who has their own weapons).
+## And "hull": what of it is in the way, as boxes {at, size, part}, with the
+## part they turn with if they do, "Turret" or "Gun", or as the corners of a
+## shape that is not a box {points, part}.
+var _layout := {}
 
 
 func _describe() -> void:
@@ -82,18 +104,26 @@ func _describe() -> void:
 ## that one.
 func _twice(build: Callable, iron := false) -> void:
 	_far = false
+	_layout = {"wheels": [], "seats": [], "hull": []}
 	build.call()
-	var near := _parts["Body"].node as MeshInstance3D
-	near.visibility_range_end = FAR_FROM
-	near.visibility_range_end_margin = FAR_MARGIN
+	for part_name: String in _parts:
+		if not part_name.ends_with("Marks"):
+			var near := _parts[part_name].node as MeshInstance3D
+			near.visibility_range_end = FAR_FROM
+			near.visibility_range_end_margin = FAR_MARGIN
+	tag("wheels", _layout.wheels)
+	tag("seats", _layout.seats)
+	tag("hull", _layout.hull)
 	part("Far")
-	var far := _parts["Far"].node as MeshInstance3D
-	far.visibility_range_begin = FAR_FROM
-	far.visibility_range_begin_margin = FAR_MARGIN
 	_far = true
 	_far_iron = iron
 	_m = Transform3D()
 	build.call()
+	for part_name: String in ["Far"] + FAR_PARTS.values():
+		if _parts.has(part_name):
+			var far := _parts[part_name].node as MeshInstance3D
+			far.visibility_range_begin = FAR_FROM
+			far.visibility_range_begin_margin = FAR_MARGIN
 	_far = false
 	_m = Transform3D()
 	part("Body")
@@ -103,6 +133,44 @@ func _twice(build: Callable, iron := false) -> void:
 func model(model_name: String) -> void:
 	if not _far:
 		super(model_name)
+
+
+## Builds what follows into the part `part_name` of the near model, which
+## turns from `pivot` (in the coordinates of the model) along with `parent`;
+## of the far model into its far part if it has one, else into "Far".
+func _on(part_name: String, pivot := Transform3D(), parent := "") -> void:
+	if not _far:
+		part(part_name, pivot, parent)
+	elif FAR_PARTS.has(part_name):
+		part(FAR_PARTS[part_name], pivot, part_name)
+	else:
+		part("Far")
+
+
+## A wheel that touches the ground, for scripts/vehicle.gd: its middle `at`
+## as it hangs, its radius, and the part that turns with it.
+func _touches(part_name: String, at: Vector3, radius: float, steers: bool, drives := true) -> void:
+	if not _far:
+		_layout.wheels.append({"part": part_name, "at": at, "radius": radius, "steers": steers, "drives": drives, "side": signf(at.x)})
+
+
+## A box of what is in the way, for scripts/vehicle.gd: see _layout.
+func _solid(at: Vector3, size: Vector3, turns_with := "") -> void:
+	if not _far:
+		_layout.hull.append({"at": at, "size": size, "part": turns_with})
+
+
+## What is in the way as the smallest shape round `points`: a hull with its
+## ends sloped, as a box is not.
+func _solid_round(points: PackedVector3Array, turns_with := "") -> void:
+	if not _far:
+		_layout.hull.append({"points": points, "part": turns_with})
+
+
+## A seat, for scripts/vehicle.gd: see _layout.
+func _sits(role: String, at: Vector3, eye: Vector3, out: Vector3, exposed: bool, on_turret := false) -> void:
+	if not _far:
+		_layout.seats.append({"role": role, "at": at, "eye": eye, "out": out, "exposed": exposed, "turret": on_turret})
 
 
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
@@ -192,8 +260,11 @@ func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> v
 func _stencil(mark: Rect2, xf: Transform3D, size: Vector2) -> void:
 	if _far:
 		return
-	part("Marks")
-	var marks := _parts["Marks"].node as MeshInstance3D
+	# What is painted on the turret turns with it.
+	var back := _current
+	var on := "TurretMarks" if back in ["Turret", "Gun"] else "Marks"
+	part(on, _parts["Turret"].frame if on == "TurretMarks" else Transform3D(), "Turret" if on == "TurretMarks" else "")
+	var marks := _parts[on].node as MeshInstance3D
 	marks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Nobody reads a number from further off than this.
 	marks.visibility_range_end = 70.0
@@ -203,7 +274,7 @@ func _stencil(mark: Rect2, xf: Transform3D, size: Vector2) -> void:
 	var out := frame.basis.z
 	_quad(_tool(MARKS, _part, frame.origin), [frame * Vector3(-half.x, -half.y, 0.003), frame * Vector3(half.x, -half.y, 0.003), frame * Vector3(half.x, half.y, 0.003), frame * Vector3(-half.x, half.y, 0.003)],
 		[out, out, out, out], [Vector2(mark.position.x, mark.end.y), mark.end, Vector2(mark.end.x, mark.position.y), mark.position])
-	part("Body")
+	part(back)
 
 
 ## The same on the side of a vehicle: at `at`, on the side `side` (-1 left,
@@ -310,16 +381,20 @@ func _seat(at: Vector3, wide: float) -> void:
 
 
 ## A steering wheel on its column, the wheel at `at`.
+## The wheel turns on its column, as a part of its own called "Steering",
+## about its own Y.
 func _steering(at: Vector3, radius: float) -> void:
 	if _far:
 		return
 	var axis := Vector3(0, 0.62, 0.78)
 	_bar(IRON, at - axis * 0.45, at, 0.016, 6)
-	_hoop(IRON, at, axis, radius, 0.012)
 	var frame := _up_along(axis)
+	_on("Steering", Transform3D(frame, at))
+	_hoop(IRON, at, axis, radius, 0.012)
 	for spoke in 3:
 		var turn := TAU * spoke / 3.0
 		_bar(IRON, at, at + (frame.x * cos(turn) + frame.z * sin(turn)) * radius, 0.008, 4)
+	_on("Body")
 
 
 # --- The field car -------------------------------------------------------------------
@@ -331,11 +406,18 @@ func _steering(at: Vector3, radius: float) -> void:
 ## the side.
 func _jeep() -> void:
 	model("jeep")
+	_solid(Vector3(0, 0.78, 0.0), Vector3(1.48, 0.62, 3.5))
 	_dye = Color(0.25, 0.5, 0.85, 0.0)
 	var r := 0.37
 	for x: float in [-0.63, 0.63]:
 		for z: float in [-1.02, 1.01]:
+			# The front wheels steer each on its own; the back two turn
+			# together on their axle.
+			var turns := ("WheelFL" if x < 0.0 else "WheelFR") if z < 0.0 else "AxleR"
+			_on(turns, Transform3D(Basis(), Vector3(x, r, z) if z < 0.0 else Vector3(0, r, z)))
 			_wheel(Vector3(x, r, z), r, 0.16, Vector3(signf(x), 0, 0))
+			_touches(turns, Vector3(x, r, z), r, z < 0.0)
+			_on("Body")
 			# The spring the axle hangs in.
 			_piece(IRON, Vector3(x * 0.72, 0.4, z), Vector3(0.05, 0.05, 0.9))
 		_plate(IRON, Vector3(x * 0.58, 0.5, -0.05), Vector3(0.06, 0.1, 3.2))
@@ -398,6 +480,14 @@ func _jeep() -> void:
 	# Where they sit, what they drive it with, and what hangs on the back.
 	for x: float in [-0.36, 0.36]:
 		_seat(Vector3(x, 0.8, -0.02), 0.44)
+	# The driver on the left, behind the wheel; one beside him, two on the
+	# bench behind. Nothing keeps a shot off any of them.
+	# The eyes a little over the top of the screen, which would otherwise
+	# cut the view in two.
+	_sits("driver", Vector3(-0.36, 0.92, 0.02), Vector3(-0.36, 1.74, 0.02), Vector3(-1.45, 0.0, -0.1), true)
+	_sits("passenger", Vector3(0.36, 0.92, 0.02), Vector3(0.36, 1.74, 0.02), Vector3(1.45, 0.0, -0.1), true)
+	for x: float in [-0.3, 0.3]:
+		_sits("passenger", Vector3(x, 0.95, 1.06), Vector3(x, 1.66, 1.05), Vector3(signf(x) * 1.45, 0.0, 1.1), true)
 	_block(CANVAS, Vector3(0, 0.88, 1.02), Vector3(1.06, 0.1, 0.4), 0.035)
 	_block(CANVAS, Vector3(0, 1.1, 1.38), Vector3(1.06, 0.36, 0.07), 0.03, Vector3(6, 0, 0))
 	_steering(Vector3(-0.36, 1.15, -0.26), 0.19)
@@ -438,13 +528,23 @@ func _jeep() -> void:
 ## open at the back. Ten wheels, the rear eight two by two on two axles.
 func _truck() -> void:
 	model("truck")
+	_solid(Vector3(0, 1.5, -2.1), Vector3(2.2, 1.7, 2.5))
+	_solid(Vector3(0, 1.95, 1.55), Vector3(2.4, 2.5, 4.0))
 	_dye = Color(0.25, 0.5, 0.85, 0.0)
 	var r := 0.5
 	for x: float in [-1.0, 1.0]:
+		var front := "WheelFL" if x < 0.0 else "WheelFR"
+		_on(front, Transform3D(Basis(), Vector3(x * 0.94, r, -2.25)))
 		_wheel(Vector3(x * 0.94, r, -2.25), r, 0.24, Vector3(x, 0, 0))
+		_touches(front, Vector3(x * 0.94, r, -2.25), r, true)
+		# The pairs at the back turn together on their axles.
 		for z: float in [1.15, 2.3]:
+			var axle := "AxleR1" if z < 2.0 else "AxleR2"
+			_on(axle, Transform3D(Basis(), Vector3(0, r, z)))
 			_wheel(Vector3(x * 1.0, r, z), r, 0.22, Vector3(x, 0, 0))
 			_wheel(Vector3(x * 0.73, r, z), r, 0.22, Vector3(x, 0, 0), 0)
+			_touches(axle, Vector3(x * 0.865, r, z), r, false)
+		_on("Body")
 		# The frame, the springs of the bogie, and a flap behind its wheels.
 		_plate(IRON, Vector3(x * 0.42, 0.84, 0.1), Vector3(0.08, 0.2, 6.6))
 		_piece(IRON, Vector3(x * 0.6, 0.62, 1.72), Vector3(0.09, 0.12, 1.5))
@@ -500,6 +600,12 @@ func _truck() -> void:
 	_block(CANVAS, Vector3(0, 1.3, -0.92), Vector3(1.8, 0.14, 0.5), 0.04)
 	_block(CANVAS, Vector3(0, 1.62, -0.62), Vector3(1.8, 0.5, 0.09), 0.03, Vector3(6, 0, 0))
 	_steering(Vector3(-0.52, 1.72, -1.24), 0.23)
+	# The driver and one beside him in the cab, steel to their waists; two
+	# on the bed under the tilt, who look out at the back.
+	_sits("driver", Vector3(-0.52, 1.42, -0.88), Vector3(-0.52, 2.12, -0.95), Vector3(-1.75, 0.0, -1.1), true)
+	_sits("passenger", Vector3(0.5, 1.42, -0.88), Vector3(0.5, 2.12, -0.95), Vector3(1.75, 0.0, -1.1), true)
+	for x: float in [-0.55, 0.55]:
+		_sits("passenger", Vector3(x, 1.32, 2.6), Vector3(x, 2.25, 2.7), Vector3(x, 0.0, 4.6), false)
 	_dye = Color(0.12, 0.62, 0.9, 0.6)
 	var top := _tool(CANVAS, _part, Vector3(0, 2.5, -1.1))
 	for i in 4:
@@ -689,21 +795,39 @@ func _track(x: float) -> void:
 ## its right. Its number is its own, and the level paints it on.
 func _tank(tank: String, traverse_deg: float) -> void:
 	model(tank)
+	# The hull, its belly between the tracks and its ends sloped as the
+	# tracks rise to the idler and the sprocket: it rides up out of a pit
+	# instead of digging its corners into the side of it.
+	var hull := PackedVector3Array()
+	for x: float in [-1.5, 1.5]:
+		for corner: Vector2 in [Vector2(-2.2, 0.35), Vector2(2.1, 0.35), Vector2(-3.0, 0.85), Vector2(-3.0, 1.25), Vector2(-2.05, 1.55), Vector2(3.0, 0.8), Vector2(3.0, 1.25), Vector2(2.55, 1.55)]:
+			hull.append(Vector3(x, corner.y, corner.x))
+	_solid_round(hull)
+	_solid(Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0), "Turret")
+	_solid(Vector3(0, 2.0, -3.3), Vector3(0.3, 0.3, 3.6), "Gun")
 	_dye = Color(0.3, 0.55, 0.8, 0.0)
 	for side: float in [-1.0, 1.0]:
 		var x := side * 1.22
 		_track(x)
 		# The road wheels on their arms, the idler in front, the sprocket
-		# behind and the rollers the track comes back over.
+		# behind and the rollers the track comes back over. Each wheel turns
+		# on its own; the track runs flat under the road wheels, a little
+		# under their rims.
+		var lr := "L" if side < 0.0 else "R"
 		for i in 6:
 			var z := -2.12 + i * 0.83
+			_on("Road%s%d" % [lr, i], Transform3D(Basis(), Vector3(x, 0.43, z)))
 			_turned(IRON, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.345, 0.02), Vector2(0.345, 0.45), Vector2(0.27, 0.47)]), 10)
 			_turned(ARMY, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.28, 0.46), Vector2(0.25, 0.4), Vector2(0.14, 0.4), Vector2(0.11, 0.5), Vector2(0, 0.5)]), 10)
+			_touches("Road%s%d" % [lr, i], Vector3(x, 0.43, z), 0.41, false)
+		_on("Idler" + lr, Transform3D(Basis(), Vector3(x, 0.64, -2.82)))
 		_turned(ARMY, Vector3(x - side * 0.22, 0.64, -2.82), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.31, 0.0), Vector2(0.31, 0.46), Vector2(0.24, 0.4), Vector2(0.1, 0.44), Vector2(0, 0.44)]), 14)
+		_on("Sprocket" + lr, Transform3D(Basis(), Vector3(x, 0.64, 2.74)))
 		_turned(IRON, Vector3(x - side * 0.2, 0.64, 2.74), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.3, 0.0), Vector2(0.3, 0.42), Vector2(0.16, 0.42), Vector2(0.12, 0.5), Vector2(0, 0.5)]), 14)
 		for tooth in 12:
 			var turn := TAU * tooth / 12.0
 			_box(IRON, _m * Transform3D(Basis(Vector3.RIGHT, turn), Vector3(x + side * 0.21, 0.64, 2.74)) * Transform3D(Basis(), Vector3(0, 0.32, 0)), Vector3(0.03, 0.07, 0.06), _part)
+		_on("Body")
 		for z: float in [1.85, 0.75, -0.4, -1.55]:
 			_bar(IRON, Vector3(x - side * 0.15, 0.87, z), Vector3(x + side * 0.2, 0.87, z), 0.1, 10)
 		# The guard over the track, bent down in front and behind.
@@ -759,23 +883,31 @@ func _tank(tank: String, traverse_deg: float) -> void:
 	_plate(ARMY, Vector3(0.49, 0.99, 3.0), Vector3(0.8, 0.03, 0.2))
 	_piece(IRON, Vector3(0.49, 1.25, 3.09), Vector3(0.8, 0.03, 0.015))
 
-	# The turret, on its ring.
+	# The turret, on its ring: a part that turns about its Y, and the gun a
+	# part in it that lifts about its X.
 	_bar(ARMY, Vector3(0, 1.5, -0.2), Vector3(0, 1.62, -0.2), 0.98, 20)
 	_m = Transform3D(Basis(Vector3.UP, -deg_to_rad(traverse_deg)), Vector3(0, 0, -0.2))
+	_on("Turret", Transform3D(Basis(), Vector3(0, 1.62, -0.2)))
 	_block(ARMY, Vector3(0, 1.98, 0.25), Vector3(1.9, 0.74, 2.3), 0.2)
 	_block(ARMY, Vector3(0, 1.96, -1.0), Vector3(1.46, 0.66, 0.84), 0.2)
 	# The gun: its mantlet under a cover of canvas, the barrel with the
-	# sleeve that draws its fumes off, and a bag over its muzzle.
+	# sleeve that draws its fumes off, and on the one that is laid up a bag
+	# over its muzzle.
+	_on("Gun", Transform3D(_m.basis, _m * Vector3(0, 1.965, -1.43)), "Turret")
 	_dye = Color(0.3, 0.6, 0.85, 0.0)
 	_block(CANVAS, Vector3(0, 1.96, -1.43), Vector3(1.0, 0.62, 0.36), 0.17)
 	_turned(CANVAS, Vector3(0, 1.965, -1.52), Vector3.FORWARD, PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.2, 0.16), Vector2(0.13, 0.3), Vector2(0.105, 0.42)]), 12, true)
 	_bar(ARMY, Vector3(0, 1.965, -1.9), Vector3(0, 1.975, -3.2), 0.085, 12)
 	_bar(ARMY, Vector3(0, 1.975, -3.2), Vector3(0, 1.98, -3.82), 0.118, 12)
 	_bar(ARMY, Vector3(0, 1.98, -3.82), Vector3(0, 1.99, -5.0), 0.076, 12)
-	_dye = Color(0.45, 0.62, 0.85, 0.0)
-	_turned(CANVAS, Vector3(0, 1.99, -4.86), Vector3.FORWARD, PackedVector2Array([Vector2(0.088, 0.0), Vector2(0.095, 0.05), Vector2(0.095, 0.3), Vector2(0.07, 0.38), Vector2(0, 0.39)]), 10, true)
+	if traverse_deg != 0.0:
+		_dye = Color(0.45, 0.62, 0.85, 0.0)
+		_turned(CANVAS, Vector3(0, 1.99, -4.86), Vector3.FORWARD, PackedVector2Array([Vector2(0.088, 0.0), Vector2(0.095, 0.05), Vector2(0.095, 0.3), Vector2(0.07, 0.38), Vector2(0, 0.39)]), 10, true)
+	elif not _far:
+		marker("Muzzle", _m * Transform3D(Basis(), Vector3(0, 1.99, -5.05)), "Gun")
 	_dye = Color(0.3, 0.55, 0.8, 0.0)
 	_bar(IRON, Vector3(0.3, 1.92, -1.5), Vector3(0.3, 1.92, -1.95), 0.022, 6)
+	_on("Turret")
 	# On its roof: the commander's cupola with its sights and its gun, the
 	# loader's hatch, a lamp, two aerials.
 	_turned(ARMY, Vector3(0.45, 2.34, 0.3), Vector3.UP, PackedVector2Array([Vector2(0.34, 0), Vector2(0.34, 0.15), Vector2(0.27, 0.21), Vector2(0, 0.21)]), 14)
@@ -816,6 +948,12 @@ func _tank(tank: String, traverse_deg: float) -> void:
 	for x: float in [-1.0, 1.0]:
 		_stencil_side(STAR, Vector3(x * 1.083, 1.98, -0.1), x, Vector2(0.36, 0.36))
 	_m = Transform3D()
+	_on("Body")
+	# Who drives it lays the gun as well, from inside the hull; the one in
+	# the cupola stands with his top half out of it, and turns with the
+	# turret.
+	_sits("driver", Vector3(0.45, 0.95, -1.55), Vector3(-0.4, 2.2, -1.2), Vector3(2.4, 0.0, -1.2), false)
+	_sits("passenger", Vector3(0.45, 1.75, 0.1), Vector3(0.45, 2.95, 0.15), Vector3(-2.4, 0.0, 0.4), true, true)
 	_stencil(PLATE_50, Transform3D(Basis(Vector3.RIGHT, deg_to_rad(57.2)) * Basis(Vector3.UP, PI), Vector3(-0.86, 1.292, -2.42)), Vector2(0.22, 0.22))
 	_stencil(ARROW, Transform3D(Basis(), Vector3(-0.2, 1.3, 2.925)), Vector2(0.2, 0.2))
 	_stencil(NO_STEP, Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0.5, 1.572, 1.0)), Vector2(0.36, 0.09))

@@ -59,6 +59,11 @@ const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
 ## The node the vehicles of the level stand under, and how many there are.
 var _vehicles: Node3D
 var _vehicle_count := 0
+## The vehicle that can be driven whose number and load are being built, and
+## whether what is built now is on its turret: it goes into a mesh of its own
+## that moves with it, see _trim() and _commit().
+var _riding: Node3D
+var _on_turret := false
 ## How many shelter() there are, for their names.
 var _shelters := 0
 ## How far before the glass of the level a shot stops, on the wall the glass
@@ -92,6 +97,8 @@ func _dice(at: Vector2, salt := 0) -> RandomNumberGenerator:
 ## strand of wire, a toggle. They throw no shadow and are not drawn from
 ## further off than TRIM_REACH, see _commit().
 func _trim(mat: String, at: Vector3) -> SurfaceTool:
+	if _riding:
+		return _still(_tool_named("|vehicle %s%s/%s" % [_riding.name, " turret" if _on_turret else "", mat]), mat)
 	@warning_ignore("integer_division")
 	return _still(_tool_named("|trim %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.z) / GROUND_BLOCK, mat]), mat)
 
@@ -114,6 +121,19 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 
 
 func _commit(zone_name: String, kind: String) -> void:
+	if kind.begins_with("vehicle "):
+		# A vehicle that carries nothing of some material still asked for a
+		# surface of it.
+		var kept := 0
+		for key: String in _tools.keys():
+			if key.begins_with("%s|%s/" % [zone_name, kind]):
+				var arrays: Array = (_tools[key] as SurfaceTool).commit_to_arrays()
+				if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null or (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+					_tools.erase(key)
+				else:
+					kept += 1
+		if kept == 0:
+			return
 	super(zone_name, kind)
 	if kind.begins_with("trim "):
 		var small := _root.get_child(0) as MeshInstance3D
@@ -127,6 +147,22 @@ func _commit(zone_name: String, kind: String) -> void:
 		column.extra_cull_margin = 12.0
 	elif kind == "glass" and zone_name == "" and _glass_reveal > 0.0:
 		(_root.get_child(0) as MeshInstance3D).set_meta(&"reveal", _glass_reveal)
+	elif kind.begins_with("vehicle "):
+		# The number and the load of a vehicle that can be driven go along
+		# with it, and what is on its turret turns with that: see
+		# scripts/vehicle.gd. The mesh is in the coordinates of the level.
+		var load := _root.get_child(0) as MeshInstance3D
+		var ride: Node3D = _vehicles.get_node(NodePath(kind.get_slice(" ", 1)))
+		load.owner = null
+		_root.remove_child(load)
+		_add(load, ride)
+		load.name = "TurretLoad" if kind.ends_with(" turret") else "Load"
+		load.transform = ride.transform.affine_inverse()
+		load.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		load.visibility_range_end = TRIM_REACH
+		load.visibility_range_end_margin = 8.0
+		if kind.ends_with(" turret"):
+			load.set_meta(&"on_turret", true)
 
 
 ## The light under a roof that keeps the sky off: in a tent, under a net,
@@ -1628,21 +1664,38 @@ func smoke(at: Vector3, height: float) -> void:
 
 ## A vehicle of tools/models/vehicles.gd on the ground at `at`: "jeep",
 ## "truck", "tank" or "tank_b", its nose towards `yaw_deg` (0 looks along
-## +Z). It rests on the ground as the ground lies.
-func vehicle(kind: String, at: Vector2, yaw_deg: float) -> void:
+## +Z). It rests on the ground as the ground lies. Unless it is `parked`,
+## it can be driven (scripts/vehicle.gd): its number and its load go with it
+## and its colliders are its own; a tank_b is a tank whose turret is turned.
+## A parked one is part of the level, as anything else that stands in it:
+## one with a sheet thrown over it, say.
+func vehicle(kind: String, at: Vector2, yaw_deg: float, parked := false) -> void:
 	var facts: Dictionary = VEHICLES[kind]
 	# A model's nose points along -Z.
 	var xf := resting(at.x, at.y, yaw_deg + 180.0, facts.span)
-	var node: Node3D = (load("res://scenes/models/%s.scn" % kind) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
-	node.name = kind.to_pascal_case()
-	node.transform = xf
+	var model := kind if parked or kind != "tank_b" else "tank"
+	var node: Node3D = (load("res://scenes/models/%s.scn" % model) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
 	if _vehicles == null:
 		_vehicles = Node3D.new()
 		_vehicles.name = "Vehicles"
 		_add(_vehicles, _root)
-	_add(node, _vehicles)
-	for part: Array in facts.boxes:
-		_collide_box(xf * Transform3D(Basis(), part[0]), part[1], "metal")
+	if parked:
+		node.name = kind.to_pascal_case()
+		node.transform = xf
+		_add(node, _vehicles)
+		for part: Array in facts.boxes:
+			_collide_box(xf * Transform3D(Basis(), part[0]), part[1], "metal")
+	else:
+		var body := RigidBody3D.new()
+		body.name = kind.to_pascal_case()
+		body.transform = xf
+		body.set_script(load("res://scripts/vehicle.gd"))
+		body.set("kind", model)
+		body.set("turret_deg", TRAVERSE.get(kind, 0.0))
+		_add(body, _vehicles)
+		node.name = "Model"
+		_add(node, body)
+		_riding = body
 	cover("earth", at, facts.span * 1.6, 0.7)
 	# No two are the same vehicle: each has its number, and what it carries.
 	_vehicle_count += 1
@@ -1657,6 +1710,8 @@ func vehicle(kind: String, at: Vector2, yaw_deg: float) -> void:
 		_:
 			_load_tank(xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2)), xf, own)
 	_small = false
+	_riding = null
+	_on_turret = false
 
 
 ## A part of the sheet of stencils, painted `size` wide and high on a face
@@ -1707,8 +1762,10 @@ func _number(kind: String, xf: Transform3D, serial: int) -> void:
 			_stencilled(number, xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.52, 0.86, -3.446)), 0.085, begins)
 		_:
 			var turret := xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2))
+			_on_turret = true
 			for side: float in [-1.0, 1.0]:
 				_stencilled(number.right(2), turret * _on_side(Vector3(side * 1.081, 1.98, 0.6), side), 0.34)
+			_on_turret = false
 
 
 ## A box that lies on a vehicle: of `mat`, `size` across, its middle at
@@ -1784,10 +1841,13 @@ func _load_tank(turret: Transform3D, hull: Transform3D, own: RandomNumberGenerat
 	if own.randf() < 0.5:
 		# A baulk of timber along the guard, for when it bogs.
 		_cylinder("wood", hull * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3((1.0 if own.randf() < 0.5 else -1.0) * 1.22, 1.6, -1.1)), 0.085, 2.2, SLIGHT, 0.085, 7)
+	# What lies on the turret goes round with it.
+	_on_turret = true
 	if own.randf() < 0.5:
-		_bundle(st, turret * Vector3(own.randf_range(-0.3, 0.3), 2.21, 1.62), turret.basis.x.normalized(), 0.8, 0.1, Color(0.2, own.randf_range(0.6, 0.85), 1.0, 0.0))
+		_bundle(_trim(CANVAS, turret.origin), turret * Vector3(own.randf_range(-0.3, 0.3), 2.21, 1.62), turret.basis.x.normalized(), 0.8, 0.1, Color(0.2, own.randf_range(0.6, 0.85), 1.0, 0.0))
 	if own.randf() < 0.4:
 		helmet(turret * Vector3(-0.45, 2.38, 0.25), own.randf_range(0, 360))
 		_small = true
+	_on_turret = false
 	if own.randf() < 0.4:
 		_stowed_box(ARMY, hull, Vector3(-0.3, 1.72, 2.2), Vector3(0.34, 0.3, 0.15), own.randf_range(-20, 20))

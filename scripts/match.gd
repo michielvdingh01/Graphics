@@ -67,6 +67,7 @@ const SCENE := "res://scenes/%s.tscn"
 ## What somebody was hit with that is no weapon of the loadout.
 const MELEE := -2
 const BLAST := -3
+const RUN_OVER := -4
 ## The physics layers of the two sides, 9 and 10: a shot is looked for on
 ## the layer of the other side, and so passes through one's own.
 const SIDES: Array[int] = [1 << 8, 1 << 9]
@@ -456,6 +457,8 @@ func score() -> Vector2i:
 func hit(by: Node, target: Object, amount: float, at: Vector3, direction: Vector3, weapon := -1, head := false) -> bool:
 	if plays(target):
 		return harm(number(target), amount, at, direction, number(by), weapon, head)
+	if target.has_method("struck_by"):
+		target.struck_by(number(by))
 	return Net.damage(target, amount, at, direction)
 
 

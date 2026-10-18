@@ -9,11 +9,11 @@ extends Node
 signal exploded(position: Vector3)
 
 const WORLD := 1
-## Layers a blast looks for bodies on: player, enemy, debris, explosive and
-## breakable. The level itself is one body of thousands of shapes with
-## nothing to say to a blast, which is why whatever explodes or breaks is on
-## a layer of its own as well.
-const REACHED := 0b111110
+## Layers a blast looks for bodies on: player, enemy, debris, explosive,
+## breakable and vehicle. The level itself is one body of thousands of shapes
+## with nothing to say to a blast, which is why whatever explodes or breaks
+## is on a layer of its own as well.
+const REACHED := 0b1111110
 ## The most shapes a blast looks at. A lamp is one or two of them, a pile of
 ## crates up to three, and a dozen piles can stand around one barrel.
 const MOST := 96
@@ -143,6 +143,8 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 			# a player what it does to anybody.
 			Match.harm(Match.number(body), damage * strength, middle, away * 2.5, by, Match.BLAST)
 		elif body.has_method("take_blast"):
+			if body.has_method("struck_by"):
+				body.struck_by(by)
 			body.take_blast(damage * strength, middle, away * 2.5)
 		elif body.has_method("take_damage"):
 			body.take_damage(damage * strength * (PLAYER_SHARE if player else 1.0), middle, away * 2.5)
@@ -151,7 +153,7 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 			body.shove(away * PUSH * strength)
 		elif body is CharacterBody3D:
 			body.velocity += away * PUSH * strength
-		elif body is RigidBody3D:
+		elif body is RigidBody3D and not body.has_method("take_blast"):
 			body.apply_central_impulse(away * PUSH * strength * body.mass)
 	_sear(space, position, radius, through)
 
