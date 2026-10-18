@@ -459,6 +459,13 @@ func _run_over() -> void:
 		waited += 0.1
 	Input.action_release("move_forward")
 	check(victim.health < 100.0, "run over: somebody in its way at %.0f km/h is hurt (%.0f left)" % [jeep.speed * 3.6, victim.health])
+	# Who was run down and is then taken away, as a robot or a bot that
+	# falls is, is forgotten: it stopped the game with a script error.
+	victim.queue_free()
+	Input.action_press("move_forward")
+	await seconds(1.5)
+	Input.action_release("move_forward")
+	check(jeep._run_over.is_empty(), "run over: once they are gone it forgets them, and drives on")
 	await _press("use")
 
 
