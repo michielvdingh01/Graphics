@@ -377,17 +377,25 @@ func judge() -> void:
 ## or more in an arena that is big enough for it.
 func most(kind: String, level: String) -> int:
 	var numbers: Dictionary = kinds.get(kind, {})
-	var arena: Dictionary = _arenas.get(level, {})
+	var arena := _arena_numbers(level)
 	return maxi(int(numbers.get("most", 1)), int(arena.get("most", 0)) * _share(kind))
 
 
 ## How many play a side there, or in all, when nothing else is asked for.
 func usual(kind: String, level: String) -> int:
 	var numbers: Dictionary = kinds.get(kind, {})
-	var arena: Dictionary = _arenas.get(level, {})
+	var arena := _arena_numbers(level)
 	if arena.has("size"):
 		return clampi(int(arena.size) * _share(kind), int(numbers.get("least", 1)), most(kind, level))
 	return int(numbers.get("size", 1))
+
+
+## The numbers of the arena of `level` in assets/match.json. A level that is
+## another played otherwise (the dunes by night) says "like" and has those
+## of that one.
+func _arena_numbers(level: String) -> Dictionary:
+	var arena: Dictionary = _arenas.get(level, {})
+	return _arenas.get(str(arena.like), {}) if arena.has("like") else arena
 
 
 ## What the numbers of an arena, which are a side's, come to in a kind: as
@@ -743,7 +751,10 @@ func _set_out_specials() -> void:
 	var kinds := [ARENA.Hideout.OFF_THE_WAY, ARENA.Hideout.UP, ARENA.Hideout.IN_THE_OPEN]
 	var spots: PackedVector3Array = arena.hideouts(kinds.slice(0, weapons.size()))
 	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(ARENAS)) if FileAccess.file_exists(ARENAS) else null
-	var placed: Dictionary = said.get(setup.level, {}).get("specials", {}) if said is Dictionary else {}
+	var own: Dictionary = said.get(setup.level, {}) if said is Dictionary else {}
+	if own.has("like"):
+		own = said.get(str(own.like), {})
+	var placed: Dictionary = own.get("specials", {})
 	for i in mini(weapons.size(), spots.size()):
 		var data := weapons[i]
 		var stand: Node3D = STASH.new()

@@ -1,0 +1,760 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/sweep.gd" id="1_qf6bs"]
+[ext_resource type="Shader" path="res://shaders/light_beam.gdshader" id="2_i88vd"]
+[ext_resource type="Script" path="res://scripts/campfire.gd" id="3_adh2u"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jyny5"]
+render_priority = 0
+shader = ExtResource("2_i88vd")
+shader_parameter/colour = Color(0.9, 0.94, 1, 1)
+shader_parameter/strength = 0.12
+shader_parameter/beam_length = 38.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_j3l0k"]
+material = SubResource("ShaderMaterial_jyny5")
+top_radius = 0.12
+bottom_radius = 2.4441795
+height = 38.0
+radial_segments = 16
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_c8kt0"]
+render_priority = 0
+shader = ExtResource("2_i88vd")
+shader_parameter/colour = Color(0.9, 0.94, 1, 1)
+shader_parameter/strength = 0.12
+shader_parameter/beam_length = 38.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_s63ie"]
+material = SubResource("ShaderMaterial_c8kt0")
+top_radius = 0.12
+bottom_radius = 2.4441795
+height = 38.0
+radial_segments = 16
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lb55d"]
+render_priority = 0
+shader = ExtResource("2_i88vd")
+shader_parameter/colour = Color(0.9, 0.94, 1, 1)
+shader_parameter/strength = 0.12
+shader_parameter/beam_length = 38.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_v27vb"]
+material = SubResource("ShaderMaterial_lb55d")
+top_radius = 0.12
+bottom_radius = 2.4441795
+height = 38.0
+radial_segments = 16
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mbjv6"]
+render_priority = 0
+shader = ExtResource("2_i88vd")
+shader_parameter/colour = Color(0.9, 0.94, 1, 1)
+shader_parameter/strength = 0.12
+shader_parameter/beam_length = 38.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_br64l"]
+material = SubResource("ShaderMaterial_mbjv6")
+top_radius = 0.12
+bottom_radius = 2.4441795
+height = 38.0
+radial_segments = 16
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[node name="Night" type="Node3D" unique_id=1869453521]
+
+[node name="Lights" type="Node3D" parent="." unique_id=1999451746]
+
+[node name="Bulb" type="OmniLight3D" parent="Lights" unique_id=992783857 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 118.88819, 6.6786065, 171.43346)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb2" type="OmniLight3D" parent="Lights" unique_id=1834793021 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140.28, 10.934132, 181.86)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb3" type="OmniLight3D" parent="Lights" unique_id=931868647 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 142.28, 7.7262025, 192.1)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb4" type="OmniLight3D" parent="Lights" unique_id=615261642 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 240, 8.583168, 197.5)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb5" type="OmniLight3D" parent="Lights" unique_id=1739942010 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 284.6417, 5.2385764, 153.87059)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb6" type="OmniLight3D" parent="Lights" unique_id=328711128 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 283.97968, 5.669059, 146.47134)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb7" type="OmniLight3D" parent="Lights" unique_id=1805108622 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 297.56656, 7.0708184, 112.11181)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb8" type="OmniLight3D" parent="Lights" unique_id=772141486 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 300.80292, 7.941604, 117.88224)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb9" type="OmniLight3D" parent="Lights" unique_id=374188514 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 296.48294, 7.1795235, 125.5675)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb10" type="OmniLight3D" parent="Lights" unique_id=1440141266 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 166.5, 9.32922, 113.5)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb11" type="OmniLight3D" parent="Lights" unique_id=1207660625 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 174.5, 9.32922, 113.5)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb12" type="OmniLight3D" parent="Lights" unique_id=1449959675 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 182.5, 9.32922, 113.5)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb13" type="OmniLight3D" parent="Lights" unique_id=1453745475 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 192.5, 9.229219, 134.5)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb14" type="OmniLight3D" parent="Lights" unique_id=1668970752 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 203.5, 9.229219, 134.5)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb15" type="OmniLight3D" parent="Lights" unique_id=1246670093 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 112, 8.512685, 137)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="Bulb16" type="OmniLight3D" parent="Lights" unique_id=1736281629 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 90, 8.967131, 138)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 2.0
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 9.0
+omni_attenuation = 1.4
+
+[node name="FloodlightSweep" type="SpotLight3D" parent="Lights" unique_id=1368144142 groups=["night_beams", "night_lamps", "searchlights"]]
+transform = Transform3D(0.7071068, -0.11061589, 0.6984012, 0, 0.9876885, 0.15643449, -0.7071068, -0.11061589, 0.6984012, 16.727207, 14.2, 5.4343143)
+light_color = Color(0.9, 0.94, 1, 1)
+light_energy = 60.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 110.0
+spot_attenuation = 1.1
+spot_angle = 3.5
+spot_angle_attenuation = 0.8
+script = ExtResource("1_qf6bs")
+
+[node name="Beam" type="MeshInstance3D" parent="Lights/FloodlightSweep" unique_id=1809753484]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -19)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("CylinderMesh_j3l0k")
+
+[node name="FloodlightSweep2" type="SpotLight3D" parent="Lights" unique_id=1131357119 groups=["night_beams", "night_lamps", "searchlights"]]
+transform = Transform3D(-0.7071068, 0.11061589, -0.6984012, 0, 0.9876885, 0.15643449, 0.7071068, 0.11061589, -0.6984012, 323.2728, 14.2, 56.565685)
+light_color = Color(0.9, 0.94, 1, 1)
+light_energy = 60.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 110.0
+spot_attenuation = 1.1
+spot_angle = 3.5
+spot_angle_attenuation = 0.8
+script = ExtResource("1_qf6bs")
+
+[node name="Beam" type="MeshInstance3D" parent="Lights/FloodlightSweep2" unique_id=474037220]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -19)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("CylinderMesh_s63ie")
+
+[node name="Bulb17" type="OmniLight3D" parent="Lights" unique_id=1403418004 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 65.6, 10.86, 56.77)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb18" type="OmniLight3D" parent="Lights" unique_id=595480325 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 72.4, 10.86, 56.77)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Floodlight" type="SpotLight3D" parent="Lights" unique_id=1504401840 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 0.87621593, 0.48191878, 0, -0.48191878, 0.87621593, 40, 14.47952, 55.380943)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight2" type="SpotLight3D" parent="Lights" unique_id=245928548 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 0.87621593, 0.48191878, 0, -0.48191878, 0.87621593, 100, 14.47952, 55.380943)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight3" type="SpotLight3D" parent="Lights" unique_id=490525232 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 0.87621593, 0.48191878, 0, -0.48191878, 0.87621593, 136, 14.47952, 55.380943)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight4" type="SpotLight3D" parent="Lights" unique_id=1150030433 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 0.87621593, 0.48191878, 0, -0.48191878, 0.87621593, 168, 14.47952, 55.380943)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight5" type="SpotLight3D" parent="Lights" unique_id=1166539344 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 30, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight6" type="SpotLight3D" parent="Lights" unique_id=1576704998 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 66, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight7" type="SpotLight3D" parent="Lights" unique_id=2043078921 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 150, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight8" type="SpotLight3D" parent="Lights" unique_id=927831959 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 180, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight9" type="SpotLight3D" parent="Lights" unique_id=2110614134 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 216, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight10" type="SpotLight3D" parent="Lights" unique_id=895053431 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 252, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight11" type="SpotLight3D" parent="Lights" unique_id=1101587199 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(-1, 0, 0, 0, 0.87621593, 0.48191878, 0, 0.48191878, -0.87621593, 288, 14.47952, 6.6190534)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight12" type="SpotLight3D" parent="Lights" unique_id=1715081290 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(0, 0.48191878, -0.87621593, 0, 0.87621593, 0.48191878, 1, 0, 0, 18.619055, 14.47952, 28)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Floodlight13" type="SpotLight3D" parent="Lights" unique_id=171728287 groups=["night_beams", "night_lamps"]]
+transform = Transform3D(0, -0.48191878, 0.87621593, 0, 0.87621593, 0.48191878, -1, 0, 0, 321.38092, 14.47952, 17)
+light_color = Color(1, 0.66, 0.34, 1)
+light_energy = 22.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 27.0
+spot_attenuation = 1.1
+spot_angle = 50.0
+spot_angle_attenuation = 0.8
+
+[node name="Bulb19" type="OmniLight3D" parent="Lights" unique_id=294658779 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 74.68, 8.190001, 61.06)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb20" type="OmniLight3D" parent="Lights" unique_id=1203969743 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 75.68, 8.91, 51)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="FloodlightSweep3" type="SpotLight3D" parent="Lights" unique_id=1072026734 groups=["night_beams", "night_lamps", "searchlights"]]
+transform = Transform3D(-0.7071068, 0.17106463, -0.68610275, 0, 0.97029585, 0.24192193, 0.7071068, 0.17106463, -0.68610275, 26.3, 14.879999, 50.3)
+light_color = Color(0.9, 0.94, 1, 1)
+light_energy = 60.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 110.0
+spot_attenuation = 1.1
+spot_angle = 3.5
+spot_angle_attenuation = 0.8
+script = ExtResource("1_qf6bs")
+
+[node name="Beam" type="MeshInstance3D" parent="Lights/FloodlightSweep3" unique_id=1142879464]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -19)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("CylinderMesh_v27vb")
+
+[node name="FloodlightSweep4" type="SpotLight3D" parent="Lights" unique_id=54867607 groups=["night_beams", "night_lamps", "searchlights"]]
+transform = Transform3D(0.7071068, 0.17106463, -0.68610275, 0, 0.97029585, 0.24192193, 0.7071068, -0.17106463, 0.68610275, 315.8, 14.879999, 11.7)
+light_color = Color(0.9, 0.94, 1, 1)
+light_energy = 60.0
+light_bake_mode = 0
+shadow_enabled = true
+distance_fade_enabled = true
+distance_fade_begin = 120.0
+distance_fade_shadow = 40.0
+distance_fade_length = 30.0
+spot_range = 110.0
+spot_attenuation = 1.1
+spot_angle = 3.5
+spot_angle_attenuation = 0.8
+script = ExtResource("1_qf6bs")
+
+[node name="Beam" type="MeshInstance3D" parent="Lights/FloodlightSweep4" unique_id=2054797530]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -19)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("CylinderMesh_br64l")
+
+[node name="Bulb21" type="OmniLight3D" parent="Lights" unique_id=1454625204 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 70.7, 6.5399995, 43.28)
+light_color = Color(1, 0.58, 0.28, 1)
+light_energy = 1.2
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 6.0
+omni_attenuation = 1.4
+
+[node name="Bulb22" type="OmniLight3D" parent="Lights" unique_id=1761163485 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 239.4, 10.78, 26.48)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb23" type="OmniLight3D" parent="Lights" unique_id=1846268943 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 236.6, 10.78, 26.48)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb24" type="OmniLight3D" parent="Lights" unique_id=77778958 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 213.2, 9.11, 26.68)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb25" type="OmniLight3D" parent="Lights" unique_id=352175932 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 283.46667, 10.31, 26.380001)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb26" type="OmniLight3D" parent="Lights" unique_id=486995834 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 266.93335, 10.31, 26.380001)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb27" type="OmniLight3D" parent="Lights" unique_id=1526624842 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 250.4, 10.31, 26.380001)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb28" type="OmniLight3D" parent="Lights" unique_id=630581841 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 225.6, 10.31, 26.380001)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb29" type="OmniLight3D" parent="Lights" unique_id=1693018816 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 209.06667, 10.31, 26.380001)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb30" type="OmniLight3D" parent="Lights" unique_id=433984020 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 192.53333, 10.31, 26.380001)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb31" type="OmniLight3D" parent="Lights" unique_id=1864843487 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 175.62, 11.660001, 37.8)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb32" type="OmniLight3D" parent="Lights" unique_id=1995783390 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 175.62, 11.660001, 45)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Bulb33" type="OmniLight3D" parent="Lights" unique_id=1685032808 groups=["night_bulbs", "night_lamps"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 295.68, 8.91, 12.9)
+light_color = Color(1, 0.74, 0.48, 1)
+light_energy = 1.3
+light_bake_mode = 0
+distance_fade_enabled = true
+distance_fade_begin = 55.0
+distance_fade_shadow = 40.0
+distance_fade_length = 15.0
+omni_range = 5.5
+omni_attenuation = 1.4
+
+[node name="Campfire" type="Node3D" parent="." unique_id=2046161763]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 289.5, 5.115126, 131.5)
+script = ExtResource("3_adh2u")

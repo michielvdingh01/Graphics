@@ -7,7 +7,10 @@ extends Node
 ## Cover is surveyed once per level, from the navmesh: spots a pace apart over
 ## every floor it has. The ones with something beside them at knee height are
 ## kept and moved up against it. Whether such a spot really hides someone from
-## the player is only looked at when one is asked for, see find_cover().
+## the player is only looked at when one is asked for, see find_cover(). In
+## the dunes that is ten thousand spots and three and a half seconds of work:
+## a level that is coming up does it a few milliseconds a frame, and only
+## what asks for cover before that is done waits for the rest.
 ##
 ## Shooting goes by turns. An enemy that wants to attack asks for one, and
 ## there are only so many at a time (Settings.rules().attackers), with a
@@ -47,6 +50,12 @@ const HAIR := 0.0015
 const AROUND := 8
 ## Spots that are looked at properly, out of the ones that seem best.
 const SHORTLIST := 8
+## Microseconds of a frame the survey of a level that is coming up takes.
+const SLICE := 4000
+## How far apart the survey of land of kilometres looks, near what stands
+## on it (see _near_things()): a spot moves up against what it finds
+## anyway, and the barns of a valley are many.
+const NEAR_GRID := 2.0
 ## A turn to attack that is not given back lapses after this long.
 const TURN_TIME := 6.0
 ## Somebody who asked for a turn this long ago is no longer waiting for one.
@@ -73,8 +82,24 @@ var _asking := {}
 var _rests: Array[float] = []
 var _flankers: Array[Node3D] = []
 var _clock := 0.0
-## What the survey was made of: a level, and the navmesh it had then.
-var _surveyed := [0, 0]
+## What the survey was made of: a level, and the navmesh it had then. Set
+## anew, a survey under way starts over.
+var _surveyed := [0, 0]:
+	set(value):
+		_surveyed = value
+		_job = [0, 0]
+## The survey under way, of a level and its navmesh as _surveyed has them:
+## the polygon of the navmesh to look at next, the spots on the one before
+## it and how many of those have been looked at, and the cells looked at and
+## kept so far.
+var _job := [0, 0]
+var _job_polygon := 0
+var _job_spots := PackedVector3Array()
+## How far down from each of _job_spots the survey near what stands looks.
+var _job_drops := PackedFloat32Array()
+var _job_spot := 0
+var _looked := {}
+var _kept := {}
 ## True once a level has asked for its survey ahead of the first fight: it
 ## is then made as soon as the navmesh is there, and again if that changes.
 var _ahead := false
@@ -88,6 +113,11 @@ var timed: Variant = null
 
 func _ready() -> void:
 	process_physics_priority = -10
+
+
+func _process(_delta: float) -> void:
+	if _ahead:
+		_survey(SLICE)
 
 
 func _physics_process(delta: float) -> void:
@@ -104,8 +134,6 @@ func _physics_process(delta: float) -> void:
 		if not _fights(_held[index]):
 			_held.erase(index)
 	_flankers = _flankers.filter(_fights)
-	if _ahead:
-		_survey()
 	for i in range(_rests.size() - 1, -1, -1):
 		_rests[i] -= delta
 		if _rests[i] <= 0.0:
@@ -125,7 +153,7 @@ func fight_in(grounds: Array[AABB]) -> void:
 ## is first asked for, which is in the middle of a fight.
 func prepare() -> void:
 	_ahead = true
-	_survey()
+	_survey(SLICE)
 
 
 # --- Turns -------------------------------------------------------------------
@@ -393,7 +421,10 @@ func threat(at: Vector3) -> Dictionary:
 
 ## Surveys the level that is loaded, if that is still to be done. False if
 ## there is nothing to survey yet.
-func _survey() -> bool:
+## Surveys the level, or goes on with the survey under way: all of it, or
+## for as many microseconds as `budget` and false if that was not enough.
+## False as well while there is no navmesh to survey.
+func _survey(budget := -1) -> bool:
 	var scene := get_tree().current_scene
 	var region := scene.get_node_or_null("NavigationRegion3D") as NavigationRegion3D if scene else null
 	if region == null:
@@ -414,57 +445,96 @@ func _survey() -> bool:
 	var owner := NavigationServer3D.map_get_closest_point_owner(map, to_world * corners[0]) if not corners.is_empty() else RID()
 	if corners.is_empty() or (region.enabled and owner != region.get_rid()) or (not region.enabled and not owner.is_valid()):
 		return false
-	_surveyed = [scene.get_instance_id(), made]
-	_spots.clear()
-	_low.clear()
-	_high.clear()
-	_open.clear()
-	_held.clear()
+	var key := [scene.get_instance_id(), made]
+	if _job != key:
+		_spots.clear()
+		_low.clear()
+		_high.clear()
+		_open.clear()
+		_held.clear()
+		_job = key
+		_job_polygon = 0
+		_job_spots = PackedVector3Array()
+		_job_drops = PackedFloat32Array()
+		_job_spot = 0
+		_looked = {}
+		_kept = {}
 	var space := region.get_world_3d().direct_space_state
-	var looked := {}
-	var kept := {}
-	if region.get_meta(&"cover_near_things", false):
-		_survey_near_things(space, map, scene, kept)
-		return true
-	for p in navmesh.get_polygon_count():
-		var outline := PackedVector2Array()
-		var points: Array[Vector3] = []
-		var from := Vector2(INF, INF)
-		var to := Vector2(-INF, -INF)
-		for corner in navmesh.get_polygon(p):
-			var point := to_world * corners[corner]
-			points.append(point)
-			outline.append(Vector2(point.x, point.z))
-			from = from.min(outline[-1])
-			to = to.max(outline[-1])
-		if points.size() < 3:
-			continue
-		if not _grounds.is_empty():
-			# Most of a level's navmesh is the land around it, in few and
-			# large polygons: only the part of one that reaches the fighting.
-			var reach := Rect2()
-			for ground in _grounds:
-				var floor_of := Rect2(ground.position.x, ground.position.z, ground.size.x, ground.size.z)
-				reach = floor_of if reach.size == Vector2.ZERO else reach.merge(floor_of)
-			from = from.max(reach.position)
-			to = to.min(reach.end)
-		var plane := Plane(points[0], points[1], points[2])
-		if absf(plane.normal.y) < 0.5:
-			continue
-		for x in range(ceili(from.x / GRID), floori(to.x / GRID) + 1):
-			for z in range(ceili(from.y / GRID), floori(to.y / GRID) + 1):
-				var flat := Vector2(x, z) * GRID
-				if not Geometry2D.is_point_in_polygon(flat, outline):
-					continue
-				var y := (plane.d - plane.normal.x * flat.x - plane.normal.z * flat.y) / plane.normal.y
-				var cell := Vector3i(x, roundi(y * 2.0), z)
-				if looked.has(cell):
-					continue
-				looked[cell] = true
-				var at := Vector3(flat.x, y, flat.y)
-				if _grounds.is_empty() or _grounds.any(func(ground: AABB) -> bool: return ground.has_point(at + Vector3.UP * 0.5)):
-					_look_at(space, map, at, kept)
+	# On land of kilometres only what lies near something that stands: all
+	# of that is found at once, and looked at a spot at a time. That is
+	# thousands of spots around the barns of a valley: whoever asks before
+	# it is done does not wait for it, and makes do without.
+	var near_things: bool = region.get_meta(&"cover_near_things", false)
+	if near_things and budget < 0:
+		budget = SLICE
+	var until := Time.get_ticks_usec() + budget
+	if near_things and _job_polygon == 0 and _job_spots.is_empty():
+		_job_spots = _near_things(scene)
+		_job_spot = 0
+		_job_polygon = navmesh.get_polygon_count()
+	# Polygon by polygon, and spot by spot in the order the polygon has them.
+	while true:
+		while _job_spot < _job_spots.size():
+			if near_things:
+				_near_spot(space, map, _job_spot)
+			else:
+				_look_at(space, map, _job_spots[_job_spot], _kept)
+			_job_spot += 1
+			if budget >= 0 and Time.get_ticks_usec() > until:
+				return false
+		if _job_polygon >= navmesh.get_polygon_count():
+			break
+		_job_spots = _spots_on(_job_polygon, navmesh, corners, to_world)
+		_job_spot = 0
+		_job_polygon += 1
+	_surveyed = key
+	_looked = {}
+	_kept = {}
 	return true
+
+
+## Where on polygon `p` of `navmesh` the survey looks: a spot every GRID over
+## it, where there is fighting, that has not been looked at from another.
+func _spots_on(p: int, navmesh: NavigationMesh, corners: PackedVector3Array, to_world: Transform3D) -> PackedVector3Array:
+	var found := PackedVector3Array()
+	var outline := PackedVector2Array()
+	var points: Array[Vector3] = []
+	var from := Vector2(INF, INF)
+	var to := Vector2(-INF, -INF)
+	for corner in navmesh.get_polygon(p):
+		var point := to_world * corners[corner]
+		points.append(point)
+		outline.append(Vector2(point.x, point.z))
+		from = from.min(outline[-1])
+		to = to.max(outline[-1])
+	if points.size() < 3:
+		return found
+	if not _grounds.is_empty():
+		# Most of a level's navmesh is the land around it, in few and
+		# large polygons: only the part of one that reaches the fighting.
+		var reach := Rect2()
+		for ground in _grounds:
+			var floor_of := Rect2(ground.position.x, ground.position.z, ground.size.x, ground.size.z)
+			reach = floor_of if reach.size == Vector2.ZERO else reach.merge(floor_of)
+		from = from.max(reach.position)
+		to = to.min(reach.end)
+	var plane := Plane(points[0], points[1], points[2])
+	if absf(plane.normal.y) < 0.5:
+		return found
+	for x in range(ceili(from.x / GRID), floori(to.x / GRID) + 1):
+		for z in range(ceili(from.y / GRID), floori(to.y / GRID) + 1):
+			var flat := Vector2(x, z) * GRID
+			if not Geometry2D.is_point_in_polygon(flat, outline):
+				continue
+			var y := (plane.d - plane.normal.x * flat.x - plane.normal.z * flat.y) / plane.normal.y
+			var cell := Vector3i(x, roundi(y * 2.0), z)
+			if _looked.has(cell):
+				continue
+			_looked[cell] = true
+			var at := Vector3(flat.x, y, flat.y)
+			if _grounds.is_empty() or _grounds.any(func(ground: AABB) -> bool: return ground.has_point(at + Vector3.UP * 0.5)):
+				found.append(at)
+	return found
 
 
 ## The survey of land of kilometres, for a level whose navmesh says so
@@ -473,8 +543,12 @@ func _survey() -> bool:
 ## cover, every collider but the ground, the walls nobody sees and what is
 ## in the group "no_cover" (the trunks of a wood). Every metre of a meadow of
 ## five square kilometres, eight rays each, took eight minutes; there is no
-## cover on a meadow, and a bot in the open runs to what it sees.
-func _survey_near_things(space: PhysicsDirectSpaceState3D, map: RID, scene: Node, kept: Dictionary) -> void:
+## cover on a meadow, and a bot in the open runs to what it sees. The spots
+## are where to look down from, over the top of what stands there; how far
+## down goes into _job_drops.
+func _near_things(scene: Node) -> PackedVector3Array:
+	var found := PackedVector3Array()
+	_job_drops = PackedFloat32Array()
 	var looked := {}
 	for body: StaticBody3D in scene.find_children("*", "StaticBody3D", true, false):
 		if body.is_in_group(&"no_cover"):
@@ -487,21 +561,29 @@ func _survey_near_things(space: PhysicsDirectSpaceState3D, map: RID, scene: Node
 			if box.size.x > 200.0 or box.size.z > 200.0:
 				continue
 			box = box.grow(NEAR)
-			for x in range(floori(box.position.x / GRID), ceili(box.end.x / GRID) + 1):
-				for z in range(floori(box.position.z / GRID), ceili(box.end.z / GRID) + 1):
+			for x in range(floori(box.position.x / NEAR_GRID), ceili(box.end.x / NEAR_GRID) + 1):
+				for z in range(floori(box.position.z / NEAR_GRID), ceili(box.end.z / NEAR_GRID) + 1):
 					var flat := Vector2i(x, z)
 					if looked.has(flat):
 						continue
 					looked[flat] = true
-					var top := Vector3(x * GRID, box.end.y + 1.0, z * GRID)
-					var ground := _ray(space, top, top + Vector3.DOWN * (box.size.y + 4.0))
-					if ground.is_empty():
-						continue
-					var at: Vector3 = ground.position
-					var on_map := WAY.closest(map, at)
-					if _flat(on_map, at) > 0.3 or absf(on_map.y - at.y) > HOVER:
-						continue
-					_look_at(space, map, at, kept)
+					found.append(Vector3(x * NEAR_GRID, box.end.y + 1.0, z * NEAR_GRID))
+					_job_drops.append(box.size.y + 4.0)
+	return found
+
+
+## Looks at spot `i` of the survey near what stands: the floor under it, if
+## the navmesh has floor there.
+func _near_spot(space: PhysicsDirectSpaceState3D, map: RID, i: int) -> void:
+	var top := _job_spots[i]
+	var ground := _ray(space, top, top + Vector3.DOWN * _job_drops[i])
+	if ground.is_empty():
+		return
+	var at: Vector3 = ground.position
+	var on_map := WAY.closest(map, at)
+	if _flat(on_map, at) > 0.3 or absf(on_map.y - at.y) > HOVER:
+		return
+	_look_at(space, map, at, _kept)
 
 
 ## Files one spot of the survey: as cover if something stands by it, moved

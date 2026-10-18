@@ -60,6 +60,10 @@ const RAIL_TOP := 0.0307
 ## The glove made last and whether it is a left hand, for _holds_also().
 var _worn: Node3D
 var _worn_left := false
+## While the standard five are built a second time with a silencer, for the
+## pack "silenced": each is then named <weapon>_sd, and has a can on its
+## muzzle (see _muzzle()).
+var _silenced := false
 
 
 func model(model_name: String) -> void:
@@ -92,6 +96,14 @@ func _describe() -> void:
 	_lmg()
 	_rocket_launcher()
 	_rocket()
+	# The standard five once more, each with a silencer.
+	_silenced = true
+	_rifle()
+	_pistol()
+	_shotgun()
+	_smg()
+	_marksman()
+	_silenced = false
 
 
 # --- Rifle ---------------------------------------------------------------------
@@ -100,7 +112,7 @@ func _describe() -> void:
 ## Carbine with a flat-top receiver, a slotted handguard and a reflex sight:
 ## an AR-15 with a 14.5 inch barrel, to the measurements of the real thing.
 func _rifle() -> void:
-	model("rifle")
+	model(_named("rifle"))
 
 	# Upper receiver, and the lower with its magazine well.
 	_section(ALU, UPPER_TUBE, -0.105, 0.095, 0.0012)
@@ -212,7 +224,7 @@ func _rifle() -> void:
 	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, lean, Vector3.RIGHT.cross(lean)), _at(0.071, -0.152)), Vector2(0.0113, 0.029), 180.0,
 		_at(-0.02, -0.19, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.535)))
+	_muzzle(0.535, 0.0195, 0.175, 0.055)
 	marker("Eject", Transform3D(Basis(), _at(0.01, 0.006, 0.024)))
 	marker("MagHold", Transform3D(Basis(), _at(0.075, -0.19)))
 
@@ -313,7 +325,7 @@ func _flip_sight(ahead: float, rear: bool) -> void:
 
 ## Striker-fired service pistol with a polymer frame.
 func _pistol() -> void:
-	model("pistol")
+	model(_named("pistol"))
 
 	_polymer_pistol()
 
@@ -325,7 +337,7 @@ func _pistol() -> void:
 
 	_handgun_hands(grip)
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.14)))
+	_muzzle(0.14, 0.0155, 0.165)
 	marker("Eject", Transform3D(Basis(), _at(0.022, 0.012, 0.016)))
 	marker("MagHold", Transform3D(Basis(), _at(-0.065, -0.17)))
 
@@ -529,7 +541,7 @@ func _trench_gun() -> void:
 ## A pump-action shotgun, its stock and forend of `furniture`; `trench` for
 ## the old one, see _trench_gun().
 func _pump_gun(model_name: String, furniture: String, trench: bool) -> void:
-	model(model_name)
+	model(_named(model_name))
 
 	# Receiver: flat-sided under a rounded top, with the trigger plate let in below.
 	_section(STEEL, [
@@ -648,7 +660,7 @@ func _pump_gun_barrel(furniture: String) -> void:
 		_at(-0.1, -0.075, -0.07), 0.034, 0.0, _at(-0.3, -0.36, -0.2),
 		[_at(-0.085, -0.074, -0.014), _at(-0.058, -0.064, -0.008), _at(-0.03, -0.059, -0.004), _at(-0.006, -0.057, -0.001)])
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.585)))
+	_muzzle(0.585, 0.024, 0.2)
 	marker("Eject", Transform3D(Basis(), _at(-0.01, 0.0, 0.026)))
 	marker("MagHold", Transform3D(Basis(), _at(-0.03, -0.085)))
 
@@ -659,7 +671,7 @@ func _pump_gun_barrel(furniture: String) -> void:
 ## Compact submachine gun: a stick magazine, a wire stock and a cocking
 ## handle on the left that travels with the bolt.
 func _smg() -> void:
-	model("smg")
+	model(_named("smg"))
 
 	# Receiver: a tube of pressed steel, eight-sided above and square below,
 	# with the lower of moulded plastic under it.
@@ -737,7 +749,7 @@ func _smg() -> void:
 	_holds_also("mag", Transform3D(Basis(), _at(0.056, -0.165)), Vector2(0.0102, 0.018), 180.0,
 		_at(-0.03, -0.2, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.29)))
+	_muzzle(0.29, 0.0185, 0.17)
 	marker("Eject", Transform3D(Basis(), _at(0.03, 0.004, 0.022)))
 	marker("MagHold", Transform3D(Basis(), _at(0.057, -0.2)))
 
@@ -749,7 +761,7 @@ func _smg() -> void:
 ## HUD takes over with the picture through the scope; this is what is seen of
 ## it from the hip.
 func _marksman() -> void:
-	model("marksman")
+	model(_named("marksman"))
 
 	# The receivers of the carbine, a size up for the longer cartridge.
 	var wide := UPPER_TUBE.map(func(corner: Vector2) -> Vector2: return Vector2(corner.x * 1.07 if absf(corner.x) > 0.008 else corner.x, corner.y))
@@ -828,7 +840,7 @@ func _marksman() -> void:
 	_holds_also("mag", Transform3D(Basis(), _at(0.06, -0.125)), Vector2(0.013, 0.038), 180.0,
 		_at(-0.03, -0.165, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.745)))
+	_muzzle(0.745, 0.0195, 0.185, 0.02)
 	marker("Eject", Transform3D(Basis(), _at(0.02, 0.006, 0.024)))
 	marker("MagHold", Transform3D(Basis(), _at(0.06, -0.155)))
 
@@ -1308,6 +1320,41 @@ func _rocket() -> void:
 
 
 # --- Shared pieces -------------------------------------------------------------
+
+
+## The name a weapon is built under: its own, and with a silencer on it
+## <weapon>_sd.
+func _named(weapon_name: String) -> String:
+	return weapon_name + "_sd" if _silenced else weapon_name
+
+
+## The marker Muzzle, `ahead` of the origin, where a shot leaves the weapon.
+## With a silencer (_silenced) a can goes on there first, `radius` round and
+## `length` long, of which `seated` reaches back over the muzzle device; the
+## shot then leaves at the front of the can.
+func _muzzle(ahead: float, radius: float, length: float, seated := 0.0) -> void:
+	if _silenced:
+		part("Body")
+		_can(_at(ahead - seated), radius, length)
+		ahead += length - seated
+	marker("Muzzle", Transform3D(Basis(), _at(ahead)))
+
+
+## A silencer from `from` forwards: a collar that screws on, the tube with a
+## band of grip near its back, and a front cap with a chamfer and the hole
+## the shot leaves by.
+func _can(from: Vector3, radius: float, length: float) -> void:
+	var collar := minf(0.018, length * 0.12)
+	_turned(ALU, from, Vector3.FORWARD, [
+		Vector2(0.0, 0.0), Vector2(radius * 0.78, 0.0), Vector2(radius * 0.82, 0.002), Vector2(radius * 0.82, collar - 0.002), Vector2(radius * 0.9, collar),
+	], 24)
+	_turned(POLY, from, Vector3.FORWARD, [
+		Vector2(radius * 0.9, collar), Vector2(radius * 0.97, collar + 0.001), Vector2(radius, collar + 0.003), Vector2(radius, length - 0.007),
+		Vector2(radius * 0.94, length - 0.001), Vector2(radius * 0.36, length), Vector2(radius * 0.3, length - 0.004), Vector2(0.0, length - 0.006),
+	], 28, true)
+	# A band of rings to grip it by when it is screwed on or off.
+	for i in 5:
+		_ring(STEEL, from + Vector3.FORWARD * (collar + 0.009 + i * 0.0045), Vector3.FORWARD, radius + 0.0002, 0.0011)
 
 
 ## Point `ahead` of the origin along the barrel, `up` above it and `right` of it.

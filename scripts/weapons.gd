@@ -351,8 +351,12 @@ var _smoke_due := false
 func _ready() -> void:
 	add_child(_rig)
 	# In a match everybody carries the pack of the match, see scripts/armory.gd;
-	# elsewhere the standard pack, or the one --pack=<name> asks for.
-	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else ARMORY.STANDARD
+	# elsewhere the pack the level says it is played with (metadata/pack on
+	# its scene, as the dunes by night carry the silenced one), else the
+	# standard pack; or the one --pack=<name> asks for.
+	var game := get_tree().get_first_node_in_group(&"game")
+	var own: String = game.get_meta(&"pack", ARMORY.STANDARD) if game else ARMORY.STANDARD
+	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else (own if ARMORY.names().has(own) else ARMORY.STANDARD)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
 			pack = arg.get_slice("=", 1)
@@ -543,7 +547,7 @@ func current_spread_deg() -> float:
 		spread += data.ramp_spread_deg * (1.0 - _ramp)
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
 	spread += data.move_spread_deg * minf(speed / 8.0, 1.5) * (1.0 - 0.7 * ads_blend)
-	if not player.is_on_floor():
+	if not player.is_on_floor() and not player.riding:
 		spread += 2.0
 	elif player.is_crouched() and not player.is_sliding():
 		spread *= 0.7
@@ -849,7 +853,7 @@ func _fire(data: WeaponData) -> void:
 
 	# Barrels that spin roar as long as they fire, see _spin_barrels().
 	if data.spin_up <= 0.0:
-		Sfx.play(data.shot_sound)
+		Sfx.play(data.shot_sound, data.shot_db)
 	_rounds += 1
 	get_tree().call_group(&"watch", &"hears", camera.global_position, data.flash_size * HEARD)
 	Save.tally("shots")
@@ -991,9 +995,14 @@ func muzzle_position() -> Vector3:
 
 
 ## The flash at the muzzle of the weapon in hand. Over the sights it is
-## smaller, so that it does not hide what is being shot at.
+## smaller, so that it does not hide what is being shot at. Whoever fires
+## from behind the wheel has the weapon out of sight: the flash is where the
+## muzzle is, for the view of the vehicle to see.
 func flash() -> void:
 	var data := current()
+	if not visible:
+		Fx.muzzle_flash(null, Transform3D(Fx.facing(-camera.global_basis.z), muzzle_position()), data.flash_size, data.flash_prongs)
+		return
 	Fx.muzzle_flash(_models[_index].muzzle, Transform3D(), data.flash_size * lerpf(1.0, 0.65, ads_blend), data.flash_prongs)
 
 
@@ -1034,7 +1043,8 @@ func _update_pump(data: WeaponData) -> void:
 ## share ("mag_in"), else `fallback`. Recording a step for one weapon and
 ## adding it to the manifest is all it takes to give that weapon its own.
 func _handling(data: WeaponData, step: String, fallback: StringName) -> StringName:
-	var own := StringName("%s_%s" % [String(data.shot_sound).trim_suffix("_shot"), step])
+	var named := String(data.handled_as) if data.handled_as else String(data.shot_sound).trim_suffix("_shot")
+	var own := StringName("%s_%s" % [named, step])
 	if Sfx.has(own):
 		return own
 	return StringName(step) if Sfx.has(StringName(step)) else fallback

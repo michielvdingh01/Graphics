@@ -12,7 +12,8 @@ extends Node
 ## A benchmark has none, so that a picture from a standpoint is the same
 ## picture every time; --cloud=0.7 holds one in front of the sun for all of a
 ## run, that much of a full one, to look at. Stands in the scene of a level,
-## beside its "Sun"; without its script line there the sun never dims.
+## beside its "Sun", or by night its "Moon"; without its script line there
+## the sun never dims.
 
 ## What is left of the sun and of the light of the sky under a full cloud.
 @export var sun_left := 0.3
@@ -51,6 +52,8 @@ var _held := -1.0
 
 func _ready() -> void:
 	_sun = get_parent().get_node_or_null("Sun") as DirectionalLight3D
+	if _sun == null:
+		_sun = get_parent().get_node_or_null("Moon") as DirectionalLight3D
 	_world = get_viewport().find_world_3d().environment
 	if _sun == null or _world == null:
 		set_process(false)

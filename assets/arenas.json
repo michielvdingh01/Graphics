@@ -1,5 +1,5 @@
 {
-	"_doc": "Where a level stands its weapons of the arena (scripts/stash.gd), where the spot that scripts/arena.gd works out (Arena.hideouts()) is not a good one: {\"<level>\": {\"specials\": {\"<weapon>\": [x, y, z]}}}, the weapon by the name of its file in weapons/. A weapon a level does not name here gets the spot that is worked out. Each spot here was looked at in the game: see PLAN.md, 'Wapens afgebouwd'. A level can also say where the two sides begin, \"ends\": [[x, y, z], [x, y, z]], where the two spots furthest apart are not the ones to begin at: the walk nearest each counts, at any height.",
+	"_doc": "Where a level stands its weapons of the arena (scripts/stash.gd), where the spot that scripts/arena.gd works out (Arena.hideouts()) is not a good one: {\"<level>\": {\"specials\": {\"<weapon>\": [x, y, z]}}}, the weapon by the name of its file in weapons/. A weapon a level does not name here gets the spot that is worked out; a level that is another played otherwise says {\"like\": \"<level>\"} and has its spots. Each spot here was looked at in the game: see PLAN.md, 'Wapens afgebouwd'. A level can also say where the two sides begin, \"ends\": [[x, y, z], [x, y, z]], where the two spots furthest apart are not the ones to begin at: the walk nearest each counts, at any height.",
 	"alps": {
 		"ends": [[330.0, 0.0, 905.0], [2880.0, 0.0, 760.0]]
 	},
@@ -7,5 +7,6 @@
 		"specials": {
 			"minigun": [152.4, 6.7, 82.4]
 		}
-	}
+	},
+	"dunes_night": {"like": "dunes"}
 }

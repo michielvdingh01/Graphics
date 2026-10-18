@@ -4064,6 +4064,16 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 - Rupsen draaien niet mee; de loopwielen wel.
 - De ruit van de jeep is van binnen grauw; ik heb het oog boven de ruit gezet.
 
+**Slagboom en prikkeldraad** (18 oktober, na Michiels eerste rit). Bij poort 2 kwam de tank er niet uit. Het "onzichtbare voorwerp" was de botsvorm van de rol prikkeldraad 15 m voor de poort: een blok van 1,45 m hoog over de hele rol, dwars op de weg naar buiten (de opening in die rij ligt op x 54 tot 64, de poort op x 69). Daarachter ligt nog een rij op z 82, en daarvoor de slagboom op 0,97 m, die elk voertuig tegenhield als een betonnen paal.
+
+- De slagboom (`scripts/barrier.gd`) en elke rol prikkeldraad (`scripts/wire.gd`) zijn nu een eigen lichaam met een eigen mesh, in de groep `crushable` onder `Level/Crushables`: 2 slagbomen en 15 rollen in de duinen. `barrier_pole()` en `wire_coil()` in `tools/kit/field.gd` bouwen ze zo voor elk level, met `_breakable_into()`.
+- Een voertuig botst er niet mee, maar ziet ze elke stap voor zich (`_crush()` in `scripts/vehicle.gd`): de slagboom knapt af en vliegt als los stuk weg (met splinters en geluid), het draad wordt platgedrukt en houdt daarna niemand meer tegen. Het voertuig verliest er wat snelheid bij: een jeep een vijfde door het draad, een tank bijna niets. Een granaat of raket hoort de slagboom ook af te knappen (niet getest).
+- Wie loopt, wordt door allebei nog tegengehouden.
+- De zandzakstelling op 12 m binnen de poort staat er met opzet; daar rijd je omheen.
+- Niet veranderd: de tank kan met een gedraaide koepel nog met zijn loop tegen de poortvleugels slaan. (Sinds `verbeterpunten` botst de loop nergens meer tegen, zie "Verbeterpunten na het spelen".) Een gebroken slagboom blijft kapot tot het level opnieuw laadt, en wie bij samen spelen later meedoet, ziet hem nog heel.
+- De duinen opnieuw gebouwd (geen lightmap); de showroom niet, daar staan ze nog vast.
+- Getest: `tools/test_vehicles.sh --only=gate` (18 controles). De speler loopt vast tegen slagboom en draad; een jeep, een vrachtwagen en een tank rijden elk recht door poort 2 naar buiten, langs beide rijen draad, en breken onderweg alles. De hele test heeft nu 133 controles in 5 minuten, en de selftest slaagt. Niet op de GPU bekeken en niet gespeeld.
+
 **Nog open**
 
 - Samen spelen: het voertuig van wie rijdt over de lijn sturen (positie, wielen, koepel), instappen op de host vragen.
@@ -4077,8 +4087,257 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 | Wat | Hoe |
 |---|---|
 | Rijden in de duinen | het spel, Dunes, naar een voertuig lopen en E |
-| De voertuigen testen | `tools/test_vehicles.sh` (2,5 minuut), `--only=jeep`, `truck`, `tank`, `wear`, `run_over`, `dunes` of `match` |
+| De voertuigen testen | `tools/test_vehicles.sh` (5 minuten), `--only=jeep`, `truck`, `tank`, `hills`, `wear`, `run_over`, `dunes`, `gate` of `match`; `SLOPES=30,40,50 tools/test_vehicles.sh --only=hills` voor andere hellingen |
+| Over de duinen | `tools/vehicle_ridges.sh` (noord, tegen de steile kant op), `DIR=south` over de lange rug; `KINDS=tank STEP=24` voor minder; zonder GPU, ongeveer een minuut per soort |
 | Een rit horen | `tools/hear.py drive jeep`, `drive truck crash`, `drive truck wreck`, `drive tank gun`, met `b` erachter de varianten |
 | De modellen opnieuw bouwen | `tools/build_model.sh vehicles`; het level hoeft daarvoor niet opnieuw, behalve als `vehicle()` of het nummer verandert |
 | Een nieuw voertuig | een model in `tools/models/vehicles.gd` met `_touches`, `_sits` en `_solid`, een `vehicles/<soort>.tres`, en `vehicle("<soort>", ...)` in het level |
 | De geluiden opnieuw snijden | `tools/build_sounds.py <id>`; de opnamen staan in `.cache/sounds/freesound_vehicles` |
+
+## Verbeterpunten na het spelen: rood licht, cellen, laden, heuvels, tank, jeep
+
+Op 18 oktober 2026 gevraagd, na het spelen: het rode licht van soldaten die richten minder fel; de groene staafjes die dode vijanden achterlaten kleiner en minder opvallend; het haperen als de duinen laden oplossen; de tank, de jeep en de vrachtwagen meer vermogen, zodat ze over alle heuvels van de duinen komen; de tank sneller weer laten schieten; schieten met je eigen wapen terwijl je in een jeep rijdt, met een vizierkruis zoals in de tank; en een plan voor naderingsmijnen, flashbangs en rookgranaten. Branch `verbeterpunten`.
+
+**Het rode licht** (`shaders/glint.gdshader`). Wat een soldaat laat zien vlak voor hij schiet en zolang hij schiet, is een rode ster op zijn wapen. Die werd nooit kleiner dan hij op 5 m afstand is, en negen keer zo fel getekend: van ver was hij dus groter dan de soldaat zelf en het felste in beeld. Nu wordt hij pas niet meer kleiner vanaf 11 m, is hij iets kleiner (0,20 in plaats van 0,24 m) en is hij minder dan half zo fel (4 in plaats van 9). Van dichtbij waarschuwt hij nog; op 40 m is hij op het scherm ruim twee keer zo klein en geeft hij een soldaat niet meer weg. De sporen van zijn kogels (rood) en de vlam aan de loop zijn niet veranderd. Robots en bots hebben deze ster niet.
+
+**De groene staafjes** (`scripts/pickup.gd`). Een gezondheidscel die een gevallen vijand achterlaat is nu even groot als hij gebouwd is (was anderhalf keer zo groot) en het venster gloeit grijsgroen in plaats van het felle groen van de lichtpuntjes op de vizieren; het licht dat hij op het zand werpt is 40% van wat het was. De kleur van "+25 HEALTH" op het scherm is niet veranderd. Munitie en granaten zijn niet veranderd.
+
+**Het haperen als de duinen laden** (`scripts/squad.gd`, `scripts/game.gd`). Gemeten zonder GPU: zes beelden nadat de duinen op het scherm komen, staat het spel 3,6 s stil. Dat is de dekkingskaart van de robots: elke plek een meter uit elkaar waar gevochten wordt, in de duinen 10.068 plekken met elk een kring van stralen, in één keer, terwijl het beeld uit het zwart opkomt. Het eerste beeld kost daarbovenop 0,4 s, het bakken van het navmesh.
+
+- De dekkingskaart wordt nu gemaakt in stukjes van 4 ms per beeld, in dezelfde volgorde, en is in de duinen na ongeveer 15 s klaar. Wat er uitkomt is precies hetzelfde als in één keer (vergeleken: dezelfde 10.068 plekken en 30.276 open plekken, met dezelfde bits). Vraagt een robot dekking voor de kaart af is, dan wordt de rest meteen afgemaakt, zoals eerst; het eerste gevecht in de duinen begint niet zo snel. De selftest zet de kaart opnieuw en maakt hem in één keer, zoals eerst.
+- Het navmesh bakt nog in één beeld (0,35 s), maar het scherm blijft nu zwart tot dat klaar is (`_lift_curtain()` in `scripts/hud.gd`, met `game.is_baked`); daarna komt het in 0,7 s op, zoals eerst. Bakken op een eigen thread heb ik geprobeerd: dat haalde ook dat beeld weg, maar de selftest van de duinen vond dan één op de drie keer geen weg van de start naar het eerste checkpoint (de trunk drie op drie wel). De selftest wacht nu op het navmesh (`_baked()`) in plaats van een vaste halve seconde.
+- Gemeten op de GPU, vanaf het titelscherm zoals Michiel speelt, met soldaten, de duinen gestart zoals het menu dat doet, op 3456×2160 met MetalFX en de schaal vanzelf; om en om drie rondes uit een kopie van de trunk (`4ce741c`) en deze branch, 18 oktober 18:48 tot 18:50, aan de lader, load 7 tot 10 (andere sessies bouwden en testten, geen andere Godot op de GPU). "Zwart" is hoe dicht het zwarte scherm op dat moment was:
+
+| | Laden | Langste beeld in de eerste 8 s | Beelden in 8 s | Pipelines gemaakt tijdens het tekenen |
+|---|---|---|---|---|
+| Trunk | 3,9 / 3,7 / 3,8 s | 3495 / 3745 / 3754 ms, het beeld half opgekomen (72% zwart) | 326 / 288 / 291 | 108 |
+| Nu | 5,6 / 3,7 / 3,8 s | 646 / 429 / 476 ms, onder het zwart (100%) | 545 / 605 / 598 | 108 |
+
+- Daarna, terwijl het opkomt, nog beelden van 40 tot 80 ms, en in de eerste ronde één van 220 ms bij 64% zwart: de 108 shaders van de duinen worden bij elke start gemaakt, ook op de trunk. Of dat als een schokje in het opkomen te zien is, kan ik niet beoordelen.
+
+**Voertuigen de heuvels op** (`scripts/vehicle.gd`, `vehicles/*.tres`, `tools/models/vehicles.gd`). Gemeten met een nieuwe proef (`tools/test_vehicles.sh --only=hills`): een helling van zand van 6 m hoog, vanuit stilstand aan de voet. Op de trunk kwam de tank geen 15° op, de jeep en de vrachtwagen geen 25°. De duinen lopen aan hun lange kant op tot 25 à 35° en vallen aan de steile kant (de lijzijde) af met 45 tot 59° over 5 tot 7 m. Wat het tegenhield, en wat er nu is:
+
+- **Het extra gewicht trok ze de helling af.** Elk voertuig weegt in het spel de helft meer dan het is, om niet van een duin te zweven; dat trok recht naar beneden en dus ook de helling af. Nu drukt het langzaam rijdend langs de onderkant van het voertuig, de helling in; tussen 6 en 14 m/s gaat het over in loodrecht op zijn lengte en opzij recht naar beneden (`LEAN_FROM`, `LEAN_SPAN`). Langs de onderkant ook bij hoge snelheid duwde het de jeep in een bocht verder om; loodrecht op de gemiddelde grond onder de wielen duwde het een voertuig terug op het moment dat de voorwielen al op de helling stonden en de achterwielen nog niet (vier steile duinkanten minder voor de vrachtwagen en de tank).
+- **Meer vermogen**: de tank 3850 in plaats van 2200 Nm, de vrachtwagen 770 in plaats van 520. Op vlak terrein haalt de tank nu na 8 s zijn topsnelheid van 47 km/u (was 33 km/u), de vrachtwagen na 10 s 67 km/u. De jeep niet: met meer koppel ging hij na 10 s 94 in plaats van 80 km/u en sloeg hij in de bocht van de test om. Die is op vlak terrein dezelfde gebleven (42 km/u na 3 s, 81 na 10 s).
+- **Een koppelomvormer**, zoals een automaat heeft: zolang de wielen veel langzamer draaien dan de motor, bij wegrijden of kruipend tegen een duin op, komt er tot 1,6 keer het koppel aan, bij de jeep 2 keer; zodra ze meedraaien niets extra. Dat geeft trekkracht tegen een helling op zonder dat het voertuig sneller wordt.
+- **De bak schakelt niet op tegen een helling** als de hogere versnelling het niet meer trekt: een schakelmoment zonder kracht liet de tank terugrollen naar waar de lagere nodig was, steeds opnieuw.
+- **Banden en rupsen voelen de helling voor zich.** Een wiel voelde alleen recht onder zijn as; een helling die ervoor opliep, raakte eerst de romp. De voorste en achterste wielen, en alle wielen onder een rups, voelen nu ook aan de voor- en achterkant van de band. De tank heeft bovendien spanwiel en aandrijfwiel als wielen die op vlak terrein vrij hangen en alleen een helling of richel opvangen; die draaien nu ook mee met de rups. Een rups trekt met de hele motor waar hij de grond raakt, in plaats van een deel te verliezen aan loopwielen in de lucht.
+- **De onderkant van de vrachtwagen is schuin afgesneden** voor de voorwielen en achter de achterwielen (de botsvormen; niet te zien).
+- **De loop van de tank botst niet meer.** De tank stond op een helling van 40° op zijn eigen kanon. Dat lost ook een open punt van de voertuigen op: de loop sloeg tegen de poortvleugels. Een kogel gaat nu door de loop heen.
+- **Wat het kost**: de wielen sturen meer stralen naar de grond (de tank 48 in plaats van 12 per stap). Gemeten zonder GPU, één voertuig dat rondjes rijdt, drie rondes om en om met de trunk, ronde voor ronde gelijk: het script kost per natuurkundestap 0,047 → 0,066 ms (jeep), 0,058 → 0,080 ms (vrachtwagen) en 0,107 → 0,164 ms (tank). Bij 120 stappen per seconde is dat voor de tank ongeveer 0,15 ms per beeld; alleen voor het voertuig waar iemand in rijdt, want de rest staat bevroren.
+- **Laden duurt 2,5 s** in plaats van 4 (`reload_time` in `vehicles/tank.tres`). Het geluid van een granaat in het staartstuk valt mee: een halve seconde voor hij klaar is.
+
+| Proef: 6 m zand, vanuit stilstand | Trunk | Nu |
+|---|---|---|
+| Jeep | 20° wel, 25° niet | 50°; en een wand van 55° met 30 m aanloop |
+| Vrachtwagen | 20° wel, 25° niet | 40° |
+| Tank | 15° niet | 45° |
+
+Over de duinen zelf (`tools/vehicle_ridges.sh`, zonder GPU): om de 12 m langs de twee lange duinen rijdt een voertuig met 22 m aanloop recht op de kam af. Plekken waar het de duin niet eens bereikte (er stond iets in de weg) tellen niet mee.
+
+| Over de kam | Trunk: noord, tegen de steile kant (45-59°) | Nu | Trunk: zuid, over de lange rug | Nu |
+|---|---|---|---|---|
+| Jeep | 0 van 23 | 30 van 33 | 34 van 41 | 41 van 41 |
+| Vrachtwagen | 0 van 3 | 18 van 25 | 2 van 24 | 35 van 40 |
+| Tank | kwam bij geen enkele | 19 van 30 | 0 van 1 | 37 van 41 |
+
+Op de trunk kwamen de vrachtwagen en de tank meestal niet eens tot de voet van de steile kant: ze bleven op de aanloop steken. Over de steilste stukken (53 tot 59°) komen de vrachtwagen en de tank nu nog niet overal; elke duin heeft een opening.
+
+**Schieten vanuit de jeep** (`scripts/player.gd`, `scripts/vehicle_view.gd`, `scripts/hud.gd`, `scripts/weapons.gd`, `driver_fires` in `scripts/vehicle_data.gd`). Wie in de jeep rijdt, houdt zijn eigen wapen in de hand: het richt waar het midden van het beeld is, van achter de jeep en vanaf de stoel (C), schiet door de eigen jeep heen zoals passagiers al deden, en het vizierkruis staat in beeld met de spreiding van het wapen. Rijden maakt de spreiding groter, net als lopen; zitten telt niet meer als in de lucht hangen (dat gold ook voor passagiers: 2° minder). Rechtermuisknop zoomt het beeld in zoals richten; de terugslag schopt het beeld omhoog; zolang je schiet of richt draait het beeld niet vanzelf terug achter de jeep. Herladen, wisselen en een granaat gooien gaan gewoon. De vlam is te zien bij de bestuurder, de hulzen vliegen eruit. Wat nog niet kan: de soldaat achter het stuur houdt van achteren gezien nog steeds het stuur vast met twee handen, zonder wapen. In de vrachtwagen en de tank heb je beide handen nodig voor het rijden; dat is één regel per voertuig. Passagiers konden al schieten met een vizierkruis; dat is niet veranderd.
+
+
+**Na het spelen: het spel stopte met een scriptfout** (18 oktober, na de merge). In de editor stopte het spel midden in de duinen met "Trying to assign invalid previously freed instance" in `_run_over_people()` (`scripts/vehicle.gd`). Een voertuig onthoudt een tel wie het heeft aangereden, zodat het die niet elke stap opnieuw raakt; werd zo iemand daarna opgeruimd (een gevallen robot of bot), dan zette de lus die het lijstje opruimt dat verdwenen ding in een getypte variabele, en dat is een scriptfout die de editor laat stoppen. De fout zat er sinds de voertuigen; nu een voertuig overal komt, rijd je vaker iemand aan. De lus is nu ongetypt, en `tools/test_vehicles.sh --only=run_over` ruimt het slachtoffer op en rijdt door: voor de reparatie 182 keer die fout en een gefaalde controle, erna niets.
+
+**Bekeken**: één blad voor en na, uit het spel op de GPU met soldaten, uit een kopie van de trunk en deze branch: `benchmark/sheets/verbeterpunten_before_after.jpg` (de rode ster op 8, 20, 40 en 60 m; een cel naast een munitieblik; schieten vanuit de jeep met het kruis en de inslag eronder).
+
+**Getest**, zonder GPU: `tools/test_vehicles.sh` (140 controles, waarvan nieuw: de hellingen, en dat wie de jeep rijdt zijn wapen heeft, kijkt waar het midden van het beeld is en raakt wie daar staat), `tools/selftest.sh` (428), `tools/selftest.sh --level=dunes` drie keer op rij, `tools/test_match.sh`, `tools/nettest.sh` en `tools/test_sandbox.sh` slagen. De wedstrijdtest faalde eerder twee keer, elke keer op een andere controle (terugkomen bij een vriend, de raket van een bot), terwijl de laptop een load van 20 tot 30 had; op een rustiger moment slaagt hij, net als op de trunk.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is niets.** Of de ster nu te weinig waarschuwt, of de cel nog te vinden is, hoe de tank en de vrachtwagen met meer vermogen en de koppelomvormer rijden (ze trekken harder op, ook op vlak terrein), en of schieten vanuit de jeep lekker werkt: dat zijn eerste getallen. Alles staat in `shaders/glint.gdshader` (SIZE, NEAR, BRIGHT), `scripts/pickup.gd` (SIZE, CELL_WINDOW, CELL_GLOW) en `vehicles/*.tres` (`torque`, `stall`, `reload_time`, `driver_fires`).
+- Van achteren gezien houdt de bestuurder van de jeep het stuur met twee handen vast terwijl er bij zijn hoofd een vlam is: een houding met een wapen uit het raam is er niet.
+- De dekkingskaart is in de duinen na zo'n 15 seconden spelen klaar (ruw: 3,6 s werk in stukjes van 4 ms). Een robot die eerder dekking zoekt, laat de rest in één keer maken; dat heb ik niet zien gebeuren en niet gemeten in het spel.
+- De vrachtwagen en de tank komen over de steilste duinkanten nog niet overal; de duinen zijn daar steiler dan zand in het echt ligt (de lijzijde van een echte duin is ongeveer 34°).
+
+### Mijnen, flashbangs en rookgranaten (plan, niets gebouwd)
+
+**Waar het op verder bouwt.** Een granaat is nu één soort per pakket (`grenade` in `assets/packs.json`: de gewone of de steelhandgranaat), op G, met een teller rechtsonder (`Grenades` in `scripts/hud.gd`). `scripts/weapons.gd` gooit hem (`_start_throw()`, `_release_grenade()`), `scripts/grenade.gd` laat hem stuiteren en na 2,2 s via `Blast.explode()` ontploffen, met wie hem gooide erbij voor de killfeed. Over de lijn gaat "threw" met de soort, en de andere machine laat een kopie zonder schade vliegen (`echo`). Vijanden zien een granaat als gevaar en rennen weg (groep `hazard`, `danger()`, `Squad.threat()`); bots gooien niets. Wat vijanden zien gaat langs stralen (`_ray_hits_player()` in `scripts/enemy.gd`) en hoe ver ze in licht en schaduw kijken (`_sees_as_far_as()`, `shade_around()`); bots kijken met stralen in `scripts/bot.gd`.
+
+**Het ontwerp.**
+
+- **Een tweede soort gooien, naast de granaat.** G blijft de scherfgranaat. Er komt één tactisch vak op Q (CoD doet het zo; Q is te voet vrij, in een voertuig blijft het "volgende stoel") met de flashbang of de rookgranaat, en de mijn als derde vak op B, of met T om tussen de soorten te wisselen als drie toetsen te veel zijn. Per pakket in `packs.json` staat wat erin zit en hoeveel: `tactical: "smoke", tacticals: 2, mines: 2`. De HUD krijgt per vak een rij pipjes zoals de granaten nu.
+- **Elk ding is een scène met een script, zoals de granaat**: `scenes/smoke_grenade.tscn`, `flashbang.tscn`, `mine.tscn`, met een eigen model in `tools/models/props.gd` en eigen geluiden (te horen met `tools/hear.py`). Het gooien zelf is dat van de granaat, met een eigen worp: een mijn ligt na een korte worp of wordt neergelegd.
+- **Rookgranaat.** Na een seconde sissen een wolk van ongeveer 8 m doorsnee die 15 tot 20 s blijft hangen, met de wind mee drijft en dan oplost. In beeld: grote, trage rookdeeltjes van de soort die er al is (`Fx.gun_smoke`, de rook van een brandend voertuig). In het spel: een wolk is een bol die ieder kan opvragen (een klein autoload `Smoke` met `blocks(from, to)`): de stralen waarmee vijanden en bots zien, gaan er niet doorheen, en wie erin staat wordt niet gezien, ook niet van dichtbij. Een vijand die de speler in de rook ziet verdwijnen, schiet nog even op de plek waar hij hem het laatst zag (dat geheugen heeft hij al).
+- **Flashbang.** Een knal na 1,5 s. Wie ernaar kijkt en hem ziet (een straal en de hoek van zijn blik): de speler krijgt een wit scherm dat in 2 tot 4 s wegtrekt en een fluittoon met gedempt geluid (een lowpass op de bus van de wereld), korter als hij er half van wegkeek. Vijanden zijn verblind: ze zien niets (zoals in rook), houden hun arm voor hun ogen (de paniekhouding van `humanoid_rig.gd` bestaat al) en schieten wild of niet. Bots verliezen hun doel en hun richten zwerft een paar seconden ver uit. Doet geen schade, breekt wel ramen in een kamer.
+- **Naderingsmijn.** Valt waar hij neerkomt, zet zich na 1,5 s op scherp met een klik en een klein knipperend lampje (zwak: geen baken, zie het rode licht hieronder). Komt een vijand, een bot van de andere kant of een voertuig binnen 2,5 m: een piep en 0,4 s later een explosie, kleiner dan een granaat maar hard tegen een voertuig (telt als zware treffer, zoals een raket). Nooit op wie hem legde of zijn eigen kant. Ten hoogste twee of drie tegelijk per speler; de oudste verdwijnt. Kapotschieten laat hem ontploffen. Over de lijn: neergelegd door de host, dus de host beslist wanneer hij afgaat; anderen zien het lampje.
+
+**Wat het kost en waar het mis kan gaan.**
+
+- De rook kost beeld: grote doorzichtige deeltjes over het hele scherm op 3456×2160. Meten met de benchmark, van binnen en van buiten de wolk, om en om. Dit is het grootste risico.
+- Alles wat nieuw in beeld komt (de wolk, het witte scherm, de mijn) moet naar `Fx.rehearse()`, anders hapert de eerste keer, zie "De eerste keer telt apart".
+- Vijanden en bots moeten de rook en de flits begrijpen; dat raakt de gevechten en de wedstrijden, en dus `tools/selftest.sh --fights` en `tools/test_match.sh`. Bots die zelf rook of mijnen gebruiken komt later.
+- Over de lijn (`Net.VERSION` omhoog): gooien gaat al met de soort; de mijn moet als ding van de host bestaan.
+- Geluid: sissen, een flashbang die echt pijn doet aan je oren en een fluittoon, de klik en de piep van de mijn. Uit de CC0-bibliotheek die er is en gesynthetiseerd; varianten om te kiezen met `tools/hear.py`.
+
+**Mijn advies.** Bouw eerst het tweede vak met de **rookgranaat**: die heeft in de grote duinen en in wedstrijden de meeste waarde, raakt alleen het zien en niet de schade, en het enige echte risico (wat de wolk kost op de GPU) is snel te meten. Daarna de **flashbang**, die vooral binnen werkt (de fabriek, de centrale, het complex) en hetzelfde "niet zien" hergebruikt. De **mijn** als laatste: die heeft eigenaarschap en kanten nodig, schade tegen voertuigen, en het meeste werk over de lijn. Elk is ongeveer één sessie van bouwen, testen en meten; de eerste iets meer, omdat het vak, de toets en de HUD erbij horen. Te kiezen door jou: de toetsen (Q en B, of één toets om te wisselen), welke pakketten wat krijgen, en of een mijn ook voor bots en vijanden is.
+
+## De duinen bij nacht
+
+Op 18 oktober 2026 gevraagd: van precies dezelfde map van de duinen een tweede versie bij nacht, zoals Call of Duty dat weleens doet: donker, met lichtbronnen bij de tenten, de verzamelpunten en het complex. Het plan is dezelfde dag goedgekeurd ("Ja, alles zoals je aanraadt, begin maar"), met een wapenset erbij: het standaardpakket, maar elk wapen met een demper, om stiller te blijven. Gebouwd op de branch `duinnacht`, in een eigen worktree, vanaf de trunk `4ce741c`. Michiel speelde het vanuit de worktree en liet het dezelfde avond in `fase-2-vertical-slice` zetten ("merge het maar, het is geweldig gemaakt!"): `f0fbb42`; niet gepusht.
+
+**Wat Michiel koos** (uit mijn voorstel): de lucht zelf rekenen in plaats van een gescande nachtlucht te downloaden; maanlicht in plaats van een maanloze nacht; geen zaklamp of nachtkijker; en het level mag op deze branch opnieuw gebouwd en meegecommit worden (de duinen hebben geen lightmap). Onder "verzamelpunten" heb ik de kampen en posten verstaan.
+
+**Wat er staat**
+
+- **Een tweede scène van hetzelfde level** (`scenes/dunes_night.tscn`). Ze laadt `scenes/levels/dunes_level.tscn`, dezelfde gebouwde duinen als de dag, met een maan, een eigen lucht en omgeving, en de nachtlaag van de bouwer (`scenes/levels/dunes_night.tscn`) in haar `Level`. In de levelkeuze staat ze als "Dunes at night", na Dunes, als variant: geen uitgang leidt erheen, en de selftest speelt haar vanuit het menu en niet langs de route (`"variant": true` in `Menu.LEVELS`, `_after()` in `scripts/selftest.gd`). In wedstrijden is ze een arena ("Dunes Night"), met de aantallen en de wapenplekken van de duinen (`"like": "dunes"` in `assets/match.json` en `assets/arenas.json`).
+- **De maan** staat waar de zon staat, 28,6 graden in het zuidzuidwesten, koel blauw (0,62, 0,72, 1) en zwak (0,45 waar de zon 3,4 is). Daardoor klopt alles wat het level over de zon weet: de schaduwkaart (die het sluipen gebruikt), de donkere grond in de verte en `sunward` op het beton. Haar schaduw reikt 50 m in twee lagen, waar die van de zon 110 m in vier reikt.
+- **De lucht wordt gerekend** (`shaders/night_sky.gdshader`): donker naar boven, iets lichter aan de horizon, de gloed van een stad in het noordnoordoosten, de maan met zeeën precies waar het licht vandaan komt, een waas om de maan, sterren die nooit kleiner dan een beeldpunt getekend worden, en een melkweg. De sterren en de maan zelf doen niet mee in het licht dat de lucht het level geeft (`AT_CUBEMAP_PASS`), en de lucht leest geen `TIME`, zodat dat licht één keer gerekend wordt.
+- **De omgeving**: belichting 1,6, het licht van rondom 2,5 keer (de nachtlucht is bijna zwart), minder verzadiging (0,8), dikkere en donkerdere nevel, meer gloed om wat fel is, meer korrel en vignet. Geen SSAO: bij een licht van rondom dat bijna nul is doet het niets en het kostte 1,0 tot 1,3 ms. Geen meeuwen en geen stofjes in de zon.
+- **Eén schakelaar voor de shaders**: de globale `night` (`project.godot`), die `Settings.apply()` zet naar `metadata/night` op de omgeving. Wat hem leest: de kamers achter de ramen van het hoofdgebouw (één op de drie met de tl-buizen aan, de rest donker), het glas van de lampen (`shaders/lamp_glass.gdshader`: bleek glas overdag, gloeiend 's nachts), de rookpluim boven het bivak (die gloeide grijs in het donker; nu is hij donker en onderaan oranje van het vuur) en de bundels van de zoeklichten.
+- **`scripts/night.gd`** past aan wat voor de dag gebouwd is: het licht onder de acht afdaken (de tent, de netten, de loodsen) is daglicht en gaat naar 5%, blauwer.
+- **De nachtlaag.** Een level dat ook 's nachts gespeeld wordt zegt dat (`_by_night` in `tools/level_builder.gd`); de bouwer schrijft dan alles wat alleen 's nachts brandt in een eigen scène (`night_light()`), met de lampen onder `Lights`, zodat `scripts/breakables.gd` er lampen van maakt die kapotgeschoten kunnen worden. Een level zonder nacht krijgt niets, ook geen lantaarns. In de duinen 50 lampen (`tools/kit/field.gd`, "By night", en `tools/levels/dunes/depot.gd`):
+  - **het complex**: de dertien masten op de muur, natriumoranje, één bundel van 100 graden per mast met schaduw; de zoeklichten op de twee hoekposten en de twee wachttorens, die heen en weer zwaaien (`scripts/sweep.gd`) met een bundel in de lucht (`shaders/light_beam.gdshader`); en de lampen boven de deuren, de poort en de achterdeur (`bulkhead()`), zodat het doel ook in het donker te vinden is;
+  - **de tenten**: een stormlantaarn aan de paal van elk tentje (`storm_lantern()`); de peer in de commandotent brandde al;
+  - **de verzamelpunten**: het kampvuur van het bivak brandt (`scripts/campfire.gd`: een vuur van `Fx.fire()` dat niet uitgaat, met schaduw en vonken, zonder eigen rookballen), een lantaarn op de grond in elke zandzakpost en onder de dakrand van elk schildwachthuisje, en peertjes aan een snoer onder elk camouflagenet (het wagenpark, het tankkamp, het depot in de vallei).
+- **De dag blijft voor het spel wat hij was**: alle 859 botsvormen en de schaduwkaart van het gebouwde level zijn gelijk aan die van de trunk. Wel hangen de lantaarns en peertjes er overdag ook, uit, en hebben de deurlampen glas in plaats van een beschilderd vlak.
+- **Sluipen in het donker** (`light_at()` in `scripts/land.gd`). Overdag is het licht op iemand de zon, zoals het was. 's Nachts is het het maanlicht buiten de schaduw (`MOONLIT`, 0,25), of de lampen die op hem schijnen met niets ertussen, wat het meest is; een lamp die stuk is, telt niet. Een wacht ziet wie in het donker staat op 5 m (`sight_dark` in `scripts/enemy.gd`), wie in het maanlicht staat op ongeveer 14 m en wie onder een lamp staat op 34 m; gebukt 30% minder, zoals overdag. Een zoeklicht dat over iemand heen gaat zet hem even in het volle licht. Onderin staat `IN THE DARK` waar overdag `IN THE SHADE` staat, en het oog (`scripts/eyes.gd`) went 's nachts aan het licht van de lampen. Bots in een wedstrijd zien 's nachts wie in het donker staat op een kwart van hoe ver ze zien, onder een lamp zo ver als overdag (`DARK_SIGHT` in `scripts/bot.gd`).
+- **Het pakket "Silenced"** (`assets/packs.json`): karabijn, pistool, shotgun, pistoolmitrailleur en scherpschuttersgeweer, elk met een demper (`weapons/*_sd.tres`, achteraan in `ARMORY.ALL`). Dezelfde cijfers, met de afname van de schade vanaf 80% van de afstand, 15% minder terugslag, iets trager richten en een kleine flits, en daarmee een schot dat een wacht of een bot op 5 tot 14 m hoort in plaats van 17 tot 42 m (`flash_size` × 100). Op het model een demper op de loop (`_muzzle()` en `_can()` in `tools/models/weapons.gd`), ook voor wie een ander draagt. Een eigen schot (`*_sd_shot`: de opname zonder haar hoge kant, de lage kant eronder, een dreun, een beetje van de knal van de kogel en het mechaniek dat terugslaat), 6 dB zachter gespeeld (`shot_db`), en het herladen van het wapen zonder demper (`handled_as`). Voor de karabijn zijn er drie varianten om op het oor te kiezen (`rifle_sd_shot`, `_b` met meer mechaniek, `_c` dieper en zwaarder). De duinen bij nacht dragen dit pakket (`metadata/pack` op een level); in een wedstrijd is het te kiezen zoals de andere.
+- **Geluid**: 's nachts klinkt de open lucht van de duinen als `ambience_dunes_night`: minder wind, en krekels in het gras, gerekend en niet opgenomen (`chirp` in `tools/build_sounds.py`: acht krekels rond 4,3 kHz en drie hogere, elk met een eigen tempo en een eigen plek). `scripts/sfx.gd` kiest 's nachts het bed `<soort>_night` als dat er is.
+- **`Net.VERSION` is 12.**
+
+**Gemeten**
+
+Op de speelinstelling (3456×2160, Ultra, MetalFX, renderschaal vanzelf), de 74 soldaten op hun post, 600 beelden per standpunt, de dag en de nacht om en om uit dezelfde checkout, aan de lader van 94 W (accu vol).
+
+De eerste lampen kostten te veel (18 oktober, 18:07 tot 18:24, load 6 tot 12, en eens 56 terwijl andere sessies bouwden; drie ronden):
+
+| Standpunt | Dag | Nacht | Verschil |
+|---|---|---|---|
+| Het bos, 1 | 72,8 | 70,1 | −2,7 |
+| Het bivak, 8 | 78,8 | 66,8 | −12,0 |
+| Het wagenpark, 10 | 84,9 | 74,9 | −10,0 |
+| De binnenplaats, 16 | 86,9 | 70,1 | −16,8 |
+| De achterdeur, 19 | 90,1 | 71,1 | −19,0 |
+
+Waar dat zat, gemeten door telkens een deel weg te laten in één run (`--profile`, ms per beeld, binnenplaats / achterdeur / bivak): de lampen van de nacht samen 1,6 / 1,8 / 0,7, hun schaduwen bijna niets (0,3 / 0 / 0,1), de bundels in de lucht 0,5 / 0,1 / 0,4 (ze lazen de diepte van het beeld), de schaduw van de maan 1,5 / 1,8 / 1,8 en SSAO 1,3 / 1,0 / 1,2. Bij het bivak daarbovenop het vuur, dat elke 0,3 s een rookbal maakte en zijn licht liet berekenen. Het zit dus in hoeveel lampen elk beeldpunt raakt, niet in hun schaduwen. Wat er veranderd is: kleinere bereiken (een mast 27 m en 100 graden waar het 34 m en 120 was, een deurlamp 5,5 m, een lantaarn 6 m), een kleine lamp licht vanaf 55 m niets meer (zijn glas gloeit nog), geen SSAO bij nacht, de maanschaduw 50 m in twee lagen, bundels die de diepte niet meer lezen, en een kampvuur zonder rookballen (de rookpluim van het kamp staat er al).
+
+De eindstand (19:42 tot 19:47, load 4 tot 6, niemand anders op de GPU): twee ronden. Een derde ronde van de nacht liep naast het spel van Michiel, dat om 19:47:55 startte, en telt niet.
+
+| Standpunt | Dag, fps (twee ronden) | Nacht | Verschil | Tekenopdrachten dag en nacht |
+|---|---|---|---|---|
+| Het bos, 1 | 73,7 en 75,2 | 84,0 en 74,4 | +4,8 | 1568 en 899 |
+| Het bivak, 8 | 79,5 en 78,1 | 84,5 en 73,3 | +0,1 | 2312 en 1147 |
+| Het wagenpark, 10 | 86,2 en 85,5 | 91,0 en 87,3 | +3,3 | 1960 en 847 |
+| De binnenplaats, 16 | 86,7 en 86,6 | 88,9 en 87,8 | +1,7 | 1316 en 611 |
+| De achterdeur, 19 | 86,3 en 84,0 | 88,4 en 87,7 | +2,9 | 1433 en 433 |
+
+- **De nacht is niet trager dan de dag**, en tekent de helft minder: de schaduw van de maan reikt minder ver dan die van de zon, en wat daarbuiten staat hoeft er niet in.
+- Het traagste honderdste ligt 's nachts op 60 tot 85 fps; de twee ronden liggen per standpunt tot 11 fps uit elkaar, dus de verschillen hierboven zijn ruw.
+- **Niets hapert de eerste keer voor zover een benchmark dat ziet**: na het eerste standpunt (dat geen laadscherm heeft) worden er geen pipelines meer gemaakt. Een rondgang vanaf het titelscherm is niet gelopen.
+- **Niet gemeten**: in beweging, in een gevecht onder de lampen (wie onder een lamp met schaduw loopt laat die lamp zijn schaduw opnieuw tekenen), en wat een kapotgeschoten lamp scheelt.
+
+**Gecontroleerd**
+
+- `tools/selftest.sh` slaagt, 517 controles; voor de nacht nieuw: waar een schijnwerper schijnt staat iemand in het licht, in de schaduw van het bos is het donker en daarbuiten is er de maan, een kapotgeschoten schijnwerper verlicht niemand meer, en een wacht ziet iemand in het donker niet en onder een lamp wel, wat het gevecht begint. `tools/test_match.sh` (met zeven pakketten en zes arena's), `tools/nettest.sh` en `tools/test_sound.sh` (38) slagen.
+- Gezien op stilstaande beelden: het blad met dag en nacht naast elkaar, acht standpunten (`benchmark/sheets/dunes_night_day_and_night.jpg`), en de wapens met demper vanuit de heup en gericht.
+
+**Niet kunnen beoordelen**
+
+- **Hoe het klinkt.** De schoten met demper en de krekels zijn gemaakt en gemeten (niveau, waar de energie zit), niet beluisterd.
+- **Alles wat beweegt**: het zwaaien van de zoeklichten, het flakkeren van het vuur, en of het oog in en uit het licht goed went.
+- **Of sluipen leuk is**: 5 m in het donker, 14 m in het maanlicht en 34 m onder een lamp zijn mijn getallen, net als hoe donker de nacht is.
+- **Of het pakket goed voelt.** Op het balansblad (`tools/weapon_sheet.py silenced`) heeft elk wapen nog zijn eigen afstand, zoals in het standaardpakket: de shotgun tot 6 m, de pistoolmitrailleur van 7 tot 14 m, de karabijn van 15 tot 35 m en het scherpschuttersgeweer van 36 tot 93 m. Door de kortere dracht doodt de karabijn op 50 m in 0,90 s waar dat 0,68 s was. Het pistool is als wapen voor als je magazijn leeg is op een paar afstanden het snelst, zoals in het standaardpakket.
+
+**Nog open**
+
+- **De zoeklichten zwaaien op de klok van elke machine**, dus niet gelijk voor wie samen speelt. Of een kapotgeschoten lamp bij een gast ook uit is, is niet getest.
+- **De peer in de tent** werpt geen schaduw (een schaduw in zes richtingen kostte te veel) en schijnt dus door het doek op het zand voor de tent.
+- **Voertuigen hebben geen koplampen**, wachters geen zaklamp; dat laatste was een keuze.
+- **`Net.VERSION`**: de branch `alpen` staat nog op 11; wie beide samenvoegt, neemt 13.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| De duinen bij nacht spelen | in het spel: Play, Dunes at night; of `/Applications/Godot.app/Contents/MacOS/Godot --path <checkout> res://scenes/dunes_night.tscn -- --play` |
+| De duinen opnieuw bouwen, met de nachtlaag | `tools/build_level.sh dunes` (40 s); er valt niets te bakken |
+| Alleen dit level testen | `tools/selftest.sh --level=dunes_night` |
+| Wat de nacht kost | `tools/benchmark.sh --scene=res://scenes/dunes_night.tscn --posted --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=night_lamps,beams,lamp_shadows,sun_shadow` |
+| De schoten met demper horen | `tools/hear.py rifle_sd_shot 620`, `rifle_sd_shot_b 620`, `rifle_sd_shot_c 620`, `pistol_sd_shot`, `shotgun_sd_shot`, `smg_sd_shot 900`, `marksman_sd_shot` |
+| De nacht horen | `tools/hear.py ambience dunes_night --in=yard` |
+| Een nieuwe lamp voor de nacht | `night_bulb()`, `night_beam()`, `storm_lantern()`, `hanging_bulb()` of `searchlight()` in de kit; alleen in een level met `_by_night` |
+
+## De Alpen: het Ehrwalder Becken
+
+Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal tussen twee hoge bergen met sneeuwtoppen, zo groot dat je een voertuig zoekt; jeeps en vrachtwagens, op twee plekken een tank, motorfietsen met zijspan uit de Tweede Wereldoorlog waarin een vriend zit en met zijn eigen wapens schiet; veel beschutting van bomen en struiken tegen sluipschutters op de hellingen; een grafisch meesterwerk, eind van de middag, half bewolkt, aan één kant van het dal nog zon. Branch `alpen`, vanaf de trunk `3c202c2`. Michiel koos vooraf: het echte **Ehrwalder Becken** uit hoogtegegevens, **vroege herfst**, **alle downloads** van de lijst, en **samen spelen in deze klus**. De rest is mijn keuze: dat het een arena is voor wedstrijden (twintig tegen twintig, "huge") én een route om samen te lopen, de kampen aan de twee einden, de stand van de zon, waar de hutten staan, de schuren en de gevechten.
+
+**Wat er staat**
+
+- **Het land** (`tools/levels/alps/plan.gd`, `dem.gd`). 3200 bij 1792 m over het Moos, uit de AWS Terrain Tiles (voor Oostenrijk het 10 m-model van data.gv.at, CC BY), bicubisch op 2 m. Daaromheen drie ringen echte bergen tot 11,5 km (`vista.gd`): Zugspitze, Wetterstein, Daniel en Grubigstein staan waar ze staan. Het land is gedeelde vlakke roosters die een shader optilt naar de hoogtekaart (128 m-blokken, drie fijnheden, met een rok tegen gaten).
+- **Licht.** De lucht is `table_mountain_2_puresky` (Poly Haven, 8k), 4,3 graden gekanteld zodat zijn zon op 11,5 graden staat in het zuidwesten (230 graden). Daardoor ligt bijna de helft van het land in de schaduw van de bergen, de westkant van het dal; het oosten, de weiden onder Ehrwald, heeft nog zon. Voorbij de 200 à 280 m waar de schaduw van de zon reikt, leest de grond (en nu ook een boom van ver) uit een gebakken kaart waar de bergen de zon afhouden. Een tweede kaart zegt hoeveel lucht een plek ziet.
+- **Wat waar ligt** (`lie_of()`): weide op de bodem en de zachte hellingen, sparrenbos tot de boomgrens (1720 m, golvend), latsche erboven, rots waar het steil is, puin eronder, verse sneeuw vanaf 2000 m en hoger op de zonkant. De bodem van het bekken is in stroken van noord naar zuid gemaaid, elke strook een tikje anders van kleur, ook in het gras.
+- **Wegen** (`ROADS`): een grindweg van kamp naar kamp en verder naar Ehrwald, een karrenspoor over het Moos vanuit het zuiden, een spoor de helling op naar de jagershut. Twee sporen met gras ertussen, de berm vertrapt.
+- **Het bos.** 11.307 bomen (`woods()`), getekend als MultiMeshes per 64 m (`scripts/grove.gd`): fijnspar (oud, half, jong), lariks (goud), latsche boven de boomgrens. Op de bodem van het dal 3678 meer als dekking (`tools/levels/alps/valley.gd`): houtwallen van latsche, jonge spar, lariks en bergahorn langs de sloten van het Moos, 55 bosjes, en 88 bomen alleen; 30 zwerfkeien en 14 omgevallen stammen aan de bosranden. De bomen zijn gemaakt door de helper `alpen-bomen`; zie hieronder.
+- **Gras** (`scripts/meadow.gd`, `shaders/alps_grass.gdshader`): drie ringen plukjes rond het oog tot 55 m, alleen op de weide, niet op weg of in bos.
+- **Wat mensen bouwden** (`tools/kit/alpine.gd`, gemaakt door de helper `alpen-dorp`; geplaatst in `valley.gd`): 81 hooischuren (11 op vaste plekken bij de gevechten, 70 verspreid over de weiden, met de stroken mee gedraaid), de kapel aan de weg met een kruisbeeld en twee esdoorns, de boerderij (een Einhof) met houtstapel, trog, hooiruiters en hekken, een marterl en een kruis bij de bocht, een lijn houten palen met draden langs de weg naar het oosten, en zes jagershutten: één bij de route, vijf hoog in de hoeken van het land die naar het midden van het dal kijken, langs een strook die het bos voor hun uitzicht openlaat, met een rotswand erachter, twee keien ervoor om achter te liggen, een omgevallen stam en de stronken van wat er gekapt is.
+- **De kampen** (`bases.gd`) in het westen (330, 905), in de schaduw aan de bosrand, en in het oosten (2880, 760) in de zon: elk twee jeeps, twee motorfietsen met zijspan, een vrachtwagen en een tank, een tent met een lamp, zandzakken, vaten, brandstof en kisten. Verspreid over het dal nog twee jeeps, een vrachtwagen en drie motorfietsen.
+- **De motorfiets met zijspan** (`tools/models/vehicles.gd`, `vehicles/motorcycle.tres`): een zware legermotor uit 1940 met een boxermotor en het zijspan rechts, dat meedrijft. Drie rijden mee: de bestuurder (zonder wapen in handen), één achterop en één in het zijspan; die laatste twee houden hun wapens en schieten. Twaalf CC0-opnamen van Freesound (de openbare previews, 13,4 MB, meer dan de ~8 MB die ik had genoemd) gesneden tot stationair, onder last, hoog toerental, starten (twee varianten) en afzetten.
+- **Samen rijden** (`scripts/vehicle.gd`, `scripts/net.gd`). De host beslist wie waar zit en hoe versleten een voertuig is; de machine van wie stuurt rekent het voertuig door en vertelt de anderen 30 keer per seconde hoe het staat; zij volgen het met 0,1 s vertraging. Wie in een zijspan of op een stoel zit, rijdt mee met wie stuurt, ook als dat de gast is. `Net.VERSION` is 12.
+- **Als arena** (`assets/arenas.json`, `assets/match.json`): "huge", twintig per kant, de twee kampen als beginpunten. Bots zoeken de weg met `scripts/way.gd` (zonder de grens van 4096 veelhoeken van Godot) en zoeken een doel ver weg minder vaak opnieuw (tot eens per 4 s).
+- **Als route** (`route.gd`), alleen of samen: van het kamp in het westen langs de bosrand, de schuren van het Moos, de kapel, de boerderij, het marterl, de jagershut en de weiden onder Ehrwald naar het kamp in het oosten en de weg naar Ehrwald: acht gevechten, negen checkpoints, elk met een voertuig in de buurt. Na de duinen gaat de route verder in de Alpen (in het menu na Dunes).
+- **Het navmesh** in vierkanten van 128 m, elk een eigen regio, 53.925 veelhoeken; samengenaaid tot één mesh om te lezen, dat niet op de kaart staat.
+
+**De bomen** (helper `alpen-bomen`, `tools/models/trees.gd`, `tools/gen_sprigs.py`): fijnspar met kamtakken, lariks met naalden in rozetten, goud en oranje, latsche, bergahorn; elk takje gegroeid en in Blender gerenderd. Body tot 23 à 32 m, Mid tot 52 à 110 m, Far als kaart tot 1500 m, één schaduwmesh. Van ver een kaart van acht kanten met in de alfa hoeveel licht de naalden doorlaten.
+
+**De gebouwen** (helper `alpen-dorp`, `tools/kit/alpine.gd`): hooischuren in drie maten, van balken of planken, met een dak van planken met stenen, van schindels of van golfplaat, op stenen of blokken; binnen hooi, een zolder, bij de grote een trap. Een schuur is dekking en je kunt erin; tussen de balken door schiet je naar buiten. De boerderij, de kapel, het kruis, het marterl, de jagershut, twee soorten hek, hooiruiters, houtstapels, een vlonder, palen met draden en een trog. Alles twee keer gebouwd: zoals het is, en als een paar gekleurde vlakken voor van ver (vanaf 240 m). Geen lightmap; wat verweert, leest de shader af aan hoe een vlak ligt.
+
+**Onderweg gevonden**
+
+- **Hoogtenevel in Godot telt de afstand niet mee.** Alles onder de 400 m van het level kreeg 23% nevel, ook op tien meter: het hele dal grijs. Uitgezet; alleen nevel op afstand.
+- **Een uitgezette navigatieregio staat nog op de kaart.** Het samengenaaide navmesh (`enabled = false`) gaf nog antwoord op "waar is de vloer", over al zijn 53.000 veelhoeken en dubbel met de vierkanten. Nu haalt `game.gd` het van de kaart. "Waar is de vloer" vraagt `Way.closest()` nu aan het vierkant van de plek (0,018 ms tegen 1,25 ms per vraag).
+- **De host stond 53 s stil na het laden.** Het onderzoek naar dekking voor de robots keek naast elke botsvorm (5461, de meeste van de schuren), 19.522 plekken, elk met die trage vraag. De gast verloor de verbinding. Nu een paar seconden, en sinds de trunk erin is verdeeld over de beelden, 4 ms per beeld, zoals de trunk het voor de duinen deed (`_near_things()` en `_near_spot()` in `scripts/squad.gd`).
+- **Een pad over het dal viel halverwege af**: Godot zoekt standaard niet verder dan 4096 veelhoeken (`path_search_max_polygons`).
+- **De grond kostte 14 van de 22,6 ms** op 1080p (profiel met `--only=landmesh`). Twaalf keer ruis van vier octaven per pixel, en elke laag gelezen ook waar die er niet is. Nu één leesbeurt per ruis uit `assets/noise/alps_fbm.png` (`tools/gen_noise.gd`) en alleen de lagen die er zijn.
+
+**Gemeten** op 18 oktober 2026 tussen 21:26 en 21:45, M1 Pro aan de lader van 94 W, load 1 tot 4,6 (andere sessies draaiden tests), geen Godot op de GPU naast de mijne en Michiel speelde niet. Om en om vanuit deze branch en een kloon ervan met de oude grond-shader, op zes standpunten (`--at`, zie de werkwijze): de weg door het Moos, de kapel, de boerderij, de hut in het noordwesten, de weiden in het oosten en het dal van 60 m hoog. Twee rondes op 1440p met FSR 2 op 67%, één zoals Michiel speelt; de rondes lagen per standpunt binnen 0,3 fps van elkaar.
+
+| Fps gemiddeld (1% laagste) | Moos | Kapel | Boerderij | Hut | Weiden | Dal van boven |
+|---|---|---|---|---|---|---|
+| 1440p FSR 2 67%, grond van eerst | 70,5 (67,9) | 67,9 (65,3) | 72,0 (68,9) | 46,1 (44,5) | 69,3 (66,7) | 53,8 (51,9) |
+| 1440p FSR 2 67%, nu | 82,6 (78,7) | 80,2 (76,2) | 85,2 (80,8) | 51,1 (49,2) | 81,2 (77,5) | 75,5 (72,3) |
+| 3456×2160 MetalFX Ultra, schaal vanzelf (0,5), grond van eerst | 59,9 | 57,2 | 60,5 | 39,1 | 57,6 | 36,8 |
+| 3456×2160 MetalFX Ultra, schaal vanzelf (0,5), nu | 74,8 | 71,6 | 76,8 | 46,7 | 72,0 | 59,5 |
+
+- Tekenopdrachten 1000 tot 1500 per beeld, driehoeken 1,2 tot 3,3 miljoen; gelijk tussen de twee standen.
+- **De hut haalt de 60 niet.** Daar kosten de schaduw van de zon 7,1 ms en de bomen 6,9 ms (`--profile`): de grote sparren vlak voor de hut vullen half het beeld met takkaarten die elk in de schaduwkaart kijken. Een kortere schaduw (200 in plaats van 300 m, bomen tot 160 m) scheelde 0,4 miljoen driehoeken en geen fps (51,0 tegen 51,1, twee rondes om en om); teruggedraaid.
+- Op 1080p zonder upscaler kostte de grond eerst 14 van de 22,6 ms in het dal van boven; het gras 0,9 ms; de bomen daar niets meetbaars.
+- **Twintig tegen twintig** (`tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90`), zonder GPU, niet om en om en bij wisselende drukte: de physics van een beeld kostte op het 95e percentiel 17 ms voor de bots een ver doel minder vaak opnieuw zochten, 8,7 ms erna (zonder dal; Michiel speelde toen), 16,1 ms met het dal en 12,4 tot 14,8 ms in vier runs na de trunk. De eerste meting na het begin is steeds 3,1 s: dat is het opzetten van de wedstrijd achter het zwarte scherm (geen beeld en geen physicsstap erna duurde langer dan 0,2 s), en het trekt het gemiddelde dat de test noemt omhoog. De bots komen in anderhalve minuut niet bij elkaar: de dichtstbijzijnde twee bleven 690 tot 770 m uit elkaar. Ze stappen niet in voertuigen.
+- **Laden.** Het level laadt headless in 3 s (de grove 0,2 s). Het onderzoek naar dekking voor de robots van de route kijkt naar 19.522 plekken naast de schuren en de kampen.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet.** Hoe ver het rijden voelt, of de sluipschuttersposten goed liggen, of de gevechten van de route te zwaar of te licht zijn.
+- **De bergen zijn hoog, het speelveld niet.** Het land loopt in de hoeken maar 150 à 190 m op; de echte bergen liggen buiten het speelveld. De hutten in de hoeken zijn de hoogste plekken. Hoger schieten vraagt een groter land (meer navmesh, meer bouwtijd).
+- **De geluiden van de motorfiets** zijn gekozen op spectrogram en toonhoogte, niet op het oor.
+- **De kleur**: het goud van lariks en esdoorn, het groen van de wei in de schaduw, de stroken.
+- Hoe het licht verloopt als de wolken over de zon trekken (`scripts/cloud.gd`) heb ik alleen op losse beelden gezien.
+
+**Nog open**
+
+- Een land dat verder de bergen op gaat, als hij van hoger wil schieten.
+- Een beek door het Moos (de textuur `river_small_rocks` is er al).
+- De verre schuren als één mesh in plaats van één per blok van 64 m.
+- Van de rotsen uit de downloads staan `boulder_01`, `rock_face_01`, `dead_tree_trunk` en `tree_stump_02` in het level; `rock_moss_set_01/02` en `rock_07` nog niet (een set is één scène met zes of zeven rotsen naast elkaar). De modellen zijn zwaar (66.000 driehoeken een kei, 100.000 een stam); hun LOD maakt de importer.
+- De hut haalt op 1440p 51 fps: minder takkaarten dichtbij, of een goedkopere schaduw op de naalden.
+- Bots die zelf een voertuig nemen.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| Het level bouwen (een minuut) | `tools/build_level.sh alps` |
+| De hoogtes opnieuw halen | `tools/fetch_map.py alps` |
+| De ruis van de grond | `Godot --headless --path . --script tools/gen_noise.gd` |
+| Samen rijden testen | `tools/nettest.sh --ride` |
+| Twintig tegen twintig, anderhalve minuut | `tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90` |
+| Wat het dal kost | `tools/benchmark.sh --scene=res://scenes/alps.tscn --at="1150,+60,700,-120,-14" --profile --only=landmesh,meadow,trees` |

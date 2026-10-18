@@ -53,8 +53,9 @@ const HUNG := "hanging_industrial_lamp"
 ## metres.
 const PAIRED := 0.6
 const GLOW_REACH := 0.8
-## What glows in the meshes of a level is made of one of these.
-const GLOWING: Array[String] = ["res://materials/emissive_warm.tres", "res://materials/emissive_cool.tres"]
+## What glows in the meshes of a level is made of one of these; the glass of
+## a lamp that burns by night only glows then, see shaders/lamp_glass.gdshader.
+const GLOWING: Array[String] = ["res://materials/emissive_warm.tres", "res://materials/emissive_cool.tres", "res://materials/lamp_glass.tres"]
 
 
 ## A box collider of the level that models may turn out to be stacked in.

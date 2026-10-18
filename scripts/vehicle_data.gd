@@ -65,6 +65,11 @@ extends Resource
 @export var peak_rpm := 2400.0
 ## How much of the power arrives at the wheels.
 @export var efficiency := 0.85
+## How many times the torque arrives at the wheels while they turn far
+## slower than the engine: the torque converter of an automatic, which lets
+## it pull away hard and crawl up the face of a dune without making it any
+## faster once it goes.
+@export var stall := 1.6
 ## The ratios of the gears from first up, of reverse, and of the axle.
 @export var gears: PackedFloat32Array = PackedFloat32Array([3.4, 2.1, 1.4, 1.0])
 @export var reverse := 3.6
@@ -115,6 +120,10 @@ extends Resource
 @export var run_over_kills := 9.0
 
 @export_group("Gun")
+## Whoever drives it keeps their own weapon in hand and fires it where the
+## view is, over the screen of an open car; in a lorry or a tank both hands
+## are needed for driving.
+@export var driver_fires := false
 ## A turret that turns, and a gun in it that lifts: degrees a second, and
 ## how far down and up it goes.
 @export var has_turret := false

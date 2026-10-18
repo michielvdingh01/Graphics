@@ -5,7 +5,9 @@
 // and as deep as `room_deep`. What is hit there is given a colour: paint
 // and concrete, lit by the day through the window it is seen through, less
 // the further in. Each room is a little lighter or darker than the next,
-// and one in a while has its lamps on.
+// and one in a while has its lamps on. By night (the global "night", see
+// Settings.apply()) no day comes in, and one room in three has its lamps
+// on, which light it all through.
 //
 // The glass has it behind its reflection (shaders/window_pane.gdshader) and
 // the wall behind a pane that is gone has it by itself
@@ -22,6 +24,9 @@ uniform float room_deep = 7.0;
 // How bright a room is just inside its window, next to the day outside.
 uniform float room_light : hint_range(0.0, 2.0) = 0.2;
 uniform sampler2D room_grain : hint_default_white, filter_linear_mipmap, repeat_enable;
+// How bright a room with its lamps on is by night, all through.
+uniform float room_lamps = 0.55;
+global uniform float night;
 
 float room_dice(vec2 cell, float salt) {
 	return fract(sin(dot(cell, vec2(12.9898, 78.233)) + salt * 37.719) * 43758.5453);
@@ -52,7 +57,7 @@ vec3 room_seen(vec3 world, vec3 out_normal, vec3 look) {
 	reach = mix(reach, vec3(1e6), lessThan(abs(way), vec3(1e-5)));
 	float far = min(reach.x, min(reach.y, reach.z));
 	vec3 hit = from + way * far;
-	float lamps_on = step(0.9, room_dice(cell, 3.0));
+	float lamps_on = step(mix(0.9, 0.66, night), room_dice(cell, 3.0));
 	float mood = mix(0.55, 1.0, room_dice(cell, 1.0));
 	vec3 paint;
 	float lit;
@@ -81,8 +86,11 @@ vec3 room_seen(vec3 world, vec3 out_normal, vec3 look) {
 	}
 	// The day comes in at the window and is lost on the way to the back.
 	float inward = hit.z;
-	float daylight = mix(1.0, 0.16, smoothstep(0.0, 1.0, inward));
+	float daylight = mix(1.0, 0.16, smoothstep(0.0, 1.0, inward)) * (1.0 - night * 0.97);
 	float grain = texture(room_grain, vec2(hit.x + hit.z * 0.7 + cell.x * 0.37, hit.y + hit.z * 0.31)).r;
 	vec3 lamp_glow = vec3(1.0, 0.86, 0.6) * lamps_on * 0.07;
-	return paint * (daylight * lit * mood * room_light * mix(0.8, 1.1, grain) + lamp_glow);
+	// By night a room with its lamps on is lit by them, the tubes on the
+	// ceiling brightest and the back a little less than the front.
+	vec3 lamplight = vec3(1.0, 0.95, 0.84) * lamps_on * night * room_lamps * lit * mood * mix(1.0, 0.75, inward);
+	return paint * (daylight * lit * mood * room_light * mix(0.8, 1.1, grain) + lamp_glow + lamplight);
 }

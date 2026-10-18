@@ -104,7 +104,8 @@ func _run() -> void:
 		tree.change_scene_to_file(levels[0].scene)
 		await tree.scene_changed
 		await _wait(0.5)
-		await _play_through(levels[0], Menu.LEVELS[at + 1].scene if at + 1 < Menu.LEVELS.size() else "")
+		await _baked()
+		await _play_through(levels[0], _after(at))
 		_ran([levels[0].name])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
@@ -146,8 +147,15 @@ func _run() -> void:
 	tree.change_scene_to_file(Menu.LEVELS[0].scene)
 	await tree.scene_changed
 	for i in Menu.LEVELS.size():
+		if Menu.LEVELS[i].get("variant", false):
+			# The same level played another way is not on the route: it is
+			# entered from the menu.
+			Save.clear()
+			tree.change_scene_to_file(Menu.LEVELS[i].scene)
+			await tree.scene_changed
 		await _wait(0.5)
-		await _play_through(Menu.LEVELS[i], Menu.LEVELS[i + 1].scene if i + 1 < Menu.LEVELS.size() else "")
+		await _baked()
+		await _play_through(Menu.LEVELS[i], _after(i))
 	_ran(Menu.LEVELS.map(func(level: Dictionary) -> String: return level.name))
 
 	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
@@ -1933,6 +1941,16 @@ func _glows(mesh: MeshInstance3D) -> bool:
 	return false
 
 
+## The scene the exit of Menu.LEVELS[i] leads to: the next level on the
+## route, "" after the last. A variant of a level (the dunes by night) is not
+## on the route; it follows the level it is a variant of, whose exit it has.
+func _after(i: int) -> String:
+	for later in range(i + 1, Menu.LEVELS.size()):
+		if not Menu.LEVELS[later].get("variant", false):
+			return Menu.LEVELS[later].scene
+	return ""
+
+
 ## Plays the level that is loaded from its start to its exit: zone by zone
 ## and checkpoint by checkpoint, with a restart of the game at the first
 ## checkpoint and a death at the last. `next` is the level its exit should
@@ -1950,6 +1968,9 @@ func _play_through(level: Dictionary, next: String) -> void:
 	_check("%s: has things that explode, each with its model" % title, not explosives.is_empty()
 		and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
 	_inventory(game, title)
+	var land: Node = load("res://scripts/land.gd").of(tree)
+	if land and land.by_night():
+		await _try_dark(game, land, title)
 
 	# The route as the level describes it, before anything is fought over.
 	var walk := _walk(game)
@@ -2292,6 +2313,50 @@ func _on_watch(robots: Array) -> bool:
 	return not robots.is_empty() and robots.all(func(robot: Node) -> bool: return robot.is_watching())
 
 
+## By night: the ground a floodlight shines on is in the light, somebody in
+## the wood is in the dark and somebody in the open under the moon in
+## between; and a floodlight that is shot out lights nothing any more. Asks
+## scripts/land.gd, which is what the watch asks.
+func _try_dark(game: Node, land: Node, title: String) -> void:
+	var space: PhysicsDirectSpaceState3D = game.player.get_world_3d().direct_space_state
+	var lamp: Node = null
+	var lit := Vector3.INF
+	for one: Node in game.get_node("Level/Breakables").get_children():
+		if not one.get(&"light") is SpotLight3D or one.out:
+			continue
+		var light: SpotLight3D = one.light
+		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(light.global_position, light.global_position - light.global_basis.z * 30.0, 1))
+		if ground.is_empty():
+			continue
+		# Where this lamp alone puts somebody in the light.
+		var others := 0.0
+		for other: Light3D in Fx.level_lamps():
+			if other != light:
+				others += Fx.lamp_strength(other, ground.position + land.CHEST)
+		if others < land.LIT * 0.2 and land.light_at(ground.position) > 0.9:
+			lamp = one
+			lit = ground.position
+			break
+	_check("%s: where a floodlight shines, somebody stands in the light" % title, lamp != null)
+	var dark := Vector3.INF
+	var moonlit := Vector3.INF
+	for x in range(8, 60, 4):
+		for z in range(186, 214, 4):
+			var top := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, 60, z), Vector3(x, -10, z), 1))
+			if top.is_empty():
+				continue
+			var light: float = land.light_at(top.position)
+			if light < 0.05 and dark == Vector3.INF:
+				dark = top.position
+			elif absf(light - land.MOONLIT) < 0.01 and moonlit == Vector3.INF:
+				moonlit = top.position
+	_check("%s: in the shade of the wood it is dark, and out of it there is the moon" % title, dark != Vector3.INF and moonlit != Vector3.INF and land.hidden_at(dark) and not land.hidden_at(lit if lit != Vector3.INF else moonlit))
+	if lamp:
+		lamp.take_damage(100.0, lamp.global_position, Vector3.DOWN)
+		await _wait(0.6)
+		_check("%s: and once it is shot out, it lights nobody" % title, lamp.out and land.light_at(lit) < 0.5)
+
+
 ## Tries the shade on the watch of a zone: somebody who stands in the shade
 ## in front of one of its guards is not seen, and somebody who stands in the
 ## light there is, which starts their fight. It takes a guard that stands
@@ -2314,7 +2379,8 @@ func _try_watch(game: Node, zone: RefCounted, title: String) -> bool:
 				var floor_hit := space.intersect_ray(floor_ray)
 				if floor_hit.is_empty() or not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, floor_hit.position + Vector3.UP * 1.35, 1)).is_empty():
 					continue
-				var shade: float = land.shade_around(floor_hit.position)
+				# The shade by day, the dark by night (scripts/land.gd).
+				var shade: float = 1.0 - land.light_at(floor_hit.position)
 				if (shade > 0.9 or shade < 0.1) and spots[shade > 0.5] == Vector3.INF:
 					spots[shade > 0.5] = floor_hit.position
 		if spots[true] == Vector3.INF or spots[false] == Vector3.INF:
@@ -2330,7 +2396,8 @@ func _try_watch(game: Node, zone: RefCounted, title: String) -> bool:
 		await _wait(0.8)
 		_move(game.player, spots[true])
 		await _wait(guard.notice_time + 1.0)
-		_check("%s: somebody who stands in the shade is not seen by the watch" % title, not zone.started and guard.awareness < 0.05)
+		var hidden := "the dark" if land.by_night() else "the shade"
+		_check("%s: somebody who stands in %s is not seen by the watch" % [title, hidden], not zone.started and guard.awareness < 0.05)
 		_move(game.player, spots[false])
 		await _wait(guard.notice_time + 0.8)
 		_check("%s: somebody who stands in the light is, and that starts their fight" % title, zone.fighting() and guard.is_alert())
@@ -2405,3 +2472,16 @@ func _check(label: String, ok: bool) -> void:
 
 func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds, true, true).timeout
+
+
+## Waits for the level that has loaded to have baked its navmesh, which it
+## does on a thread of its own, and for the server that finds the ways over
+## it to have it: at most ten seconds.
+func _baked() -> void:
+	var game := get_tree().current_scene
+	var waited := 0.0
+	while not game.get(&"is_baked") and waited < 10.0:
+		await _wait(0.1)
+		waited += 0.1
+	for i in 3:
+		await get_tree().physics_frame

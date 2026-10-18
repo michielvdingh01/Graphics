@@ -16,6 +16,7 @@
 	"specials": {"first": 60.0, "back": 90.0},
 	"arenas": {
 		"dunes": {"most": 20, "size": 20},
+		"dunes_night": {"like": "dunes"},
 		"alps": {"most": 32, "size": 20}
 	},
 	"modes": {

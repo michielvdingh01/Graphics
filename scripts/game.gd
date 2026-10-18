@@ -149,6 +149,9 @@ var _breakables: Array[Node] = []
 var _robot_tick := 0.0
 var _watch_tick := 0.0
 var _wiped := false
+## True once the navmesh has been baked, see the signal `baked`, or once it
+## is clear that this machine bakes none: a guest finds no ways itself.
+var is_baked := false
 
 @onready var nav_region: NavigationRegion3D = $NavigationRegion3D
 @onready var player: CharacterBody3D = $Player
@@ -194,6 +197,7 @@ func _ready() -> void:
 		WAY.forget_squares()
 	# Only the host's robots find their own way.
 	if Net.is_guest():
+		is_baked = true
 		return
 	# The level's static body is built a frame late, so wait before baking from
 	# it. The server only picks this bake up with region_use_async_iterations off.
@@ -202,8 +206,11 @@ func _ready() -> void:
 		if not is_inside_tree():
 			# The sandbox or a match has sent the player on to another level.
 			return
+	# In the dunes that takes a third of a second, in one frame: the HUD keeps
+	# the screen black until it is done.
 	if not prebaked:
 		nav_region.bake_navigation_mesh(false)
+	is_baked = true
 	baked.emit()
 	# Cover is only looked for where there is fighting: in the zones.
 	var grounds: Array[AABB] = []

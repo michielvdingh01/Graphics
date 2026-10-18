@@ -268,8 +268,12 @@ func _survey(scene: Node) -> void:
 	if level == null:
 		return
 	# A level that is not a yard between sheds says what its open air sounds
-	# like: see open_air() in tools/kit/land.gd.
+	# like: see open_air() in tools/kit/land.gd. By night (the environment of
+	# the scene says so) it is the bed of that kind by night, if there is one.
 	_open_bed = level.get_meta(&"open_air", &"yard")
+	var world := scene.get_viewport().find_world_3d().environment if scene.is_inside_tree() else null
+	if world and world.get_meta(&"night", false) and _streams.has(StringName(BED + String(_open_bed) + "_night")):
+		_open_bed = StringName(String(_open_bed) + "_night")
 	for zone in level.get_children():
 		if not zone.has_meta(&"bounds"):
 			continue

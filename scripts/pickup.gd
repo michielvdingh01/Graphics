@@ -5,7 +5,9 @@ extends Node3D
 ##
 ## It hops out of the wreck, hangs a hand above the floor turning slowly, and
 ## glows faintly in its own colour: enough to be found in a dark hall, not
-## enough to be the brightest thing in it. Walking up to
+## enough to be the brightest thing in it. A cell is drawn no bigger than it
+## is and glows a grey green: by daylight in the dunes a bright green one drew
+## the eye from the fight. Walking up to
 ## it takes it, if there is any use for it: a cell is left lying by somebody
 ## who is not hurt. After a while it blinks and is gone, which is a reason
 ## not to wait behind a crate until the fight is over.
@@ -22,7 +24,7 @@ const MODELS := {
 ## The colour it glows in, how large it is drawn next to how it was built,
 ## and the sound of taking it.
 const TINT := {Kind.HEALTH: Color(0.3, 1.0, 0.45), Kind.AMMO: Color(1.0, 0.7, 0.28), Kind.GRENADE: Color(0.75, 0.88, 1.0)}
-const SIZE := {Kind.HEALTH: 1.5, Kind.AMMO: 1.15, Kind.GRENADE: 2.4}
+const SIZE := {Kind.HEALTH: 1.0, Kind.AMMO: 1.15, Kind.GRENADE: 2.4}
 const SOUND := {Kind.HEALTH: &"pickup_health", Kind.AMMO: &"pickup_ammo", Kind.GRENADE: &"pickup_grenade"}
 ## What the HUD says when it is taken.
 const LABEL := {Kind.HEALTH: "+%d HEALTH", Kind.AMMO: "+AMMO", Kind.GRENADE: "+GRENADE"}
@@ -41,6 +43,10 @@ const HOP_TIME := 0.45
 const GLOW := 0.22
 const GLOW_REACH := 1.5
 const LIT := 0.35
+## What the window of a cell glows instead of the green of a sight, and how
+## much of the glow it has on the floor.
+const CELL_WINDOW := Color(0.42, 0.62, 0.45)
+const CELL_GLOW := 0.4
 const TURN := 0.9
 const WORLD := 1
 
@@ -69,10 +75,16 @@ func _ready() -> void:
 			if lit and lit.emission_enabled:
 				lit = lit.duplicate()
 				lit.emission_energy_multiplier *= LIT
+				if kind == Kind.HEALTH:
+					lit.emission = CELL_WINDOW
+					lit.albedo_color = CELL_WINDOW
 				mesh.set_surface_override_material(i, lit)
 	add_child(_model)
 	_light.light_color = TINT[kind].lerp(Color.WHITE, 0.35)
 	_light.light_energy = GLOW
+	if kind == Kind.HEALTH:
+		_light.light_color = CELL_WINDOW
+		_light.light_energy = GLOW * CELL_GLOW
 	_light.omni_range = GLOW_REACH
 	_light.omni_attenuation = 1.4
 	_light.light_bake_mode = Light3D.BAKE_DISABLED
