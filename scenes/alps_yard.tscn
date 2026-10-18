@@ -1,0 +1,69 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://assets/hdri/table_mountain_2_puresky.hdr" id="hdri"]
+[ext_resource type="PackedScene" path="res://scenes/levels/alps_yard_level.tscn" id="level"]
+[ext_resource type="Shader" path="res://shaders/alps_sky.gdshader" id="sky_shader"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("sky_shader")
+shader_parameter/panorama = ExtResource("hdri")
+shader_parameter/ground = Color(0.3, 0.32, 0.22, 1)
+shader_parameter/ground_energy = 0.6
+shader_parameter/turn = 0.0007
+shader_parameter/sun_turn_deg = 230.0
+shader_parameter/tilt_deg = 4.3
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+radiance_size = 2
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_energy = 0.85
+tonemap_mode = 4
+tonemap_exposure = 1.0
+tonemap_agx_contrast = 1.25
+ssao_enabled = true
+ssao_radius = 2.5
+ssao_intensity = 4.0
+glow_enabled = true
+glow_intensity = 0.5
+glow_bloom = 0.03
+glow_hdr_threshold = 1.3
+fog_enabled = true
+fog_light_color = Color(0.72, 0.78, 0.88, 1)
+fog_density = 0.00007
+fog_aerial_perspective = 0.55
+fog_sun_scatter = 0.12
+fog_height = 400.0
+fog_height_density = 0.0008
+adjustment_enabled = true
+adjustment_contrast = 1.03
+adjustment_saturation = 1.08
+metadata/open_sky = true
+
+[sub_resource type="BoxMesh" id="shade_wall"]
+size = Vector3(130, 40, 4)
+
+[node name="AlpsYard" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.6427876, 0.1527247, -0.7506659, 0, 0.9799247, 0.1993679, 0.7660444, -0.1281512, 0.6298835, 0, 0, 0)
+light_color = Color(1, 0.84, 0.66, 1)
+light_energy = 3.2
+light_bake_mode = 0
+shadow_enabled = true
+shadow_blur = 1.5
+directional_shadow_blend_splits = false
+directional_shadow_max_distance = 300.0
+
+[node name="Level" parent="." instance=ExtResource("level")]
+
+[node name="ShadeWall" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.6427876, 0, -0.7660444, 0, 1, 0, 0.7660444, 0, 0.6427876, -88, 120, -110)
+cast_shadow = 3
+mesh = SubResource("shade_wall")
