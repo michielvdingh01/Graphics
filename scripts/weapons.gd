@@ -547,7 +547,7 @@ func current_spread_deg() -> float:
 		spread += data.ramp_spread_deg * (1.0 - _ramp)
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
 	spread += data.move_spread_deg * minf(speed / 8.0, 1.5) * (1.0 - 0.7 * ads_blend)
-	if not player.is_on_floor():
+	if not player.is_on_floor() and not player.riding:
 		spread += 2.0
 	elif player.is_crouched() and not player.is_sliding():
 		spread *= 0.7
@@ -995,9 +995,14 @@ func muzzle_position() -> Vector3:
 
 
 ## The flash at the muzzle of the weapon in hand. Over the sights it is
-## smaller, so that it does not hide what is being shot at.
+## smaller, so that it does not hide what is being shot at. Whoever fires
+## from behind the wheel has the weapon out of sight: the flash is where the
+## muzzle is, for the view of the vehicle to see.
 func flash() -> void:
 	var data := current()
+	if not visible:
+		Fx.muzzle_flash(null, Transform3D(Fx.facing(-camera.global_basis.z), muzzle_position()), data.flash_size, data.flash_prongs)
+		return
 	Fx.muzzle_flash(_models[_index].muzzle, Transform3D(), data.flash_size * lerpf(1.0, 0.65, ads_blend), data.flash_prongs)
 
 

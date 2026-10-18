@@ -4070,7 +4070,7 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 - Een voertuig botst er niet mee, maar ziet ze elke stap voor zich (`_crush()` in `scripts/vehicle.gd`): de slagboom knapt af en vliegt als los stuk weg (met splinters en geluid), het draad wordt platgedrukt en houdt daarna niemand meer tegen. Het voertuig verliest er wat snelheid bij: een jeep een vijfde door het draad, een tank bijna niets. Een granaat of raket hoort de slagboom ook af te knappen (niet getest).
 - Wie loopt, wordt door allebei nog tegengehouden.
 - De zandzakstelling op 12 m binnen de poort staat er met opzet; daar rijd je omheen.
-- Niet veranderd: de tank kan met een gedraaide koepel nog met zijn loop tegen de poortvleugels slaan. Een gebroken slagboom blijft kapot tot het level opnieuw laadt, en wie bij samen spelen later meedoet, ziet hem nog heel.
+- Niet veranderd: de tank kan met een gedraaide koepel nog met zijn loop tegen de poortvleugels slaan. (Sinds `verbeterpunten` botst de loop nergens meer tegen, zie "Verbeterpunten na het spelen".) Een gebroken slagboom blijft kapot tot het level opnieuw laadt, en wie bij samen spelen later meedoet, ziet hem nog heel.
 - De duinen opnieuw gebouwd (geen lightmap); de showroom niet, daar staan ze nog vast.
 - Getest: `tools/test_vehicles.sh --only=gate` (18 controles). De speler loopt vast tegen slagboom en draad; een jeep, een vrachtwagen en een tank rijden elk recht door poort 2 naar buiten, langs beide rijen draad, en breken onderweg alles. De hele test heeft nu 133 controles in 5 minuten, en de selftest slaagt. Niet op de GPU bekeken en niet gespeeld.
 
@@ -4087,11 +4087,97 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 | Wat | Hoe |
 |---|---|
 | Rijden in de duinen | het spel, Dunes, naar een voertuig lopen en E |
-| De voertuigen testen | `tools/test_vehicles.sh` (5 minuten), `--only=jeep`, `truck`, `tank`, `wear`, `run_over`, `dunes`, `gate` of `match` |
+| De voertuigen testen | `tools/test_vehicles.sh` (5 minuten), `--only=jeep`, `truck`, `tank`, `hills`, `wear`, `run_over`, `dunes`, `gate` of `match`; `SLOPES=30,40,50 tools/test_vehicles.sh --only=hills` voor andere hellingen |
+| Over de duinen | `tools/vehicle_ridges.sh` (noord, tegen de steile kant op), `DIR=south` over de lange rug; `KINDS=tank STEP=24` voor minder; zonder GPU, ongeveer een minuut per soort |
 | Een rit horen | `tools/hear.py drive jeep`, `drive truck crash`, `drive truck wreck`, `drive tank gun`, met `b` erachter de varianten |
 | De modellen opnieuw bouwen | `tools/build_model.sh vehicles`; het level hoeft daarvoor niet opnieuw, behalve als `vehicle()` of het nummer verandert |
 | Een nieuw voertuig | een model in `tools/models/vehicles.gd` met `_touches`, `_sits` en `_solid`, een `vehicles/<soort>.tres`, en `vehicle("<soort>", ...)` in het level |
 | De geluiden opnieuw snijden | `tools/build_sounds.py <id>`; de opnamen staan in `.cache/sounds/freesound_vehicles` |
+
+## Verbeterpunten na het spelen: rood licht, cellen, laden, heuvels, tank, jeep
+
+Op 18 oktober 2026 gevraagd, na het spelen: het rode licht van soldaten die richten minder fel; de groene staafjes die dode vijanden achterlaten kleiner en minder opvallend; het haperen als de duinen laden oplossen; de tank, de jeep en de vrachtwagen meer vermogen, zodat ze over alle heuvels van de duinen komen; de tank sneller weer laten schieten; schieten met je eigen wapen terwijl je in een jeep rijdt, met een vizierkruis zoals in de tank; en een plan voor naderingsmijnen, flashbangs en rookgranaten. Branch `verbeterpunten`.
+
+**Het rode licht** (`shaders/glint.gdshader`). Wat een soldaat laat zien vlak voor hij schiet en zolang hij schiet, is een rode ster op zijn wapen. Die werd nooit kleiner dan hij op 5 m afstand is, en negen keer zo fel getekend: van ver was hij dus groter dan de soldaat zelf en het felste in beeld. Nu wordt hij pas niet meer kleiner vanaf 11 m, is hij iets kleiner (0,20 in plaats van 0,24 m) en is hij minder dan half zo fel (4 in plaats van 9). Van dichtbij waarschuwt hij nog; op 40 m is hij op het scherm ruim twee keer zo klein en geeft hij een soldaat niet meer weg. De sporen van zijn kogels (rood) en de vlam aan de loop zijn niet veranderd. Robots en bots hebben deze ster niet.
+
+**De groene staafjes** (`scripts/pickup.gd`). Een gezondheidscel die een gevallen vijand achterlaat is nu even groot als hij gebouwd is (was anderhalf keer zo groot) en het venster gloeit grijsgroen in plaats van het felle groen van de lichtpuntjes op de vizieren; het licht dat hij op het zand werpt is 40% van wat het was. De kleur van "+25 HEALTH" op het scherm is niet veranderd. Munitie en granaten zijn niet veranderd.
+
+**Het haperen als de duinen laden** (`scripts/squad.gd`, `scripts/game.gd`). Gemeten zonder GPU: zes beelden nadat de duinen op het scherm komen, staat het spel 3,6 s stil. Dat is de dekkingskaart van de robots: elke plek een meter uit elkaar waar gevochten wordt, in de duinen 10.068 plekken met elk een kring van stralen, in één keer, terwijl het beeld uit het zwart opkomt. Het eerste beeld kost daarbovenop 0,4 s, het bakken van het navmesh.
+
+- De dekkingskaart wordt nu gemaakt in stukjes van 4 ms per beeld, in dezelfde volgorde, en is in de duinen na ongeveer 15 s klaar. Wat er uitkomt is precies hetzelfde als in één keer (vergeleken: dezelfde 10.068 plekken en 30.276 open plekken, met dezelfde bits). Vraagt een robot dekking voor de kaart af is, dan wordt de rest meteen afgemaakt, zoals eerst; het eerste gevecht in de duinen begint niet zo snel. De selftest zet de kaart opnieuw en maakt hem in één keer, zoals eerst.
+- Het navmesh bakt nog in één beeld (0,35 s), maar het scherm blijft nu zwart tot dat klaar is (`_lift_curtain()` in `scripts/hud.gd`, met `game.is_baked`); daarna komt het in 0,7 s op, zoals eerst. Bakken op een eigen thread heb ik geprobeerd: dat haalde ook dat beeld weg, maar de selftest van de duinen vond dan één op de drie keer geen weg van de start naar het eerste checkpoint (de trunk drie op drie wel). De selftest wacht nu op het navmesh (`_baked()`) in plaats van een vaste halve seconde.
+- Gemeten op de GPU, vanaf het titelscherm zoals Michiel speelt, met soldaten, de duinen gestart zoals het menu dat doet, op 3456×2160 met MetalFX en de schaal vanzelf; om en om drie rondes uit een kopie van de trunk (`4ce741c`) en deze branch, 18 oktober 18:48 tot 18:50, aan de lader, load 7 tot 10 (andere sessies bouwden en testten, geen andere Godot op de GPU). "Zwart" is hoe dicht het zwarte scherm op dat moment was:
+
+| | Laden | Langste beeld in de eerste 8 s | Beelden in 8 s | Pipelines gemaakt tijdens het tekenen |
+|---|---|---|---|---|
+| Trunk | 3,9 / 3,7 / 3,8 s | 3495 / 3745 / 3754 ms, het beeld half opgekomen (72% zwart) | 326 / 288 / 291 | 108 |
+| Nu | 5,6 / 3,7 / 3,8 s | 646 / 429 / 476 ms, onder het zwart (100%) | 545 / 605 / 598 | 108 |
+
+- Daarna, terwijl het opkomt, nog beelden van 40 tot 80 ms, en in de eerste ronde één van 220 ms bij 64% zwart: de 108 shaders van de duinen worden bij elke start gemaakt, ook op de trunk. Of dat als een schokje in het opkomen te zien is, kan ik niet beoordelen.
+
+**Voertuigen de heuvels op** (`scripts/vehicle.gd`, `vehicles/*.tres`, `tools/models/vehicles.gd`). Gemeten met een nieuwe proef (`tools/test_vehicles.sh --only=hills`): een helling van zand van 6 m hoog, vanuit stilstand aan de voet. Op de trunk kwam de tank geen 15° op, de jeep en de vrachtwagen geen 25°. De duinen lopen aan hun lange kant op tot 25 à 35° en vallen aan de steile kant (de lijzijde) af met 45 tot 59° over 5 tot 7 m. Wat het tegenhield, en wat er nu is:
+
+- **Het extra gewicht trok ze de helling af.** Elk voertuig weegt in het spel de helft meer dan het is, om niet van een duin te zweven; dat trok recht naar beneden en dus ook de helling af. Nu drukt het langzaam rijdend langs de onderkant van het voertuig, de helling in; tussen 6 en 14 m/s gaat het over in loodrecht op zijn lengte en opzij recht naar beneden (`LEAN_FROM`, `LEAN_SPAN`). Langs de onderkant ook bij hoge snelheid duwde het de jeep in een bocht verder om; loodrecht op de gemiddelde grond onder de wielen duwde het een voertuig terug op het moment dat de voorwielen al op de helling stonden en de achterwielen nog niet (vier steile duinkanten minder voor de vrachtwagen en de tank).
+- **Meer vermogen**: de tank 3850 in plaats van 2200 Nm, de vrachtwagen 770 in plaats van 520. Op vlak terrein haalt de tank nu na 8 s zijn topsnelheid van 47 km/u (was 33 km/u), de vrachtwagen na 10 s 67 km/u. De jeep niet: met meer koppel ging hij na 10 s 94 in plaats van 80 km/u en sloeg hij in de bocht van de test om. Die is op vlak terrein dezelfde gebleven (42 km/u na 3 s, 81 na 10 s).
+- **Een koppelomvormer**, zoals een automaat heeft: zolang de wielen veel langzamer draaien dan de motor, bij wegrijden of kruipend tegen een duin op, komt er tot 1,6 keer het koppel aan, bij de jeep 2 keer; zodra ze meedraaien niets extra. Dat geeft trekkracht tegen een helling op zonder dat het voertuig sneller wordt.
+- **De bak schakelt niet op tegen een helling** als de hogere versnelling het niet meer trekt: een schakelmoment zonder kracht liet de tank terugrollen naar waar de lagere nodig was, steeds opnieuw.
+- **Banden en rupsen voelen de helling voor zich.** Een wiel voelde alleen recht onder zijn as; een helling die ervoor opliep, raakte eerst de romp. De voorste en achterste wielen, en alle wielen onder een rups, voelen nu ook aan de voor- en achterkant van de band. De tank heeft bovendien spanwiel en aandrijfwiel als wielen die op vlak terrein vrij hangen en alleen een helling of richel opvangen; die draaien nu ook mee met de rups. Een rups trekt met de hele motor waar hij de grond raakt, in plaats van een deel te verliezen aan loopwielen in de lucht.
+- **De onderkant van de vrachtwagen is schuin afgesneden** voor de voorwielen en achter de achterwielen (de botsvormen; niet te zien).
+- **De loop van de tank botst niet meer.** De tank stond op een helling van 40° op zijn eigen kanon. Dat lost ook een open punt van de voertuigen op: de loop sloeg tegen de poortvleugels. Een kogel gaat nu door de loop heen.
+- **Wat het kost**: de wielen sturen meer stralen naar de grond (de tank 48 in plaats van 12 per stap). Gemeten zonder GPU, één voertuig dat rondjes rijdt, drie rondes om en om met de trunk, ronde voor ronde gelijk: het script kost per natuurkundestap 0,047 → 0,066 ms (jeep), 0,058 → 0,080 ms (vrachtwagen) en 0,107 → 0,164 ms (tank). Bij 120 stappen per seconde is dat voor de tank ongeveer 0,15 ms per beeld; alleen voor het voertuig waar iemand in rijdt, want de rest staat bevroren.
+- **Laden duurt 2,5 s** in plaats van 4 (`reload_time` in `vehicles/tank.tres`). Het geluid van een granaat in het staartstuk valt mee: een halve seconde voor hij klaar is.
+
+| Proef: 6 m zand, vanuit stilstand | Trunk | Nu |
+|---|---|---|
+| Jeep | 20° wel, 25° niet | 50°; en een wand van 55° met 30 m aanloop |
+| Vrachtwagen | 20° wel, 25° niet | 40° |
+| Tank | 15° niet | 45° |
+
+Over de duinen zelf (`tools/vehicle_ridges.sh`, zonder GPU): om de 12 m langs de twee lange duinen rijdt een voertuig met 22 m aanloop recht op de kam af. Plekken waar het de duin niet eens bereikte (er stond iets in de weg) tellen niet mee.
+
+| Over de kam | Trunk: noord, tegen de steile kant (45-59°) | Nu | Trunk: zuid, over de lange rug | Nu |
+|---|---|---|---|---|
+| Jeep | 0 van 23 | 30 van 33 | 34 van 41 | 41 van 41 |
+| Vrachtwagen | 0 van 3 | 18 van 25 | 2 van 24 | 35 van 40 |
+| Tank | kwam bij geen enkele | 19 van 30 | 0 van 1 | 37 van 41 |
+
+Op de trunk kwamen de vrachtwagen en de tank meestal niet eens tot de voet van de steile kant: ze bleven op de aanloop steken. Over de steilste stukken (53 tot 59°) komen de vrachtwagen en de tank nu nog niet overal; elke duin heeft een opening.
+
+**Schieten vanuit de jeep** (`scripts/player.gd`, `scripts/vehicle_view.gd`, `scripts/hud.gd`, `scripts/weapons.gd`, `driver_fires` in `scripts/vehicle_data.gd`). Wie in de jeep rijdt, houdt zijn eigen wapen in de hand: het richt waar het midden van het beeld is, van achter de jeep en vanaf de stoel (C), schiet door de eigen jeep heen zoals passagiers al deden, en het vizierkruis staat in beeld met de spreiding van het wapen. Rijden maakt de spreiding groter, net als lopen; zitten telt niet meer als in de lucht hangen (dat gold ook voor passagiers: 2° minder). Rechtermuisknop zoomt het beeld in zoals richten; de terugslag schopt het beeld omhoog; zolang je schiet of richt draait het beeld niet vanzelf terug achter de jeep. Herladen, wisselen en een granaat gooien gaan gewoon. De vlam is te zien bij de bestuurder, de hulzen vliegen eruit. Wat nog niet kan: de soldaat achter het stuur houdt van achteren gezien nog steeds het stuur vast met twee handen, zonder wapen. In de vrachtwagen en de tank heb je beide handen nodig voor het rijden; dat is één regel per voertuig. Passagiers konden al schieten met een vizierkruis; dat is niet veranderd.
+
+
+**Bekeken**: één blad voor en na, uit het spel op de GPU met soldaten, uit een kopie van de trunk en deze branch: `benchmark/sheets/verbeterpunten_before_after.jpg` (de rode ster op 8, 20, 40 en 60 m; een cel naast een munitieblik; schieten vanuit de jeep met het kruis en de inslag eronder).
+
+**Getest**, zonder GPU: `tools/test_vehicles.sh` (140 controles, waarvan nieuw: de hellingen, en dat wie de jeep rijdt zijn wapen heeft, kijkt waar het midden van het beeld is en raakt wie daar staat), `tools/selftest.sh` (428), `tools/selftest.sh --level=dunes` drie keer op rij, `tools/test_match.sh`, `tools/nettest.sh` en `tools/test_sandbox.sh` slagen. De wedstrijdtest faalde eerder twee keer, elke keer op een andere controle (terugkomen bij een vriend, de raket van een bot), terwijl de laptop een load van 20 tot 30 had; op een rustiger moment slaagt hij, net als op de trunk.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is niets.** Of de ster nu te weinig waarschuwt, of de cel nog te vinden is, hoe de tank en de vrachtwagen met meer vermogen en de koppelomvormer rijden (ze trekken harder op, ook op vlak terrein), en of schieten vanuit de jeep lekker werkt: dat zijn eerste getallen. Alles staat in `shaders/glint.gdshader` (SIZE, NEAR, BRIGHT), `scripts/pickup.gd` (SIZE, CELL_WINDOW, CELL_GLOW) en `vehicles/*.tres` (`torque`, `stall`, `reload_time`, `driver_fires`).
+- Van achteren gezien houdt de bestuurder van de jeep het stuur met twee handen vast terwijl er bij zijn hoofd een vlam is: een houding met een wapen uit het raam is er niet.
+- De dekkingskaart is in de duinen na zo'n 15 seconden spelen klaar (ruw: 3,6 s werk in stukjes van 4 ms). Een robot die eerder dekking zoekt, laat de rest in één keer maken; dat heb ik niet zien gebeuren en niet gemeten in het spel.
+- De vrachtwagen en de tank komen over de steilste duinkanten nog niet overal; de duinen zijn daar steiler dan zand in het echt ligt (de lijzijde van een echte duin is ongeveer 34°).
+
+### Mijnen, flashbangs en rookgranaten (plan, niets gebouwd)
+
+**Waar het op verder bouwt.** Een granaat is nu één soort per pakket (`grenade` in `assets/packs.json`: de gewone of de steelhandgranaat), op G, met een teller rechtsonder (`Grenades` in `scripts/hud.gd`). `scripts/weapons.gd` gooit hem (`_start_throw()`, `_release_grenade()`), `scripts/grenade.gd` laat hem stuiteren en na 2,2 s via `Blast.explode()` ontploffen, met wie hem gooide erbij voor de killfeed. Over de lijn gaat "threw" met de soort, en de andere machine laat een kopie zonder schade vliegen (`echo`). Vijanden zien een granaat als gevaar en rennen weg (groep `hazard`, `danger()`, `Squad.threat()`); bots gooien niets. Wat vijanden zien gaat langs stralen (`_ray_hits_player()` in `scripts/enemy.gd`) en hoe ver ze in licht en schaduw kijken (`_sees_as_far_as()`, `shade_around()`); bots kijken met stralen in `scripts/bot.gd`.
+
+**Het ontwerp.**
+
+- **Een tweede soort gooien, naast de granaat.** G blijft de scherfgranaat. Er komt één tactisch vak op Q (CoD doet het zo; Q is te voet vrij, in een voertuig blijft het "volgende stoel") met de flashbang of de rookgranaat, en de mijn als derde vak op B, of met T om tussen de soorten te wisselen als drie toetsen te veel zijn. Per pakket in `packs.json` staat wat erin zit en hoeveel: `tactical: "smoke", tacticals: 2, mines: 2`. De HUD krijgt per vak een rij pipjes zoals de granaten nu.
+- **Elk ding is een scène met een script, zoals de granaat**: `scenes/smoke_grenade.tscn`, `flashbang.tscn`, `mine.tscn`, met een eigen model in `tools/models/props.gd` en eigen geluiden (te horen met `tools/hear.py`). Het gooien zelf is dat van de granaat, met een eigen worp: een mijn ligt na een korte worp of wordt neergelegd.
+- **Rookgranaat.** Na een seconde sissen een wolk van ongeveer 8 m doorsnee die 15 tot 20 s blijft hangen, met de wind mee drijft en dan oplost. In beeld: grote, trage rookdeeltjes van de soort die er al is (`Fx.gun_smoke`, de rook van een brandend voertuig). In het spel: een wolk is een bol die ieder kan opvragen (een klein autoload `Smoke` met `blocks(from, to)`): de stralen waarmee vijanden en bots zien, gaan er niet doorheen, en wie erin staat wordt niet gezien, ook niet van dichtbij. Een vijand die de speler in de rook ziet verdwijnen, schiet nog even op de plek waar hij hem het laatst zag (dat geheugen heeft hij al).
+- **Flashbang.** Een knal na 1,5 s. Wie ernaar kijkt en hem ziet (een straal en de hoek van zijn blik): de speler krijgt een wit scherm dat in 2 tot 4 s wegtrekt en een fluittoon met gedempt geluid (een lowpass op de bus van de wereld), korter als hij er half van wegkeek. Vijanden zijn verblind: ze zien niets (zoals in rook), houden hun arm voor hun ogen (de paniekhouding van `humanoid_rig.gd` bestaat al) en schieten wild of niet. Bots verliezen hun doel en hun richten zwerft een paar seconden ver uit. Doet geen schade, breekt wel ramen in een kamer.
+- **Naderingsmijn.** Valt waar hij neerkomt, zet zich na 1,5 s op scherp met een klik en een klein knipperend lampje (zwak: geen baken, zie het rode licht hieronder). Komt een vijand, een bot van de andere kant of een voertuig binnen 2,5 m: een piep en 0,4 s later een explosie, kleiner dan een granaat maar hard tegen een voertuig (telt als zware treffer, zoals een raket). Nooit op wie hem legde of zijn eigen kant. Ten hoogste twee of drie tegelijk per speler; de oudste verdwijnt. Kapotschieten laat hem ontploffen. Over de lijn: neergelegd door de host, dus de host beslist wanneer hij afgaat; anderen zien het lampje.
+
+**Wat het kost en waar het mis kan gaan.**
+
+- De rook kost beeld: grote doorzichtige deeltjes over het hele scherm op 3456×2160. Meten met de benchmark, van binnen en van buiten de wolk, om en om. Dit is het grootste risico.
+- Alles wat nieuw in beeld komt (de wolk, het witte scherm, de mijn) moet naar `Fx.rehearse()`, anders hapert de eerste keer, zie "De eerste keer telt apart".
+- Vijanden en bots moeten de rook en de flits begrijpen; dat raakt de gevechten en de wedstrijden, en dus `tools/selftest.sh --fights` en `tools/test_match.sh`. Bots die zelf rook of mijnen gebruiken komt later.
+- Over de lijn (`Net.VERSION` omhoog): gooien gaat al met de soort; de mijn moet als ding van de host bestaan.
+- Geluid: sissen, een flashbang die echt pijn doet aan je oren en een fluittoon, de klik en de piep van de mijn. Uit de CC0-bibliotheek die er is en gesynthetiseerd; varianten om te kiezen met `tools/hear.py`.
+
+**Mijn advies.** Bouw eerst het tweede vak met de **rookgranaat**: die heeft in de grote duinen en in wedstrijden de meeste waarde, raakt alleen het zien en niet de schade, en het enige echte risico (wat de wolk kost op de GPU) is snel te meten. Daarna de **flashbang**, die vooral binnen werkt (de fabriek, de centrale, het complex) en hetzelfde "niet zien" hergebruikt. De **mijn** als laatste: die heeft eigenaarschap en kanten nodig, schade tegen voertuigen, en het meeste werk over de lijn. Elk is ongeveer één sessie van bouwen, testen en meten; de eerste iets meer, omdat het vak, de toets en de HUD erbij horen. Te kiezen door jou: de toetsen (Q en B, of één toets om te wisselen), welke pakketten wat krijgen, en of een mijn ook voor bots en vijanden is.
 
 ## De duinen bij nacht
 
