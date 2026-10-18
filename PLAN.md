@@ -4093,20 +4093,88 @@ Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden z
 | Een nieuw voertuig | een model in `tools/models/vehicles.gd` met `_touches`, `_sits` en `_solid`, een `vehicles/<soort>.tres`, en `vehicle("<soort>", ...)` in het level |
 | De geluiden opnieuw snijden | `tools/build_sounds.py <id>`; de opnamen staan in `.cache/sounds/freesound_vehicles` |
 
-## De duinen bij nacht (plan)
+## De duinen bij nacht
 
-Op 18 oktober 2026 gevraagd: van precies dezelfde map van de duinen een tweede versie bij nacht, zoals Call of Duty dat weleens doet: donker, met lichtbronnen bij de tenten, de verzamelpunten en het complex. Het plan is dezelfde dag goedgekeurd ("Ja, alles zoals je aanraadt"), met een wapenset erbij: het standaardpakket, maar elk wapen met een demper, om stiller te blijven. Branch `duinnacht`.
+Op 18 oktober 2026 gevraagd: van precies dezelfde map van de duinen een tweede versie bij nacht, zoals Call of Duty dat weleens doet: donker, met lichtbronnen bij de tenten, de verzamelpunten en het complex. Het plan is dezelfde dag goedgekeurd ("Ja, alles zoals je aanraadt, begin maar"), met een wapenset erbij: het standaardpakket, maar elk wapen met een demper, om stiller te blijven. Gebouwd op de branch `duinnacht`, in een eigen worktree, vanaf de trunk `4ce741c`; niet gemerged.
 
-**Hoe**
+**Wat Michiel koos** (uit mijn voorstel): de lucht zelf rekenen in plaats van een gescande nachtlucht te downloaden; maanlicht in plaats van een maanloze nacht; geen zaklamp of nachtkijker; en het level mag op deze branch opnieuw gebouwd en meegecommit worden (de duinen hebben geen lightmap). Onder "verzamelpunten" heb ik de kampen en posten verstaan.
 
-- **Eén gebouwd level, twee scènes.** `scenes/dunes_night.tscn` laadt hetzelfde `scenes/levels/dunes_level.tscn` als de dag, met een eigen omgeving, een maan en een laag lampen. Botsvormen, navmesh, route en posten zijn die van de dag.
-- **De maan staat waar de zon staat** (28,6 graden op 214 graden): de schaduwkaart van het level, de donkere grond in de verte en `sunward` op het beton blijven kloppen.
-- **De lucht wordt in `shaders/dune_sky.gdshader` gerekend**: sterren, de maan waar het licht vandaan komt, een gloed aan de horizon. Geen download.
-- **Eén schakelaar `night`** (een globale shaderwaarde) voor wat de nacht anders tekent: de kamers achter de ramen, het glas van de lampen, de lucht. De omgeving van een level zegt het (`metadata/night`), zoals `metadata/open_sky`.
-- **De lampen** zet de bouwer in een laag `Night`, die zichzelf opruimt als het dag is (zoals `scripts/bake_only.gd`), met namen die `scripts/breakables.gd` kent: ze kunnen stuk. Niets ervan heeft een botsvorm.
-- **Sluipen**: drie standen in plaats van twee. Onder een lamp 34 m, in het maanlicht ongeveer 14, in het donker ongeveer 5; het licht op de speler wordt in het spel uitgerekend, dus een kapotgeschoten lamp maakt het donker.
-- **De begroting**: de nacht is niet trager dan de dag op de vijf vaste standpunten met de soldaten op hun post, om en om op de speelinstelling, en de dag blijft precies gelijk.
+**Wat er staat**
 
-**Wat Michiel koos**: de lucht zelf rekenen, maanlicht, geen zaklamp of nachtkijker, en het level mag op deze branch opnieuw gebouwd en meegecommit worden (er is geen lightmap).
+- **Een tweede scène van hetzelfde level** (`scenes/dunes_night.tscn`). Ze laadt `scenes/levels/dunes_level.tscn`, dezelfde gebouwde duinen als de dag, met een maan, een eigen lucht en omgeving, en de nachtlaag van de bouwer (`scenes/levels/dunes_night.tscn`) in haar `Level`. In de levelkeuze staat ze als "Dunes at night", na Dunes, als variant: geen uitgang leidt erheen, en de selftest speelt haar vanuit het menu en niet langs de route (`"variant": true` in `Menu.LEVELS`, `_after()` in `scripts/selftest.gd`). In wedstrijden is ze een arena ("Dunes Night"), met de aantallen en de wapenplekken van de duinen (`"like": "dunes"` in `assets/match.json` en `assets/arenas.json`).
+- **De maan** staat waar de zon staat, 28,6 graden in het zuidzuidwesten, koel blauw (0,62, 0,72, 1) en zwak (0,45 waar de zon 3,4 is). Daardoor klopt alles wat het level over de zon weet: de schaduwkaart (die het sluipen gebruikt), de donkere grond in de verte en `sunward` op het beton. Haar schaduw reikt 50 m in twee lagen, waar die van de zon 110 m in vier reikt.
+- **De lucht wordt gerekend** (`shaders/night_sky.gdshader`): donker naar boven, iets lichter aan de horizon, de gloed van een stad in het noordnoordoosten, de maan met zeeën precies waar het licht vandaan komt, een waas om de maan, sterren die nooit kleiner dan een beeldpunt getekend worden, en een melkweg. De sterren en de maan zelf doen niet mee in het licht dat de lucht het level geeft (`AT_CUBEMAP_PASS`), en de lucht leest geen `TIME`, zodat dat licht één keer gerekend wordt.
+- **De omgeving**: belichting 1,6, het licht van rondom 2,5 keer (de nachtlucht is bijna zwart), minder verzadiging (0,8), dikkere en donkerdere nevel, meer gloed om wat fel is, meer korrel en vignet. Geen SSAO: bij een licht van rondom dat bijna nul is doet het niets en het kostte 1,0 tot 1,3 ms. Geen meeuwen en geen stofjes in de zon.
+- **Eén schakelaar voor de shaders**: de globale `night` (`project.godot`), die `Settings.apply()` zet naar `metadata/night` op de omgeving. Wat hem leest: de kamers achter de ramen van het hoofdgebouw (één op de drie met de tl-buizen aan, de rest donker), het glas van de lampen (`shaders/lamp_glass.gdshader`: bleek glas overdag, gloeiend 's nachts), de rookpluim boven het bivak (die gloeide grijs in het donker; nu is hij donker en onderaan oranje van het vuur) en de bundels van de zoeklichten.
+- **`scripts/night.gd`** past aan wat voor de dag gebouwd is: het licht onder de acht afdaken (de tent, de netten, de loodsen) is daglicht en gaat naar 5%, blauwer.
+- **De nachtlaag.** Een level dat ook 's nachts gespeeld wordt zegt dat (`_by_night` in `tools/level_builder.gd`); de bouwer schrijft dan alles wat alleen 's nachts brandt in een eigen scène (`night_light()`), met de lampen onder `Lights`, zodat `scripts/breakables.gd` er lampen van maakt die kapotgeschoten kunnen worden. Een level zonder nacht krijgt niets, ook geen lantaarns. In de duinen 50 lampen (`tools/kit/field.gd`, "By night", en `tools/levels/dunes/depot.gd`):
+  - **het complex**: de dertien masten op de muur, natriumoranje, één bundel van 100 graden per mast met schaduw; de zoeklichten op de twee hoekposten en de twee wachttorens, die heen en weer zwaaien (`scripts/sweep.gd`) met een bundel in de lucht (`shaders/light_beam.gdshader`); en de lampen boven de deuren, de poort en de achterdeur (`bulkhead()`), zodat het doel ook in het donker te vinden is;
+  - **de tenten**: een stormlantaarn aan de paal van elk tentje (`storm_lantern()`); de peer in de commandotent brandde al;
+  - **de verzamelpunten**: het kampvuur van het bivak brandt (`scripts/campfire.gd`: een vuur van `Fx.fire()` dat niet uitgaat, met schaduw en vonken, zonder eigen rookballen), een lantaarn op de grond in elke zandzakpost en onder de dakrand van elk schildwachthuisje, en peertjes aan een snoer onder elk camouflagenet (het wagenpark, het tankkamp, het depot in de vallei).
+- **De dag blijft voor het spel wat hij was**: alle 859 botsvormen en de schaduwkaart van het gebouwde level zijn gelijk aan die van de trunk. Wel hangen de lantaarns en peertjes er overdag ook, uit, en hebben de deurlampen glas in plaats van een beschilderd vlak.
+- **Sluipen in het donker** (`light_at()` in `scripts/land.gd`). Overdag is het licht op iemand de zon, zoals het was. 's Nachts is het het maanlicht buiten de schaduw (`MOONLIT`, 0,25), of de lampen die op hem schijnen met niets ertussen, wat het meest is; een lamp die stuk is, telt niet. Een wacht ziet wie in het donker staat op 5 m (`sight_dark` in `scripts/enemy.gd`), wie in het maanlicht staat op ongeveer 14 m en wie onder een lamp staat op 34 m; gebukt 30% minder, zoals overdag. Een zoeklicht dat over iemand heen gaat zet hem even in het volle licht. Onderin staat `IN THE DARK` waar overdag `IN THE SHADE` staat, en het oog (`scripts/eyes.gd`) went 's nachts aan het licht van de lampen. Bots in een wedstrijd zien 's nachts wie in het donker staat op een kwart van hoe ver ze zien, onder een lamp zo ver als overdag (`DARK_SIGHT` in `scripts/bot.gd`).
+- **Het pakket "Silenced"** (`assets/packs.json`): karabijn, pistool, shotgun, pistoolmitrailleur en scherpschuttersgeweer, elk met een demper (`weapons/*_sd.tres`, achteraan in `ARMORY.ALL`). Dezelfde cijfers, met de afname van de schade vanaf 80% van de afstand, 15% minder terugslag, iets trager richten en een kleine flits, en daarmee een schot dat een wacht of een bot op 5 tot 14 m hoort in plaats van 17 tot 42 m (`flash_size` × 100). Op het model een demper op de loop (`_muzzle()` en `_can()` in `tools/models/weapons.gd`), ook voor wie een ander draagt. Een eigen schot (`*_sd_shot`: de opname zonder haar hoge kant, de lage kant eronder, een dreun, een beetje van de knal van de kogel en het mechaniek dat terugslaat), 6 dB zachter gespeeld (`shot_db`), en het herladen van het wapen zonder demper (`handled_as`). Voor de karabijn zijn er drie varianten om op het oor te kiezen (`rifle_sd_shot`, `_b` met meer mechaniek, `_c` dieper en zwaarder). De duinen bij nacht dragen dit pakket (`metadata/pack` op een level); in een wedstrijd is het te kiezen zoals de andere.
+- **Geluid**: 's nachts klinkt de open lucht van de duinen als `ambience_dunes_night`: minder wind, en krekels in het gras, gerekend en niet opgenomen (`chirp` in `tools/build_sounds.py`: acht krekels rond 4,3 kHz en drie hogere, elk met een eigen tempo en een eigen plek). `scripts/sfx.gd` kiest 's nachts het bed `<soort>_night` als dat er is.
+- **`Net.VERSION` is 12.**
 
-**De stappen**: 1. de nacht (scène, maan, lucht, kleur, schakelaar, in de levelkeuze); 2. de lampen; 3. sluipen; 4. geluid, de arena voor wedstrijden, `Net.VERSION`, de hele selftest. Daarnaast het pakket met dempers.
+**Gemeten**
+
+Op de speelinstelling (3456×2160, Ultra, MetalFX, renderschaal vanzelf), de 74 soldaten op hun post, 600 beelden per standpunt, de dag en de nacht om en om uit dezelfde checkout, aan de lader van 94 W (accu vol).
+
+De eerste lampen kostten te veel (18 oktober, 18:07 tot 18:24, load 6 tot 12, en eens 56 terwijl andere sessies bouwden; drie ronden):
+
+| Standpunt | Dag | Nacht | Verschil |
+|---|---|---|---|
+| Het bos, 1 | 72,8 | 70,1 | −2,7 |
+| Het bivak, 8 | 78,8 | 66,8 | −12,0 |
+| Het wagenpark, 10 | 84,9 | 74,9 | −10,0 |
+| De binnenplaats, 16 | 86,9 | 70,1 | −16,8 |
+| De achterdeur, 19 | 90,1 | 71,1 | −19,0 |
+
+Waar dat zat, gemeten door telkens een deel weg te laten in één run (`--profile`, ms per beeld, binnenplaats / achterdeur / bivak): de lampen van de nacht samen 1,6 / 1,8 / 0,7, hun schaduwen bijna niets (0,3 / 0 / 0,1), de bundels in de lucht 0,5 / 0,1 / 0,4 (ze lazen de diepte van het beeld), de schaduw van de maan 1,5 / 1,8 / 1,8 en SSAO 1,3 / 1,0 / 1,2. Bij het bivak daarbovenop het vuur, dat elke 0,3 s een rookbal maakte en zijn licht liet berekenen. Het zit dus in hoeveel lampen elk beeldpunt raakt, niet in hun schaduwen. Wat er veranderd is: kleinere bereiken (een mast 27 m en 100 graden waar het 34 m en 120 was, een deurlamp 5,5 m, een lantaarn 6 m), een kleine lamp licht vanaf 55 m niets meer (zijn glas gloeit nog), geen SSAO bij nacht, de maanschaduw 50 m in twee lagen, bundels die de diepte niet meer lezen, en een kampvuur zonder rookballen (de rookpluim van het kamp staat er al).
+
+De eindstand (19:42 tot 19:47, load 4 tot 6, niemand anders op de GPU): twee ronden. Een derde ronde van de nacht liep naast het spel van Michiel, dat om 19:47:55 startte, en telt niet.
+
+| Standpunt | Dag, fps (twee ronden) | Nacht | Verschil | Tekenopdrachten dag en nacht |
+|---|---|---|---|---|
+| Het bos, 1 | 73,7 en 75,2 | 84,0 en 74,4 | +4,8 | 1568 en 899 |
+| Het bivak, 8 | 79,5 en 78,1 | 84,5 en 73,3 | +0,1 | 2312 en 1147 |
+| Het wagenpark, 10 | 86,2 en 85,5 | 91,0 en 87,3 | +3,3 | 1960 en 847 |
+| De binnenplaats, 16 | 86,7 en 86,6 | 88,9 en 87,8 | +1,7 | 1316 en 611 |
+| De achterdeur, 19 | 86,3 en 84,0 | 88,4 en 87,7 | +2,9 | 1433 en 433 |
+
+- **De nacht is niet trager dan de dag**, en tekent de helft minder: de schaduw van de maan reikt minder ver dan die van de zon, en wat daarbuiten staat hoeft er niet in.
+- Het traagste honderdste ligt 's nachts op 60 tot 85 fps; de twee ronden liggen per standpunt tot 11 fps uit elkaar, dus de verschillen hierboven zijn ruw.
+- **Niets hapert de eerste keer voor zover een benchmark dat ziet**: na het eerste standpunt (dat geen laadscherm heeft) worden er geen pipelines meer gemaakt. Een rondgang vanaf het titelscherm is niet gelopen.
+- **Niet gemeten**: in beweging, in een gevecht onder de lampen (wie onder een lamp met schaduw loopt laat die lamp zijn schaduw opnieuw tekenen), en wat een kapotgeschoten lamp scheelt.
+
+**Gecontroleerd**
+
+- `tools/selftest.sh` slaagt, 517 controles; voor de nacht nieuw: waar een schijnwerper schijnt staat iemand in het licht, in de schaduw van het bos is het donker en daarbuiten is er de maan, een kapotgeschoten schijnwerper verlicht niemand meer, en een wacht ziet iemand in het donker niet en onder een lamp wel, wat het gevecht begint. `tools/test_match.sh` (met zeven pakketten en zes arena's), `tools/nettest.sh` en `tools/test_sound.sh` (38) slagen.
+- Gezien op stilstaande beelden: het blad met dag en nacht naast elkaar, acht standpunten (`benchmark/sheets/dunes_night_day_and_night.jpg`), en de wapens met demper vanuit de heup en gericht.
+
+**Niet kunnen beoordelen**
+
+- **Hoe het klinkt.** De schoten met demper en de krekels zijn gemaakt en gemeten (niveau, waar de energie zit), niet beluisterd.
+- **Alles wat beweegt**: het zwaaien van de zoeklichten, het flakkeren van het vuur, en of het oog in en uit het licht goed went.
+- **Of sluipen leuk is**: 5 m in het donker, 14 m in het maanlicht en 34 m onder een lamp zijn mijn getallen, net als hoe donker de nacht is.
+- **Of het pakket goed voelt.** Op het balansblad (`tools/weapon_sheet.py silenced`) heeft elk wapen nog zijn eigen afstand, zoals in het standaardpakket: de shotgun tot 6 m, de pistoolmitrailleur van 7 tot 14 m, de karabijn van 15 tot 35 m en het scherpschuttersgeweer van 36 tot 93 m. Door de kortere dracht doodt de karabijn op 50 m in 0,90 s waar dat 0,68 s was. Het pistool is als wapen voor als je magazijn leeg is op een paar afstanden het snelst, zoals in het standaardpakket.
+
+**Nog open**
+
+- **De zoeklichten zwaaien op de klok van elke machine**, dus niet gelijk voor wie samen speelt. Of een kapotgeschoten lamp bij een gast ook uit is, is niet getest.
+- **De peer in de tent** werpt geen schaduw (een schaduw in zes richtingen kostte te veel) en schijnt dus door het doek op het zand voor de tent.
+- **Voertuigen hebben geen koplampen**, wachters geen zaklamp; dat laatste was een keuze.
+- **`Net.VERSION`**: de branch `alpen` staat nog op 11; wie beide samenvoegt, neemt 13.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| De duinen bij nacht spelen | in het spel: Play, Dunes at night; of `/Applications/Godot.app/Contents/MacOS/Godot --path <checkout> res://scenes/dunes_night.tscn -- --play` |
+| De duinen opnieuw bouwen, met de nachtlaag | `tools/build_level.sh dunes` (40 s); er valt niets te bakken |
+| Alleen dit level testen | `tools/selftest.sh --level=dunes_night` |
+| Wat de nacht kost | `tools/benchmark.sh --scene=res://scenes/dunes_night.tscn --posted --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --profile --only=night_lamps,beams,lamp_shadows,sun_shadow` |
+| De schoten met demper horen | `tools/hear.py rifle_sd_shot 620`, `rifle_sd_shot_b 620`, `rifle_sd_shot_c 620`, `pistol_sd_shot`, `shotgun_sd_shot`, `smg_sd_shot 900`, `marksman_sd_shot` |
+| De nacht horen | `tools/hear.py ambience dunes_night --in=yard` |
+| Een nieuwe lamp voor de nacht | `night_bulb()`, `night_beam()`, `storm_lantern()`, `hanging_bulb()` of `searchlight()` in de kit; alleen in een level met `_by_night` |
