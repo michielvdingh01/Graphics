@@ -484,8 +484,76 @@ def larch_shoot(sprig, kind, start, way, length, age, vigour):
     return end
 
 
+def maple_leaf(sprig, foot, way, face, size, colour):
+    """A leaf of a sycamore from the end of its stalk at `foot`: five lobes
+    with shallow teeth, as wide as it is long, its blade along `way` and
+    facing `face`, drooping a little from its middle rib and cupped."""
+    rng = sprig.rng
+    way = unit(way)
+    face = unit(face - way * np.dot(face, way))
+    side = np.cross(face, way)
+    # The outline: five lobes, the middle three larger, and teeth on each.
+    lobes = [(-118.0, 0.55), (-62.0, 0.88), (0.0, 1.0), (62.0, 0.88), (118.0, 0.55)]
+    angles = np.radians(np.linspace(-150.0, 150.0, 31))
+    reach = np.full(len(angles), 0.32)
+    for at, long in lobes:
+        near = np.exp(-((np.degrees(angles) - at) / 19.0) ** 2)
+        reach = np.maximum(reach, 0.32 + (long - 0.32) * near)
+    reach *= 1.0 + 0.05 * np.where(np.arange(len(angles)) % 2 == 0, 1.0, -1.0)
+    reach *= rng.uniform(0.92, 1.08, len(angles))
+    middle = np.array([0.0, 0.0])
+    outline = np.stack([np.cos(angles) * reach, np.sin(angles) * reach], axis=1) * 0.5 + np.array([0.5, 0.0])
+    # From the stalk outwards it droops and is cupped about its rib.
+    corners = [foot + way * size * 0.5 * 0.0]
+    centre = foot + way * size * 0.5
+    corners = [centre]
+    droop = rng.uniform(0.05, 0.18)
+    for u, v in outline:
+        point = foot + way * u * size + side * v * size
+        lift = -droop * u * u * size + abs(v) * 0.12 * size
+        corners.append(point + face * lift)
+    count = len(outline)
+    triangles = [[0, 1 + i, 2 + i] for i in range(count - 1)] + [[0, count, 1]]
+    tint = np.ones((count + 1, 1))
+    tint[0] = 0.9
+    sprig.add(np.array(corners), np.array(triangles), np.asarray(colour)[None, :] * tint * rng.uniform(0.9, 1.1, (count + 1, 1)))
+
+
+def maple_shoot(sprig, kind, start, way, length, age, vigour):
+    """One year's length of a sycamore twig: its wood, and at each of its
+    knots a pair of leaves on long stalks, one either side, the next pair
+    square to it. On older wood the leaves are on short shoots, a pair at
+    the end of each. In October they are yellow, gold and brown, a few still
+    green."""
+    rng = sprig.rng
+    end = start + way * length
+    thick = kind["twig"] * (1.0 + 0.6 * age) * (0.7 + 0.3 * vigour)
+    wood = np.array(kind["wood_young"]) if age == 0 else np.array(kind["wood_old"])
+    tube(sprig, [start, end], [thick, thick * 0.9], wood * rng.uniform(0.85, 1.1), 5)
+    if age >= kind["keeps"]:
+        return end
+    over = upward(way)
+    beside = np.cross(way, over)
+    palette = np.array(kind["autumn"])
+    knots = max(int(length / kind["knot"]), 1)
+    for k in range(knots):
+        at = start + way * length * (k + 0.85) / knots
+        pair = beside if (k + age) % 2 == 0 else over
+        for hand in (-1.0, 1.0):
+            out = pair * hand
+            stalk = unit(out + way * 0.4 + over * 0.25)
+            long = kind["stalk"] * rng.uniform(0.75, 1.2)
+            leaf_at = at + stalk * long
+            tube(sprig, [at, leaf_at], [thick * 0.35, thick * 0.25], np.array(kind["stalk_colour"]), 3)
+            # The blade faces the light, out along its stalk and leaning down.
+            blade = unit(out + way * 0.3 - over * rng.uniform(0.0, 0.35) + rng.normal(0.0, 0.15, 3))
+            colour = palette[rng.integers(len(palette))] * rng.uniform(0.85, 1.15)
+            maple_leaf(sprig, leaf_at, blade, over + rng.normal(0.0, 0.25, 3), kind["leaf_size"] * rng.uniform(0.75, 1.15) * (0.85 + 0.15 * vigour), colour)
+    return end
+
+
 # How each kind grows a year's length of twig, if not as a pine does.
-SHOOTS = {"spruce": spruce_shoot, "larch": larch_shoot}
+SHOOTS = {"spruce": spruce_shoot, "larch": larch_shoot, "maple": maple_shoot}
 
 
 def bud(sprig, kind, at, way):
@@ -630,7 +698,7 @@ KINDS["spruce"] = {
     "grow": "pine", "shoot": "spruce",
     "year": 0.085, "last": 0.85, "twig": 0.0016, "needle": 0.017, "width": 0.0011, "pitch": 0.0011,
     "keeps": 6, "stand": [36.0, 50.0, 58.0], "candle": False, "part": 0.85,
-    "green": [[0.075, 0.15, 0.08], [0.045, 0.105, 0.075], [0.038, 0.09, 0.07], [0.034, 0.08, 0.065]],
+    "green": [[0.07, 0.15, 0.055], [0.038, 0.1, 0.05], [0.03, 0.086, 0.046], [0.027, 0.076, 0.043]],
     "dead": 0.006, "dead_colour": [0.3, 0.18, 0.07],
     "wood_young": [0.34, 0.21, 0.1], "wood_old": [0.2, 0.12, 0.07],
     "bud": 0.005, "bud_colour": [0.32, 0.19, 0.09],
@@ -679,6 +747,23 @@ KINDS["mugo"].update({
     "forks": [1, 2, 3, 4], "fork_odds": [0.1, 0.35, 0.4, 0.15], "fork_angle": (30.0, 55.0), "fork_vigour": (0.7, 0.92),
     "dies": 0.35,
 })
+# Sycamore in October: leaves in pairs on long stalks, a hand wide, yellow
+# going to gold and brown, a few still green; grey twigs that fork in pairs.
+KINDS["maple"] = {
+    "grow": "pine", "shoot": "maple",
+    "year": 0.16, "last": 0.8, "twig": 0.0028, "knot": 0.07, "stalk": 0.07, "leaf_size": 0.13,
+    "keeps": 2, "candle": False,
+    "autumn": [[0.62, 0.46, 0.05], [0.58, 0.36, 0.04], [0.5, 0.42, 0.06], [0.4, 0.22, 0.04], [0.3, 0.32, 0.06], [0.22, 0.11, 0.03]],
+    "stalk_colour": [0.45, 0.2, 0.08],
+    "wood_young": [0.32, 0.26, 0.18], "wood_old": [0.22, 0.2, 0.17],
+    "bud": 0.008, "bud_colour": [0.3, 0.32, 0.12],
+    "cone": 0.0, "cone_colour": [0.0, 0.0, 0.0], "cones": 0.0,
+    "upturn": 0.12, "wander": 0.1, "flatten": 0.4,
+    "forks": [1, 2], "fork_odds": [0.3, 0.7], "fork_angle": (30.0, 50.0), "fork_vigour": (0.7, 0.92),
+    "dies": 0.4,
+}
+KINDS["maple_tuft"] = dict(KINDS["maple"])
+KINDS["maple_tuft"].update({"leaf_size": 0.15, "knot": 0.08})
 KINDS["mugo_tuft"] = dict(KINDS["mugo"])
 KINDS["mugo_tuft"].update({"needle": 0.05, "width": 0.0032, "pitch": 0.0042, "keeps": 3, "cones": 0.0})
 

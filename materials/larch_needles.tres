@@ -20,3 +20,5 @@ shader_parameter/vary = 0.18
 shader_parameter/lift = 0.3
 shader_parameter/edge = 0.3
 shader_parameter/sharp = 1.0
+shader_parameter/sky_deep = 0.45
+shader_parameter/sky_out = 0.85
