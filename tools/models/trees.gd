@@ -1,7 +1,9 @@
 extends "res://tools/model_builder.gd"
 ## What grows tall on the dunes: pines in five shapes and thorn scrub in two.
-## Build with tools/build_model.sh trees; stand one in a level to look at it
-## with tools/benchmark.sh --quick --spawn="res://scenes/models/pine_a.scn@2,0,0,0".
+## And what grows in the Alps: Norway spruce in three shapes, larch in two,
+## dwarf mountain pine in two, and sycamore, see "The trees of the Alps"
+## below. Build with tools/build_model.sh trees; stand one in a level to look
+## at it with tools/benchmark.sh --quick --spawn="res://scenes/models/pine_a.scn@2,0,0,0".
 ##
 ## A tree stands on the ground at the origin. It is grown first and drawn
 ## afterwards: a trunk, the boughs that leave it and twist and fork, and at
@@ -43,14 +45,34 @@ extends "res://tools/model_builder.gd"
 const BARK := "pine_trunk"
 const NEEDLES := "pine_needles"
 const LEAVES := "thorn_scrub"
+## The needles of a Norway spruce, of a larch in October and of a dwarf
+## mountain pine, and the bark of the two trees.
+const SPRUCE := "spruce_needles"
+const LARCH := "larch_needles"
+const DWARF := "dwarf_pine_needles"
+const MAPLE := "maple_leaves"
+const SPRUCE_BARK := "spruce_bark"
+const LARCH_BARK := "larch_bark"
+const MAPLE_BARK := "maple_bark"
 ## The pictures of sprigs and boughs each of those is drawn with, and where
 ## on their sheet each picture is.
-const SHEETS := {NEEDLES: "res://assets/foliage/pine_sprigs.json", LEAVES: "res://assets/foliage/thorn_sprigs.json"}
+const SHEETS := {
+	NEEDLES: "res://assets/foliage/pine_sprigs.json",
+	LEAVES: "res://assets/foliage/thorn_sprigs.json",
+	SPRUCE: "res://assets/foliage/spruce_sprigs.json",
+	LARCH: "res://assets/foliage/larch_sprigs.json",
+	DWARF: "res://assets/foliage/mugo_sprigs.json",
+	MAPLE: "res://assets/foliage/maple_sprigs.json",
+}
 ## The material a pine is drawn with from afar, as one card, and what
 ## tools/gen_tree_cards.sh wrote of the pictures on it. Without that file a
 ## tree is drawn from afar as it was before there were pictures.
 const FAR_PICTURE := "pine_far"
 const FAR_SHEET := "res://assets/foliage/pine_far.json"
+## The same for the trees of the Alps, which are pictured on a sheet of their
+## own: tools/gen_tree_cards.sh alpine.
+const ALPINE_FAR := "alpine_far"
+const ALPINE_FAR_SHEET := "res://assets/foliage/alpine_far.json"
 ## From how far off a tree is its Mid and its Far, and how far its Far
 ## carries. A bush, which is small, is itself up to FAR. SHADE_END is how far
 ## off a tree still throws a shadow: as far as the sun's shadow reaches in the
@@ -102,6 +124,10 @@ var _more := RandomNumberGenerator.new()
 ## The crown that is being built, for the normals of its cards.
 var _crown_at := Vector3.ZERO
 var _crown_size := Vector3.ONE
+## Whether that crown is a cone, as that of a spruce or a larch is, and if so
+## how high it begins and ends and how wide it is at its foot.
+var _cone_on := false
+var _cone := Vector3.ZERO
 ## What is on each sheet, by material: {pictures, size, bark}. The pictures
 ## by what they show and from where ("sprig plan"), a list of {rect, size,
 ## anchor, depth, box} each; the size of the sheet in dots; and where on it
@@ -116,8 +142,6 @@ var _bark_strip := Rect2()
 ## The pictures of the trees from afar, by tree, and how many there are of a
 ## tree side by side and how many trees one under the other.
 var _far := {}
-var _far_sides := 8.0
-var _far_rows := 1.0
 ## The tree that has been grown and is being drawn. Its limbs: {points, thick,
 ## tints, order}, order 0 for the trunk, 1 for a bough, 2 for what forks off
 ## a bough and 3 for what is dead. Its tufts, a sprig each: {frame, size,
@@ -135,16 +159,36 @@ var _bark_cast := Color.WHITE
 ## The drawings of the tree that give way to one another, by part: over
 ## which distances each comes in and goes out, see _seen().
 var _shown := {}
+## From how far off the tree that is being built is its Mid and its Far, how
+## far its Far carries and over how many metres before that it goes, a tree
+## at a time, how far off it throws a shadow, and over how many metres one
+## drawing gives way to the next: NEAR, FAR, FAR_END, SHADE_END, NEAR_BLEND
+## and FAR_BLEND for what grows on the dunes, more for the large trees of the
+## Alps, see _distances().
+var _near := NEAR
+var _far_from := FAR
+var _far_end := FAR_END
+var _far_fade := 0.0
+var _shade_end := SHADE_END
+var _near_blend := NEAR_BLEND
+var _far_blend := FAR_BLEND
+## What the trunk and limbs of the tree that is being built are drawn with.
+var _bark := BARK
 
 
 func _describe() -> void:
 	for mat: String in SHEETS:
 		_read_sheet(mat)
-	if FileAccess.file_exists(FAR_SHEET):
-		var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FAR_SHEET))
-		_far = sheet.trees
-		_far_sides = float(sheet.sides)
-		_far_rows = float(sheet.rows)
+	for far: Array in [[FAR_PICTURE, FAR_SHEET], [ALPINE_FAR, ALPINE_FAR_SHEET]]:
+		if not FileAccess.file_exists(far[1]):
+			continue
+		var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(far[1]))
+		for tree: String in sheet.trees:
+			var picture: Dictionary = sheet.trees[tree]
+			picture["material"] = far[0]
+			picture["sides"] = float(sheet.sides)
+			picture["rows"] = float(sheet.rows)
+			_far[tree] = picture
 	# name, seed, height, girth, where the crown begins, how far it reaches,
 	# how many boughs, how far the top stands out of plumb.
 	_pine("pine_a", 11, 14.0, 0.26, 0.58, 3.4, 11, 0.5)
@@ -154,6 +198,19 @@ func _describe() -> void:
 	_pine("pine_young", 53, 5.0, 0.1, 0.12, 1.7, 12, 0.2)
 	_scrub("scrub_a", 61, 2.1, 1.6)
 	_scrub("scrub_b", 67, 1.5, 2.0)
+	# The Alps. name, kind, seed, height, girth, where the crown begins, how
+	# wide it is at its foot, how far apart its whorls are, how many boughs to
+	# a whorl, how far the top stands out of plumb.
+	_conifer("spruce_old", "spruce", 101, 32.0, 0.36, 0.38, 4.5, 0.55, 5, 0.25)
+	_conifer("spruce_mid", "spruce", 103, 17.5, 0.2, 0.14, 3.2, 0.48, 5, 0.15)
+	_conifer("spruce_young", "spruce", 107, 6.0, 0.07, 0.0, 1.8, 0.32, 6, 0.05)
+	_conifer("larch_old", "larch", 109, 27.0, 0.33, 0.4, 4.4, 0.62, 6, 0.6)
+	_conifer("larch_young", "larch", 113, 20.0, 0.22, 0.24, 3.5, 0.55, 6, 0.35)
+	# name, seed, height, how far its stems reach, how many there are.
+	_dwarf_pine("dwarf_pine_a", 127, 2.1, 2.2, 12)
+	_dwarf_pine("dwarf_pine_b", 131, 1.6, 2.5, 14)
+	# name, seed, height, girth, where the crown begins, how wide it is.
+	_maple("maple", 137, 17.0, 0.42, 0.2, 6.5)
 
 
 ## Reads what tools/gen_sprigs.py wrote next to the sheet of a material.
@@ -197,6 +254,9 @@ func _use(mat: String) -> void:
 func _pine(tree: String, seed: int, height: float, girth: float, crown_from: float, spread: float, boughs: int, lean: float) -> void:
 	model(tree)
 	_use(NEEDLES)
+	_distances(NEAR, FAR, FAR_END, SHADE_END, NEAR_BLEND, FAR_BLEND)
+	_bark = BARK
+	_cone_on = false
 	_dice.seed = seed
 	_more.seed = seed * 7919 + 13
 	# The trunk: not quite straight, and out of plumb at the top by `lean`.
@@ -455,7 +515,7 @@ func _tuft(at: Vector3, way: Vector3, size: float, views: String, bough: int, en
 func _draw(_tree: String) -> void:
 	var ends := _grouped("end")
 	var boughs := _grouped("bough")
-	_seen(0.0, NEAR, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_seen(0.0, _near, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	for limb: Dictionary in _limbs:
 		var sides: int = [8, 5, 3, 4][limb.order]
 		if limb.order == 0:
@@ -472,7 +532,7 @@ func _draw(_tree: String) -> void:
 			_sprig_card(tuft, view, 1.0)
 
 	part("Mid")
-	_seen(NEAR, FAR, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_seen(_near, _far_from, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	for limb: Dictionary in _limbs:
 		var points: Array[Vector3] = limb.points
 		# What is short is a stub, or is inside the needles it carries.
@@ -499,7 +559,7 @@ func _draw(_tree: String) -> void:
 	# From afar a plate that lies level is seen along its plane, which is
 	# not at all: what stands is what shows.
 	part("Far")
-	_seen(FAR, FAR_END, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_seen(_far_from, _far_end, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if _far.has(_tree):
 		# One card with a picture of the whole tree on it, see _far_card().
 		_far_card(_far[_tree])
@@ -513,7 +573,7 @@ func _draw(_tree: String) -> void:
 			_bough_cards(boughs[bough], ["side", "front"] if _young or bough % 3 == 0 else ["side"])
 
 	part("Shade")
-	_seen(0.0, SHADE_END, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	_seen(0.0, _shade_end, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 	for limb: Dictionary in _limbs:
 		if limb.order >= 2:
 			continue
@@ -544,7 +604,9 @@ func _draw(_tree: String) -> void:
 ## metres one of its pictures is across, where on that its foot stands and
 ## the part of it there is something on.
 func _far_card(picture: Dictionary) -> void:
-	var st := _tool(FAR_PICTURE, 0, Vector3.ZERO)
+	var st := _tool(picture.material, 0, Vector3.ZERO)
+	var sides: float = picture.sides
+	var rows: float = picture.rows
 	var size := Vector2(picture.size[0], picture.size[1])
 	var foot := Vector2(picture.foot[0], picture.foot[1])
 	var box: Array = picture.box
@@ -552,7 +614,7 @@ func _far_card(picture: Dictionary) -> void:
 	var uvs: Array[Vector2] = []
 	for corner: Vector2 in [Vector2(box[0], box[3]), Vector2(box[2], box[3]), Vector2(box[2], box[1]), Vector2(box[0], box[1])]:
 		points.append(Vector3((corner.x - foot.x) * size.x, (foot.y - corner.y) * size.y, 0.0))
-		uvs.append(Vector2(corner.x / _far_sides, (float(picture.row) + corner.y) / _far_rows))
+		uvs.append(Vector2(corner.x / sides, (float(picture.row) + corner.y) / rows))
 	# Each corner says how far to the side of the stem it is: the card is
 	# stood up again around the stem for whoever looks. And its colour says
 	# that the tree is not turned and gets all of the light.
@@ -592,18 +654,36 @@ func _seen(from: float, to: float, shadow: GeometryInstance3D.ShadowCastingSetti
 		mesh.visibility_range_end_margin = MARGIN
 		return
 	var coming := Vector2.ZERO
-	if from == NEAR:
-		coming = Vector2(NEAR - NEAR_BLEND, NEAR + NEAR_BLEND)
-	elif from == FAR:
-		coming = Vector2(FAR - FAR_BLEND, FAR)
+	if from == _near:
+		coming = Vector2(_near - _near_blend, _near + _near_blend)
+	elif from == _far_from:
+		coming = Vector2(_far_from - _far_blend, _far_from)
 	var going := Vector2.ZERO
-	if to == NEAR:
-		going = Vector2(NEAR - NEAR_BLEND, NEAR + NEAR_BLEND)
-	elif to == FAR:
-		going = Vector2(FAR, FAR + FAR_BLEND)
+	if to == _near:
+		going = Vector2(_near - _near_blend, _near + _near_blend)
+	elif to == _far_from:
+		going = Vector2(_far_from, _far_from + _far_blend)
+	elif to == _far_end and _far_fade > 0.0:
+		# The far card of a tree of the Alps goes where the ground takes
+		# over the wood, one tree at a time, see shaders/tree_far.gdshader.
+		going = Vector2(_far_end - _far_fade, _far_end)
 	mesh.visibility_range_begin = coming.x
 	mesh.visibility_range_end = going.y if going.y > 0.0 else to
 	_shown[_current] = Vector4(coming.x, coming.y, going.x, going.y)
+
+
+## Says from how far off the tree that is being built is its Mid and its
+## Far, how far its Far carries, how far off it throws a shadow, and over how
+## many metres one drawing gives way to the next. `fade` is how many metres
+## before `far_end` its far card begins to go.
+func _distances(near: float, far: float, far_end: float, shade_end: float, near_blend: float, far_blend: float, fade := 0.0) -> void:
+	_near = near
+	_far_from = far
+	_far_end = far_end
+	_shade_end = shade_end
+	_near_blend = near_blend
+	_far_blend = far_blend
+	_far_fade = fade
 
 
 ## Before the tree is written out: each of its drawings gets copies of its
@@ -834,8 +914,11 @@ func _bough_cards(tufts: Array, views: Array, smaller := 1.0) -> void:
 ## A card with `picture` on it, in the frame of the sprig it shows: where its
 ## twig begins and how it is turned, and `size` times the size it was grown
 ## at. `middle` and `reach` are the tuft it is part of, for its normals, and
-## `phase` where in its sway it is next to the others.
-func _card(picture: Dictionary, frame: Transform3D, size: float, middle: Vector3, reach: float, phase: float) -> void:
+## `phase` where in its sway it is next to the others. `tuft_share` is how
+## much of a corner's normal is that of the tuft and how much that of the
+## crown: a card as long as a whole bough is no tuft, and the half of it
+## near the trunk would face inwards.
+func _card(picture: Dictionary, frame: Transform3D, size: float, middle: Vector3, reach: float, phase: float, tuft_share := 0.5) -> void:
 	var st := _tool(_leaf, 0, frame.origin)
 	var axes: Array = VIEWS[picture.view]
 	var right: Vector3 = axes[0]
@@ -856,7 +939,7 @@ func _card(picture: Dictionary, frame: Transform3D, size: float, middle: Vector3
 		var point: Vector3 = frame * (local * size)
 		corners.append(point)
 		var of_tuft: Vector3 = ((point - middle) / maxf(reach, 0.01)).limit_length(1.0) + Vector3.UP * 0.35
-		normals.append((of_tuft.normalized() * 0.5 + _crown_normal(point) * 0.5).normalized())
+		normals.append((of_tuft.normalized() * tuft_share + _crown_normal(point) * (1.0 - tuft_share)).normalized())
 		uvs.append((rect.position + corner * rect.size) / _sheet)
 		var sway := clampf(Vector2(point.x - _crown_at.x, point.z - _crown_at.z).length() / _crown_size.x, 0.2, 1.0)
 		colours.append(Color(sway, phase, _crown_light(point), lies))
@@ -865,12 +948,25 @@ func _card(picture: Dictionary, frame: Transform3D, size: float, middle: Vector3
 
 ## Which way a point of the crown faces, as part of the whole crown.
 func _crown_normal(point: Vector3) -> Vector3:
+	if _cone_on:
+		# Out from the trunk and a little up, as the side of a slender cone
+		# faces: in a low sun one side of it is lit and the other is not.
+		var out := Vector3(point.x, 0.0, point.z)
+		if out.length() < 0.05:
+			return Vector3.UP
+		var slope := atan2(_cone.z, _cone.y - _cone.x)
+		return (out.normalized() * cos(slope) + Vector3.UP * (sin(slope) + 0.2)).normalized()
 	return (((point - _crown_at) / _crown_size).normalized() + Vector3.UP * 0.6).normalized()
 
 
 ## How much light gets to a point of the crown: more the further out it is
 ## and the higher up.
 func _crown_light(point: Vector3) -> float:
+	if _cone_on:
+		var up := clampf((point.y - _cone.x) / (_cone.y - _cone.x), 0.0, 1.0)
+		var wide := _cone.z * pow(1.0 - up, 0.9) + 0.3
+		var out := Vector2(point.x, point.z).length() / wide
+		return clampf(out * 0.85 + up * 0.25 + (0.25 if _young else 0.0), 0.0, 1.0)
 	var from_middle := (point - _crown_at) / _crown_size
 	# A young tree stands by itself and is open to the light all the way down.
 	return clampf(from_middle.length() * 0.75 + clampf(from_middle.y, -1.0, 1.0) * 0.3 + (0.4 if _young else 0.15), 0.0, 1.0)
@@ -886,6 +982,9 @@ func _crown_light(point: Vector3) -> float:
 func _scrub(bush: String, seed: int, height: float, spread: float) -> void:
 	model(bush)
 	_use(LEAVES)
+	_distances(NEAR, FAR, FAR_END, SHADE_END, NEAR_BLEND, FAR_BLEND)
+	_bark = BARK
+	_cone_on = false
 	_dice.seed = seed
 	_crown_size = Vector3(spread, height * 0.6, spread)
 	_crown_at = Vector3(0, height * 0.5, 0)
@@ -919,7 +1018,7 @@ func _scrub(bush: String, seed: int, height: float, spread: float) -> void:
 		var out := Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU) * spread * _dice.randf_range(0.0, 0.35)
 		_tuft(out + Vector3.UP * height * _dice.randf_range(0.7, 0.85), (Vector3.UP + out.normalized() * 0.5).normalized(), spread * 1.1, "plan side front", 0, 0, Vector3.ZERO)
 
-	_seen(0.0, FAR, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+	_seen(0.0, _far_from, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	for limb: Dictionary in _limbs:
 		_tube(_leaf, limb.points, limb.thick, 3, none, true)
 	_tangle(height, spread)
@@ -927,7 +1026,7 @@ func _scrub(bush: String, seed: int, height: float, spread: float) -> void:
 		for view: String in (tuft.views as String).split(" "):
 			_sprig_card(tuft, view, 1.0)
 	part("Far")
-	_seen(FAR, FAR_END * 0.5, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+	_seen(_far_from, _far_end * 0.5, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	_tangle(height, spread)
 	print("%s: %d stems, %d sprays" % [bush, _limbs.size(), _tufts.size()])
 
@@ -964,3 +1063,496 @@ func _whole_card(picture: Dictionary, middle: Vector3, right: Vector3, up: Vecto
 		var sway := clampf(corners[i].y / (_crown_size.y * 2.0), 0.0, 1.0)
 		colours.append(Color(sway, phase, _crown_light(corners[i]), lies))
 	_quad(st, corners, normals, uvs, colours)
+
+
+# --- The trees of the Alps ---------------------------------------------------------
+#
+# Norway spruce, larch and dwarf mountain pine, planted in tens of thousands
+# by the level (tools/levels/alps/plan.gd) and drawn as MultiMeshes, cell by
+# cell (scripts/grove.gd): nothing of a tree may need a node or a uniform of
+# its own, and every drawing gives way to the next in its shaders, by the
+# distance to the foot of that one tree. The drawings are those of the
+# pines: Body, Mid, Far as one card, and Shade, which only throws the shadow.
+#
+# What differs is the crown. A spruce of the mountains is a slender cone of
+# whorls, a whorl of boughs for every year, and every bough is a comb: a
+# limb that leaves the trunk level and turns up at its end, with the twigs
+# it put out hanging under it like a curtain. A card here is a picture of
+# such a whole bough (tools/gen_sprigs.py, comb_bough()), one that stands
+# along the bough and one that lies, rather than plates of sprigs. A larch is
+# built the same way, more open and less even, in gold. And the sun is low:
+# a crown's corners face out from its trunk, so that one side of the cone is
+# lit and the other is in its own shade.
+
+## How far off a tree of the Alps is still drawn as a card: further off, the
+## ground draws the wood as crowns. It goes over the last ALPINE_FAR_FADE
+## metres before that, a tree at a time. A dwarf pine, which is low, goes
+## sooner.
+const ALPINE_FAR_END := 1500.0
+const ALPINE_FAR_FADE := 160.0
+const DWARF_FAR_END := 800.0
+## How long the limb of each whole bough on a sheet is, in the order of the
+## sheet, as assets/manifest.json grows them: a card shows a bough of some
+## length at that length over this.
+const BOUGH_LENGTHS := {SPRUCE: [2.6, 1.7, 0.9], LARCH: [2.4, 1.5], DWARF: [1.1, 0.8], MAPLE: [1.6, 1.2]}
+## The bark of a spruce low on its trunk and high up, a larch's, and the
+## stems of a dwarf pine: tints on the scanned bark.
+const SPRUCE_LOW := Color(0.44, 0.4, 0.38)
+const SPRUCE_HIGH := Color(0.56, 0.42, 0.35)
+const LARCH_LOW := Color(0.5, 0.4, 0.36)
+const LARCH_HIGH := Color(0.66, 0.45, 0.36)
+const DWARF_STEM := Color(0.45, 0.42, 0.4)
+const MAPLE_LOW := Color(0.62, 0.6, 0.57)
+const MAPLE_HIGH := Color(0.75, 0.73, 0.68)
+
+## The boughs of the tree that is being built: {foot, out, tilt, length, up,
+## whorl, phase, which, roll}. Where on the trunk it leaves it, the way it
+## runs over the ground, how far its limb rises from level (radians), how
+## long it is, how high in the crown it sits (0 to 1), the whorl it is part
+## of, its number for giving way (see shaders/tree_lod.gdshaderinc), dice
+## for the picture it is drawn with, and how far it is turned about itself.
+var _boughs: Array[Dictionary] = []
+
+
+## A spruce or a larch of the Alps, as it grows in a wood on a mountain: a
+## straight trunk, bare up to `crown_from` of its height but for the stubs
+## and the dead branches of what it shed, and above that a whorl of boughs
+## every `gap` metres, about `per_whorl` to a whorl, each shorter than the
+## one below, so that the crown is a slender cone `spread` metres in radius
+## at its foot. `lean` is how far its top stands out of plumb.
+func _conifer(tree: String, kind: String, seed: int, height: float, girth: float, crown_from: float, spread: float, gap: float, per_whorl: int, lean: float) -> void:
+	model(tree)
+	var larch := kind == "larch"
+	_use(LARCH if larch else SPRUCE)
+	_bark = LARCH_BARK if larch else SPRUCE_BARK
+	_dice.seed = seed
+	_more.seed = seed * 7919 + 13
+	# A tall tree gives way to its next drawing further off than a young one.
+	var tall := clampf((height - 6.0) / 26.0, 0.0, 1.0)
+	_distances(lerpf(16.0, 32.0, tall), lerpf(52.0, 110.0, tall), ALPINE_FAR_END, lerpf(110.0, 220.0, tall), lerpf(2.5, 4.0, tall), lerpf(5.0, 9.0, tall), ALPINE_FAR_FADE)
+	var leans := Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU) * lean
+	var trunk: Array[Vector3] = []
+	var thick: Array[float] = []
+	var tints: Array[Color] = []
+	_bark_cast = Color(1.0, 1.0, 1.0).lerp(Color(1.05, 0.97, 0.92) if _dice.randf() < 0.5 else Color(0.92, 0.94, 0.97), _dice.randf())
+	var low := LARCH_LOW if larch else SPRUCE_LOW
+	var high := LARCH_HIGH if larch else SPRUCE_HIGH
+	# Closer together at the foot, where it spreads into its roots.
+	for share: float in [0.0, 0.015, 0.06, 0.15, 0.3, 0.45, 0.6, 0.75, 0.88, 1.0]:
+		trunk.append(Vector3(0, height * share, 0) + leans * share * share)
+		thick.append(lerpf(girth, 0.025, pow(share, 0.9)))
+		tints.append(low.lerp(high, smoothstep(0.35, 0.85, share)) * _bark_cast)
+	thick[0] = girth * 1.45
+	thick[1] = girth * 1.15
+	var crown_low := height * crown_from
+	_young = crown_from < 0.08
+	_cone_on = true
+	_cone = Vector3(crown_low, height, spread)
+	_crown_at = trunk[0] + Vector3.UP * (crown_low + height) * 0.5
+	_crown_size = Vector3(spread, (height - crown_low) * 0.5, spread)
+	var length := height - crown_low
+	tag("kind", kind)
+	tag("crowns", [
+		[Vector3(0, crown_low + length * 0.27, 0), Vector3(spread * 0.85, length * 0.28, spread * 0.85)],
+		[Vector3(0, crown_low + length * 0.66, 0), Vector3(spread * 0.5, length * 0.3, spread * 0.5)],
+	])
+	tag("girth", girth)
+	tag("height", height)
+	tag("far_end", _far_end)
+	_limbs = [{"points": trunk, "thick": thick, "tints": tints, "order": 0}]
+	_tufts = []
+	_boughs = []
+	_ends = 0
+	if not _young:
+		_shed(trunk, girth, height, crown_low)
+	var whorl := 0
+	var at := crown_low + gap * _dice.randf_range(0.0, 0.6)
+	while at < height - 0.4:
+		var up := (at - crown_low) / length
+		var reach := spread * pow(1.0 - up, 1.0 if larch else 1.08)
+		# The lowest live boughs of a tree in a wood are short: they are in
+		# the shade of the rest. A young tree in the open has none such.
+		if not _young:
+			reach *= lerpf(0.8, 1.0, smoothstep(0.0, 0.1, up))
+		var count := per_whorl + _dice.randi_range(-1, 1)
+		var first := whorl * 2.39996 + _dice.randf() * 0.6
+		var share := at / height
+		var foot := _spot_on(trunk, share)
+		var width := _width_on(thick, share)
+		for i in count:
+			# A larch is open and uneven: a bough is missing here and there.
+			if larch and _dice.randf() < 0.1:
+				continue
+			var turn := first + i * TAU / count + _dice.randf_range(-0.3, 0.3)
+			var out := Vector3(cos(turn), 0.0, sin(turn))
+			var rises := lerpf(-10.0, 42.0, up) + _dice.randf_range(-12.0, 12.0) if larch else lerpf(-16.0, 34.0, pow(up, 1.2)) + _dice.randf_range(-7.0, 7.0)
+			var tilt := deg_to_rad(rises)
+			var long := reach * _dice.randf_range(0.86, 1.12) * (_dice.randf_range(0.7, 1.2) if larch else 1.0) / maxf(cos(tilt), 0.6)
+			_boughs.append({
+				"foot": foot + out * width * 0.8, "out": out, "tilt": tilt, "length": maxf(long, 0.22),
+				"up": up, "whorl": whorl, "phase": _dice.randf(), "which": _dice.randi(), "roll": _dice.randf_range(-0.14, 0.14),
+			})
+		whorl += 1
+		at += gap * _dice.randf_range(0.8, 1.2)
+	_draw_conifer(tree)
+
+
+## What a tree of a wood keeps of the boughs it shed on its way up, on the
+## bare trunk below `crown_low`: stubs low down, and just under the crown,
+## dead branches that still hang on with their twigs.
+func _shed(trunk: Array[Vector3], girth: float, height: float, crown_low: float) -> void:
+	var stubs := clampi(int(crown_low / 0.6), 0, 18)
+	for i in stubs:
+		var h := _dice.randf_range(1.6, crown_low)
+		var foot := _spot_on(trunk, h / height)
+		var way := (Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU) + Vector3.UP * _dice.randf_range(-0.5, 0.1)).normalized()
+		var near_crown := smoothstep(crown_low * 0.55, crown_low, h)
+		var reach := lerpf(0.12, 0.45, near_crown) * _dice.randf_range(0.6, 1.4)
+		var start := girth * lerpf(0.12, 0.07, near_crown)
+		if near_crown > 0.4 and _dice.randf() < 0.4:
+			_dead_branch(foot, way, reach * 3.0, start)
+			continue
+		var points: Array[Vector3] = [foot, foot + way * reach + Vector3.DOWN * reach * _dice.randf_range(0.0, 0.2)]
+		var widths: Array[float] = [start, start * 0.45]
+		_limbs.append({"points": points, "thick": widths, "tints": _all(BARK_STUB, 2), "order": 3, "stub": true})
+
+
+## The thickness of a limb at a share of its length.
+func _width_on(thick: Array[float], share: float) -> float:
+	var at := clampf(share, 0.0, 1.0) * (thick.size() - 1)
+	var i := mini(int(at), thick.size() - 2)
+	return lerpf(thick[i], thick[i + 1], at - i)
+
+
+## Draws the spruce or the larch that was grown, once for every distance it
+## is seen from, and once more for its shadow.
+func _draw_conifer(tree: String) -> void:
+	_seen(0.0, _near, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	for limb: Dictionary in _limbs:
+		if limb.order == 0:
+			_tube(_bark, limb.points, limb.thick, 8, limb.tints)
+		else:
+			_tube(_bark, limb.points, limb.thick, 3, limb.tints, false, not limb.has("spur"))
+	# Each bough as it is seen from beside, from above and along it: a card
+	# that stands along a bough is seen edge on from where the bough points,
+	# and without the one across it the crown would be a fan with the trunk
+	# in front of it.
+	for i in _boughs.size():
+		var bough := _boughs[i]
+		_comb_cards(bough, ["side", "plan", "front"])
+		# What can be reached from the ground is seen from close by: the
+		# spray at its end as sprigs, sharper than a picture of the whole.
+		if (bough.foot as Vector3).y < 3.5:
+			_comb_sprigs(bough)
+	_spire(1.0)
+
+	# From the middle distance every other whorl stands for two, and a few
+	# lie, for whoever looks down on the wood from a mountain.
+	part("Mid")
+	_seen(_near, _far_from, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var trunk: Dictionary = _limbs[0]
+	# Inside a spruce's crown the trunk is hidden, and would show through the
+	# gaps a coarser crown has as a pale line: it stops a third of the way up.
+	var stem: Array[Vector3] = _coarser(trunk.points)
+	var stem_thick: Array[float] = _coarser_floats(trunk.thick)
+	var stem_tints: Array[Color] = _coarser_colours(trunk.tints)
+	if _leaf == SPRUCE:
+		var hidden := _cone.x + (_cone.y - _cone.x) * 0.35
+		while stem.size() > 2 and stem[stem.size() - 2].y > hidden:
+			stem.resize(stem.size() - 1)
+			stem_thick.resize(stem_thick.size() - 1)
+			stem_tints.resize(stem_tints.size() - 1)
+		var last := stem.size() - 1
+		var share := (hidden - stem[last - 1].y) / maxf(stem[last].y - stem[last - 1].y, 0.01)
+		stem_thick[last] = lerpf(stem_thick[last - 1], stem_thick[last], clampf(share, 0.0, 1.0))
+		stem[last] = stem[last - 1].lerp(stem[last], clampf(share, 0.0, 1.0))
+	_tube(_bark, stem, stem_thick, 5, stem_tints)
+	for limb: Dictionary in _limbs:
+		var points: Array[Vector3] = limb.points
+		if limb.order == 3 and not limb.has("spur") and not limb.has("stub") and points[0].distance_to(points[points.size() - 1]) > 0.9:
+			_tube(_bark, _coarser(points), _coarser_floats(limb.thick), 3, _coarser_colours(limb.tints))
+	# Every bough of every other whorl stands for the one under it as well,
+	# seen from beside or along it by turns, so that there is about as much
+	# to see of the crown from any side.
+	for i in _boughs.size():
+		var bough := _boughs[i]
+		if bough.whorl % 2 == 0:
+			_comb_cards(bough, ["side"] if i % 2 == 0 else ["front"], 1.15, 1.6)
+			if i % 6 == 0:
+				_comb_cards(bough, ["front"], 1.15, 1.6)
+		elif bough.whorl % 8 == 1:
+			_comb_cards(bough, ["plan"], 1.1)
+	_spire(1.15)
+
+	part("Far")
+	_seen(_far_from, _far_end, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	if _far.has(tree):
+		_far_card(_far[tree])
+	else:
+		# Until the trees have been pictured: the trunk, and every third
+		# whorl standing for three.
+		_tube(_bark, _coarser(trunk.points), _coarser_floats(trunk.thick), 4, _coarser_colours(trunk.tints))
+		for bough: Dictionary in _boughs:
+			if bough.whorl % 3 == 0:
+				_comb_cards(bough, ["side"], 1.2)
+
+	# The sun is low in the Alps, and what throws its shadow has to stand:
+	# a card that lies is seen along its plane from there. The trunk runs
+	# through every point of the trunk that is seen, and stays inside it.
+	part("Shade")
+	_seen(0.0, _shade_end, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	var thin: Array[float] = []
+	for width: float in (trunk.thick as Array[float]):
+		thin.append(width * SHADE_TRUNK)
+	_tube(_bark, trunk.points, thin, 5, trunk.tints)
+	for i in _boughs.size():
+		var bough := _boughs[i]
+		if bough.whorl % 2 == 0:
+			_comb_cards(bough, ["side", "front"] if i % 3 == 0 else ["side"], 1.05, 1.5)
+	print("%s: %d limbs, %d boughs in %d whorls" % [tree, _limbs.size(), _boughs.size(), (_boughs[_boughs.size() - 1].whorl as int) + 1 if not _boughs.is_empty() else 0])
+
+
+## The frame of a bough: its limb along X, from the trunk, with Y up as the
+## bough sees it, `stretch` times as long.
+func _bough_frame(bough: Dictionary, stretch := 1.0) -> Transform3D:
+	var out: Vector3 = bough.out
+	var tilt: float = bough.tilt
+	var along := out * cos(tilt) + Vector3.UP * sin(tilt)
+	var lift := Vector3.UP * cos(tilt) - out * sin(tilt)
+	var basis := Basis(along, lift, along.cross(lift)).rotated(along, bough.roll)
+	return Transform3D(Basis(basis.x, basis.y * stretch, basis.z), bough.foot)
+
+
+## The cards of one bough of a spruce or a larch, from the sides `views`
+## names: a picture of a whole bough of about its length, its limb along
+## that of the bough. `larger` is how much larger than the bough they are, in
+## a drawing that has fewer of them, and `stretch` how much further down
+## they reach than they are long: a bough that stands for the whorl under it
+## as well hangs that much lower.
+func _comb_cards(bough: Dictionary, views: Array, larger := 1.0, stretch := 1.0) -> void:
+	var lengths: Array = BOUGH_LENGTHS[_leaf]
+	var long: float = bough.length
+	# The picture of the longest bough that is not much longer than this.
+	var which := lengths.size() - 1
+	for i in lengths.size():
+		if long >= (lengths[i] as float) * 0.72:
+			which = i
+			break
+	var size := long / (lengths[which] as float) * larger
+	var frame := _bough_frame(bough, stretch)
+	var middle := frame * (Vector3(long * 0.55, -long * 0.12, 0.0))
+	for view: String in views:
+		var pictures: Array = _pictures["bough " + view]
+		var picture: Dictionary = pictures[which % pictures.size()]
+		_card(picture, frame, size, middle, long * 0.6, bough.phase, 0.2 if _cone_on else 0.5)
+
+
+## The end of a bough as sprigs, for whoever stands next to it: the spray it
+## ends in, lying, and one that stands through it.
+func _comb_sprigs(bough: Dictionary) -> void:
+	var frame := _bough_frame(bough)
+	var long: float = bough.length
+	var size := clampf(long * 0.45, 0.5, 1.2)
+	var tip := frame * Vector3(long - size * 0.32, size * 0.04, 0.0)
+	var tuft := {"frame": Transform3D(frame.basis, tip), "size": size, "which": bough.which, "phase": bough.phase}
+	_sprig_card(tuft, "plan", 1.0)
+	_sprig_card(tuft, "side", 1.0)
+
+
+## The leader at the top of a spruce or a larch, this year's shoot straight
+## up: two sprigs standing through each other.
+func _spire(larger: float) -> void:
+	var trunk: Dictionary = _limbs[0]
+	var points: Array[Vector3] = trunk.points
+	var top := points[points.size() - 1]
+	var size := 1.3 * larger
+	var turn := Vector3.RIGHT.rotated(Vector3.UP, _dice.randf() * TAU)
+	var tuft := {"frame": Transform3D(Basis(Vector3.UP, turn.cross(Vector3.UP), turn), top - Vector3.UP * size * 0.45), "size": size, "which": 1, "phase": 0.99}
+	_sprig_card(tuft, "side", 1.0)
+	_sprig_card(tuft, "front", 1.0)
+
+
+## Dwarf mountain pine, Latschen: a bush of crooked stems out of one foot
+## that creep over the ground and then rise, `height` high and reaching
+## `spread` metres from its foot, dense and dark, with a brush of needles at
+## every end. Above the tree line it covers whole slopes; below it, it is
+## cover on the scree.
+func _dwarf_pine(tree: String, seed: int, height: float, spread: float, stems: int) -> void:
+	model(tree)
+	_use(DWARF)
+	_bark = SPRUCE_BARK
+	_cone_on = false
+	_young = false
+	_dice.seed = seed
+	_distances(24.0, 70.0, DWARF_FAR_END, 90.0, 3.0, 6.0, 90.0)
+	_crown_size = Vector3(spread, height * 0.55, spread)
+	_crown_at = Vector3(0, height * 0.45, 0)
+	tag("kind", "dwarf_pine")
+	tag("crowns", [[Vector3(0, height * 0.42, 0), Vector3(spread * 0.85, height * 0.48, spread * 0.85)]])
+	tag("girth", 0.0)
+	tag("height", height)
+	tag("far_end", _far_end)
+	_limbs = []
+	_tufts = []
+	_boughs = []
+	for i in stems:
+		var turn := i * TAU / stems + _dice.randf_range(-0.35, 0.35)
+		var out := Vector3(cos(turn), 0.0, sin(turn))
+		var reach := spread * _dice.randf_range(0.5, 1.0)
+		# The longest creep the furthest and rise the least.
+		var rise := height * _dice.randf_range(0.6, 1.0) * lerpf(1.1, 0.7, reach / spread)
+		var aside := out.cross(Vector3.UP) * reach * _dice.randf_range(-0.25, 0.25)
+		var bend := reach * _dice.randf_range(0.4, 0.7)
+		var points: Array[Vector3] = [out * 0.05 + Vector3.UP * 0.05, out * bend * 0.5 + aside * 0.3 + Vector3.UP * 0.1, out * bend + aside * 0.6 + Vector3.UP * rise * 0.28, out * reach + aside + Vector3.UP * rise]
+		var widths: Array[float] = [0.07, 0.05, 0.035, 0.012]
+		_limbs.append({"points": points, "thick": widths, "tints": _all(DWARF_STEM, 4), "order": 1})
+		var along := (points[3] - points[2]).normalized()
+		var level := Vector3(along.x, 0.0, along.z).normalized()
+		_boughs.append({
+			"foot": points[2], "out": level, "tilt": asin(clampf(along.y, -1.0, 1.0)) * 0.45, "length": points[2].distance_to(points[3]) * 1.25,
+			"up": 0.5, "whorl": i, "phase": _dice.randf(), "which": _dice.randi(), "roll": _dice.randf_range(-0.3, 0.3),
+		})
+		# The brushes: one at its end, standing, and one on the way up.
+		_tuft(points[3] - along * 0.15, (along + Vector3.UP * 0.5).normalized(), 1.15, "plan side", i, i, level)
+		_tuft(_spot_on(points, 0.72), (out + Vector3.UP * 0.7).normalized(), 1.0, "side front", i, i, level)
+
+	_seen(0.0, _near, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	for limb: Dictionary in _limbs:
+		_tube(_bark, limb.points, limb.thick, 3, limb.tints)
+	_tangle(height, spread)
+	for bough: Dictionary in _boughs:
+		_comb_cards(bough, ["side", "front"])
+	for tuft: Dictionary in _tufts:
+		for view: String in (tuft.views as String).split(" "):
+			_sprig_card(tuft, view, 1.0)
+	part("Mid")
+	_seen(_near, _far_from, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_tangle(height, spread)
+	for bough: Dictionary in _boughs:
+		if bough.whorl % 2 == 0:
+			_comb_cards(bough, ["side"], 1.15)
+	part("Far")
+	_seen(_far_from, _far_end, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	if _far.has(tree):
+		_far_card(_far[tree])
+	else:
+		_tangle(height, spread)
+	part("Shade")
+	_seen(0.0, _shade_end, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	_tangle(height, spread)
+	print("%s: %d stems, %d brushes" % [tree, _limbs.size(), _tufts.size()])
+
+
+## A sycamore of the meadows by the farms, alone in the open: a short stout
+## trunk that forks into a few limbs going up and out, and a broad dome of a
+## crown `spread` metres in radius, in October yellow and gold. The crown is
+## clumps of leaves on the outside of the dome, each a picture of a whole
+## branch end facing out, with the limbs that carry them showing between.
+func _maple(tree: String, seed: int, height: float, girth: float, crown_from: float, spread: float) -> void:
+	model(tree)
+	_use(MAPLE)
+	_bark = MAPLE_BARK
+	_cone_on = false
+	_young = false
+	_dice.seed = seed
+	_more.seed = seed * 7919 + 13
+	_distances(30.0, 100.0, ALPINE_FAR_END, 200.0, 4.0, 8.0, ALPINE_FAR_FADE)
+	var crown_low := height * crown_from
+	_crown_size = Vector3(spread, (height - crown_low) * 0.52, spread)
+	_crown_at = Vector3(0, crown_low + (height - crown_low) * 0.5, 0)
+	tag("kind", "maple")
+	tag("crowns", [[_crown_at, Vector3(spread * 0.9, _crown_size.y * 0.9, spread * 0.9)]])
+	tag("girth", girth)
+	tag("height", height)
+	tag("far_end", _far_end)
+	_limbs = []
+	_tufts = []
+	_boughs = []
+	_bark_cast = Color(1.0, 1.0, 1.0)
+	# The trunk, up to where it forks.
+	var fork := crown_low * 1.25
+	var trunk: Array[Vector3] = []
+	var thick: Array[float] = []
+	for share: float in [0.0, 0.03, 0.12, 0.4, 0.75, 1.0]:
+		trunk.append(Vector3(0.0, fork * share, 0.0))
+		thick.append(lerpf(girth, girth * 0.8, share))
+	thick[0] = girth * 1.4
+	_limbs.append({"points": trunk, "thick": thick, "tints": _all(MAPLE_LOW, trunk.size()), "order": 0})
+	# The limbs: up and out from the fork, each with a bend in it, and the
+	# leader on up the middle.
+	var scaffold: Array = []
+	var limbs := 5
+	for i in limbs + 1:
+		var lead := i == limbs
+		var turn := i * TAU / limbs + _dice.randf_range(-0.3, 0.3)
+		var out := Vector3(cos(turn), 0.0, sin(turn))
+		var tip := _crown_at + (Vector3.UP * _crown_size.y * 0.75 if lead else out * spread * 0.62 + Vector3.UP * _crown_size.y * _dice.randf_range(-0.05, 0.4))
+		var foot := trunk[trunk.size() - 1]
+		var bend := (foot + tip) * 0.5 + out * spread * 0.12 + Vector3(_dice.randf_range(-1, 1), 0, _dice.randf_range(-1, 1)) * 0.4
+		var points: Array[Vector3] = [foot, foot.lerp(bend, 0.6), bend, bend.lerp(tip, 0.6), tip]
+		var widths: Array[float] = [girth * 0.62, girth * 0.5, girth * 0.4, girth * 0.25, girth * 0.12]
+		_limbs.append({"points": points, "thick": widths, "tints": _all(MAPLE_HIGH, points.size()), "order": 1})
+		scaffold.append(points)
+	# The clumps of leaves, spread evenly over the dome.
+	var clumps := 72
+	for i in clumps:
+		var y := 1.0 - (i + 0.5) / clumps * 1.7
+		var ring := sqrt(maxf(0.0, 1.0 - y * y))
+		var turn := i * 2.39996 + _dice.randf_range(-0.2, 0.2)
+		var way := Vector3(cos(turn) * ring, y, sin(turn) * ring)
+		var spot := _crown_at + way * _crown_size * _dice.randf_range(0.78, 0.98)
+		var long := spread * _dice.randf_range(0.32, 0.42)
+		var level := Vector3(way.x, 0.0, way.z)
+		level = level.normalized() if level.length() > 0.1 else Vector3.RIGHT.rotated(Vector3.UP, turn)
+		var tilt := clampf(asin(clampf(way.y, -1.0, 1.0)) * 0.8 + deg_to_rad(15.0), deg_to_rad(-20.0), deg_to_rad(65.0))
+		var along := level * cos(tilt) + Vector3.UP * sin(tilt)
+		var foot := spot - along * long * 0.55
+		_boughs.append({"foot": foot, "out": level, "tilt": tilt, "length": long, "up": (y + 1.0) * 0.5, "whorl": i, "phase": _dice.randf(), "which": _dice.randi(), "roll": _dice.randf_range(-0.25, 0.25)})
+		# What carries it: a branch from the nearest limb.
+		var nearest := Vector3.ZERO
+		var best := INF
+		for points: Array[Vector3] in scaffold:
+			for point: Vector3 in points.slice(1):
+				if point.distance_to(foot) < best:
+					best = point.distance_to(foot)
+					nearest = point
+		if i % 2 == 0:
+			var branch: Array[Vector3] = [nearest, foot + along * long * 0.2]
+			var widths: Array[float] = [girth * 0.12, girth * 0.04]
+			_limbs.append({"points": branch, "thick": widths, "tints": _all(MAPLE_HIGH, 2), "order": 2})
+
+	_seen(0.0, _near, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	for limb: Dictionary in _limbs:
+		_tube(_bark, limb.points, limb.thick, [8, 5, 3][limb.order], limb.tints)
+	for i in _boughs.size():
+		var bough := _boughs[i]
+		_comb_cards(bough, ["side", "plan", "front"] if i % 3 == 0 else ["side", "plan"])
+		if (bough.foot as Vector3).y < 5.0:
+			_comb_sprigs(bough)
+	part("Mid")
+	_seen(_near, _far_from, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	for limb: Dictionary in _limbs:
+		if limb.order < 2:
+			_tube(_bark, _coarser(limb.points), _coarser_floats(limb.thick), [5, 3][limb.order], _coarser_colours(limb.tints))
+	for i in _boughs.size():
+		_comb_cards(_boughs[i], ["side"] if i % 3 != 1 else ["plan"], 1.1)
+	part("Far")
+	_seen(_far_from, _far_end, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	if _far.has(tree):
+		_far_card(_far[tree])
+	else:
+		for bough: Dictionary in _boughs:
+			if bough.whorl % 2 == 0:
+				_comb_cards(bough, ["side"], 1.2)
+	part("Shade")
+	_seen(0.0, _shade_end, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	for limb: Dictionary in _limbs:
+		if limb.order < 2:
+			var thin: Array[float] = []
+			for width: float in (limb.thick as Array[float]):
+				thin.append(width * SHADE_TRUNK)
+			_tube(_bark, _coarser(limb.points) if limb.order > 0 else limb.points, _coarser_floats(thin) if limb.order > 0 else thin, 4, _coarser_colours(limb.tints) if limb.order > 0 else limb.tints)
+	for i in _boughs.size():
+		if i % 3 != 1:
+			_comb_cards(_boughs[i], ["side"], 1.1)
+	print("%s: %d limbs, %d clumps" % [tree, _limbs.size(), _boughs.size()])

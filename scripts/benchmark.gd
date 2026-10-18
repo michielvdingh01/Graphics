@@ -18,8 +18,8 @@ extends Node
 ## --weapon=3 puts that weapon of the loadout in view as the player holds it,
 ## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
-## stands a scene in the level at that spot (a y with a plus is over the
-## ground, as for --at), a model or an enemy, without
+## stands a scene in the level at that spot (a y that begins with a plus is
+## over the ground there, as in --at), a model or an enemy, without
 ## letting it run; several are separated by semicolons, a fifth number scales
 ## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride, 3 shot to pieces,
 ## 4 firing.
@@ -44,6 +44,9 @@ extends Node
 ## In a level on land --profile also takes away the trees and, in turn,
 ## each kind of mesh the builder lays in blocks: ground, strewn (grass),
 ## undergrowth, litter, beyond (the wood around the land), detail, trim.
+## The trees are those the level stands one by one and those it plants by
+## the thousand (scripts/grove.gd); what --spawn stood there is "spawned",
+## to weigh fifty of one tree against fifty of another with --off=trees.
 ## --only=zones,dust limits --profile to those effects, to measure one thing
 ## several times over instead of everything once.
 ## --warmup=0 starts measuring a view that many frames after the camera got
@@ -94,6 +97,8 @@ var _animate := false
 var _off := PackedStringArray()
 var _at := PackedStringArray()
 var _spawn := PackedStringArray()
+## What --spawn stood in the level.
+var _spawned: Array[Node3D] = []
 var _weapon := PackedFloat64Array()
 var _shoot := PackedFloat64Array()
 var _hold := -1.0
@@ -229,9 +234,10 @@ func _run() -> void:
 		var node: Node3D = (load(entry.get_slice("@", 0)) as PackedScene).instantiate()
 		node.process_mode = Node.PROCESS_MODE_DISABLED
 		tree.current_scene.add_child(node)
+		_spawned.append(node)
 		node.position = Vector3(numbers[0], numbers[1], numbers[2])
 		if entry.get_slice("@", 1).get_slice(",", 1).strip_edges().begins_with("+"):
-			node.position.y += _ground_under(numbers[0], numbers[2])
+			node.set_meta(&"over_ground", numbers[1])
 		node.rotation_degrees.y = numbers[3]
 		if numbers.size() > 4:
 			node.scale = Vector3.ONE * numbers[4]
@@ -240,6 +246,14 @@ func _run() -> void:
 		if _animate:
 			node.process_mode = Node.PROCESS_MODE_INHERIT
 			node.set_physics_process(false)
+	# What stands at a height over the ground is put there once the level's
+	# colliders are there, a frame late.
+	if _spawned.any(func(node: Node3D) -> bool: return node.has_meta(&"over_ground")):
+		await tree.physics_frame
+		await tree.physics_frame
+		for node in _spawned:
+			if node.has_meta(&"over_ground"):
+				node.position.y = _ground_under(node.position.x, node.position.z) + float(node.get_meta(&"over_ground"))
 	if (_posted or not _awake.is_empty()) and tree.current_scene.has_method("post_robots"):
 		tree.current_scene.post_robots()
 	if _awake.size() >= 3 and player and tree.current_scene.has_method("post_robots"):
@@ -519,6 +533,10 @@ func _profile_targets() -> Dictionary:
 	var scene := get_tree().current_scene
 	var environment := get_viewport().find_world_3d().environment
 	var targets := {"sun_shadow": [], "lamp_shadows": []}
+	if not _spawned.is_empty():
+		targets["spawned"] = []
+		for node in _spawned:
+			targets["spawned"].append([node, "visible"])
 	for effect: String in ["ssao", "ssil", "ssr", "volumetric_fog", "glow"]:
 		targets[effect] = [[environment, effect + "_enabled"]]
 	for light: Light3D in scene.find_children("*", "Light3D", true, false):
@@ -536,8 +554,11 @@ func _profile_targets() -> Dictionary:
 	# blocks and names by what they are: the ground, what is strewn on it,
 	# the undergrowth, the litter, the wood beyond the land.
 	if level and level.has_node("Ground"):
-		if level.has_node("Trees"):
-			targets["trees"] = [[level.get_node("Trees"), "visible"]]
+		for planted: String in ["Trees", "Grove"]:
+			if level.has_node(planted):
+				if not targets.has("trees"):
+					targets["trees"] = []
+				targets["trees"].append([level.get_node(planted), "visible"])
 		for mesh in level.get_children():
 			if mesh is MeshInstance3D:
 				var kind := String(mesh.name).rstrip("0123456789").to_lower()
