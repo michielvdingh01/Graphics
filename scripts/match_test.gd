@@ -499,13 +499,14 @@ func _run() -> void:
 	Menu.MATCH_MENU.chosen.pack = pack_was
 	var arenas: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Arena"))[0]
 	var places := [arenas.text]
-	for i in 4:
+	for i in Menu.MATCH_MENU.ARENAS.size() - 1:
 		arenas.pressed.emit()
 		places.append(arenas.text)
 	arenas.pressed.emit()
 	_check("the dunes are among the arenas", places.has("Arena  ·  Dunes (large)") and arenas.text == places[0])
-	_check("and each says whether it is small, medium or large", places.all(func(text: String) -> bool:
-		return ["(small)", "(medium)", "(large)"].any(func(size: String) -> bool: return text.ends_with(size))))
+	_check("and the Alps, which are huge", places.has("Arena  ·  Alps (huge)"))
+	_check("and each says whether it is small, medium, large or huge", places.all(func(text: String) -> bool:
+		return ["(small)", "(medium)", "(large)", "(huge)"].any(func(size: String) -> bool: return text.ends_with(size))))
 	var size: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Players"))[0]
 	var size_was := size.text
 	while not arenas.text.begins_with("Arena  ·  Dunes"):

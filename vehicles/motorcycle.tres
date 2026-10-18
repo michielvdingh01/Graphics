@@ -1,0 +1,66 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3]
+
+[ext_resource type="Script" path="res://scripts/vehicle_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/motorcycle.scn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Motorcycle"
+model = ExtResource("2")
+mass = 650.0
+center_of_mass = Vector3(0.38, 0.5, 0.0)
+weight = 0.6
+engine_at = Vector3(0, 0.45, -0.12)
+travel = 0.16
+spring_hz = 1.9
+damping = 0.5
+anti_roll = 0.7
+grip = 1.05
+bite = 0.35
+drift_grip = 0.4
+steer_deg = 30.0
+steer_at_speed = 0.35
+steer_time = 0.18
+steering_turns = 1.0
+idle_rpm = 900.0
+max_rpm = 4800.0
+torque = 100.0
+peak_rpm = 3000.0
+efficiency = 0.85
+gears = PackedFloat32Array(3.6, 2.3, 1.55, 1.1)
+reverse = 3.8
+final_drive = 5.2
+shift_time = 0.22
+top_speed = 25.0
+reverse_speed = 5.0
+start_time = 1.0
+brake = 0.6
+drag = 0.55
+rolling = 0.025
+health = 220.0
+bullet_share = 0.5
+blast_share = 1.0
+heavy_hit = 100.0
+crash_from = 7.0
+crash_damage = 12.0
+blast_radius = 5.5
+blast_damage = 110.0
+blast_size = 1.3
+run_over_from = 3.5
+run_over_kills = 9.0
+camera_back = 4.2
+camera_up = 1.7
+camera_aim = 1.0
+engine_loops = Array[StringName]([&"motorcycle_idle", &"motorcycle_low", &"motorcycle_high"])
+engine_rpms = PackedFloat32Array(900, 2200, 3900)
+engine_idle_db = -8.0
+engine_load_db = 0.0
+start_sound = &"motorcycle_start"
+stop_sound = &"motorcycle_stop"
+shift_sound = &"vehicle_shift"
+brake_sound = &"brake_squeal"
+door_sound = &""
+crash_sound = &"vehicle_crash"
+damaged_sound = &"engine_damaged"
+explode_sound = &"vehicle_explode"
+roll_sound = &"tyre_roll"

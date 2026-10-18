@@ -13,7 +13,7 @@ extends Node3D
 
 ## The rings: how far apart the tufts stand in each, and how far out it
 ## reaches. A ring begins where the one inside it ends.
-const RINGS := [[0.42, 14.0], [0.85, 32.0], [1.7, 66.0]]
+const RINGS := [[0.26, 12.0], [0.52, 26.0], [1.04, 55.0]]
 
 ## The material of the grass, which the level hands the maps of its land.
 @export var look: ShaderMaterial

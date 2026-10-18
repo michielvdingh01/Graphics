@@ -419,6 +419,9 @@ func _survey() -> bool:
 	var space := region.get_world_3d().direct_space_state
 	var looked := {}
 	var kept := {}
+	if region.get_meta(&"cover_near_things", false):
+		_survey_near_things(space, map, scene, kept)
+		return true
 	for p in navmesh.get_polygon_count():
 		var outline := PackedVector2Array()
 		var points: Array[Vector3] = []
@@ -458,6 +461,43 @@ func _survey() -> bool:
 				if _grounds.is_empty() or _grounds.any(func(ground: AABB) -> bool: return ground.has_point(at + Vector3.UP * 0.5)):
 					_look_at(space, map, at, kept)
 	return true
+
+
+## The survey of land of kilometres, for a level whose navmesh says so
+## (metadata/cover_near_things, see tools/levels/alps/plan.gd): the floor is
+## looked at only within NEAR of something that stands on it and could be
+## cover, every collider but the ground, the walls nobody sees and what is
+## in the group "no_cover" (the trunks of a wood). Every metre of a meadow of
+## five square kilometres, eight rays each, took eight minutes; there is no
+## cover on a meadow, and a bot in the open runs to what it sees.
+func _survey_near_things(space: PhysicsDirectSpaceState3D, map: RID, scene: Node, kept: Dictionary) -> void:
+	var looked := {}
+	for body: StaticBody3D in scene.find_children("*", "StaticBody3D", true, false):
+		if body.is_in_group(&"no_cover"):
+			continue
+		for child in body.get_children():
+			var collider := child as CollisionShape3D
+			if collider == null or collider.shape == null or collider.shape is HeightMapShape3D or collider.shape is WorldBoundaryShape3D:
+				continue
+			var box := collider.global_transform * collider.shape.get_debug_mesh().get_aabb()
+			if box.size.x > 200.0 or box.size.z > 200.0:
+				continue
+			box = box.grow(NEAR)
+			for x in range(floori(box.position.x / GRID), ceili(box.end.x / GRID) + 1):
+				for z in range(floori(box.position.z / GRID), ceili(box.end.z / GRID) + 1):
+					var flat := Vector2i(x, z)
+					if looked.has(flat):
+						continue
+					looked[flat] = true
+					var top := Vector3(x * GRID, box.end.y + 1.0, z * GRID)
+					var ground := _ray(space, top, top + Vector3.DOWN * (box.size.y + 4.0))
+					if ground.is_empty():
+						continue
+					var at: Vector3 = ground.position
+					var on_map := NavigationServer3D.map_get_closest_point(map, at)
+					if _flat(on_map, at) > 0.3 or absf(on_map.y - at.y) > HOVER:
+						continue
+					_look_at(space, map, at, kept)
 
 
 ## Files one spot of the survey: as cover if something stands by it, moved

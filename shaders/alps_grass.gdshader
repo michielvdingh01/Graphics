@@ -26,7 +26,7 @@ uniform float land_cell = 2.0;
 
 uniform sampler2D blades_tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform sampler2D blades_normal : hint_normal, filter_linear_mipmap, repeat_disable;
-uniform vec3 tint : source_color = vec3(0.62, 0.78, 0.38);
+uniform vec3 tint : source_color = vec3(0.55, 0.8, 0.32);
 uniform vec3 straw_tint : source_color = vec3(0.86, 0.72, 0.42);
 uniform float cut_near : hint_range(0.0, 1.0) = 0.42;
 uniform float cut_far : hint_range(0.0, 1.0) = 0.16;
@@ -34,7 +34,7 @@ uniform vec2 wind = vec2(0.6, 0.8);
 uniform float sway = 0.08;
 uniform float through : hint_range(0.0, 1.0) = 0.35;
 // How large a tuft of the nearest ring is, in metres, the least and the most.
-uniform vec2 size = vec2(0.32, 0.55);
+uniform vec2 size = vec2(0.24, 0.4);
 
 varying float straw;
 varying float sky;
@@ -81,12 +81,12 @@ void vertex() {
 		meadow = 0.0;
 	}
 	kept *= step(d4 * 0.9 + 0.05, meadow);
-	float grown = mix(size.x, size.y, d4) * spacing / 0.42 * kept;
-	straw = smoothstep(0.55, 0.95, hash(square + 5.3)) * 0.8 + smoothstep(0.5, 0.0, meadow) * 0.4;
+	float grown = mix(size.x, size.y, d4) * spacing / 0.26 * kept;
+	straw = smoothstep(0.7, 1.0, hash(square + 5.3)) * 0.6 + smoothstep(0.5, 0.0, meadow) * 0.3;
 	sky = map.g;
 	float turn = d1 * 6.2831853;
 	mat3 spin = mat3(vec3(cos(turn), 0.0, -sin(turn)), vec3(0.0, 1.0, 0.0), vec3(sin(turn), 0.0, cos(turn)));
-	vec3 local = spin * VERTEX * grown;
+	vec3 local = spin * (VERTEX * vec3(1.15, 0.7, 1.15)) * grown;
 	vec3 world = vec3(at.x, height_at(at) - 0.03 * grown, at.y) + local;
 	// Gusts run over the meadow with the wind, and every tuft shivers in
 	// them at its own time.

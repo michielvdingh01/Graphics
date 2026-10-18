@@ -25,6 +25,9 @@ var size := 1.7
 var thrower := 0
 var shooter: CollisionObject3D
 var skip := RID()
+## Only seen: a shell another machine fired, which has the host see to what
+## it hits (see _fired_here() in scripts/vehicle.gd).
+var harmless := false
 
 var _age := 0.0
 static var _ball: SphereMesh
@@ -83,6 +86,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _go_off(at: Vector3, struck: Object) -> void:
+	if harmless:
+		queue_free()
+		return
 	var direction := velocity.normalized()
 	if struck and struck.has_method("take_damage"):
 		if Match.active and shooter:

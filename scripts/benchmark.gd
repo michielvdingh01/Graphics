@@ -18,7 +18,8 @@ extends Node
 ## --weapon=3 puts that weapon of the loadout in view as the player holds it,
 ## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
-## stands a scene in the level at that spot, a model or an enemy, without
+## stands a scene in the level at that spot (a y with a plus is over the
+## ground, as for --at), a model or an enemy, without
 ## letting it run; several are separated by semicolons, a fifth number scales
 ## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride, 3 shot to pieces,
 ## 4 firing.
@@ -229,6 +230,8 @@ func _run() -> void:
 		node.process_mode = Node.PROCESS_MODE_DISABLED
 		tree.current_scene.add_child(node)
 		node.position = Vector3(numbers[0], numbers[1], numbers[2])
+		if entry.get_slice("@", 1).get_slice(",", 1).strip_edges().begins_with("+"):
+			node.position.y += _ground_under(numbers[0], numbers[2])
 		node.rotation_degrees.y = numbers[3]
 		if numbers.size() > 4:
 			node.scale = Vector3.ONE * numbers[4]

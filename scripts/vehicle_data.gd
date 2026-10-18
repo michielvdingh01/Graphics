@@ -47,6 +47,9 @@ extends Resource
 ## left at top speed.
 @export var steer_deg := 32.0
 @export var steer_at_speed := 0.3
+## How many times as far as the wheels the steering turns: a steering wheel
+## goes round nine times as far, the bars of a motorcycle as far.
+@export var steering_turns := 9.0
 ## How fast the wheels go from straight to full lock, in seconds.
 @export var steer_time := 0.25
 ## On tracks: how fast it turns on the spot and at speed, in degrees a second.

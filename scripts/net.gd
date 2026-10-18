@@ -37,8 +37,12 @@ const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
 const JOIN_TIME := 8.0
 const CONFIG := "user://net.cfg"
-## What a guest may have the host do to a node, see ask().
-const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm"]
+## What a guest may have the host do to a node, see ask(): the last three
+## are a vehicle's, see scripts/vehicle.gd.
+const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm", &"seat_asked", &"seat_left_asked", &"worn_by"]
+## What the machine that runs a vehicle may have the others do to it, see
+## vehicle_did().
+const VEHICLE_DEEDS: Array[StringName] = [&"_fired_here"]
 ## What a machine may report its player did, see player_did().
 const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched", &"struck", &"knocked"]
 const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
@@ -462,6 +466,34 @@ func heat_bits(heat: float) -> int:
 ## How hot the weapon of somebody is, from 0 to 1, from what they are doing.
 func heat_of(doing: int) -> float:
 	return float((doing >> HEAT) & HOTTEST) / HOTTEST
+
+
+## Tells the others how a vehicle that this machine runs stands: see
+## net_state() in scripts/vehicle.gd. Thirty times a second while it moves.
+func vehicle_state(vehicle: Node, state: Array) -> void:
+	if active and game and present.size() > 1:
+		_vehicle_state.rpc(vehicle.get_path(), state)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", 3)
+func _vehicle_state(path: NodePath, state: Array) -> void:
+	var vehicle := get_node_or_null(path)
+	if game and vehicle and vehicle.has_method("net_state"):
+		vehicle.net_state(multiplayer.get_remote_sender_id(), state)
+
+
+## Has the others show what a vehicle this machine runs did, one of
+## VEHICLE_DEEDS: the gun of a tank fired.
+func vehicle_did(vehicle: Node, what: StringName, args := []) -> void:
+	if active and game and present.size() > 1:
+		_vehicle_did.rpc(vehicle.get_path(), what, args)
+
+
+@rpc("any_peer", "call_remote", "reliable", 3)
+func _vehicle_did(path: NodePath, what: StringName, args: Array) -> void:
+	var vehicle := get_node_or_null(path)
+	if game and vehicle and VEHICLE_DEEDS.has(what) and vehicle.has_method(what):
+		vehicle.callv(what, args)
 
 
 ## Tells the others what this machine's player did, one of DEEDS, which their

@@ -108,8 +108,8 @@ func lie_of(at: Vector2, high: float, normal: Vector3) -> Dictionary:
 	var thin := 1.0 - smoothstep(TREE_LINE - 40.0, TREE_LINE + 200.0, line)
 	# Meadow on the floor of the basin and on the gentlest slopes round it.
 	var mown := 1.0 - smoothstep(MEADOW_TO - 15.0, MEADOW_TO + 40.0, high + wander * 50.0 + ragged * 15.0)
-	var pasture := smoothstep(0.988, 0.996, up + ragged * 0.004) * (1.0 - smoothstep(1100.0, 1250.0, high))
-	var alp := smoothstep(0.42, 0.55, _clearings.get_noise_2dv(at) + ragged * 0.08) * smoothstep(0.9, 0.96, up)
+	var pasture := smoothstep(0.992, 0.998, up + ragged * 0.003) * (1.0 - smoothstep(1050.0, 1120.0, high))
+	var alp := smoothstep(0.5, 0.6, _clearings.get_noise_2dv(at) + ragged * 0.08) * smoothstep(0.93, 0.97, up)
 	# Gullies: noise stretched along the fall of the slope, on the steep.
 	var fall := Vector2(normal.x, normal.z)
 	var gully := 0.0
@@ -137,6 +137,9 @@ func _lie_of_the_land() -> void:
 		for column in _across():
 			var at := _spot(column, row)
 			_heights[row * _across() + column] = altitude(at.x, at.y)
+	# The two camps at the ends, levelled where their vehicles stand.
+	for camp: Vector2 in [Vector2(330, 905), Vector2(2880, 760)]:
+		level_off(Rect2(camp - Vector2(45, 35), Vector2(90, 70)), NAN, 18.0)
 	lay_ground("alps_ground")
 
 
@@ -345,15 +348,23 @@ func _finish_zones() -> void:
 
 ## The navmesh of the land: baked here, once, and not by the game when the
 ## level loads (see scripts/game.gd), which on land of kilometres would take
-## minutes. Recast takes no more than 65 536 corners in one bake, so the land
-## is baked in squares of WALK_CHUNK metres, each with what lies WALK_MARGIN
-## round it, and the squares are sewn together into one navmesh: where two
-## meet, each edge along the seam gets the corners of the other side's edges,
-## so that both have the same edges and the game finds its way across.
-## Its cells are twice as coarse as those of the other levels; the game sets
-## the map of the level to match.
-const WALK_CELL := 0.5
-const WALK_CHUNK := 256.0
+## minutes. Its cells are four times as coarse as those of the other levels,
+## and the game sets the map of the level to match. Recast takes no more than
+## 65 536 corners in one bake; the land takes some eight thousand. Should it
+## ever take more, WALK_CHUNK smaller bakes it in squares, each with what lies
+## WALK_MARGIN round it, sewn together into one navmesh: where two meet, each
+## edge along the seam gets the corners of the other side's edges. That was
+## tried with squares of 256 m and a twentieth of the step it has now, and
+## the game did not find its way across every seam.
+const WALK_CELL := 1.0
+const WALK_CHUNK := 4000.0
+## How high a step one may take from one cell to the next: on land as steep
+## as one can walk up, 45 degrees, that is a cell. With the quarter of a metre
+## of the other levels every slope over 26 degrees fell apart into scraps.
+const WALK_CLIMB := 1.0
+## Whether the trunks of the wood are holes in the navmesh. Twelve thousand
+## of them made it ten times as large: a bot walks round a trunk by itself.
+const WALK_TRUNKS := false
 const WALK_MARGIN := 6.0
 
 
@@ -389,7 +400,8 @@ func _walk_settings() -> NavigationMesh:
 	navmesh.geometry_collision_mask = 1
 	navmesh.cell_size = WALK_CELL
 	navmesh.cell_height = 0.25
-	navmesh.agent_radius = WALK_CELL
+	navmesh.agent_radius = 0.5
+	navmesh.agent_max_climb = WALK_CLIMB
 	navmesh.edge_max_error = 1.0
 	navmesh.border_size = 2.0
 	return navmesh
@@ -427,7 +439,7 @@ func _obstacle_faces() -> PackedVector3Array:
 		faces.append(Vector3(corners[i * 3], corners[i * 3 + 1], corners[i * 3 + 2]))
 	# The trunks of the wood, which are colliders only in the game (see
 	# scripts/grove.gd): a square post each, as thick as the trunk.
-	for trunk: Array in _trunks:
+	for trunk: Array in (_trunks if WALK_TRUNKS else []):
 		var foot: Vector3 = trunk[0]
 		var r: float = trunk[1]
 		var top := foot + Vector3.UP * 4.0
@@ -607,8 +619,8 @@ const YOUNG := [["pine_young", 2.0], ["pine_d", 1.0]]
 const LARCHES := [["pine_c", 1.0]]
 const DWARF_PINES := [["scrub_a", 1.0], ["scrub_b", 1.0]]
 
-## The trees planted so far, by kind: {"cells": {Vector2i: buffer}}, see
-## scripts/grove.gd. And every trunk, [foot, radius], for the navmesh.
+## The trees planted so far, by kind: {"cells": {Vector2i: twelve numbers a
+## tree}}, see scripts/grove.gd. And every trunk, [foot, radius], for the navmesh.
 var _grove := {}
 var _trunks: Array = []
 
@@ -625,8 +637,8 @@ func plant(kind: String, at: Vector2, size := 1.0, yaw_deg := 0.0) -> void:
 		_grove[kind] = {"cells": {}}
 	var cells: Dictionary = _grove[kind].cells
 	if not cells.has(cell):
-		cells[cell] = PackedFloat32Array()
-	(cells[cell] as PackedFloat32Array).append_array([
+		cells[cell] = []
+	(cells[cell] as Array).append_array([
 		basis.x.x, basis.y.x, basis.z.x, foot.x,
 		basis.x.y, basis.y.y, basis.z.y, foot.y,
 		basis.x.z, basis.y.z, basis.z.z, foot.z,
@@ -672,14 +684,14 @@ func woods() -> void:
 				kinds = YOUNG
 			elif high > 1100.0 and high < 1900.0 and larch_stands.get_noise_2dv(at) > 0.25:
 				kinds = LARCHES
-			plant(_pick(kinds, dice), at, size, dice.randf_range(0.0, 360.0))
+			plant(_kind_by_weight(kinds, dice), at, size, dice.randf_range(0.0, 360.0))
 			planted += 1
 		z += WOOD_SPACING
 	print("Woods: %d trees in %.1f s" % [planted, (Time.get_ticks_msec() - began) / 1000.0])
 
 
 ## One of `kinds`, [model, weight] each, by weight.
-func _pick(kinds: Array, dice: RandomNumberGenerator) -> String:
+func _kind_by_weight(kinds: Array, dice: RandomNumberGenerator) -> String:
 	var total := 0.0
 	for kind: Array in kinds:
 		total += kind[1]
@@ -697,7 +709,11 @@ func _write_grove() -> void:
 		return
 	var plantings := Resource.new()
 	for kind: String in _grove:
-		plantings.set_meta(kind, _grove[kind])
+		# Gathered in arrays, which are kept by reference; written as buffers.
+		var cells := {}
+		for cell: Vector2i in _grove[kind].cells:
+			cells[cell] = PackedFloat32Array(_grove[kind].cells[cell])
+		plantings.set_meta(kind, {"cells": cells})
 	var path := "%s%s_grove.res" % [OUT_DIR, _level_name()]
 	ResourceSaver.save(plantings, path, ResourceSaver.FLAG_COMPRESS)
 	plantings.take_over_path(path)
@@ -706,3 +722,9 @@ func _write_grove() -> void:
 	node.set_script(GROVE)
 	node.set("plantings", plantings)
 	_add(node, _root)
+
+
+## A level for matches only has a start and no way out: see scripts/arena.gd.
+func _check_route() -> void:
+	if _route == null or _route.get_node_or_null("Start") == null:
+		push_error("Route: the Alps need a start, for the arena to walk from")

@@ -30,6 +30,8 @@ const DELAY := 0.1
 ## The longest it carries on by itself when nothing is heard, in seconds.
 const COAST := 0.25
 const EYE := 1.6
+## How high the hips of a soldier are over its feet, for sitting.
+const HIPS := 0.95
 const CROUCH_EYE := 0.95
 const LAYER := 2
 const HIT_MASK := 0b100101  # world + enemy + breakable
@@ -72,6 +74,10 @@ var head := Node3D.new()
 ## thinks for.
 var team := -1
 var driven := false
+## The vehicle it sits in on its player's machine, and in which seat: see
+## sit() and scripts/vehicle.gd. The vehicle carries it there.
+var riding: Node3D
+var seat := -1
 ## Nothing it carries stops a shot: scripts/weapons.gd asks that of whatever
 ## has a head to hit.
 var deflected := false
@@ -193,6 +199,11 @@ func _eyes() -> float:
 func _physics_process(_delta: float) -> void:
 	if _reports.is_empty():
 		return
+	# In a vehicle it is where the vehicle carries it; only where it looks
+	# is its player's.
+	if riding:
+		_steer_look()
+		return
 	# The two reports that the moment to show lies between. Past the last one
 	# it carries on the way it was going, for a moment.
 	var now := Time.get_ticks_msec() * 0.001 - DELAY
@@ -218,6 +229,9 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# At the wheel the vehicle shows the driver; a passenger is seen.
+	if _rig:
+		_rig.visible = riding == null or seat != 0
 	if ARMORY.at(_weapon).spin_up > 0.0 or _spin > 0.0 or _roaring:
 		_spin_barrels(ARMORY.at(_weapon), delta)
 	if _rig == null or dead:
@@ -233,6 +247,39 @@ func _process(delta: float) -> void:
 		_rig.lower()
 	else:
 		_rig.aim(head.global_position - head.global_basis.z * 20.0)
+
+
+## Where it looks in a vehicle, as its player looks: the vehicle has put it
+## in its seat (ride()).
+func _steer_look() -> void:
+	var last: Array = _reports[-1]
+	rotation.y = last[2]
+	head.rotation.x = last[3]
+	head.position.y = _eyes()
+	velocity = riding.linear_velocity if riding is RigidBody3D else Vector3.ZERO
+
+
+## Into seat `which` of `vehicle`, as its player got in on its own machine.
+## At the wheel the vehicle shows a figure of its own; a passenger is this
+## soldier, low in the seat, with its weapon up.
+func sit(vehicle: Node3D, which: int) -> void:
+	riding = vehicle
+	seat = which
+	collision_layer = _layer if vehicle.exposed(which) and not dead else 0
+
+
+## Out of the vehicle: from now on where its machine says it is.
+func stand(_pose: Transform3D, _going: Vector3) -> void:
+	riding = null
+	seat = -1
+	collision_layer = 0 if dead else _layer
+	_reports.clear()
+
+
+## Carried by its vehicle: the hips where the seat has them, and since the
+## soldier stands, its feet that much below them, in the vehicle.
+func ride(frame: Transform3D) -> void:
+	global_position = frame.origin - Vector3.UP * HIPS
 
 
 ## Strikes a pose for a screenshot of a puppet that nobody is behind: 1 with
@@ -268,7 +315,7 @@ func net_state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int
 	if dead and not down:
 		# Back on its feet somewhere else: there is no way between the two.
 		_reports.clear()
-	if _reports.is_empty():
+	if _reports.is_empty() and riding == null:
 		global_position = at
 		rotation.y = yaw
 		visible = true

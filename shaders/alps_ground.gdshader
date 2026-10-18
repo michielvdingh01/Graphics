@@ -151,8 +151,8 @@ void fragment() {
 
 	// The meadow: green on the floor, going over to the tawny of October in
 	// patches and on the alps higher up.
-	vec3 meadow = mix(texture(meadow_tex, p * 0.25).rgb * vec3(0.95, 1.05, 0.8), meadow_far, 1.0 - near);
-	float browned = smoothstep(0.55, 0.85, fbm(p * 0.006 + 7.7)) * 0.35 + smoothstep(1250.0, 1750.0, world.y + sea) * 0.75;
+	vec3 meadow = mix(texture(meadow_tex, p * 0.25).rgb * vec3(0.8, 1.12, 0.55) * 1.15, meadow_far, 1.0 - near);
+	float browned = smoothstep(0.6, 0.9, fbm(p * 0.006 + 7.7)) * 0.25 + smoothstep(1300.0, 1800.0, world.y + sea) * 0.75;
 	meadow = mix(meadow, meadow * autumn / meadow_far, clamp(browned, 0.0, 1.0));
 	// The wood: where the map says how much of it there is, crowns stand in
 	// clumps that many, with the shade between them; from far off that is
@@ -163,8 +163,8 @@ void fragment() {
 	float stands = mix(smoothstep(0.42, 0.58, forest + (clumps - 0.5) * 0.9), forest, blur);
 	float gaps = mix(smoothstep(0.3, 0.55, clumps), 0.55, blur);
 	vec3 canopy = crowns * mix(0.55, 1.3, gaps) * mix(0.85, 1.15, fbm(p * 0.015));
-	float larches = smoothstep(0.62, 0.72, fbm(p * 0.035 + 11.0)) * smoothstep(1950.0, 1700.0, world.y + sea) * smoothstep(1050.0, 1250.0, world.y + sea);
-	canopy = mix(canopy, larch * mix(0.7, 1.2, gaps), larches * 0.8);
+	float larches = smoothstep(0.66, 0.74, fbm(p * 0.08 + 11.0)) * smoothstep(1950.0, 1700.0, world.y + sea) * smoothstep(1050.0, 1250.0, world.y + sea);
+	canopy = mix(canopy, larch * mix(0.7, 1.2, gaps), larches * 0.45);
 	vec3 litter = texture(forest_tex, p * 0.3).rgb * 0.75;
 	vec3 wood = mix(litter, canopy, 1.0 - near);
 	forest = stands;

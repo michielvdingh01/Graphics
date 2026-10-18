@@ -871,7 +871,10 @@ func _material(mat: String) -> Material:
 			ResourceSaver.save(_own_map, file, ResourceSaver.FLAG_COMPRESS)
 			_own_map.take_over_path(file)
 		return _own_map
-	if mat != "dune_ground" or _cover == null:
+	# Sand that lies against something, as the field kit lays it, is of the
+	# dunes' ground with the map of the dunes on it; on other land it is
+	# that material as it is.
+	if mat != "dune_ground" or _cover == null or _ground_mat != "dune_ground":
 		return super(mat)
 	if _own_ground == null:
 		_own_ground = (load("res://materials/dune_ground.tres") as ShaderMaterial).duplicate()

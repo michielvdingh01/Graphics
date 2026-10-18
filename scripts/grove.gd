@@ -121,6 +121,9 @@ func _trunks(buffer: PackedFloat32Array, girth: float, shapes: Dictionary, bodie
 	if not bodies.has(cell):
 		var body := StaticBody3D.new()
 		body.name = "Trunks%d_%d" % [cell.x, cell.y]
+		# A trunk is no cover worth surveying a wood of thousands for: see
+		# Squad._survey_near_things().
+		body.add_to_group(&"no_cover")
 		add_child(body)
 		bodies[cell] = body
 	var body: StaticBody3D = bodies[cell]
