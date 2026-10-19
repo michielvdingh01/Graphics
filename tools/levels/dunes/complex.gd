@@ -656,4 +656,4 @@ func _route_through() -> void:
 	])
 	# Through the door: the level ends a step inside.
 	var face := BLOCK_NORTH + 0.25
-	route_exit("Leave by the back door", AABB(Vector3(BACK_DOOR_X - 2.3, YARD_Y - 0.1, face + 1.2), Vector3(4.6, 3.6, 3.0)), "", Vector3(BACK_DOOR_X, YARD_Y + 5.6, BLOCK_NORTH), Vector3.FORWARD)
+	route_exit("Leave by the back door", AABB(Vector3(BACK_DOOR_X - 2.3, YARD_Y - 0.1, face + 1.2), Vector3(4.6, 3.6, 3.0)), "alps", Vector3(BACK_DOOR_X, YARD_Y + 5.6, BLOCK_NORTH), Vector3.FORWARD)

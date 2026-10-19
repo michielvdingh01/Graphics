@@ -42,6 +42,15 @@ uniform float scatter : hint_range(0.0, 1.0) = 0.22;
 // How far round a tuft the sun reaches: at nought only what faces it is lit.
 uniform float wrap : hint_range(0.0, 1.0) = 0.35;
 uniform float roughness : hint_range(0.0, 1.0) = 0.9;
+// How much of the sky a needle gives back. A crown as dark as a spruce's is
+// otherwise mostly the sky it reflects, a grey haze over it.
+uniform float specular : hint_range(0.0, 1.0) = 0.1;
+// How much of the sky what is deep in a crown sees, and what is on its
+// outside. A dense crown hides most of the sky from itself: under a low sun
+// it is then lit on one side and dark on the other, as a spruce is, where a
+// crown that sees all of the sky is as light on either side.
+uniform float sky_deep : hint_range(0.0, 1.0) = 0.7;
+uniform float sky_out : hint_range(0.0, 1.0) = 1.0;
 // How dark what sits deep in a crown is, next to what is on its outside.
 uniform float deep : hint_range(0.0, 1.0) = 0.45;
 // How much one tree differs from the next in colour, by where it stands:
@@ -83,7 +92,7 @@ void vertex() {
 	own = vec3(1.0 + vary * warm, 1.0 + vary * 0.35 * warm, 1.0 - vary * 0.8 * warm) * (1.0 + vary * light);
 	// Each tuft has a number of its own, the green of its corners; wood that
 	// is drawn with the needles goes along with the bark.
-	if (given_way(NODE_POSITION_WORLD, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, abs(COLOR.a - 0.5) < 0.25 ? 0.5 : COLOR.g)) {
+	if (given_way(MODEL_MATRIX[3].xyz, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, abs(COLOR.a - 0.5) < 0.25 ? 0.5 : COLOR.g)) {
 		VERTEX = vec3(0.0);
 	}
 }
@@ -130,9 +139,9 @@ void fragment() {
 		vec3 colour = leaf.rgb * mix(tint * own, vec3(1.0), wood);
 		ALBEDO = colour * mix(deep, 1.0, COLOR.b) * mix(1.0, 0.8, under);
 		ROUGHNESS = roughness;
-		SPECULAR = 0.1;
+		SPECULAR = specular;
 		// What sits deep in a crown sees little of the sky either.
-		AO = mix(0.7, 1.0, COLOR.b);
+		AO = mix(sky_deep, sky_out, COLOR.b);
 		lets = through * (1.0 - wood);
 		LIGHT_VERTEX = VERTEX + NORMAL * lift;
 	}

@@ -15,6 +15,7 @@ extends RefCounted
 ## Distances are as the crow flies, not walked. scripts/match.gd makes one
 ## when a level has become an arena.
 
+const WAY := preload("res://scripts/way.gd")
 const WORLD := 1
 const GRID := 2.0
 const EYE := 1.6
@@ -115,7 +116,12 @@ func survey(game: Node3D) -> bool:
 					walked[other] = true
 					todo.append(other)
 
-	# The spots on that floor.
+	# The spots on that floor: GRID apart, or further on floor of kilometres,
+	# where there would be a million and only MOST are kept.
+	var floor_area := 0.0
+	for p: int in walked:
+		floor_area += absf(_area(outlines[p]))
+	var grid := maxf(GRID, sqrt(floor_area / (MOST * 2.5)))
 	spots = PackedVector3Array()
 	var looked := {}
 	for p: int in walked:
@@ -128,9 +134,9 @@ func survey(game: Node3D) -> bool:
 		for point in outlines[p]:
 			from = from.min(point)
 			to = to.max(point)
-		for x in range(ceili(from.x / GRID), floori(to.x / GRID) + 1):
-			for z in range(ceili(from.y / GRID), floori(to.y / GRID) + 1):
-				var flat := Vector2(x, z) * GRID + Vector2(0.37, 0.41)
+		for x in range(ceili(from.x / grid), floori(to.x / grid) + 1):
+			for z in range(ceili(from.y / grid), floori(to.y / grid) + 1):
+				var flat := Vector2(x, z) * grid + Vector2(0.37, 0.41)
 				if not Geometry2D.is_point_in_polygon(flat, outlines[p]):
 					continue
 				var y := (plane.d - plane.normal.x * flat.x - plane.normal.z * flat.y) / plane.normal.y
@@ -152,14 +158,49 @@ func survey(game: Node3D) -> bool:
 		spots = kept
 
 	# Its ends: the spot that is the longest walk from the start, and the one
-	# that is the longest walk from that.
-	var from_start := _walks_from(start)
-	ends[0] = _furthest(from_start)
-	walks[0] = _walks_from(spots[ends[0]])
-	ends[1] = _furthest(walks[0])
+	# that is the longest walk from that. Unless the level says where they
+	# are (assets/arenas.json): then the spots nearest to those.
+	var said := _said_ends(game)
+	if said.size() == 2:
+		for k in 2:
+			var best := INF
+			for i in spots.size():
+				var gap := Vector2(spots[i].x - said[k].x, spots[i].z - said[k].z).length()
+				if gap < best:
+					best = gap
+					ends[k] = i
+		walks[0] = _walks_from(spots[ends[0]])
+	else:
+		var from_start := _walks_from(start)
+		ends[0] = _furthest(from_start)
+		walks[0] = _walks_from(spots[ends[0]])
+		ends[1] = _furthest(walks[0])
 	walks[1] = _walks_from(spots[ends[1]])
 	took = (Time.get_ticks_usec() - began) / 1e6
 	return true
+
+
+## Where the level says its two sides begin, as assets/arenas.json has it
+## under "ends", or nothing.
+func _said_ends(game: Node3D) -> PackedVector3Array:
+	var level := game.scene_file_path.get_file().get_basename()
+	var path := "res://assets/arenas.json"
+	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+	var ends_said := PackedVector3Array()
+	if said is Dictionary and (said as Dictionary).get(level) is Dictionary:
+		for end: Variant in (said[level] as Dictionary).get("ends", []):
+			ends_said.append(Vector3(end[0], end[1], end[2]))
+	return ends_said
+
+
+## The area inside an outline, signed by which way it goes round.
+func _area(outline: PackedVector2Array) -> float:
+	var sum := 0.0
+	for i in outline.size():
+		var a := outline[i]
+		var b := outline[(i + 1) % outline.size()]
+		sum += a.x * b.y - b.x * a.y
+	return sum * 0.5
 
 
 ## How far it is to walk from one end to the other.
@@ -429,7 +470,7 @@ func _room(at: Vector3) -> bool:
 ## sets out on it looks at, which is never the wall that the place itself
 ## lies behind.
 func _ahead(from: Vector3, to: Vector3) -> Vector3:
-	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	var path := WAY.between(_map, from, to)
 	var walked := 0.0
 	for i in range(1, path.size()):
 		walked += path[i - 1].distance_to(path[i])
@@ -452,7 +493,7 @@ func _middle() -> Vector3:
 
 ## How far it is to walk from `from` to `to`; NO_WAY where there is no way.
 func walk(from: Vector3, to: Vector3) -> float:
-	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	var path := WAY.between(_map, from, to)
 	if path.is_empty() or path[-1].distance_to(to) > 1.5:
 		return NO_WAY
 	var length := 0.0
@@ -465,7 +506,7 @@ func walk(from: Vector3, to: Vector3) -> float:
 func _walks_from(from: Vector3) -> PackedFloat32Array:
 	var lengths := PackedFloat32Array()
 	for spot in spots:
-		var path := NavigationServer3D.map_get_path(_map, from, spot, true)
+		var path := WAY.between(_map, from, spot)
 		var length := NO_WAY
 		if not path.is_empty() and path[-1].distance_to(spot) < 1.5:
 			length = 0.0

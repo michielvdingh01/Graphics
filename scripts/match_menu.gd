@@ -7,11 +7,12 @@ extends RefCounted
 ## are chosen.
 
 ## The levels there are to play in: the name of each as Match.open() takes it.
-const ARENAS: Array[String] = ["works", "powerhouse", "factory", "depot", "dunes", "dunes_night"]
+const ARENAS: Array[String] = ["works", "powerhouse", "factory", "depot", "dunes", "dunes_night", "alps"]
 ## How big each arena is, by the floor somebody can walk to: small is under
 ## 1 000 m², large over 2 000 m². Measured on 15 October 2026, see PLAN.md
-## under "Een tweede nummer, en hoe groot een arena is".
-const SIZES := {"works": "large", "powerhouse": "medium", "factory": "small", "depot": "medium", "dunes": "large", "dunes_night": "large"}
+## under "Een tweede nummer, en hoe groot een arena is". The Alps are huge:
+## three kilometres end to end, which nobody crosses on foot.
+const SIZES := {"works": "large", "powerhouse": "medium", "factory": "small", "depot": "medium", "dunes": "large", "dunes_night": "large", "alps": "huge"}
 ## Themes of scripts/enemy_themes.gd that are not on offer as who to play
 ## against: the second uniform, which soldiers wear anyway, and those that
 ## look like another.

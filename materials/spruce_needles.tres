@@ -1,0 +1,25 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/crown.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/foliage/spruce_sprigs.png" id="leaf"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/leaf_tex = ExtResource("leaf")
+shader_parameter/tint = Color(0.6, 0.72, 0.55, 1)
+shader_parameter/cut = 0.4
+shader_parameter/cut_far = 0.26
+shader_parameter/cut_shadow = 0.35
+shader_parameter/sway = 0.04
+shader_parameter/through = 0.12
+shader_parameter/scatter = 0.18
+shader_parameter/wrap = 0.25
+shader_parameter/roughness = 0.8
+shader_parameter/deep = 0.45
+shader_parameter/vary = 0.1
+shader_parameter/lift = 0.3
+shader_parameter/edge = 0.3
+shader_parameter/sharp = 1.0
+shader_parameter/specular = 0.0
+shader_parameter/sky_deep = 0.25
+shader_parameter/sky_out = 0.6

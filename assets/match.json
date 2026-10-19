@@ -16,7 +16,8 @@
 	"specials": {"first": 60.0, "back": 90.0},
 	"arenas": {
 		"dunes": {"most": 20, "size": 20},
-		"dunes_night": {"like": "dunes"}
+		"dunes_night": {"like": "dunes"},
+		"alps": {"most": 32, "size": 20}
 	},
 	"modes": {
 		"tdm": {"title": "Team deathmatch", "limit": 50, "grows": true, "minutes": 10, "respawn": 2.0, "least": 1, "most": 6, "size": 6},

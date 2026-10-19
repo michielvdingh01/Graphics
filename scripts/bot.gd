@@ -74,6 +74,10 @@ const STUCK := Vector2(0.4, 1.5)
 ## seconds it goes somewhere else after it got stuck on the way to where the
 ## match wants it.
 const REPATH := 0.3
+## Seconds before a way is looked for again for every so many metres the goal
+## is off, and the most it waits.
+const FAR_PATH := 60.0
+const REPATH_MOST := 4.0
 const DETOUR := 3.0
 const EYE := 1.6
 ## A weapon of the arena that is there to be taken this near, in metres, and
@@ -176,6 +180,9 @@ func _ready() -> void:
 	_body = get_parent()
 	_agent.path_desired_distance = 0.6
 	_agent.target_desired_distance = 1.0
+	# As far as it takes: a bot crosses the Alps, and the 4096 polygons the
+	# search stops at by itself end the way half-way (see scripts/way.gd).
+	_agent.path_search_max_polygons = 0
 	_agent.radius = 0.4
 	_body.add_child.call_deferred(_agent)
 	_own = ARMORY.at(me.weapon)
@@ -549,7 +556,10 @@ func _roam(wish: Variant) -> Vector3:
 func _towards(goal: Vector3, pace: float) -> Vector3:
 	if _clock >= _path_at and _agent.target_position.distance_to(goal) > 0.5:
 		_agent.target_position = goal
-		_path_at = _clock + REPATH
+		# A goal far off is looked for again less often: where it is to the
+		# metre only matters close by, and a way across the Alps takes ten
+		# milliseconds to find.
+		_path_at = _clock + clampf(_body.global_position.distance_to(goal) / FAR_PATH, REPATH, REPATH_MOST)
 	var straight := goal - _body.global_position
 	straight.y = 0.0
 	if straight.length() < 1.0:

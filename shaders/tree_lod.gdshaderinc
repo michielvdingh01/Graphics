@@ -21,13 +21,23 @@
 uniform vec4 shown = vec4(0.0);
 
 // True for what of this drawing is left to another one, at `node` the foot
-// of the tree, from `eye`. `tuft` is the number of the tuft it belongs to,
+// of the tree, from `eye`. The foot is where the tree's own transform puts
+// it (MODEL_MATRIX[3]), which for a tree drawn as one of a MultiMesh is that
+// tree and not the node that holds them all (scripts/grove.gd). `tuft` is the number of the tuft it belongs to,
 // 0 to 1. What is left to another is folded up into a point where it
 // stands, so that nothing of it is drawn, and its shadow goes with it: the
 // eye is that of the camera also when the sun draws its shadows.
-bool given_way(vec3 node, vec3 eye, float tuft) {
+// The same with a number of its own for where it comes in and for where it
+// goes: the far card of a tree of the Alps comes in where its nearer drawing
+// goes, all at once, and goes where the ground takes over the wood, one tree
+// at a time, each at a distance of its own.
+bool given_way_by(vec3 node, vec3 eye, float coming_tuft, float going_tuft) {
 	float away = distance(node, eye);
 	float coming = shown.y > shown.x ? smoothstep(shown.x, shown.y, away) : 1.0;
 	float going = shown.w > shown.z ? smoothstep(shown.z, shown.w, away) : 0.0;
-	return tuft >= coming || tuft < going;
+	return coming_tuft >= coming || going_tuft < going;
+}
+
+bool given_way(vec3 node, vec3 eye, float tuft) {
+	return given_way_by(node, eye, tuft, tuft);
 }

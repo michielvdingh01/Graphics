@@ -35,6 +35,11 @@ extends Resource
 ## How much of what the springs hold on one side the bar between them puts on
 ## the other: against rolling over in a bend.
 @export var anti_roll := 0.5
+## How firmly it is held upright across its length, against the ground under
+## its wheels, as the frequency of that spring in Hz: for what has no wheel
+## on one side, a motorcycle with a sidecar, which a rider holds up. 0 for
+## what stands on its axles.
+@export var steady := 0.0
 ## How hard the tyres hold on the ground, sideways and along, as a share of
 ## the weight on them: 1 is dry tarmac, sand is less.
 @export var grip := 1.05
@@ -47,6 +52,9 @@ extends Resource
 ## left at top speed.
 @export var steer_deg := 32.0
 @export var steer_at_speed := 0.3
+## How many times as far as the wheels the steering turns: a steering wheel
+## goes round nine times as far, the bars of a motorcycle as far.
+@export var steering_turns := 9.0
 ## How fast the wheels go from straight to full lock, in seconds.
 @export var steer_time := 0.25
 ## On tracks: how fast it turns on the spot and at speed, in degrees a second.

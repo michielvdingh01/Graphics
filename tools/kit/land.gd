@@ -60,6 +60,11 @@ const MOUND_HIGH := 0.13
 
 ## The land of the level (x and z), or nothing for a level without any.
 var _land := Rect2()
+## How far apart its heights lie, and the dots to the metre of the map of
+## what covers it: LAND_CELL and COVER_SCALE unless land() was told
+## otherwise. A land of kilometres takes coarser ones.
+var _cell := LAND_CELL
+var _cover_scale := COVER_SCALE
 ## Its heights, LAND_CELL apart, row after row from north to south.
 var _heights := PackedFloat32Array()
 ## How much of each spot was raised by a ridge or a mound: two that cross do
@@ -133,8 +138,10 @@ var _own_map: StandardMaterial3D
 ## Sets out the land of the level: `area` on the ground (x and z, whole
 ## metres), lying `height` high to begin with. That height keeps it clear of
 ## nought, which hollows and ditches may come close to but not under.
-func land(area: Rect2, height: float) -> void:
+func land(area: Rect2, height: float, cell := LAND_CELL, cover_scale := COVER_SCALE) -> void:
 	_land = area
+	_cell = cell
+	_cover_scale = cover_scale
 	var count := _across() * _down()
 	_heights.resize(count)
 	_heights.fill(height)
@@ -142,7 +149,7 @@ func land(area: Rect2, height: float) -> void:
 	_raised.fill(0.0)
 	_firm.resize(count)
 	_firm.fill(0.0)
-	_cover = Image.create(int(area.size.x * COVER_SCALE), int(area.size.y * COVER_SCALE), false, Image.FORMAT_RGBA8)
+	_cover = Image.create(int(area.size.x * _cover_scale), int(area.size.y * _cover_scale), false, Image.FORMAT_RGBA8)
 	_cover.fill(Color(0, 0, 0, 0))
 	_earth_beside = Image.create(_cover.get_width(), _cover.get_height(), false, Image.FORMAT_L8)
 	_earth_beside.fill(Color(0, 0, 0))
@@ -181,24 +188,24 @@ func shut_in(inset := 2.6) -> void:
 
 
 func _across() -> int:
-	return int(_land.size.x / LAND_CELL) + 1
+	return int(_land.size.x / _cell) + 1
 
 
 func _down() -> int:
-	return int(_land.size.y / LAND_CELL) + 1
+	return int(_land.size.y / _cell) + 1
 
 
 ## The spots of the land that lie in `area`, as [first column, first row,
 ## last column, last row].
 func _spots_in(area: Rect2) -> Array[int]:
-	var from := ((area.position - _land.position) / LAND_CELL).floor()
-	var to := ((area.end - _land.position) / LAND_CELL).ceil()
+	var from := ((area.position - _land.position) / _cell).floor()
+	var to := ((area.end - _land.position) / _cell).ceil()
 	return [clampi(int(from.x), 0, _across() - 1), clampi(int(from.y), 0, _down() - 1), clampi(int(to.x), 0, _across() - 1), clampi(int(to.y), 0, _down() - 1)]
 
 
 ## Where spot (`column`, `row`) lies on the ground.
 func _spot(column: int, row: int) -> Vector2:
-	return _land.position + Vector2(column, row) * LAND_CELL
+	return _land.position + Vector2(column, row) * _cell
 
 
 ## The box around a path, grown by `reach`.
@@ -454,7 +461,7 @@ func ground_height(x: float, z: float) -> float:
 	# and the next stand on that.
 	if _heights.is_empty():
 		return 0.0
-	var at := (Vector2(x, z) - _land.position) / LAND_CELL
+	var at := (Vector2(x, z) - _land.position) / _cell
 	var column := clampi(int(floorf(at.x)), 0, _across() - 2)
 	var row := clampi(int(floorf(at.y)), 0, _down() - 2)
 	var u := clampf(at.x - column, 0.0, 1.0)
@@ -511,8 +518,8 @@ func cover(kind: String, at: Vector2, radius: float, amount := 1.0, soft := 0.5)
 	if _cover == null:
 		return
 	var channel: int = COVERS[kind]
-	var middle := (at - _land.position) * COVER_SCALE
-	var reach := radius * COVER_SCALE
+	var middle := (at - _land.position) * _cover_scale
+	var reach := radius * _cover_scale
 	for y in range(maxi(int(middle.y - reach), 0), mini(int(middle.y + reach) + 1, _cover.get_height())):
 		for x in range(maxi(int(middle.x - reach), 0), mini(int(middle.x + reach) + 1, _cover.get_width())):
 			var share := Vector2(x + 0.5, y + 0.5).distance_to(middle) / reach
@@ -527,11 +534,11 @@ func cover_along(kind: String, way: PackedVector2Array, reach: float, amount := 
 		return
 	var channel: int = COVERS[kind]
 	var box := _around(way, reach)
-	var from := ((box.position - _land.position) * COVER_SCALE).floor()
-	var to := ((box.end - _land.position) * COVER_SCALE).ceil()
+	var from := ((box.position - _land.position) * _cover_scale).floor()
+	var to := ((box.end - _land.position) * _cover_scale).ceil()
 	for y in range(maxi(int(from.y), 0), mini(int(to.y), _cover.get_height())):
 		for x in range(maxi(int(from.x), 0), mini(int(to.x), _cover.get_width())):
-			var share := _nearest_on(way, _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE).x / reach
+			var share := _nearest_on(way, _land.position + Vector2(x + 0.5, y + 0.5) / _cover_scale).x / reach
 			if share >= 1.0:
 				continue
 			_lay_dot(x, y, channel, amount * (1.0 - smoothstep(1.0 - soft, 1.0, share)))
@@ -542,8 +549,8 @@ func cover_over(kind: String, area: Rect2, amount := 1.0) -> void:
 	if _cover == null:
 		return
 	var channel: int = COVERS[kind]
-	var from := ((area.position - _land.position) * COVER_SCALE).floor()
-	var to := ((area.end - _land.position) * COVER_SCALE).ceil()
+	var from := ((area.position - _land.position) * _cover_scale).floor()
+	var to := ((area.end - _land.position) * _cover_scale).ceil()
 	for y in range(maxi(int(from.y), 0), mini(int(to.y), _cover.get_height())):
 		for x in range(maxi(int(from.x), 0), mini(int(to.x), _cover.get_width())):
 			_lay_dot(x, y, channel, amount)
@@ -562,7 +569,7 @@ func _lay_dot(x: int, y: int, channel: int, amount: float) -> void:
 func cover_at(kind: String, at: Vector2) -> float:
 	if _cover == null:
 		return 0.0
-	var dot := ((at - _land.position) * COVER_SCALE).floor()
+	var dot := ((at - _land.position) * _cover_scale).floor()
 	if dot.x < 0.0 or dot.y < 0.0 or dot.x >= _cover.get_width() or dot.y >= _cover.get_height():
 		return 0.0
 	return _cover.get_pixel(int(dot.x), int(dot.y))[COVERS[kind]]
@@ -572,7 +579,7 @@ func cover_at(kind: String, at: Vector2) -> float:
 func firm_at(at: Vector2) -> float:
 	if _firm.is_empty():
 		return 1.0
-	var spot := ((at - _land.position) / LAND_CELL).round()
+	var spot := ((at - _land.position) / _cell).round()
 	return _firm[clampi(int(spot.y), 0, _down() - 1) * _across() + clampi(int(spot.x), 0, _across() - 1)]
 
 
@@ -600,6 +607,14 @@ func lay_ground(mat := "dune_ground") -> void:
 	var collider := CollisionShape3D.new()
 	collider.shape = field
 	collider.position = Vector3(_land.get_center().x, 0.0, _land.get_center().y)
+	if _cell != 1.0:
+		# A height field has its heights a unit apart: a coarser one is
+		# scaled up, all three ways, and its heights scaled down to match.
+		var heights := _heights.duplicate()
+		for i in heights.size():
+			heights[i] /= _cell
+		field.map_data = heights
+		collider.scale = Vector3.ONE * _cell
 	collider.set_meta(&"surface", "sand")
 	_add(collider, body)
 	_ground_mat = mat
@@ -633,7 +648,7 @@ func _dress_ground() -> void:
 	var caught := {}
 	for clump: Dictionary in _clumps:
 		if clump.size >= MOUND_FROM:
-			var block := Vector2i(((clump.at as Vector2) - _land.position) / (GROUND_BLOCK * LAND_CELL))
+			var block := Vector2i(((clump.at as Vector2) - _land.position) / (GROUND_BLOCK * _cell))
 			if not caught.has(block):
 				caught[block] = []
 			caught[block].append(clump)
@@ -696,7 +711,7 @@ func _facing(column: int, row: int) -> Vector3:
 	var east := _heights[row * across + mini(column + 1, across - 1)]
 	var north := _heights[maxi(row - 1, 0) * across + column]
 	var south := _heights[mini(row + 1, _down() - 1) * across + column]
-	return Vector3(west - east, 2.0 * LAND_CELL, north - south).normalized()
+	return Vector3(west - east, 2.0 * _cell, north - south).normalized()
 
 
 ## Reads off the land what its material cannot see for itself, for every
@@ -823,7 +838,7 @@ func _evened(values: PackedFloat32Array, reach: int) -> PackedFloat32Array:
 ## What `values`, one for every spot of the land, come to at `at`, between
 ## the spots.
 func _between(values: PackedFloat32Array, at: Vector2) -> float:
-	var spot := (at - _land.position) / LAND_CELL
+	var spot := (at - _land.position) / _cell
 	var column := clampi(int(floorf(spot.x)), 0, _across() - 2)
 	var row := clampi(int(floorf(spot.y)), 0, _down() - 2)
 	var u := clampf(spot.x - column, 0.0, 1.0)
@@ -835,7 +850,7 @@ func _between(values: PackedFloat32Array, at: Vector2) -> float:
 ## What _read_land() says of the ground at `at`, between the spots it was
 ## read at.
 func look_at_ground(at: Vector2) -> Color:
-	var spot := (at - _land.position) / LAND_CELL
+	var spot := (at - _land.position) / _cell
 	var column := clampi(int(floorf(spot.x)), 0, _across() - 2)
 	var row := clampi(int(floorf(spot.y)), 0, _down() - 2)
 	var u := clampf(spot.x - column, 0.0, 1.0)
@@ -856,7 +871,10 @@ func _material(mat: String) -> Material:
 			ResourceSaver.save(_own_map, file, ResourceSaver.FLAG_COMPRESS)
 			_own_map.take_over_path(file)
 		return _own_map
-	if mat != "dune_ground" or _cover == null:
+	# Sand that lies against something, as the field kit lays it, is of the
+	# dunes' ground with the map of the dunes on it; on other land it is
+	# that material as it is.
+	if mat != "dune_ground" or _cover == null or _ground_mat != "dune_ground":
 		return super(mat)
 	if _own_ground == null:
 		_own_ground = (load("res://materials/dune_ground.tres") as ShaderMaterial).duplicate()
@@ -868,7 +886,7 @@ func _material(mat: String) -> Material:
 			for x in map.get_width():
 				var dot := map.get_pixel(x, y)
 				dot.b = _earth_beside.get_pixel(x, y).r
-				dot.r = maxf(dot.r, smoothstep(0.3, 0.55, _between(_wooded, _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE)))
+				dot.r = maxf(dot.r, smoothstep(0.3, 0.55, _between(_wooded, _land.position + Vector2(x + 0.5, y + 0.5) / _cover_scale)))
 				map.set_pixel(x, y, dot)
 		map.generate_mipmaps()
 		_own_ground.set_shader_parameter("cover", ImageTexture.create_from_image(map))
@@ -953,11 +971,11 @@ func _shade_land(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameter
 		var fall := centre.y - ground_height(centre.x, centre.z) - SHADE_HEIGHT
 		var onto := Vector2(centre.x, centre.z) - Vector2(_sunward.x, _sunward.z) * (fall / _sunward.y)
 		var reach := maxf(radii.x, maxf(radii.y, radii.z)) / _sunward.y + 2.0
-		var from := ((onto - Vector2.ONE * reach - _land.position) * COVER_SCALE).floor()
-		var to := ((onto + Vector2.ONE * reach - _land.position) * COVER_SCALE).ceil()
+		var from := ((onto - Vector2.ONE * reach - _land.position) * _cover_scale).floor()
+		var to := ((onto + Vector2.ONE * reach - _land.position) * _cover_scale).ceil()
 		for y in range(maxi(int(from.y), 0), mini(int(to.y), high)):
 			for x in range(maxi(int(from.x), 0), mini(int(to.x), wide)):
-				var at := _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE
+				var at := _land.position + Vector2(x + 0.5, y + 0.5) / _cover_scale
 				var eye := ground(at.x, at.y, SHADE_HEIGHT)
 				# How near the way to the sun passes the middle of the crown,
 				# in a space where the crown is a ball of radius one.
@@ -976,7 +994,7 @@ func _shade_land(space: PhysicsDirectSpaceState3D, ray: PhysicsRayQueryParameter
 			var i := y * wide + x
 			if shade[i] >= 0.999:
 				continue
-			var at := _land.position + Vector2(x + 0.5, y + 0.5) / COVER_SCALE
+			var at := _land.position + Vector2(x + 0.5, y + 0.5) / _cover_scale
 			ray.from = ground(at.x, at.y, SHADE_HEIGHT)
 			ray.to = ray.from + _sunward * SHADE_REACH
 			if _stops_sun(space, ray):
@@ -1694,7 +1712,7 @@ func _strew_grass() -> void:
 			var right := Vector2(-along.y, along.x).normalized()
 			var seed := int(dice.randi())
 			var chance := dice.randf()
-			if cover_at("earth", way[i]) > 0.3 and _earth_beside.get_pixelv(Vector2i(((way[i] - _land.position) * COVER_SCALE).floor().clamp(Vector2.ZERO, Vector2(_cover.get_size() - Vector2i.ONE)))).r > 0.3:
+			if cover_at("earth", way[i]) > 0.3 and _earth_beside.get_pixelv(Vector2i(((way[i] - _land.position) * _cover_scale).floor().clamp(Vector2.ZERO, Vector2(_cover.get_size() - Vector2i.ONE)))).r > 0.3:
 				continue
 			# Between the ruts, which weave as the material has them weave,
 			# and along both sides: more of it where a wood shelters it.
@@ -1788,7 +1806,7 @@ func _stain_standings() -> void:
 func _in_shade(at: Vector2) -> bool:
 	if _shade_bits == null:
 		return false
-	var dot := Vector2i(((at - _land.position) * COVER_SCALE).floor())
+	var dot := Vector2i(((at - _land.position) * _cover_scale).floor())
 	var size := _shade_bits.get_size()
 	return dot.x >= 0 and dot.y >= 0 and dot.x < size.x and dot.y < size.y and _shade_bits.get_bitv(dot)
 
@@ -1939,7 +1957,7 @@ func _stand_marram() -> void:
 ## The spot of the land nearest to `at`, as its place in the lists that
 ## have one entry a spot.
 func _spot_at(at: Vector2) -> int:
-	var spot := ((at - _land.position) / LAND_CELL).round()
+	var spot := ((at - _land.position) / _cell).round()
 	return clampi(int(spot.y), 0, _down() - 1) * _across() + clampi(int(spot.x), 0, _across() - 1)
 
 

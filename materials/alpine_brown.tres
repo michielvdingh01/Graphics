@@ -1,0 +1,19 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/alpine_wood.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/weathered_planks/weathered_planks_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/weathered_planks/weathered_planks_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/weathered_planks/weathered_planks_arm.jpg" id="arm"]
+[ext_resource type="Texture2D" path="res://assets/masks/wear.png" id="mask"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/albedo_tex = ExtResource("diff")
+shader_parameter/normal_tex = ExtResource("nor")
+shader_parameter/orm_tex = ExtResource("arm")
+shader_parameter/wear_mask = ExtResource("mask")
+shader_parameter/grey = Color(0.38, 0.31, 0.25, 1)
+shader_parameter/burnt = Color(0.25, 0.15, 0.09, 1)
+shader_parameter/tones = 0.2
+shader_parameter/lichen = 0.15
+shader_parameter/moss = 0.2

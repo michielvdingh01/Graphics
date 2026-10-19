@@ -28,6 +28,7 @@ const LEVELS: Array[Dictionary] = [
 	# The dunes again by night: a variant, which no exit leads to and whose
 	# exit leads where that of the dunes does. It follows the dunes.
 	{"name": "Dunes at night", "scene": "res://scenes/dunes_night.tscn", "music": LEVEL_MUSIC, "variant": true},
+	{"name": "Alps", "scene": "res://scenes/alps.tscn", "music": LEVEL_MUSIC},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it
 ## cannot hold a right click and click at once, and its scroll is not a wheel.

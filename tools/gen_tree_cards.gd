@@ -14,14 +14,29 @@ extends SceneTree
 ## where on them its foot stands. It draws, so it runs through tools/godot.sh
 ## and takes its turn on the GPU. Build the models first, and again after:
 ## tools/models/trees.gd reads the json.
+##
+## With "alpine" (tools/gen_tree_cards.sh alpine) it pictures the trees of
+## the Alps instead, into alpine_far: in narrower, taller pictures, for a
+## spruce is a slender cone, and with how much light each tree's needles let
+## through in the alpha of the second sheet (see `graded` in
+## shaders/tree_far.gdshader), for a larch glows in the sun and a spruce does
+## not.
 
-const TREES: Array[String] = ["pine_a", "pine_b", "pine_c", "pine_d", "pine_young"]
+const PINES: Array[String] = ["pine_a", "pine_b", "pine_c", "pine_d", "pine_young"]
+const ALPINE: Array[String] = ["spruce_old", "spruce_mid", "spruce_young", "larch_old", "larch_young", "dwarf_pine_a", "dwarf_pine_b", "maple"]
 const SIDES := 8
-## The size of one picture on the sheet, and how many times as large it is
-## drawn before it is brought down to that.
-const CELL := Vector2i(192, 320)
+## How many times as large a picture is drawn before it is brought down to
+## the size of one picture on the sheet.
 const OVER := 3
-const OUT := "res://assets/foliage/pine_far"
+## The light the needles let through that a graded sheet counts as all of it:
+## what alpine_far.tres has as its `through`.
+const GRADED_THROUGH := 0.5
+
+## The trees, the size of one picture on the sheet, and where it is written.
+var TREES: Array[String] = PINES
+var CELL := Vector2i(192, 320)
+var OUT := "res://assets/foliage/pine_far"
+var _graded := false
 ## What the importer is told of a sheet, as tools/gen_sprigs.py tells it.
 const IMPORT := "[remap]\n\nimporter=\"texture\"\ntype=\"CompressedTexture2D\"\n\n[params]\n\ncompress/mode=2\ncompress/high_quality=true\nmipmaps/generate=true\nprocess/fix_alpha_border=true\ndetect_3d/compress_to=0\n"
 
@@ -39,6 +54,17 @@ uniform vec2 scale = vec2(1.0);
 uniform int what = 0;
 // Whether this is bark: its colour is that of its corners, and it is wood.
 uniform bool bark = false;
+// How much light the needles let through, as a share of what a graded sheet
+// counts as all.
+uniform float lets = 1.0;
+// From how high up the bark is inside the crown, where the needles keep the
+// light off it, and how dark it is there.
+uniform float hidden_from = 1000.0;
+uniform float hidden = 1.0;
+varying float high;
+void vertex() {
+	high = VERTEX.y;
+}
 void fragment() {
 	vec4 dot = texture(tex, UV * scale);
 	if (!bark) {
@@ -48,11 +74,11 @@ void fragment() {
 	float wood = bark ? 1.0 : 1.0 - abs(COLOR.a - 0.5) * 2.0;
 	vec3 faces = FRONT_FACING || bark ? NORMAL : -NORMAL;
 	if (what == 0) {
-		ALBEDO = bark ? dot.rgb * COLOR.rgb * tint : dot.rgb * mix(tint, vec3(1.0), wood) * mix(deep, 1.0, COLOR.b);
+		ALBEDO = bark ? dot.rgb * COLOR.rgb * tint * mix(1.0, hidden, smoothstep(hidden_from, hidden_from + 2.0, high)) : dot.rgb * mix(tint, vec3(1.0), wood) * mix(deep, 1.0, COLOR.b);
 	} else if (what == 1) {
 		ALBEDO = normalize(faces) * 0.5 + 0.5;
 	} else {
-		ALBEDO = vec3(wood);
+		ALBEDO = vec3(wood, bark ? 0.0 : lets, 0.0);
 	}
 }
 """
@@ -62,6 +88,11 @@ var _camera: Camera3D
 
 
 func _initialize() -> void:
+	if "alpine" in OS.get_cmdline_user_args():
+		TREES = ALPINE
+		CELL = Vector2i(128, 384)
+		OUT = "res://assets/foliage/alpine_far"
+		_graded = true
 	await process_frame
 	_viewport = SubViewport.new()
 	_viewport.size = CELL * OVER
@@ -107,6 +138,10 @@ func _initialize() -> void:
 func _picture(tree: String, row: int, colour: Image, facing: Image) -> Dictionary:
 	var model: Node3D = (load("res://scenes/models/%s.scn" % tree) as PackedScene).instantiate()
 	_viewport.add_child(model)
+	# Where the crown begins: above it the trunk is in the crown's shade.
+	var hidden_from := 1000.0
+	for crown: Array in model.get_meta(&"crowns", []):
+		hidden_from = minf(hidden_from, (crown[0] as Vector3).y - (crown[1] as Vector3).y * 0.6)
 	var seen: MeshInstance3D
 	for part: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		part.visibility_range_begin = 0.0
@@ -122,11 +157,24 @@ func _picture(tree: String, row: int, colour: Image, facing: Image) -> Dictionar
 		var own := seen.mesh.surface_get_material(surface)
 		var show := ShaderMaterial.new()
 		show.shader = shader
-		if own is ShaderMaterial:
+		if own is ShaderMaterial and (own as ShaderMaterial).get_shader_parameter("albedo_tex") != null:
+			# Bark, drawn with shaders/bark.gdshader.
+			var bark_shader := own as ShaderMaterial
+			var albedo: Color = bark_shader.get_shader_parameter("albedo")
+			show.set_shader_parameter("tex", bark_shader.get_shader_parameter("albedo_tex"))
+			show.set_shader_parameter("tint", Vector3(albedo.r, albedo.g, albedo.b))
+			show.set_shader_parameter("scale", bark_shader.get_shader_parameter("uv_scale"))
+			show.set_shader_parameter("bark", true)
+			if _graded:
+				show.set_shader_parameter("hidden_from", hidden_from)
+				show.set_shader_parameter("hidden", 0.35)
+		elif own is ShaderMaterial:
 			show.set_shader_parameter("tex", (own as ShaderMaterial).get_shader_parameter("leaf_tex"))
 			show.set_shader_parameter("tint", (own as ShaderMaterial).get_shader_parameter("tint"))
 			show.set_shader_parameter("deep", (own as ShaderMaterial).get_shader_parameter("deep"))
 			show.set_shader_parameter("cut", (own as ShaderMaterial).get_shader_parameter("cut"))
+			var through: Variant = (own as ShaderMaterial).get_shader_parameter("through")
+			show.set_shader_parameter("lets", clampf(float(through) / GRADED_THROUGH, 0.0, 1.0) if through != null else 1.0)
 		else:
 			var bark := own as BaseMaterial3D
 			show.set_shader_parameter("tex", bark.albedo_texture)
@@ -171,7 +219,12 @@ func _picture(tree: String, row: int, colour: Image, facing: Image) -> Dictionar
 				var dot := taken[0].get_pixel(x, y)
 				colour.set_pixel(at.x + x, at.y + y, dot)
 				var faces := taken[1].get_pixel(x, y)
-				facing.set_pixel(at.x + x, at.y + y, Color(faces.r, faces.g, faces.b, 1.0 - taken[2].get_pixel(x, y).r))
+				var wood := taken[2].get_pixel(x, y)
+				var needles := 1.0 - wood.r
+				if _graded:
+					# Needles from one half up, by how much light they let through.
+					needles *= 0.5 + 0.5 * clampf(wood.g / maxf(needles, 0.001), 0.0, 1.0)
+				facing.set_pixel(at.x + x, at.y + y, Color(faces.r, faces.g, faces.b, needles))
 				if dot.a > 0.1:
 					used = Rect2i(x, y, 1, 1) if used.size == Vector2i.ZERO else used.expand(Vector2i(x, y)).expand(Vector2i(x + 1, y + 1))
 	model.queue_free()

@@ -383,6 +383,179 @@ def pine_shoot(sprig, kind, start, way, length, age, vigour):
     return end
 
 
+def upward(way):
+    """The way up, square to `way`: what is over a twig that runs that way."""
+    up = np.array([0.0, 1.0, 0.0]) - way * way[1]
+    if np.linalg.norm(up) < 1e-4:
+        up = np.array([1.0, 0.0, 0.0]) - way * way[0]
+    return unit(up)
+
+
+def spruce_shoot(sprig, kind, start, way, length, age, vigour):
+    """One year's length of a spruce twig from `start` along `way`, grown `age`
+    years ago: its wood, and its needles, which a spruce keeps for many years.
+    They stand one by one all round the twig, on a spiral, leaning forward. On
+    a twig in the shade of the others, which is most of a spruce, they part:
+    those under it turn out to the sides and up, so that the twig is a flat
+    comb of needles, thick on top and thin underneath."""
+    rng = sprig.rng
+    end = start + way * length
+    thick = kind["twig"] * (1.0 + 0.5 * age) * (0.7 + 0.3 * vigour)
+    wood = np.array(kind["wood_young"]) if age == 0 else np.array(kind["wood_old"])
+    tube(sprig, [start, end], [thick, thick * 0.88], wood * rng.uniform(0.85, 1.1), 5)
+    if age >= kind["keeps"]:
+        return end
+    # The oldest wood has lost some of its needles.
+    count = max(int(length / kind["pitch"] * (1.0 - 0.08 * age)), 4)
+    along = (np.arange(count) + rng.uniform(0.0, 1.0, count)) / count
+    over = upward(way)
+    beside = np.cross(way, over)
+    turn = np.arange(count) * GOLDEN + rng.uniform(0.0, math.tau)
+    out = beside[None, :] * np.cos(turn)[:, None] + over[None, :] * np.sin(turn)[:, None]
+    # Parted: what points down turns out to the side it is on, and up.
+    under = np.clip(-(out @ over), 0.0, 1.0)
+    hand = np.where(out @ beside >= 0.0, 1.0, -1.0)
+    out = out + (beside[None, :] * hand[:, None] * 0.9 + over[None, :] * 0.6) * (under * kind["part"])[:, None]
+    out /= np.linalg.norm(out, axis=1, keepdims=True)
+    forward = np.radians(rng.normal(kind["stand"][min(age, 2)], 8.0, count))
+    ways = way[None, :] * np.cos(forward)[:, None] + out * np.sin(forward)[:, None]
+    ways /= np.linalg.norm(ways, axis=1, keepdims=True)
+    feet = start[None, :] + way[None, :] * (along * length)[:, None] + out * thick
+    lengths = kind["needle"] * rng.uniform(0.75, 1.15, count) * (0.85 + 0.15 * vigour)
+    # Those on top are longer than those underneath.
+    lengths *= 1.0 + 0.2 * (out @ over)
+    fresh = np.array(kind["green"][min(age, len(kind["green"]) - 1)])
+    colours = fresh[None, :] * rng.uniform(0.82, 1.18, (count, 1)) * (1.0 + rng.uniform(-0.06, 0.06, (count, 3)))
+    dead = rng.uniform(0.0, 1.0, count) < kind["dead"] * (age + 0.2)
+    colours[dead] = np.array(kind["dead_colour"]) * rng.uniform(0.8, 1.2, (int(dead.sum()), 1))
+    needles(sprig, feet, ways, lengths, kind["width"], colours, way)
+    return end
+
+
+def larch_shoot(sprig, kind, start, way, length, age, vigour):
+    """One year's length of a larch twig. This year's wood carries its needles
+    one by one, on a spiral; older wood carries short shoots, knobs that put
+    out a rosette of twenty to forty soft needles every year. In October they
+    turn: gold, orange, here and there one still green or already brown, a
+    rosette at a time."""
+    rng = sprig.rng
+    end = start + way * length
+    thick = kind["twig"] * (1.0 + 0.5 * age) * (0.7 + 0.3 * vigour)
+    wood = np.array(kind["wood_young"]) if age == 0 else np.array(kind["wood_old"])
+    tube(sprig, [start, end], [thick, thick * 0.88], wood * rng.uniform(0.85, 1.1), 5)
+    if age >= kind["keeps"]:
+        return end
+    over = upward(way)
+    beside = np.cross(way, over)
+    palette = np.array(kind["autumn"])
+    if age == 0:
+        count = max(int(length / kind["pitch"]), 3)
+        along = (np.arange(count) + rng.uniform(0.0, 1.0, count)) / count
+        turn = np.arange(count) * GOLDEN + rng.uniform(0.0, math.tau)
+        out = beside[None, :] * np.cos(turn)[:, None] + over[None, :] * np.sin(turn)[:, None]
+        forward = np.radians(rng.normal(48.0, 10.0, count))
+        ways = way[None, :] * np.cos(forward)[:, None] + out * np.sin(forward)[:, None]
+        feet = start[None, :] + way[None, :] * (along * length)[:, None] + out * thick
+        colours = palette[rng.integers(len(palette))][None, :] * rng.uniform(0.85, 1.15, (count, 1))
+        needles(sprig, feet, ways, kind["needle"] * rng.uniform(0.6, 0.95, count), kind["width"], colours, np.array([0.0, -1.0, 0.0]))
+        return end
+    spurs = max(int(length / kind["spur"] * rng.uniform(0.8, 1.1)), 1)
+    for i in range(spurs):
+        t = (i + rng.uniform(0.2, 0.8)) / spurs
+        turn = i * GOLDEN + rng.uniform(-0.3, 0.3)
+        out = beside * math.cos(turn) + over * math.sin(turn)
+        # The knob leans forward and up, as its needles do.
+        axis = unit(out * 0.75 + way * 0.45 + over * 0.35)
+        foot = start + way * length * t + out * thick
+        knob = foot + axis * kind["knob"]
+        tube(sprig, [foot, knob], [thick * 0.7, thick * 0.6], wood * 0.9, 4)
+        count = int(rng.integers(*kind["rosette"]))
+        side, up = across(axis)
+        spin = rng.uniform(0.0, math.tau, count)
+        spread = np.radians(rng.uniform(8.0, kind["fan"], count))
+        ring = side[None, :] * np.cos(spin)[:, None] + up[None, :] * np.sin(spin)[:, None]
+        ways = axis[None, :] * np.cos(spread)[:, None] + ring * np.sin(spread)[:, None]
+        feet = np.tile(knob, (count, 1)) + ring * thick * 0.4
+        # One rosette is one colour, near enough: they turn one by one.
+        colour = palette[rng.integers(len(palette))] * rng.uniform(0.8, 1.15)
+        colours = colour[None, :] * (1.0 + rng.uniform(-0.08, 0.08, (count, 3)))
+        lengths = kind["needle"] * rng.uniform(0.55, 1.1, count) * (0.85 + 0.15 * vigour)
+        needles(sprig, feet, ways, lengths, kind["width"], colours, np.array([0.0, -1.0, 0.0]))
+    return end
+
+
+def maple_leaf(sprig, foot, way, face, size, colour):
+    """A leaf of a sycamore from the end of its stalk at `foot`: five lobes
+    with shallow teeth, as wide as it is long, its blade along `way` and
+    facing `face`, drooping a little from its middle rib and cupped."""
+    rng = sprig.rng
+    way = unit(way)
+    face = unit(face - way * np.dot(face, way))
+    side = np.cross(face, way)
+    # The outline: five lobes, the middle three larger, and teeth on each.
+    lobes = [(-118.0, 0.55), (-62.0, 0.88), (0.0, 1.0), (62.0, 0.88), (118.0, 0.55)]
+    angles = np.radians(np.linspace(-150.0, 150.0, 31))
+    reach = np.full(len(angles), 0.32)
+    for at, long in lobes:
+        near = np.exp(-((np.degrees(angles) - at) / 19.0) ** 2)
+        reach = np.maximum(reach, 0.32 + (long - 0.32) * near)
+    reach *= 1.0 + 0.05 * np.where(np.arange(len(angles)) % 2 == 0, 1.0, -1.0)
+    reach *= rng.uniform(0.92, 1.08, len(angles))
+    middle = np.array([0.0, 0.0])
+    outline = np.stack([np.cos(angles) * reach, np.sin(angles) * reach], axis=1) * 0.5 + np.array([0.5, 0.0])
+    # From the stalk outwards it droops and is cupped about its rib.
+    corners = [foot + way * size * 0.5 * 0.0]
+    centre = foot + way * size * 0.5
+    corners = [centre]
+    droop = rng.uniform(0.05, 0.18)
+    for u, v in outline:
+        point = foot + way * u * size + side * v * size
+        lift = -droop * u * u * size + abs(v) * 0.12 * size
+        corners.append(point + face * lift)
+    count = len(outline)
+    triangles = [[0, 1 + i, 2 + i] for i in range(count - 1)] + [[0, count, 1]]
+    tint = np.ones((count + 1, 1))
+    tint[0] = 0.9
+    sprig.add(np.array(corners), np.array(triangles), np.asarray(colour)[None, :] * tint * rng.uniform(0.9, 1.1, (count + 1, 1)))
+
+
+def maple_shoot(sprig, kind, start, way, length, age, vigour):
+    """One year's length of a sycamore twig: its wood, and at each of its
+    knots a pair of leaves on long stalks, one either side, the next pair
+    square to it. On older wood the leaves are on short shoots, a pair at
+    the end of each. In October they are yellow, gold and brown, a few still
+    green."""
+    rng = sprig.rng
+    end = start + way * length
+    thick = kind["twig"] * (1.0 + 0.6 * age) * (0.7 + 0.3 * vigour)
+    wood = np.array(kind["wood_young"]) if age == 0 else np.array(kind["wood_old"])
+    tube(sprig, [start, end], [thick, thick * 0.9], wood * rng.uniform(0.85, 1.1), 5)
+    if age >= kind["keeps"]:
+        return end
+    over = upward(way)
+    beside = np.cross(way, over)
+    palette = np.array(kind["autumn"])
+    knots = max(int(length / kind["knot"]), 1)
+    for k in range(knots):
+        at = start + way * length * (k + 0.85) / knots
+        pair = beside if (k + age) % 2 == 0 else over
+        for hand in (-1.0, 1.0):
+            out = pair * hand
+            stalk = unit(out + way * 0.4 + over * 0.25)
+            long = kind["stalk"] * rng.uniform(0.75, 1.2)
+            leaf_at = at + stalk * long
+            tube(sprig, [at, leaf_at], [thick * 0.35, thick * 0.25], np.array(kind["stalk_colour"]), 3)
+            # The blade faces the light, out along its stalk and leaning down.
+            blade = unit(out + way * 0.3 - over * rng.uniform(0.0, 0.35) + rng.normal(0.0, 0.15, 3))
+            colour = palette[rng.integers(len(palette))] * rng.uniform(0.85, 1.15)
+            maple_leaf(sprig, leaf_at, blade, over + rng.normal(0.0, 0.25, 3), kind["leaf_size"] * rng.uniform(0.75, 1.15) * (0.85 + 0.15 * vigour), colour)
+    return end
+
+
+# How each kind grows a year's length of twig, if not as a pine does.
+SHOOTS = {"spruce": spruce_shoot, "larch": larch_shoot, "maple": maple_shoot}
+
+
 def bud(sprig, kind, at, way):
     """The bud a twig ends in."""
     points = [at, at + way * kind["bud"] * 0.5, at + way * kind["bud"]]
@@ -414,7 +587,7 @@ def pine_axis(sprig, kind, start, way, age, vigour, flat):
         length = kind["year"] * vigour * rng.uniform(0.75, 1.25) * (1.0 if year > 0 else kind["last"])
         # Up towards the light, and a little off to one side: no twig is straight.
         way = unit(way + np.array([0.0, kind["upturn"], 0.0]) * rng.uniform(0.5, 1.5) + rng.normal(0.0, kind["wander"], 3))
-        at = pine_shoot(sprig, kind, at, way, length, year, vigour)
+        at = SHOOTS.get(kind.get("shoot", "pine"), pine_shoot)(sprig, kind, at, way, length, year, vigour)
         if year == 0:
             bud(sprig, kind, at, way)
             break
@@ -517,6 +690,84 @@ KINDS["buckthorn_spray"] = dict(KINDS["buckthorn"])
 KINDS["buckthorn_spray"].update({"fork_odds": [0.55, 0.38, 0.07], "fork_angle": (28.0, 52.0), "dies": 0.4, "flatten": 0.5})
 
 
+# Norway spruce, of the mountains: short stiff needles one by one all round
+# the twig and parted under it, dark and blue-green, a little lighter on this
+# year's wood; side twigs to either side in one plane, so that a sprig is a
+# flat spray, a comb.
+KINDS["spruce"] = {
+    "grow": "pine", "shoot": "spruce",
+    "year": 0.085, "last": 0.85, "twig": 0.0016, "needle": 0.017, "width": 0.0011, "pitch": 0.0011,
+    "keeps": 6, "stand": [36.0, 50.0, 58.0], "candle": False, "part": 0.85,
+    "green": [[0.07, 0.15, 0.055], [0.038, 0.1, 0.05], [0.03, 0.086, 0.046], [0.027, 0.076, 0.043]],
+    "dead": 0.006, "dead_colour": [0.3, 0.18, 0.07],
+    "wood_young": [0.34, 0.21, 0.1], "wood_old": [0.2, 0.12, 0.07],
+    "bud": 0.005, "bud_colour": [0.32, 0.19, 0.09],
+    "cone": 0.0, "cone_colour": [0.0, 0.0, 0.0], "cones": 0.0,
+    "upturn": 0.04, "wander": 0.07, "flatten": 0.9,
+    "forks": [1, 2, 3], "fork_odds": [0.25, 0.55, 0.2], "fork_angle": (42.0, 62.0), "fork_vigour": (0.6, 0.85),
+    "dies": 0.32,
+}
+# The same for a whole bough, which is pictured small: fewer and thicker
+# needles, which a dot can hold.
+KINDS["spruce_tuft"] = dict(KINDS["spruce"])
+KINDS["spruce_tuft"].update({"needle": 0.021, "width": 0.0024, "pitch": 0.0026, "keeps": 5, "twig": 0.002})
+
+# European larch in October: soft needles in rosettes on the knobs of the
+# older wood and one by one on this year's, turned gold and orange. Its twigs
+# fork less and hang.
+KINDS["larch"] = {
+    "grow": "pine", "shoot": "larch",
+    "year": 0.1, "last": 0.75, "twig": 0.0014, "needle": 0.027, "width": 0.0011, "pitch": 0.0022,
+    "spur": 0.009, "knob": 0.004, "rosette": (22, 38), "fan": 64.0,
+    "keeps": 7, "stand": [48.0, 48.0, 48.0], "candle": False,
+    "autumn": [[0.64, 0.37, 0.035], [0.68, 0.46, 0.05], [0.62, 0.27, 0.02], [0.55, 0.45, 0.07], [0.42, 0.4, 0.08], [0.32, 0.15, 0.03]],
+    "wood_young": [0.36, 0.24, 0.12], "wood_old": [0.2, 0.14, 0.1],
+    "bud": 0.003, "bud_colour": [0.3, 0.2, 0.1],
+    "cone": 0.028, "cone_colour": [0.26, 0.17, 0.11], "cones": 0.06,
+    "upturn": 0.0, "wander": 0.1, "flatten": 0.6,
+    "forks": [1, 2], "fork_odds": [0.45, 0.55], "fork_angle": (35.0, 60.0), "fork_vigour": (0.6, 0.9),
+    "dies": 0.3,
+}
+KINDS["larch_tuft"] = dict(KINDS["larch"])
+KINDS["larch_tuft"].update({"needle": 0.03, "width": 0.0024, "pitch": 0.004, "rosette": (10, 18), "spur": 0.012, "keeps": 5, "cones": 0.0})
+
+# Dwarf mountain pine: dark needles in pairs, longer and stiffer than those
+# of a Scots pine and packed into brushes, on twigs that fork often and turn
+# up towards the light.
+KINDS["mugo"] = dict(KINDS["scots"])
+KINDS["mugo"].update({
+    "year": 0.06, "needle": 0.045, "width": 0.0018, "pitch": 0.0022, "keeps": 5,
+    "stand": [26.0, 40.0, 52.0],
+    "green": [[0.06, 0.13, 0.055], [0.04, 0.095, 0.05], [0.032, 0.075, 0.045]],
+    "dead": 0.008, "dead_colour": [0.3, 0.2, 0.08],
+    "wood_young": [0.18, 0.15, 0.08], "wood_old": [0.12, 0.1, 0.08],
+    "bud": 0.01, "bud_colour": [0.3, 0.18, 0.1],
+    "cone": 0.035, "cones": 0.05,
+    "upturn": 0.22, "wander": 0.1, "flatten": 0.3,
+    "forks": [1, 2, 3, 4], "fork_odds": [0.1, 0.35, 0.4, 0.15], "fork_angle": (30.0, 55.0), "fork_vigour": (0.7, 0.92),
+    "dies": 0.35,
+})
+# Sycamore in October: leaves in pairs on long stalks, a hand wide, yellow
+# going to gold and brown, a few still green; grey twigs that fork in pairs.
+KINDS["maple"] = {
+    "grow": "pine", "shoot": "maple",
+    "year": 0.16, "last": 0.8, "twig": 0.0028, "knot": 0.07, "stalk": 0.07, "leaf_size": 0.13,
+    "keeps": 2, "candle": False,
+    "autumn": [[0.62, 0.46, 0.05], [0.58, 0.36, 0.04], [0.5, 0.42, 0.06], [0.4, 0.22, 0.04], [0.3, 0.32, 0.06], [0.22, 0.11, 0.03]],
+    "stalk_colour": [0.45, 0.2, 0.08],
+    "wood_young": [0.32, 0.26, 0.18], "wood_old": [0.22, 0.2, 0.17],
+    "bud": 0.008, "bud_colour": [0.3, 0.32, 0.12],
+    "cone": 0.0, "cone_colour": [0.0, 0.0, 0.0], "cones": 0.0,
+    "upturn": 0.12, "wander": 0.1, "flatten": 0.4,
+    "forks": [1, 2], "fork_odds": [0.3, 0.7], "fork_angle": (30.0, 50.0), "fork_vigour": (0.7, 0.92),
+    "dies": 0.4,
+}
+KINDS["maple_tuft"] = dict(KINDS["maple"])
+KINDS["maple_tuft"].update({"leaf_size": 0.15, "knot": 0.08})
+KINDS["mugo_tuft"] = dict(KINDS["mugo"])
+KINDS["mugo_tuft"].update({"needle": 0.05, "width": 0.0032, "pitch": 0.0042, "keeps": 3, "cones": 0.0})
+
+
 def grow(kind_name, seed, age, vigour):
     """One sprig of a kind: its twig begins at the origin and grows along +X,
     with +Y up. Returns its corners, triangles and colours."""
@@ -527,12 +778,13 @@ def grow(kind_name, seed, age, vigour):
     return sprig.all()
 
 
-def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
+def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22, curl=0.1):
     """A whole bough end, for a tree that is seen from afar: bare wood that
     forks, `length` long, with the sprigs of `grown` (what grow() returned for
     each) at its ends and along the outer part of it. It begins at the origin
     and grows along +X, with +Y up, as a sprig does. `apart` is how far from
-    each other the sprigs stand along a limb."""
+    each other the sprigs stand along a limb, and `curl` how far up a limb
+    turns at its end."""
     out = Sprig(seed)
     rng = out.rng
     wood = np.array(wood)
@@ -545,7 +797,7 @@ def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
         points = []
         for step in range(6):
             t = step / 5.0
-            sag = np.array([0.0, -0.06 * math.sin(math.pi * t) + 0.1 * t * t, 0.0]) * reach
+            sag = np.array([0.0, -0.06 * math.sin(math.pi * t) + curl * t * t, 0.0]) * reach
             points.append(start + way * reach * t + sag + bend * math.sin(math.pi * t * 0.8))
         tube(out, points, [thick * (1.0 - 0.75 * step / 5.0) for step in range(6)], wood * rng.uniform(0.85, 1.1), 6)
         return points
@@ -601,6 +853,97 @@ def bough(seed, grown, length, forks, wood=(0.2, 0.13, 0.08), apart=0.22):
         way = unit(along * math.cos(lean) + side * hand * math.sin(lean) + np.array([0.0, rng.uniform(0.0, 0.2), 0.0]))
         reach = length * (1.0 - t) * rng.uniform(0.75, 1.0) + 0.25
         dress(limb(at, way, reach, 0.012), reach)
+    return out.all()
+
+
+def smooth(low, high, value):
+    t = min(max((value - low) / (high - low), 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def comb_bough(seed, grown, spec):
+    """A whole bough of a spruce or a larch of the mountains: a limb that
+    leaves the trunk level, sags, and turns up at its end, and to either side
+    of it by turns the twigs it put out year after year, which leave it level
+    and then hang, a curtain under it. That is the comb a spruce of the
+    mountains is named for. Near the trunk the twigs have died and gone; those
+    of the last few years, at its end, still stand out level, a flat spray.
+    It begins at the origin and grows along +X with +Y up, as a sprig does,
+    and is dressed with the sprigs of `grown`. `spec` says how long the limb
+    is ("length"), how far its twigs hang where they hang furthest ("hang"),
+    how far apart they leave it ("apart"), how far its end turns up ("rise")
+    and the colour of its wood ("wood")."""
+    out = Sprig(seed)
+    rng = out.rng
+    wood = np.array(spec.get("wood", (0.2, 0.13, 0.08)))
+    length = spec["length"]
+    hang = spec["hang"]
+    rise = spec.get("rise", 0.2)
+    sag = spec.get("sag", 0.08)
+    up = np.array([0.0, 1.0, 0.0])
+    down = -up
+    bend = rng.normal(0.0, 0.05) * length
+    points = [np.array([length * t, length * (-sag * math.sin(math.pi * t) + rise * t ** 3), bend * math.sin(math.pi * t)]) for t in np.linspace(0.0, 1.0, 9)]
+    thick = spec.get("thick", 0.006 * length + 0.006)
+    tube(out, points, [thick * (1.0 - 0.8 * i / 8.0) for i in range(9)], wood * rng.uniform(0.9, 1.1), 6)
+
+    def on_limb(t):
+        """Where the limb is at a share of its length, and which way it runs."""
+        f = min(max(t, 0.0), 1.0) * 8.0
+        i = min(int(f), 7)
+        return points[i] + (points[i + 1] - points[i]) * (f - i), unit(points[i + 1] - points[i])
+
+    def put(at, way, flat, scale):
+        """One of the sprigs, its twig at `at` growing along `way` and spread
+        in the plane of `way` and `flat`."""
+        corners, triangles, colours, _cards = grown[rng.integers(len(grown))]
+        way = unit(way)
+        z = flat - way * np.dot(flat, way)
+        z = unit(z) if np.linalg.norm(z) > 1e-3 else across(way)[0]
+        if rng.uniform() < 0.5:
+            z = -z
+        y = np.cross(z, way)
+        roll = rng.normal(0.0, 0.2)
+        y, z = y * math.cos(roll) + z * math.sin(roll), z * math.cos(roll) - y * math.sin(roll)
+        turned_ = corners[:, 0:1] * way[None, :] + corners[:, 1:2] * y[None, :] + corners[:, 2:3] * z[None, :]
+        out.add(at[None, :] + turned_ * scale, triangles, colours * rng.uniform(0.9, 1.1))
+
+    # The end: what grew last, a spray out ahead and one to either side.
+    tip, heading = on_limb(1.0)
+    flat_side = unit(np.cross(heading, up))
+    put(tip - heading * 0.04, heading + up * 0.1, flat_side, rng.uniform(1.0, 1.2))
+    pos = length * spec.get("bare", 0.12)
+    hand = 1.0 if rng.uniform() < 0.5 else -1.0
+    while pos < length * 0.97:
+        t = pos / length
+        at, along = on_limb(t)
+        side = unit(np.cross(along, up)) * hand
+        hand = -hand
+        pos += spec.get("apart", 0.1) * rng.uniform(0.75, 1.25)
+        size = rng.uniform(0.9, 1.1) * (1.0 - 0.2 * t)
+        # How far out to the side it goes: furthest a third of the way out.
+        reach = spec.get("reach", 0.32) * rng.uniform(0.7, 1.15) * (0.45 + 0.55 * smooth(0.0, 0.3, t) * (1.0 - 0.7 * smooth(0.5, 1.0, t)))
+        if rng.uniform() < smooth(0.7, 0.93, t):
+            # Young: it stands out level, forward, a little up.
+            put(at, along * 0.5 + side * 0.85 + up * 0.06, up, size)
+            continue
+        # Old: out to the side in a bow, and then down, a curtain along the limb.
+        drop = hang * rng.uniform(0.7, 1.2) * (0.3 + 0.7 * smooth(0.05, 0.3, t) * (1.0 - smooth(0.5, 0.92, t)))
+        first = at + side * reach * 0.6 + along * reach * 0.25 + up * reach * 0.05
+        second = at + side * reach + along * reach * 0.4 + down * drop * 0.35
+        last = second + down * drop * 0.65 + along * 0.04 + side * reach * 0.1
+        tube(out, [at, first, second, last], [thick * 0.2, thick * 0.15, thick * 0.1, thick * 0.05], wood * rng.uniform(0.85, 1.1), 4)
+        # On the bow, sprays that lie out to the side; below it, sprigs that
+        # hang along the twig, spread along the limb.
+        put(at + (first - at) * 0.4, side * 0.8 + along * 0.5 + up * 0.05, up, size * 0.9)
+        put(first, side * 0.7 + along * 0.4 + down * 0.25, up, size * 0.95)
+        steps = max(int(drop / spec.get("drape", 0.12)), 1)
+        for k in range(steps):
+            f = (k + rng.uniform(0.3, 0.7)) / steps
+            spot = second + (last - second) * f if f > 0.0 else second
+            spot = first + (second - first) * min(f * 2.5, 1.0) if f < 0.4 else spot
+            put(spot, down + along * rng.uniform(0.0, 0.35) + side * rng.uniform(0.15, 0.5), along, size * rng.uniform(0.85, 1.1))
+        put(last, down + along * 0.1 + side * 0.1, along, size * 0.9)
     return out.all()
 
 
@@ -858,7 +1201,11 @@ def render_sheet(asset, out_dir, scratch):
     # sprig has to show the sky between its twigs.
     dress = [grow(sprig["kind"], asset["seed"] + 5000 + index * 101, sprig["age"], sprig.get("vigour", 1.0)) for index, sprig in enumerate(asset.get("bough_sprigs", []))]
     for column, spec in enumerate(boughs):
-        grown.append(bough(asset["seed"] + 977 + column * 131, dress if dress else grown[:len(sprigs)], spec["length"], spec["forks"], spec.get("wood", (0.2, 0.13, 0.08)), spec.get("apart", 0.22)))
+        sprigs_of = dress if dress else grown[:len(sprigs)]
+        if spec.get("shape") == "comb":
+            grown.append(comb_bough(asset["seed"] + 977 + column * 131, sprigs_of, spec))
+        else:
+            grown.append(bough(asset["seed"] + 977 + column * 131, sprigs_of, spec["length"], spec["forks"], spec.get("wood", (0.2, 0.13, 0.08)), spec.get("apart", 0.22), spec.get("curl", 0.1)))
     for column, (corners, triangles, colours, cards) in enumerate(grown):
         what = "sprig" if column < len(sprigs) else "bough"
         scene = set_scene(asset.get("samples", 48))

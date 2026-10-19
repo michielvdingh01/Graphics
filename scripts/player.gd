@@ -264,7 +264,7 @@ func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.
 	health_changed.emit(health, MAX_HEALTH)
 	if health <= 0.0:
 		if riding:
-			riding.leave(self)
+			riding.request_leave(self)
 		dead = true
 		_set_crouched(true)
 		died.emit()
@@ -275,7 +275,7 @@ func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.
 ## a death is not the end of the level.
 func revive(pose: Transform3D) -> void:
 	if riding:
-		riding.leave(self)
+		riding.request_leave(self)
 	dead = false
 	health = MAX_HEALTH
 	_since_damage = 0.0
@@ -298,14 +298,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventJoypadButton and event.is_action_pressed("sprint"):
 		_sprint_latched = true
 	elif event.is_action_pressed("use") and has_control():
+		# In a game with others the host says who sits where: see
+		# request_seat() in scripts/vehicle.gd.
 		if riding:
-			riding.leave(self)
+			riding.request_leave(self)
 		else:
 			var near := VEHICLE.within_reach(self)
 			if near:
-				near.vehicle.enter(self, near.seat)
+				near.vehicle.request_seat(self, near.seat)
 	elif event.is_action_pressed("vehicle_seat") and has_control() and riding:
-		riding.enter(self, riding.next_seat(seat))
+		riding.request_seat(self, riding.next_seat(seat))
 
 
 ## What `body` would get into if it pressed the key now: see

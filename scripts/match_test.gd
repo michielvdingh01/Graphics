@@ -506,8 +506,9 @@ func _run() -> void:
 	arenas.pressed.emit()
 	_check("the dunes are among the arenas, by day and by night", places.has("Arena  ·  Dunes (large)") and places.has("Arena  ·  Dunes Night (large)")
 		and arenas.text == places[0])
-	_check("and each says whether it is small, medium or large", places.all(func(text: String) -> bool:
-		return ["(small)", "(medium)", "(large)"].any(func(size: String) -> bool: return text.ends_with(size))))
+	_check("and the Alps, which are huge", places.has("Arena  ·  Alps (huge)"))
+	_check("and each says whether it is small, medium, large or huge", places.all(func(text: String) -> bool:
+		return ["(small)", "(medium)", "(large)", "(huge)"].any(func(size: String) -> bool: return text.ends_with(size))))
 	var size: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Players"))[0]
 	var size_was := size.text
 	while not arenas.text.begins_with("Arena  ·  Dunes"):

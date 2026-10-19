@@ -44,6 +44,7 @@ const VEHICLES := {
 	"truck": {"span": 2.0, "boxes": [[Vector3(0, 1.3, -2.1), Vector3(2.2, 1.9, 2.5)], [Vector3(0, 1.75, 1.55), Vector3(2.4, 2.8, 4.0)]]},
 	"tank": {"span": 2.4, "boxes": [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)], [Vector3(0, 2.0, -3.3), Vector3(0.3, 0.3, 3.6)]]},
 	"tank_b": {"span": 2.4, "boxes": [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.0), Vector3(2.6, 0.85, 2.8)]]},
+	"motorcycle": {"span": 1.0, "boxes": [[Vector3(0, 0.62, -0.02), Vector3(0.62, 0.86, 2.15)], [Vector3(1.06, 0.62, -0.06), Vector3(0.7, 0.5, 1.72)]]},
 }
 ## The sheet of what an army stencils on what it drives, as far as a level
 ## uses it: the ten figures in a row, and under them the letters a number
@@ -51,7 +52,7 @@ const VEHICLES := {
 ## Each as [where on the sheet it begins, how much of the sheet it takes].
 ## See _stencils() in tools/gen_foliage.gd.
 const FIGURES := Rect2(0, 0.5, 0.1, 0.125)
-const NUMBER_BEGINS := {"jeep": Rect2(0, 0.625, 0.25, 0.125), "truck": Rect2(0.25, 0.625, 0.25, 0.125), "tank": Rect2(0.5, 0.625, 0.25, 0.125), "tank_b": Rect2(0.5, 0.625, 0.25, 0.125)}
+const NUMBER_BEGINS := {"jeep": Rect2(0, 0.625, 0.25, 0.125), "truck": Rect2(0.25, 0.625, 0.25, 0.125), "tank": Rect2(0.5, 0.625, 0.25, 0.125), "tank_b": Rect2(0.5, 0.625, 0.25, 0.125), "motorcycle": Rect2(0, 0.625, 0.25, 0.125)}
 const STROKE := Rect2(0.825, 0.625, 0.1, 0.125)
 ## How far the turret of each tank is traversed to its right, in degrees.
 const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
@@ -1957,6 +1958,8 @@ func vehicle(kind: String, at: Vector2, yaw_deg: float, parked := false) -> void
 			_load_jeep(xf, own)
 		"truck":
 			_load_truck(xf, own)
+		"motorcycle":
+			pass
 		_:
 			_load_tank(xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2)), xf, own)
 	_small = false
@@ -2010,6 +2013,10 @@ func _number(kind: String, xf: Transform3D, serial: int) -> void:
 			for side: float in [-1.0, 1.0]:
 				_stencilled(number, xf * _on_side(Vector3(side * 0.611, 1.69, -2.45), side), 0.075, begins)
 			_stencilled(number, xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.52, 0.86, -3.446)), 0.085, begins)
+		"motorcycle":
+			# On the nose of the sidecar, either side.
+			for side: float in [-1.0, 1.0]:
+				_stencilled(number, xf * _on_side(Vector3(1.06 + side * 0.255, 0.62, -0.6), side), 0.045, begins)
 		_:
 			var turret := xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2))
 			_on_turret = true
