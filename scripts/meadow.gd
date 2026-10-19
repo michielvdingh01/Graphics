@@ -132,6 +132,9 @@ func _ready() -> void:
 			var ground_look := load(ground) as ShaderMaterial
 			for seen: Array in [["green_seen", "mown_seen"], ["straw_seen", "long_seen"]]:
 				var colour: Variant = ground_look.get_shader_parameter(seen[0]) if ground_look else null
+				# A colour the level left as the ground shader has it.
+				if colour == null and ground_look and ground_look.shader:
+					colour = RenderingServer.shader_get_parameter_default(ground_look.shader.get_rid(), seen[0])
 				if colour is Vector3:
 					colour = Color(colour.x, colour.y, colour.z)
 				if colour is Color:
