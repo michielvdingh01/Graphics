@@ -4405,52 +4405,43 @@ Helper van `alpen-beeld`, branch `claude/alpen-planten-84f2e7`, 19 oktober 2026:
 - **In tegels die het oog volgen.** Elke ring is zes bij zes tegels, en de middelste vier vallen weg waar de ring erbinnen al gras tekent. Een tegel is een `MultiMeshInstance3D` die zo hoog is als het land eronder, zodat Godot overslaat wat niet in beeld is. Het oude gras rekende elk plukje van het hele vierkant rond het oog door, ook achter je.
 - **Welke soort waar** leest de shader uit `land_c` (r lang, g nat, b vertrapt, a bosrand); steiler dan 25 graden wordt ook lang. Waar soorten in elkaar overgaan gebeurt dat in plekken van een paar meter, niet plukje om plukje. De hoofdsessie maakt `land_c` (`_grass_map()` in plan.gd); een level dat gebouwd is toen de grasshader hem nog niet las, heeft hem wel naast zich (`alps_land_c.res`) maar niet op het materiaal, en dan leest `meadow.gd` hem daar. Zonder kaart maakt het er een vervanger bij (8 m per stip, 60 ms bij het laden): lang langs de bosrand, de bermen en in plekken ruis, nat in andere plekken.
 - **Een kaart die je op zijn kant ziet wordt smal**, en van schuin boven ook, anders zie je strepen; de platte kaart wordt smal als je er laag langs kijkt. Wat vlak bij het oog staat buigt weg.
-- **Van ver heeft het gras de kleur en het licht van de grond eronder**: normaal recht omhoog, ruwheid 0,9, specular 0,08, AO uit `land_a.g`, de stroken van de gemaaide bodem met dezelfde formule als `alps_ground.gdshader`. De kleur komt van de grond zelf: gemaaid wordt gemiddeld `green_seen`, lang `straw_seen` (sRGB 0,35/0,42/0,19 en 0,62/0,54/0,32); `meadow.gd` leest ze uit `<level>_ground_look.res` als die ze heeft, en deelt door wat de plaatjes van die soort gemiddeld zijn (`mean` in `alps_meadow.json`, door `gen_plants.py` uitgerekend). Waar de grond kale aarde laat zien (zelfde formule op `land_c.b`) staat geen gras en geen bloem, op een brandnetel na.
+- **Van ver heeft het gras de kleur en het licht van de grond eronder**: normaal recht omhoog, ruwheid 0,9, specular 0,08, AO uit `land_a.g`, de stroken van de gemaaide bodem met dezelfde formule als `alps_ground.gdshader`. De kleur komt van de grond zelf: gemaaid wordt gemiddeld `green_seen`, lang `straw_seen`, nat `wet_seen`; `meadow.gd` leest ze uit `<level>_ground_look.res` (of de standaard van de grondshader) en deelt door wat de plaatjes van die soort gemiddeld zijn (`mean` in `alps_meadow.json`, door `gen_plants.py` uitgerekend). Verandert de hoofdsessie die kleuren, dan volgt het gras vanzelf. Waar de grond kale aarde laat zien (zelfde formule op `land_c.b`) en op het water in de diepste sloten staat geen gras en geen bloem, op een brandnetel aan de rand van de aarde na.
+- **Onder een wolk** is elk plantje donkerder zoals de grond (`cloud_light()` uit `shaders/cloud_shadow.gdshaderinc` van de hoofdsessie).
 
 **Bloemen, bosgrond en struiken** (`shaders/alps_plants.gdshader`, `materials/alps_herbs.tres`, `alps_floor.tres`, `alps_shrubs.tres`)
 
 - `meadow.gd` tekent nu lagen, elk met eigen ringen en een eigen blad: het gras, de bloemen ertussen, de bosgrond en de struiken van de bosrand. Wat er in een vierkant groeit (of niets) werkt de shader uit met dezelfde kaarten als het gras.
-- **Bloemen** (`alps_herbs`, ringen tot 12, 24 en 48 m): herfsttijloos in zwermen over de gemaaide wei, bleek lila op een witte buis en zonder blad; paardenbloemen (rozet en bloem, Poly Haven `dandelion_01`) en hier en daar een pluizenbol; knoopkruid (half uitgebloeid) en duizendblad in het lange gras; brandnetels (Poly Haven `nettle_plant`, drie tot vijf keer zo groot als het model, dat een jonge plant is) in plukken waar `land_c` vertrapt zegt, en een enkele aan de bosrand.
+- **Bloemen** (`alps_herbs`, ringen tot 12, 24 en 48 m): herfsttijloos in zwermen over de gemaaide wei, bleek lila op een witte buis en zonder blad; paardenbloemen (rozet en bloem, Poly Haven `dandelion_01`) en hier en daar een pluizenbol; knoopkruid (half uitgebloeid) en duizendblad in het lange gras; brandnetels (Poly Haven `nettle_plant`, drie tot vijf keer zo groot als het model, dat een jonge plant is) in plukken aan de rand van de kale aarde bij schuren en in de kampen, niet in de berm van een weg, en een enkele aan de bosrand.
 - **Bosgrond** (`alps_floor`, ringen tot 10, 20, 40 en 72 m, alleen onder het bos): bosbes, rood, oranje en geel, in tapijten waar wat licht door de kruinen komt; varens die goud en bruin zijn geworden (zelf gegroeid: `fern_02` bleek een tongvaren, die groen blijft; die staat er een enkele keer bij); kussens mos en klaverzuring (Poly Haven `shrub_sorrel_01`) in het donker, met een platte kaart voor van boven; en een enkele jonge spar. Het mos is zelf gegroeid: `moss_01` kwam als jpg en heeft zijn gaten verloren.
-- **Struiken** (`alps_shrubs`, ringen tot 45, 100 en 220 m): hazelaar met geel blad, lijsterbes met oranje en rood blad en trossen bessen, jeneverbes als een donkere zuil op de zonnige steile kant; aan de weidekant van de bosrand (`land_c.a` en waar het bos dun wordt) en een enkele los in de wei. Elke struik is één keer gegroeid en van drie kanten gerenderd; de drie kaarten van een struik tonen elk een kant. Die tot 45 m werpen schaduw.
+- **Struiken** (`alps_shrubs`, ringen tot 45, 100 en 220 m): hazelaar met geel blad, lijsterbes met oranje en rood blad en trossen bessen, jeneverbes als een donkere zuil op de zonnige steile kant; aan de weidekant van de bosrand (`land_c.a` en waar het bos dun wordt) en een enkele los in de wei. Elke struik is één keer gegroeid en van drie kanten gerenderd; de drie kaarten van een struik tonen elk een kant. Die tot 45 m werpen schaduw. Een struik buigt niet mee met de helling (een kaart van 4 m werd daar scheef getrokken); hij zakt zo ver als de grond onder hem wegvalt.
 - **Wat er niet in zit**: botsen (niets ervan houdt iets tegen; een bot ziet door een struik heen en een speler niet), kegels en takjes als losse dingen (die liggen in de textuur van de grond van de hoofdsessie).
 
-**Gemeten** op 19 oktober tussen 09:08 en 09:25, M1 Pro aan de lader, accu vol, load 1,7 tot 2,4, een andere sessie die ook op de GPU mat (het slot liet ons om de beurt), Michiel speelde niet. Om en om vanuit deze worktree en een kloon met het oude gras, drie rondes plus een profielronde, op zeven standpunten zoals Michiel speelt (3456×2160, MetalFX, kwaliteit 3, schaal vanzelf); de rondes lagen per standpunt binnen 0,4 fps van elkaar. "Gras" is wat `--profile --only=meadow` meet: het verschil tussen met en zonder.
+**Onderweg gevonden**
 
-| | Moos, schaduw | Bosrand, schaduw | In het bos | Wei, zon, omlaag | Dal van 14 m | Wei, tegenlicht | Bosrand, zon |
-|---|---|---|---|---|---|---|---|
-| Fps, oud gras | 71,1 | 43,6 | 49,6 | 73,0 | 63,6 | 74,0 | 57,1 |
-| Fps, nieuw gras | 73,9 | 44,3 | 51,6 | 74,0 | 67,5 | 77,6 | 58,4 |
-| Gras, oud (ms) | 2,44 | 2,84 | 1,07 | 2,84 | 2,10 | 2,34 | 2,19 |
-| Gras, nieuw (ms) | 1,99 | 2,51 | 0,31 | 2,80 | 1,17 | 1,77 | 1,93 |
-
-- Standpunten (`--at`): `1150,+1.7,700,-90,-4`, `490,+1.7,165,0,-2`, `800,+1.7,189,0,-8`, `2300,+1.7,500,180,-35`, `1150,+14,700,-60,-9`, `2300,+1.7,500,135,-3`, `1180,+1.7,125,0,-3`, op het Alpenlevel zoals `alpen-beeld` het die ochtend had (het grote land van gisteren).
-- Het nieuwe gras is overal goedkoper dan het oude, 0,2 tot 0,9 ms per beeld, ondanks twee keer zo ver en veel dichter. Het duurst is omlaag kijken in de wei: 2,8 ms. Van de 3 ms die al het kleine groen mag kosten blijft in de wei dus weinig over voor bloemen; in het bos (0,3 ms gras) veel.
-- Het blad met voor en na: `benchmark/sheets/alps_gras_voor_na.jpg` (zes standpunten, zoals Michiel speelt).
-
-**Op het nieuwe land** (`alpen-beeld` a85546b, het level van 09:42), gemeten tussen 10:38 en 10:55, aan de lader, load 1,4 tot 2,7, een andere sessie op de GPU en een selftest van een andere sessie, Michiel speelde niet. Om en om met een kloon met het oude gras, twee rondes en een profielronde, zoals Michiel speelt; per standpunt binnen 0,5 fps van elkaar. "Van mij" is alles samen: gras, bloemen, bosgrond en struiken.
-
-| | Wei, tegenlicht | Wei, omlaag | Bosrand | Bos, zon | Bos, schaduw | Nat, helling op | Bij de weg | Van 20 m |
-|---|---|---|---|---|---|---|---|---|
-| Fps, oud gras | 52,9 | 52,1 | 50,3 | 60,5 | 60,9 | 72,8 | 53,0 | 61,1 |
-| Fps, alles van mij | 54,4 | 53,0 | 52,0 | 62,5 | 61,7 | 72,8 | 54,4 | 62,7 |
-| Oud gras (ms) | 1,80 | 2,08 | 2,62 | 0,97 | 1,35 | 1,78 | 1,27 | 1,44 |
-| Alles van mij (ms) | 1,32 | 1,80 | 1,97 | 0,46 | 1,18 | 1,87 | 0,85 | 1,07 |
-
-- Standpunten: `444,+1.7,453,135,-3`, `1299,+1.7,462,135,-35`, `1335,+1.7,140,0,-2`, `822,+1.7,48,180,-8`, `291,+1.7,57,90,-8`, `642,+1.7,1119,0,-4`, `1263,+1.7,705,0,-6`, `900,+20,900,0,-12`.
-- Hooguit 2 ms voor alles samen, binnen de 3; het beeld is op zeven van de acht standpunten 1 tot 2 fps sneller dan met het oude gras alleen. 260 tot 390 tekenopdrachten meer (de tegels in beeld); twee pipelines meer bij het eerste beeld na het laden en daarna geen (alle lagen tekenen vanaf het eerste beeld, ook waar niets groeit, dus de bosgrond wacht niet tot je het bos in loopt).
-- Het blad: `benchmark/sheets/alps_planten_voor_na.jpg` (acht standpunten, zoals Michiel speelt).
-- **De kleur van de grond** (na de laatste stand van de hoofdsessie): het gras neemt `green_seen` en `straw_seen` over en laat de kale aarde vrij; blad `benchmark/sheets/alps_gras_kleur_voor_na.jpg`, op de standpunten van de hoofdsessie. Niet om en om gemeten: het is per plukje één deling meer en minder plukjes op de aarde, en één snelle run gaf op negen standpunten hetzelfde (binnen 0,4 fps) als de stand ervoor.
+- **Geef een shader nooit getallen als kleur.** Waar elk plaatje op zijn blad ligt ging als `PackedColorArray` naar een `vec4`-array, en Godot maakt een kleur onderweg lineair: een rechthoek van 0,25 tot 0,5 werd er een van 0,05 tot 0,21. Elke kaart van gras, bloem, bosgrond en struik liet een uitgesmeerd stuk van een ander plaatje zien; dat waren de strepen. Zo stond het in de eerste twee mijlpalen (bdbe913, 63a430e) en op hun bladen, en gemeten is toen dus iets anders dan nu. Sinds 07d5927 gaan ze als `PackedVector4Array`.
 - **Dobbelstenen ver van de oorsprong**: `fract(sin(...))` op vierkanten duizenden meters uit het midden komt in 32 bits soms op precies nul, en "neem er nul procent van" hield dan toch een plukje. Nu strikt kleiner dan.
+- Een level dat gebouwd is met een shader die een uniform nog niet had, bewaart die waarde niet op het materiaal (zo miste `land_c` op `alps_grass.res`).
 
+**Gemeten** op 19 oktober tussen 12:16 en 12:32, op het land van `alpen-beeld` b9bcd26 (zelf gebouwd, niet gecommit), M1 Pro aan de lader, accu vol, load 2,2 tot 2,8, Michiel speelde niet. Om en om vanuit een kloon van deze worktree (07d5927) en een kloon met het gras van vóór mij (f20422b), twee rondes en een profielronde, zoals Michiel speelt (3456×2160, MetalFX, kwaliteit 3, schaal vanzelf); per standpunt binnen 0,8 fps van elkaar. "Van mij" is wat `--profile --only=meadow` meet: alles samen, gras, bloemen, bosgrond en struiken.
+
+| | Struiken bij schuur | Wei kamp west | Schuren Moos | Weg langs helling | Boerderij | Bosrand en terras | In het bos | Moos oost | Wei tegenlicht | Van 20 m |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Fps, gras van vóór mij | 64,9 | 68,1 | 67,7 | 64,3 | 66,7 | 50,3 | 45,1 | 75,0 | 52,0 | 61,8 |
+| Fps, alles van mij | 68,7 | 72,6 | 71,4 | 66,8 | 70,3 | 52,5 | 46,5 | 79,6 | 53,2 | 64,2 |
+| Gras van vóór mij (ms) | 2,48 | 2,25 | 2,29 | 1,72 | 2,28 | 1,46 | 1,41 | 2,10 | 2,07 | 1,70 |
+| Alles van mij (ms) | 1,64 | 1,33 | 1,53 | 1,17 | 1,57 | 0,65 | 0,77 | 1,38 | 1,66 | 1,09 |
+
+- Standpunten (de eerste is van mij, de laatste twee ook; de rest van de hoofdsessie): `1287,+1.7,906,-70,-15`, `270,+1.7,1120,-63,-2`, `480,+1.7,1100,-11,4`, `560,+1.7,932,-77,-1`, `990,+1.7,960,-45,1`, `862,+6.5,452,-160,-8`, `1050,+1.7,405,-105,0`, `1500,+1.7,900,-75,5`, `444,+1.7,453,135,-3`, `900,+20,900,0,-12`.
+- Alles van mij samen kost 0,65 tot 1,66 ms, ruim binnen de 3, en 0,4 tot 0,9 ms minder dan het gras van vóór mij alleen: het beeld is 1,2 tot 4,6 fps sneller, met gras twee keer zo ver, bloemen, bosgrond en struiken erbij. 220 tot 330 tekenopdrachten meer (de tegels in beeld); twee pipelines meer bij het eerste beeld na het laden en daarna geen (alle lagen tekenen vanaf het eerste beeld, ook waar niets groeit, dus de bosgrond wacht niet tot je het bos in loopt).
+- Het blad: `benchmark/sheets/alps_planten_voor_na.jpg`, tien standpunten, zoals Michiel speelt. De bladen van de eerste twee mijlpalen zijn weg: ze lieten de kaarten zien zoals ze verkeerd gelezen werden.
 
 **Wat ik niet kon beoordelen**
 
 - **Gespeeld is het niet**, en bewegen in de wind heb ik alleen op stilstaande beelden gezien.
-- **De kleur tegen de grond.** Van 20 m hoog zie je de plukjes nog als donkere streepjes op de wei en het stro: hun voet is in het plaatje donker van de schaduw van de halmen eromheen.
-- **De bosgrond in de schaduw** is erg donker: de bosbes is daar bijna zwart. Of het zo hoort in een sparrenbos om half vijf weet ik niet.
-- **Struiken zijn kaarten**, drie door elkaar: van dichtbij en op hun kant zie je dat. Ze houden niets tegen.
-- Het eerste blad (`alps_gras_voor_na.jpg`) is van het grote land van gisteren, het tweede van het nieuwe.
+- **De bosgrond in de schaduw** is op het blad erg donker; volgens de hoofdsessie maakt de belichting van het spel het bos tot twee keer lichter.
+- **Struiken zijn kaarten**, drie door elkaar: van dichtbij en op hun kant zie je dat. Ze houden niets tegen, ook geen kogel of blik van een bot.
+- **De brandnetels** zijn blauwig grijs (de kleur van het model) en staan in de kampen nogal dicht.
+- Of herfsttijloos zo talrijk hoort, en het goud van het pijpenstrootje en het rood van de bosbes, kan alleen Michiel zeggen.
 
 **Werkwijze**
 
