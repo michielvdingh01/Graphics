@@ -578,7 +578,8 @@ func _grass_map(woody: PackedFloat32Array, upright: PackedFloat32Array, roads: A
 			var at := _spot(column, row)
 			for camp: Rect2 in camps:
 				if camp.has_point(at):
-					b = maxf(b, 0.45)
+					# A camp of a few days: the grass flattened, bare in a few places.
+					b = maxf(b, 0.2)
 			image.set_pixel(column, row, Color(r * (1.0 - b), g, b, edge))
 	image.generate_mipmaps()
 	print("Grass map: %d x %d dots, in %.1f s" % [across, down, (Time.get_ticks_msec() - began) / 1000.0])
