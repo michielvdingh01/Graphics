@@ -38,6 +38,9 @@ const HIT_MASK := 0b100101  # world + enemy + breakable
 ## metre of flame at the muzzle: the pistol 17 m, the shotgun 42.
 const HEARD := 100.0
 const FIRE_BUFFER := 0.12
+## Seconds a sight takes from its first stage to its far one and back, see
+## WeaponData.far_fov.
+const ZOOM_TIME := 0.2
 ## Turns a second of barrels that spin, at full speed.
 const SPIN_TURNS := 5.5
 ## Seconds a weapon from the arena that is fired empty stays in the hands
@@ -254,6 +257,11 @@ class Viewmodel:
 
 ## 0 at the hip, 1 fully aimed down sights.
 var ads_blend := 0.0
+## For a sight with a far stage, which is tapped rather than held: 0 at the
+## hip, 1 at the first stage, 2 at the far one. And how far the view has
+## gone from the first to the far one, from 0 to 1.
+var _stage := 0
+var _zoom := 0.0
 ## The weapons in hand on 1 and on: those of the pack that is carried, see
 ## equip().
 var loadout: Array[WeaponData] = []
@@ -399,6 +407,8 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade 
 	_landed = true
 	_pump_stage = 2
 	_locked = 0.0
+	_stage = 0
+	_zoom = 0.0
 	_settle_barrels()
 	_models[_index].root.visible = true
 	start_grenades = grenade_count.x
@@ -517,7 +527,19 @@ func current() -> WeaponData:
 
 
 func ads_fov() -> float:
-	return current().ads_fov
+	var data := current()
+	if data.far_fov <= 0.0:
+		return data.ads_fov
+	return lerpf(data.ads_fov, data.far_fov, smoothstep(0.0, 1.0, _zoom))
+
+
+## Takes the sights down at once and forgets a stage that was tapped: on the
+## way into a vehicle, where the view is another and the weapon may be put
+## away with them still up.
+func lower() -> void:
+	ads_blend = 0.0
+	_stage = 0
+	_zoom = 0.0
 
 
 func move_speed_scale() -> float:
@@ -716,8 +738,19 @@ func _process(delta: float) -> void:
 
 	var data := current()
 	var busy := _switch_left > 0.0 or _reload_left > 0.0 or _throw_left > 0.0 or _melee_left > 0.0
-	var aiming := control and Input.is_action_pressed("ads") and not busy and not data.aim_spins
+	var up := Input.is_action_pressed("ads")
+	if data.far_fov > 0.0:
+		# A sight with a far stage is tapped: up, further, and down again. It
+		# stays up through a reload; setting off at a sprint, a throw, a blow
+		# and getting killed take it down.
+		if control and Input.is_action_just_pressed("ads"):
+			_stage = (_stage + 1) % 3
+		if player.dead or (control and Input.is_action_just_pressed("sprint")):
+			_stage = 0
+		up = _stage > 0
+	var aiming := control and up and not busy and not data.aim_spins
 	ads_blend = move_toward(ads_blend, 1.0 if aiming else 0.0, delta / data.ads_time)
+	_zoom = move_toward(_zoom, 1.0 if aiming and _stage == 2 else 0.0, delta / ZOOM_TIME)
 	_bloom = move_toward(_bloom, 0.0, data.bloom_recovery_deg * delta)
 
 	if data.spin_up <= 0.0:
@@ -1107,6 +1140,7 @@ func _start_throw() -> void:
 	if grenades <= 0 or _throw_left > 0.0 or _switch_left > 0.0 or _melee_left > 0.0:
 		return
 	_reload_left = 0.0
+	_stage = 0
 	_throw_left = THROW_TIME
 	_thrown = false
 	Sfx.play(&"pin", -4.0)
@@ -1139,6 +1173,7 @@ func _start_melee(dry := false) -> void:
 	if _melee_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0:
 		return
 	_reload_left = 0.0
+	_stage = 0
 	_melee_left = MELEE_TIME
 	_landed = false
 	if dry:
@@ -1191,6 +1226,7 @@ func _switch_to(index: int) -> void:
 	_landed = true
 	_pending = index
 	_reload_left = 0.0
+	_stage = 0
 	# A heavy weapon takes longer to put away and to bring up.
 	_switch_total = maxf(current().switch_time, loadout[index].switch_time)
 	_switch_left = _switch_total

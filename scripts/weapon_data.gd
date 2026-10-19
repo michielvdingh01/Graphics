@@ -55,6 +55,11 @@ extends Resource
 ## Aimed through a telescopic sight: the HUD shows the picture through it and
 ## the weapon itself goes out of view.
 @export var scoped := false
+## The field of view of a second stage of the sight that brings things
+## closer still, 0 for a sight with one. A weapon that has it is not aimed by
+## holding the key but by tapping it: once to ads_fov, again to far_fov, a
+## third time back to the hip.
+@export var far_fov := 0.0
 
 @export_group("Muzzle")
 ## Length of the flash in metres, and the number of tongues the muzzle device

@@ -332,6 +332,7 @@ func sit(vehicle: Node3D, which: int) -> void:
 	_seat_yaw = 0.0
 	collision_layer = _layer if vehicle.exposed(which) else 0
 	var drives := which == 0
+	weapons.lower()
 	weapons.visible = not drives
 	weapons.process_mode = Node.PROCESS_MODE_DISABLED if drives and not vehicle.data.driver_fires else Node.PROCESS_MODE_INHERIT
 	ride(Transform3D())
