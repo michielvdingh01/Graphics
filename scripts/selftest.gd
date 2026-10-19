@@ -120,9 +120,10 @@ func _run() -> void:
 		tree.quit(1 if _failures else 0)
 		return
 	# --view leaves out everything but how the view moves, --breaks
-	# everything but what can be shot to pieces, and --balance everything but
-	# the range every weapon is fired on, at every distance.
-	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--balance", _balance.bind(true), "balance"]]:
+	# everything but what can be shot to pieces, --scope everything but the
+	# stages of a sight, and --balance everything but the range every weapon
+	# is fired on, at every distance.
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--scope", _scope_stages, "scope"], ["--balance", _balance.bind(true), "balance"]]:
 		if only[0] not in OS.get_cmdline_user_args():
 			continue
 		await (only[1] as Callable).call()
@@ -137,9 +138,10 @@ func _run() -> void:
 		await _view()
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
+		await _scope_stages()
 		await _music_turns()
 		await _balance()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "music", "balance"])
+		_ran(["handling", "fights", "supplies", "view", "breakables", "scope", "music", "balance"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -300,6 +302,9 @@ func _handling() -> void:
 	await _wait(0.6)
 	_check("scope takes over from the weapon in view", weapons.scope_blend() == 1.0 and not weapons._models[4].root.visible)
 	Input.action_release("ads")
+	# Its sight is tapped, not held (see _scope_stages()): letting go leaves
+	# it up.
+	weapons.lower()
 
 	# Enemy types.
 	var rusher: CharacterBody3D = game.RUSHER.instantiate()
@@ -449,6 +454,58 @@ func _handling() -> void:
 ## a level one after the other. Apart from the handling and after the fights:
 ## three seconds more in _handling() were enough for the cover in _fights()
 ## to come out otherwise with a collider more (on 15 October 2026).
+## The marksman's sight has a far stage, so its key is tapped: once is up,
+## and it stays up; twice is closer still; three times is back at the hip.
+func _scope_stages() -> void:
+	var player: CharacterBody3D = get_tree().current_scene.player
+	var weapons: Node3D = player.weapons
+	player.force_control = true
+	player.health = 1e6
+	for action in ["move_forward", "move_right", "sprint", "crouch", "jump", "ads", "fire"]:
+		Input.action_release(action)
+	weapons.equip(ARMORY.weapons(ARMORY.STANDARD), ARMORY.grenades(ARMORY.STANDARD))
+	weapons._switch_to(4)
+	await _wait(0.6)
+	var marksman: WeaponData = weapons.current()
+	var tap := func() -> void:
+		Input.action_press("ads")
+		await _wait(0.1)
+		Input.action_release("ads")
+	await tap.call()
+	await _wait(0.5)
+	var near: float = player.camera.fov
+	_check("the marksman's scope stays up once the key is let go", weapons.scope_blend() == 1.0 and absf(near - marksman.ads_fov) < 1.0)
+	await tap.call()
+	await _wait(0.5)
+	var far: float = player.camera.fov
+	_check("a second tap brings it closer still", weapons.scope_blend() == 1.0 and absf(far - marksman.far_fov) < 0.5)
+	await tap.call()
+	await _wait(0.6)
+	_check("and a third takes it down", weapons.ads_blend == 0.0 and player.camera.fov > 70.0)
+	print("    the marksman's scope at %.1f° and at %.1f°" % [near, far])
+	await tap.call()
+	await _wait(0.4)
+	Input.action_press("sprint")
+	await _wait(0.1)
+	Input.action_release("sprint")
+	await _wait(0.4)
+	_check("setting off at a sprint takes it down as well", weapons.ads_blend == 0.0)
+	await tap.call()
+	await _wait(0.4)
+	weapons._switch_to(0)
+	await _wait(0.6)
+	weapons._switch_to(4)
+	await _wait(0.6)
+	_check("and so does putting the weapon away", weapons.current() == marksman and weapons.ads_blend == 0.0)
+	# The rest of the standard pack is aimed by holding the key, as it was.
+	weapons._switch_to(0)
+	await _wait(0.6)
+	await tap.call()
+	await _wait(0.4)
+	_check("the rifle is still aimed only while the key is held", weapons.ads_blend == 0.0)
+	_finished.append("scope")
+
+
 func _music_turns() -> void:
 	# The theme is a piece on its own: at its end it starts again.
 	Sfx.music([Menu.THEME], 0.0)

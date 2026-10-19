@@ -4351,3 +4351,34 @@ Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal
 | Een rit horen | `tools/hear.py drive motorcycle` (`drive b` met de kickstart) |
 | Twintig tegen twintig, anderhalve minuut | `tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90` |
 | Wat het dal kost | `tools/benchmark.sh --scene=res://scenes/alps.tscn --at="1150,+60,700,-120,-14" --profile --only=landmesh,meadow,trees` |
+
+## Een kijker met twee standen
+
+Op 19 oktober 2026 gevraagd: in de Alpen is veel ruimte om te campen en te snipen, maar de kijker van de sniper heeft één stand en zoomt niet ver genoeg in. De sniper uit de standaardset krijgt twee standen: één keer Option geeft de kijker zoals hij was, twee keer zoomt extra ver in, en bij een derde keer kijk je niet meer door de kijker en kun je bijvoorbeeld wegrennen. Branch `sniperzoom`, vanaf de trunk `ac102ca`.
+
+**Wat er is**
+
+- **Tikken in plaats van vasthouden** (`scripts/weapons.gd`, `far_fov` in `scripts/weapon_data.gd`). Een wapen met een verre stand (`far_fov` groter dan 0) richt je niet meer door de toets vast te houden maar door te tikken: heup, kijker (28°, 3,4 keer zo dichtbij als de heup op 80°), ver (9°, 10,7 keer), heup. Loslaten doet niets. Dat geldt voor alles wat richten is: Option, de rechtermuisknop en de linkertrekker van een controller. Van de ene stand naar de andere schuift het beeld in 0,2 s; omhoog en omlaag gaat zoals het ging (0,3 s, eerst zwart, dan de cirkel).
+- **Welke wapens.** De Marksman (toets 5 in de standaardset) en de Marksman met demper uit de set Silenced (de duinen bij nacht), want dat is dezelfde kijker. Alle andere wapens richten zoals ze deden, ook het grendelgeweer van Long range en de raketwerper, die ook een kijker hebben. Eén regel in `weapons/<naam>.tres` (`far_fov = 9.0`) geeft een wapen de tweede stand.
+- **Wat de kijker neerhaalt:** de derde tik, Shift (sprinten), een granaat, een klap met het wapen, een ander wapen pakken, instappen en doodgaan. Bij herladen blijft hij op zijn stand: daarna kijk je weer waar je keek. Dat Shift hem neerhaalt is mijn keuze: anders doet Shift niets zolang de kijker op staat, en dat voelt als kapot.
+- **Draaien gaat trager naarmate je inzoomt**, en dat deed het al (`_look()` in `scripts/player.gd` schaalt met de kijkhoek): op 9° beweegt het beeld even rustig als op 28°. Niets aan veranderd.
+- **De kogel gaat verder.** De Marksman raakte niets voorbij 300 m (`max_range`); door de verre stand zie je tot ver over een kilometer. Hij reikt nu 1500 m, de Marksman met demper ook. Wat een schot op afstand doet is gelijk gebleven: voorbij 120 m (met demper 96 m) 70% van de schade, 49 op het lijf en 122 op het hoofd, dus een kopschot blijft dodelijk. Een bot met de Marksman ziet niet verder dan 180 m (`bot_sight`); voor bots verandert er niets.
+- **Instappen met de kijker op** liet die eerst over het beeld van de bestuurder staan, want het wapen werkt zich dan niet meer bij. `weapons.lower()` haalt bij instappen het vizier meteen neer, ook bij de wapens die je vasthoudt om te richten.
+- **Tests** (`_scope_stages()` in `scripts/selftest.gd`, apart te draaien met `tools/selftest.sh --scope`): één tik houdt de kijker op na het loslaten, de tweede zet hem op 9°, de derde haalt hem neer, Shift en een ander wapen halen hem neer, en de karabijn richt nog alleen zolang de toets is ingedrukt. Het deel staat na `_breakables()`, omdat wachten in `_handling()` de dekkingstests in `_fights()` verschuift.
+
+**Bekeken** (`benchmark/results/sniperzoom/kijker.jpg`, niet in git): de Alpen, op de grindweg ten westen van de boerderij, met een robot op 260 en een op 540 m, op de instellingen waarmee hij speelt (3456×2160, MetalFX, kwaliteit 3, schaal vanzelf). Achtereenvolgens heup, eerste stand, verre stand en weer heup, en de robot op 260 m in beide standen uitvergroot: in de eerste stand een paar pixels, in de verre stand een robot. De fps op de beelden (75 aan de heup, 85 en 80 door de kijker) zijn geen meting: de laptop stond op de accu, zonder lader, en ik heb niet om en om gemeten. Door de kijker staat er minder in beeld; duurder dan de heup hoort het niet te zijn.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet.** Of 9° de goede verre stand is, en of 0,2 s tussen de standen goed voelt.
+- **Wat van ver komt, ziet er op 10× uit als van ver.** Schuren, de kapel en de boerderij worden vanaf 240 m als een paar gekleurde vlakken getekend, verre bomen als kaarten, en het gras houdt op 55 m op. Dat hangt af van de afstand, niet van hoe ver je inzoomt: door de verre stand zie je op 500 m blokken met een dak (onderste rij van het blad). In de eerste stand viel het minder op. Op te lossen door die afstanden te delen door de zoom zolang de kijker op staat; dat raakt de bomen, het gras en de gebouwen van de Alpen, waar nu andere agents aan werken, dus heb ik het laten liggen.
+- **De terugslag**: 2,6° omhoog per schot is door de verre stand een kwart van het beeld; het beeld veert in een fractie van een seconde terug. Of dat te veel is, merk je pas als je speelt.
+- **Wie met de rechtermuisknop richt** en hem vasthoudt: met de Marksman blijft de kijker na loslaten nu op. De rechterknop en Option zijn dezelfde actie.
+- **Geen klik bij het wisselen van stand.** Een geluid dat het spel zelf maakt (de tabel in `scripts/sfx.gd`) kan `tools/hear.py` niet laten horen, en naar een opname heb ik niet gezocht.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| Alleen de standen van de kijker testen | `tools/selftest.sh --scope` |
+| Een wapen een verre stand geven | `far_fov = <graden>` in `weapons/<naam>.tres` |
