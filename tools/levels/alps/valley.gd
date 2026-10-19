@@ -16,48 +16,46 @@ extends "res://tools/levels/alps/plan.gd"
 ## The hay barns where the route is fought, and by the road between:
 ## [x, z, the way the door faces, size].
 const BARNS := [
-	# The barns of the Moos.
-	[918, 860, 180.0, "middle"], [1000, 985, 0.0, "large"], [870, 962, 90.0, "small"],
-	[1050, 880, 200.0, "middle"],
-	# Along the road to the chapel and past it.
-	[1150, 960, 10.0, "large"], [1405, 850, 170.0, "small"],
-	# By the shrine.
-	[1880, 945, 180.0, "middle"], [1832, 812, 160.0, "small"],
-	# On the meadows below Ehrwald.
-	[2470, 702, 200.0, "middle"], [2500, 572, 160.0, "large"], [2600, 700, 180.0, "small"],
+	# The barns of the Moos in the west, by the cart track.
+	[425, 1085, 0.0, "middle"], [515, 1052, 90.0, "large"], [395, 1020, 180.0, "small"],
+	# By the chapel, between the road and the track.
+	[630, 965, 10.0, "large"], [705, 975, 170.0, "small"],
+	# By the farm.
+	[975, 955, 180.0, "middle"], [1130, 965, 0.0, "small"],
+	# The Moos in the east, before the camp.
+	[1255, 815, 200.0, "middle"], [1300, 915, 160.0, "large"],
 ]
 ## The hunters' stands: [x, z, how high its floor is, how far down the
 ## slope the wood leaves open for its view, in metres]. The one by the route
-## stands at the edge of the wood and looks south over the track; the others
-## stand high on the slopes in the corners of the land, which are as high as
-## it goes, and look at the middle of the valley.
+## stands on the terrace by the path along it and looks out over the Moos;
+## the others stand on the spurs of the slope, from 1100 to 1270 metres, and
+## look at the middle of the Moos.
 const STANDS := [
-	[2205, 612, 4.5, 0.0],
-	[410, 70, 5.0, 260.0],
-	[1060, 40, 4.5, 230.0],
-	[90, 1540, 5.0, 260.0],
-	[3120, 1150, 4.5, 200.0],
-	[2900, 1660, 4.5, 200.0],
+	[862, 452, 4.5, 0.0],
+	[300, 250, 5.0, 240.0],
+	[1300, 250, 4.5, 240.0],
+	[1000, 60, 5.0, 280.0],
+	[200, 460, 4.5, 180.0],
 ]
 ## Where the stands high on the slopes look, and the way the one by the
 ## route looks (0 looks along +Z: a stand has its stair at the back).
-const VIEW_TO := Vector2(1500, 850)
-const ROUTE_STAND_LOOKS := -13.0
+const VIEW_TO := Vector2(800, 1000)
+const ROUTE_STAND_LOOKS := 20.0
 ## How many more barns stand about the meadows, and how far one is from the
 ## next at least, in metres.
-const MORE_BARNS := 70
-const BARN_SPACING := 45.0
-## Where barns, copses and hedges go: the floor of the basin and the
-## meadows round it.
-const FLOOR := Rect2(380, 380, 2560, 1120)
+const MORE_BARNS := 30
+const BARN_SPACING := 40.0
+## Where barns, copses and hedges go: the Moos and the meadows at the foot of
+## the slope.
+const FLOOR := Rect2(20, 640, 1560, 545)
 
 
 func _describe() -> void:
 	in_zone("")
 	for barn: Array in BARNS:
 		_barn(Vector2(barn[0], barn[1]), barn[2], barn[3])
-	_chapel(Vector2(1268, 915))
-	_farm(Vector2(1552, 798))
+	_chapel(Vector2(522, 962))
+	_farm(Vector2(1050, 900))
 	_shrine()
 	for stand: Array in STANDS:
 		var at := Vector2(stand[0], stand[1])
@@ -235,21 +233,22 @@ func _farm(at: Vector2) -> void:
 	plant("maple", at + Vector2(-22, -16), 1.1, 10.0)
 
 
-## The shrine where the road bends to the slope: a shrine on its post and a
-## cross, a stack of wood and a hedge of fence along the road.
+## The shrine where the track up the slope leaves the road in the west: a
+## shrine on its post and a cross, a stack of wood and a fence of Tyrol
+## along the road.
 func _shrine() -> void:
-	marterl(Vector2(1838, 868), 0.0)
-	wayside_cross(Vector2(1990, 882), 180.0)
-	woodpile(Vector2(1905, 960), 90.0, 3.5)
-	slant_fence([Vector2(1930, 878), Vector2(1960, 880), Vector2(1985, 882)])
+	marterl(Vector2(132, 930), 0.0)
+	wayside_cross(Vector2(170, 985), 180.0)
+	woodpile(Vector2(95, 905), 90.0, 3.5)
+	slant_fence([Vector2(180, 955), Vector2(210, 968), Vector2(240, 980)])
 
 
 ## The line of poles that carries the wires along the road, a little off it
-## on its north side, from the farm to the camp in the east.
+## on its north side, from the chapel to the camp in the east.
 func _poles() -> void:
 	var points: Array = []
-	var x := 1600.0
-	while x <= 2860.0:
+	var x := 560.0
+	while x <= 1580.0:
 		points.append(Vector2(x, _road_z(x) - 9.0))
 		x += 42.0
 	pole_line(points)
@@ -284,24 +283,25 @@ func _meadow_cover() -> void:
 
 ## What grows in a hedge, by weight: mostly dwarf pine, with young spruce,
 ## a larch and a sycamore here and there.
-const HEDGE := [["dwarf_pine_a", 3.0], ["dwarf_pine_b", 3.0], ["spruce_young", 2.5], ["larch_young", 0.8], ["maple", 0.6], ["spruce_mid", 0.6]]
+const HEDGE := [["dwarf_pine_a", 3.0], ["dwarf_pine_b", 3.0], ["spruce_young", 3.0], ["larch_young", 0.4], ["maple", 0.25], ["spruce_mid", 1.0]]
 ## What grows in a copse.
 const COPSE := [["spruce_mid", 3.0], ["spruce_young", 2.0], ["larch_young", 1.5], ["maple", 1.0], ["dwarf_pine_a", 1.0], ["dwarf_pine_b", 1.0]]
 
 
-## Hedges along the ditches that drain the Moos: from north to south every
-## 150 to 220 metres, and a few across, wandering, with gaps. Returns how many
-## grew.
+## Hedges along the ditches that drain the Moos, where the scans have them,
+## with gaps. Returns how many grew.
 func _hedges(dice: RandomNumberGenerator) -> int:
 	var grown := 0
 	var gaps := _noise(7131, 60.0)
 	var lines: Array = []
-	var x := FLOOR.position.x + 60.0
-	while x < FLOOR.end.x - 60.0:
-		lines.append([Vector2(x, FLOOR.position.y), Vector2(x + dice.randf_range(-40.0, 40.0), FLOOR.end.y), dice.randf() * TAU])
-		x += dice.randf_range(150.0, 220.0)
-	for z: float in [560.0, 1080.0, 1300.0]:
-		lines.append([Vector2(FLOOR.position.x, z), Vector2(FLOOR.end.x, z + dice.randf_range(-60.0, 60.0)), dice.randf() * TAU])
+	# The copses and hedges the aerial photograph shows grow with the wood
+	# (lie_of()); these are the ditches.
+	# Across: the ditch that drains the Moos from east to west, as the scans
+	# have it, and one more north of it.
+	lines.append([Vector2(205, 1165), Vector2(800, 1095), 0.0, 2.0])
+	lines.append([Vector2(800, 1095), Vector2(1180, 1045), 1.0, 2.0])
+	lines.append([Vector2(1180, 1045), Vector2(1430, 950), 2.0, 2.0])
+
 	for line: Array in lines:
 		var from: Vector2 = line[0]
 		var to: Vector2 = line[1]
@@ -311,7 +311,7 @@ func _hedges(dice: RandomNumberGenerator) -> int:
 		var d := 0.0
 		while d < length:
 			d += dice.randf_range(3.0, 6.0)
-			var at: Vector2 = from + along * d + side * (sin(d / 85.0 + float(line[2])) * 14.0 + dice.randf_range(-1.2, 1.2))
+			var at: Vector2 = from + along * d + side * (sin(d / 85.0 + float(line[2])) * float(line[3]) + dice.randf_range(-1.2, 1.2))
 			if gaps.get_noise_2dv(at) < -0.15:
 				continue
 			if not _grows_on_floor(at):
@@ -322,11 +322,13 @@ func _hedges(dice: RandomNumberGenerator) -> int:
 	return grown
 
 
-## Copses on the meadows: a few dozen, each a stand of spruce with a larch
-## and a sycamore in it, dwarf pine round the edge. Returns how many grew.
+## Copses on the meadows: none any more, the aerial photograph has them (see
+## lie_of()); kept for a level that wants them. Each a stand of spruce with a
+## larch and a sycamore in it, dwarf pine round the edge. Returns how many
+## grew.
 func _copses(dice: RandomNumberGenerator) -> int:
 	var grown := 0
-	for i in 55:
+	for i in 0:
 		var middle := Vector2(dice.randf_range(FLOOR.position.x, FLOOR.end.x), dice.randf_range(FLOOR.position.y, FLOOR.end.y))
 		var reach := dice.randf_range(9.0, 24.0)
 		var many := int(reach * reach / 22.0)
@@ -345,7 +347,7 @@ func _copses(dice: RandomNumberGenerator) -> int:
 ## Sycamores and larches alone on the meadows. Returns how many grew.
 func _alone(dice: RandomNumberGenerator) -> int:
 	var grown := 0
-	for i in 90:
+	for i in 6:
 		var at := Vector2(dice.randf_range(FLOOR.position.x, FLOOR.end.x), dice.randf_range(FLOOR.position.y, FLOOR.end.y))
 		if not _grows_on_floor(at):
 			continue

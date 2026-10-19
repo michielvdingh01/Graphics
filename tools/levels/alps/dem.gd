@@ -25,12 +25,25 @@ const ZOOMS := [
 ## Over how many pixels of a grid, from its edge in, the next coarser one
 ## gives way to it.
 const SEAM := 24.0
+## Finer than the tiles: the laser scans of the Land Tirol, laid out in the
+## metres of this file by tools/fetch_dgm.py (in the same terrarium encoding):
+## the file, where its first dot lies (x and z) and how far apart its dots
+## are, finest first. Over the land a metre apart, round it five. Where a
+## scan has nought, it has no height there.
+const SCANS := [
+	["dgm_1m.png", Vector2(-1700, -1300), 1.0],
+	["dgm_5m.png", Vector2(-5500, -5300), 5.0],
+]
+## Over how many metres from its edge in a scan gives way to the next.
+const SCAN_SEAM := [60.0, 400.0]
 
 ## Metres to a degree here, north and east.
 var _north := 0.0
 var _east := 0.0
 ## For every zoom: its first pixel (x, y), its size in pixels and its heights.
 var _grids: Array[Dictionary] = []
+## For every scan: where it lies, its size in dots and its heights.
+var _scans: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -58,10 +71,60 @@ func _init() -> void:
 						var at := (y * 256 + x) * channels
 						heights[row + x] = data[at] * 256.0 + data[at + 1] + data[at + 2] / 256.0 - 32768.0
 		_grids.append({"zoom": zoom[0], "first": first * 256, "size": size, "heights": heights})
+	for scan: Array in SCANS:
+		var picture := Image.load_from_file(ProjectSettings.globalize_path(FOLDER + scan[0]))
+		if picture == null:
+			push_error("Missing height scan %s: run tools/fetch_dgm.py" % scan[0])
+			continue
+		picture.convert(Image.FORMAT_RGB8)
+		var data := picture.get_data()
+		var count := picture.get_width() * picture.get_height()
+		var heights := PackedFloat32Array()
+		heights.resize(count)
+		for i in count:
+			var h := data[i * 3] * 256.0 + data[i * 3 + 1] + data[i * 3 + 2] / 256.0 - 32768.0
+			heights[i] = NAN if h == 0.0 else h
+		_scans.append({"at": scan[1], "cell": scan[2], "size": Vector2i(picture.get_width(), picture.get_height()), "heights": heights})
 
 
-## The height over the sea at (x, z), in metres from the middle of the Moos.
+## The height over the sea at (x, z), in metres from the middle of the Moos:
+## from the finest scan that has the spot, else from the tiles.
 func altitude(x: float, z: float) -> float:
+	var height := _tiles(x, z)
+	for s in range(_scans.size() - 1, -1, -1):
+		var scan: Dictionary = _scans[s]
+		var cell: float = scan.cell
+		var at := (Vector2(x, z) - (scan.at as Vector2)) / cell
+		var size := Vector2(scan.size as Vector2i)
+		var inside := minf(minf(at.x, at.y), minf(size.x - 1.0 - at.x, size.y - 1.0 - at.y)) * cell
+		# Two dots from the edge, which the smooth reading needs on every side.
+		if inside < 2.0 * cell:
+			continue
+		var here := _from_scan(scan, at)
+		if is_nan(here):
+			continue
+		height = here if is_nan(height) else lerpf(height, here, clampf((inside - 2.0 * cell) / SCAN_SEAM[s], 0.0, 1.0))
+	return 0.0 if is_nan(height) else height
+
+
+## The height of a scan between its dots, at `at` in dots: bilinear a metre
+## apart, where the scan is fine enough for that to show no facets, and
+## smooth through the dots (Catmull-Rom) further apart.
+func _from_scan(scan: Dictionary, at: Vector2) -> float:
+	var heights: PackedFloat32Array = scan.heights
+	var width: int = scan.size.x
+	if scan.cell > 2.0:
+		return _bicubic({"heights": heights, "size": scan.size}, at)
+	var x0 := floori(at.x)
+	var y0 := floori(at.y)
+	var tx := at.x - x0
+	var ty := at.y - y0
+	var i := y0 * width + x0
+	return lerpf(lerpf(heights[i], heights[i + 1], tx), lerpf(heights[i + width], heights[i + width + 1], tx), ty)
+
+
+## The height over the sea at (x, z) as the elevation tiles have it.
+func _tiles(x: float, z: float) -> float:
 	var lat := LAT - z / _north
 	var lon := LON + x / _east
 	var height := NAN
@@ -75,7 +138,7 @@ func altitude(x: float, z: float) -> float:
 			continue
 		var here := _bicubic(grid, at)
 		height = here if is_nan(height) else lerpf(height, here, clampf((inside - 2.0) / SEAM, 0.0, 1.0))
-	return 0.0 if is_nan(height) else height
+	return height
 
 
 ## Where (lat, lon) lies in the pixels of all the world at `zoom`.
