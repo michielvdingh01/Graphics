@@ -3,10 +3,12 @@ extends Node3D
 ## describes (tools/levels/<name>.gd, built into Level/Route). The robots a
 ## zone lists stand at their posts from the moment the level loads, switched
 ## off. Their fight starts when the player walks into the zone or shoots at
-## one of them. A checkpoint is a place: it counts once everything before it
-## is cleared, and a death or a restart of the game carries on from the last
-## one. The exit opens when every zone is cleared: its lamp comes on and its
-## door rolls up.
+## one of them. A checkpoint is a place: it counts once the player gets
+## there, however he got past what lies before it, unless it lies in a zone
+## that is still held. A death or a restart of the game carries on from the
+## last one, and a robot that has fallen stays down: nothing comes back. The
+## exit opens when the last fight of the route is won: its lamp comes on and
+## its door rolls up.
 ##
 ## In a game with others (see net.gd) the host keeps track of all this and
 ## the others are told: the _show_ functions run on every machine. Everybody
@@ -86,6 +88,9 @@ const LEAVES_CAN: Array[float] = [0.3, 0.8]
 const LEAVES_GRENADE: Array[float] = [0.12, 1.0]
 ## A kill from closer than this counts as one from close by.
 const CLOSE := 8.0
+## A checkpoint waits for a zone that has a robot posted closer than this to
+## where the player carries on, and in view of it: see _overlook().
+const TOO_CLOSE := 14.0
 
 
 ## A part of the level that is fought over.
@@ -103,6 +108,9 @@ class Zone:
 	var watched := false
 	## Whether that watch is up and about, or stands still far from anybody.
 	var awake := false
+	## Whether a player has been in it, fought or not: how far along the
+	## route the player has come, for what to do next.
+	var entered := false
 	## The robots that hold it, from the moment they are posted.
 	var robots: Array[Node3D] = []
 
@@ -117,6 +125,10 @@ class Checkpoint:
 	var order := 0
 	## Where the player stands after carrying on from here.
 	var pose: Transform3D
+	## The zones that pose lies in, or that have a robot posted close by and
+	## in view of it: while one of them is held, carrying on from here would
+	## be among its robots, and the checkpoint does not count.
+	var among: Array[Zone] = []
 
 
 var kills := 0
@@ -141,6 +153,9 @@ var _due: Array[float] = [0.0, 0.5, 0.0]
 ## hundred times the zone's place in the list plus its own place in the zone.
 ## A machine that came in at a later checkpoint has not posted them all.
 var _robots := {}
+## The numbers of the robots that have fallen in this level, as a set, from
+## the first time it was played until now: they are not posted again.
+var _fallen := {}
 ## What can explode in the level, by path, to tell a latecomer what is gone.
 var _explosives: Array[NodePath] = []
 ## What can be shot to pieces in the level, in an order that is the same on
@@ -183,7 +198,7 @@ func _ready() -> void:
 		player.died.connect(_on_player_died)
 		player.damaged.connect(func(amount: float) -> void: Net.player_did(&"hurt", [amount]))
 		_update_objective()
-		if _route_cleared():
+		if _exit_due():
 			_open_exit(false)
 		for explosive in get_tree().get_nodes_in_group("explosive"):
 			_explosives.append(get_path_to(explosive))
@@ -211,6 +226,7 @@ func _ready() -> void:
 		if not is_inside_tree():
 			# The sandbox or a match has sent the player on to another level.
 			return
+	_overlook()
 	# In the dunes that takes a third of a second, in one frame: the HUD keeps
 	# the screen black until it is done.
 	if not prebaked:
@@ -314,10 +330,45 @@ func _read_route() -> void:
 			exit = step
 		elif step.name == &"Start":
 			start = (step as Node3D).global_transform
+	for checkpoint in checkpoints:
+		for zone in zones:
+			var size: Vector3 = (zone.area.get_child(0) as CollisionShape3D).shape.size
+			if AABB(zone.area.global_position - size * 0.5, size).has_point(checkpoint.pose.origin + Vector3.UP):
+				checkpoint.among.append(zone)
 
 
-## Puts the player at the last checkpoint, with everything before it cleared,
-## or at the start of the level.
+## Adds to what each checkpoint waits for the zones that have a robot posted
+## closer than TOO_CLOSE to where it has the player carry on, and in view of
+## it: the player can slip past a zone, and would carry on in its sights.
+## Once the colliders of the level are there, to look past.
+func _overlook() -> void:
+	var space := get_world_3d().direct_space_state
+	for checkpoint in checkpoints:
+		var eye := checkpoint.pose.origin + Vector3.UP * 1.6
+		for zone in zones:
+			if zone in checkpoint.among:
+				continue
+			for spawn in zone.area.get_children():
+				if not spawn.is_in_group("enemy_spawn"):
+					continue
+				var at: Vector3 = (spawn as Node3D).global_position
+				if eye.distance_to(at) < TOO_CLOSE and _in_sight(space, eye, at):
+					checkpoint.among.append(zone)
+					break
+
+
+## True if nothing stands between `eye` and the head or the middle of who
+## stands at `spot`.
+func _in_sight(space: PhysicsDirectSpaceState3D, eye: Vector3, spot: Vector3) -> bool:
+	for height: float in [1.5, 0.8]:
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, spot + Vector3.UP * height, 1)).is_empty():
+			return true
+	return false
+
+
+## Puts the player at the last checkpoint, or at the start of the level, with
+## every robot that has fallen so far gone and a zone whose robots have all
+## fallen cleared.
 func _resume() -> void:
 	# Together, where to carry on from is the host's to say.
 	var saved: Dictionary = Net.session if Net.active else Save.resume_point(scene_file_path)
@@ -328,13 +379,24 @@ func _resume() -> void:
 			if checkpoints[i].id == saved.at:
 				_checkpoint = i
 				pose = checkpoints[i].pose
-				for zone in zones:
-					if zone.order < checkpoints[i].order:
-						zone.started = true
-						zone.cleared = true
 				# As the checkpoint left the player, and no better.
 				player.health = CHECKPOINT_HEALTH
 				player.health_changed.emit.call_deferred(player.health, player.MAX_HEALTH)
+		for number: int in saved.get("fallen", []):
+			_fallen[number] = true
+		if not saved.has("fallen") and _checkpoint >= 0:
+			# Saved before the fallen were: what lay before the checkpoint
+			# had to be cleared to get there.
+			for zone in zones:
+				if zone.order < checkpoints[_checkpoint].order:
+					for number in _numbers(zone):
+						_fallen[number] = true
+		for zone in zones:
+			var numbers := _numbers(zone)
+			if not numbers.is_empty() and numbers.all(func(number: int) -> bool: return _fallen.has(number)):
+				zone.started = true
+				zone.cleared = true
+				zone.entered = true
 	elif exit:
 		# The start of a level is the first place to carry on from.
 		Save.store(scene_file_path, "", "", kills)
@@ -358,6 +420,34 @@ func post_robots() -> void:
 		for spawn in zone.area.get_children():
 			if spawn.is_in_group("enemy_spawn"):
 				post(zone, spawn.get_meta(&"kind"), (spawn as Node3D).global_position, from, spawn)
+	# Who fell in a zone that still has robots standing is posted with the
+	# rest, so that every robot has its number, and taken away again.
+	for number: int in _fallen.keys():
+		_take_away(number)
+
+
+## The numbers the robots a zone lists are posted under, see `_robots`.
+func _numbers(zone: Zone) -> Array[int]:
+	var numbers: Array[int] = []
+	for spawn in zone.area.get_children():
+		if spawn.is_in_group("enemy_spawn"):
+			numbers.append(zones.find(zone) * 100 + numbers.size())
+	return numbers
+
+
+## Takes away a robot that fell before this level was loaded, by its number;
+## its zone is cleared when that was the last. One that is not posted, as in
+## a zone that was cleared, is gone already.
+func _take_away(number: int) -> void:
+	_fallen[number] = true
+	var robot: Variant = _robots.get(number)
+	if not is_instance_valid(robot) or robot.dead:
+		return
+	for zone in zones:
+		if zone.robots.has(robot):
+			zone.alive -= 1
+			zone.cleared = zone.alive <= 0
+	robot.free()
 
 
 ## Stands one robot of `kind` in a zone at `at`, facing `towards`. Where the
@@ -538,10 +628,14 @@ func _players() -> Array:
 
 
 func _on_zone_entered(body: Node3D, zone: Zone) -> void:
-	# Where a watch is kept, it is the watch that starts the fight.
-	if not _players().has(body) or zone.started or zone.watched or body.dead or not _holds(zone.area, body):
+	if not _players().has(body) or body.dead or not _holds(zone.area, body):
 		return
-	_start(zone)
+	if not zone.entered:
+		zone.entered = true
+		_update_objective()
+	# Where a watch is kept, it is the watch that starts the fight.
+	if not zone.started and not zone.watched:
+		_start(zone)
 
 
 func _process(delta: float) -> void:
@@ -581,6 +675,7 @@ func _on_enemy_died(enemy: Node3D, zone: Zone) -> void:
 	_leave_behind(enemy)
 	kills += 1
 	kills_changed.emit(kills)
+	_keep_down(enemy)
 	zone.alive -= 1
 	# One shot from afar can be the first the others know of it.
 	_start(zone)
@@ -589,24 +684,38 @@ func _on_enemy_died(enemy: Node3D, zone: Zone) -> void:
 		return
 	zone.cleared = true
 	_update_objective()
-	if not fighting():
-		# A player may be standing in a checkpoint already, or at the exit.
-		for body: Node3D in _players():
-			for i in checkpoints.size():
-				_on_checkpoint_entered(body, i)
-	if _route_cleared():
+	# A player may be standing in a checkpoint in that zone already.
+	for body: Node3D in _players():
+		for i in checkpoints.size():
+			_on_checkpoint_entered(body, i)
+	if _exit_due():
 		_open_exit(true)
 
 
+## Remembers that a robot has fallen, so that it stays down after a death or
+## a restart of the game: in the save, or together in what the host carries
+## on from.
+func _keep_down(robot: Node3D) -> void:
+	var number: Variant = _robots.find_key(robot)
+	if number == null or not _playing or Sandbox.active or Match.active:
+		return
+	_fallen[number] = true
+	if Net.active:
+		Net.session.fallen = _fallen.keys()
+		Net.session.kills = kills
+	else:
+		Save.fell(scene_file_path, _fallen.keys(), kills)
+
+
+## A checkpoint counts once a player stands in it, whatever is still standing
+## elsewhere: whoever slips past a fight is as far along as whoever fought
+## it. Only where it lies in a zone that is still held does it wait.
 func _on_checkpoint_entered(body: Node3D, index: int) -> void:
-	if Net.is_guest() or not _players().has(body) or index <= _checkpoint or body.dead or fighting():
+	if Net.is_guest() or not _players().has(body) or index <= _checkpoint or body.dead:
 		return
 	var checkpoint := checkpoints[index]
-	if not _holds(checkpoint.area, body):
+	if not _holds(checkpoint.area, body) or checkpoint.among.any(func(zone: Zone) -> bool: return not zone.cleared):
 		return
-	for zone in zones:
-		if zone.order < checkpoint.order and not zone.cleared:
-			return
 	Net.show(self, &"_show_checkpoint", [index])
 
 
@@ -617,18 +726,22 @@ func _show_checkpoint(index: int) -> void:
 	if Net.active:
 		Net.session.at = checkpoint.id
 		Net.session.kills = kills
+		Net.session.fallen = _fallen.keys()
 	else:
-		Save.store(scene_file_path, checkpoint.id, checkpoint.title, kills)
+		Save.store(scene_file_path, checkpoint.id, checkpoint.title, kills, _fallen.keys())
 	# Not a full refill: whatever has run low comes back up to what a level
 	# starts with, and so does the player.
 	player.weapons.resupply()
 	player.heal(maxf(CHECKPOINT_HEALTH - player.health, 0.0))
 	Sfx.play(&"checkpoint", -2.0)
 	checkpoint_reached.emit(checkpoint.title)
+	_update_objective()
 
 
-func _route_cleared() -> bool:
-	return zones.all(func(zone: Zone) -> bool: return zone.cleared)
+## True once the exit may open: the last fight of the route is won. What was
+## slipped past on the way there may still stand.
+func _exit_due() -> bool:
+	return zones.is_empty() or zones[-1].cleared
 
 
 func _open_exit(announce: bool) -> void:
@@ -693,7 +806,9 @@ func _show_finished(next: String) -> void:
 
 
 ## Works out what there is to do: finish the fight that is going on, or else
-## go to the first zone that still has to be cleared, or else leave.
+## leave once the exit is open, or else go to the next zone along the route
+## that still has to be cleared, past the last checkpoint and the last zone a
+## player has been in, or else go back and win the last fight.
 func _update_objective() -> void:
 	var hostiles := 0
 	var text := ""
@@ -702,13 +817,19 @@ func _update_objective() -> void:
 			hostiles += zone.alive
 			if text == "":
 				text = "Clear %s" % zone.title
+	if text == "" and exit and _exit_due():
+		text = exit.get_meta(&"title", "")
 	if text == "":
+		var along := checkpoints[_checkpoint].order if _checkpoint >= 0 else -1
 		for zone in zones:
-			if not zone.cleared:
+			if zone.entered:
+				along = maxi(along, zone.order)
+		for zone in zones:
+			if not zone.cleared and zone.order > along:
 				text = "Reach %s" % zone.title
 				break
 	if text == "" and exit:
-		text = exit.get_meta(&"title", "")
+		text = "Clear %s" % zones[-1].title
 	objective = text
 	objective_changed.emit(text, hostiles)
 
@@ -803,7 +924,7 @@ func _check_wipe() -> void:
 		return
 	_wiped = true
 	await get_tree().create_timer(RESTART_DELAY, false).timeout
-	Net.load_level(scene_file_path, Net.session.at, Net.session.kills)
+	Net.load_level(scene_file_path, Net.session.at, Net.session.kills, Net.session.get("fallen", []))
 
 
 ## How the level stands, for somebody who walks in while it is being played:
@@ -815,6 +936,10 @@ func net_snapshot() -> Dictionary:
 	for number: int in _robots:
 		var robot: Variant = _robots[number]
 		if not is_instance_valid(robot) or robot.dead:
+			fallen.append(number)
+	# And those of a zone that was cleared before the level was loaded.
+	for number: int in _fallen:
+		if not _robots.has(number):
 			fallen.append(number)
 	var started: Array[int] = []
 	for i in zones.size():
@@ -838,14 +963,7 @@ func net_snapshot() -> Dictionary:
 ## Brings a level that has just been loaded to how the host's stands.
 func net_restore(state: Dictionary) -> void:
 	for number: int in state.fallen:
-		var robot: Variant = _robots.get(number)
-		if not is_instance_valid(robot) or robot.dead:
-			continue
-		for zone in zones:
-			if zone.robots.has(robot):
-				zone.alive -= 1
-				zone.cleared = zone.alive <= 0
-		robot.free()
+		_take_away(number)
 	for i: int in state.started:
 		_show_start(i)
 	for path: NodePath in state.blown:
@@ -861,5 +979,5 @@ func net_restore(state: Dictionary) -> void:
 	kills_changed.emit(kills)
 	_move_robots(state.robots, true)
 	_update_objective()
-	if _route_cleared():
+	if _exit_due():
 		_open_exit(false)
