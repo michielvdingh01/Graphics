@@ -4341,3 +4341,33 @@ Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal
 | Samen rijden testen | `tools/nettest.sh --ride` |
 | Twintig tegen twintig, anderhalve minuut | `tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90` |
 | Wat het dal kost | `tools/benchmark.sh --scene=res://scenes/alps.tscn --at="1150,+60,700,-120,-14" --profile --only=landmesh,meadow,trees` |
+
+## De Alpen kleiner en mooier: de noordrand onder de Daniel
+
+Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" uitzien: liever een iets kleinere kaart met veel betere graphics. Branch `alpen-beeld`, vanaf `alpen` (f20422b). Hij koos vooraf: **speelveld A**, de noordrand van het Moos onder de Daniel, 1,6 bij 1,2 km (in plaats van 3,2 bij 1,8); **alle downloads** van de lijst (~290 MB); en **één helper** voor het groen rond het oog (gras, bloemen, bosgrond, struiken), branch `alpen-planten`, met een eigen sectie. De rest is mijn keuze: de maat, de zon, de indeling, de route.
+
+**Waarom het ouderwets oogde** (contactblad van 18 oktober): het echte Moos is plat (56% van het land binnen 15 m van het laagste punt), dus alles stond ver weg en dichtbij stond niets; hoogtes van 10 m glad gemaakt, zonder sloot of wal; gras tot 55 m en daarachter één textuur; geen wolken (de mist van de omgeving lag voor driekwart over de lucht); de zon op 11,5 graden zette de helft in de schaduw; losse bolle bomen op de vlakte; de bergen gekleurd uit een kaart van 24 m per punt.
+
+**Wat er nu staat**
+
+- **Het land** is 1600 bij 1200 m, cellen van 1 m, uit de laserscan van het Land Tirol (`tools/fetch_dgm.py`, de WCS "Gelände Tirol", CC BY 4.0 AT): 1 m over het speelveld en 400 m eromheen, 5 m over 10 bij 10 km. De sloten van het Moos, de wegdijk, de spoordijk, het kanaal, de geulen en het terras in de helling zitten er nu in. Gelegd tegen de AWS-tegels op 4120 punten op hellingen: binnen een meter, zodra de datumverschuiving als *position vector* gelezen wordt (als *coordinate frame*: 35 m ernaast). Daarbuiten de oude tegels, met een overgang van 60 m en 400 m.
+- **De indeling.** Onderaan het Moos met de kampen (west 230,1120 en oost 1400,860), schuren, de kapel en de boerderij net onder de weg; de grindweg ligt op de echte wegdijk (de punten zijn naar de kruin van de dijk geschoven), het karrenspoor ook; de paden de helling op en over het terras zijn van mij. Vijf jagershutten op de uitlopers van 1100 tot 1270 m, met een open strook naar het Moos. De helling is te steil voor voertuigen (25 tot 40%); die blijven op het Moos en de weg.
+- **Het bos staat waar de luchtfoto het heeft** (`tools/fetch_photos.py`, de orthofoto-WMS van het Land Tirol, 5 m, 10 bij 10 km; `photo_cover()` in plan.gd): bos is donkerder dan wei en even blauw als groen, wei is groener, grijs en licht hoog of steil is rots of puin, wit hoog is firn; dorpen en akkers (warm grijs, laag) nooit rots. Zo krijgt de helling de echte lappendeken van bospercelen en weiden in plaats van strepen uit ruis. Het bos loopt 600 m door buiten het speelveld, op het grovere land eromheen (47.812 bomen, alleen getekend). Fijnsparren 25% breder dan het model. In het echt staat de helling ook onderaan vol bos; de weiden onder 1030 m die het terrein open houden zijn van mij.
+- **De middenkaart** (`_mid_map()` in vista.gd): 10 bij 10 km op 5 m, met de richting van de helling uit de scan, wat er ligt uit de foto, de zon op 5 m, en het licht en donker van de foto als reliëf in rots en bos. De bergen tot vijf kilometer hebben nu rotsbanden, geulen en bosranden waar ze echt zijn.
+- **Lucht en licht.** `table_mountain_1_puresky` (wolkenbanken, zon op 12,9 graden in de scan), 5,1 graden gekanteld zodat zijn zon op 18 graden uit 228 graden staat, half vijf: vanaf het speelveld staan de bergen in het zuidwesten 10 tot 15 graden hoog, dus de helling en het Moos hebben zon en de noordhellingen aan de overkant liggen in de schaduw. De mist ligt niet meer over de lucht (`fog_sky_affect = 0`), met meer kleur van de lucht in de verte (`fog_aerial_perspective = 0.8`).
+- **De grond** (`shaders/alps_ground.gdshader`): wei van groen gras en verwelkt herfstgras (`grass_ground`, `withered_grass`, 2k), twee keer gelezen tegen herhaling, met AO en ruwheid; de kleur gestuurd met twee doelkleuren (`green_seen`, `straw_seen`) zodat dichtbij en ver dezelfde kleur hebben; bosgrond van mos en strooisel, kalksteen met korstmos, grijs grind op de weg, aarde op de paden. De kaart `land_c` (lang gras, nat, vertrapt, bosrand; `_grass_map()`) leest de helper ook.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet**, en het gras dichtbij is nog het oude (de helper).
+- Of de kleur van de wei en het stro klopt voor oktober; of de bleke strook langs de schuren goed is.
+- De route is nieuw en alleen door de selftest gelopen.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| De hoogtes van het Land Tirol halen (bewaard in `.cache/dgm`) | `tools/fetch_dgm.py` |
+| De luchtfoto halen | `tools/fetch_photos.py` |
+| Het level bouwen (70 s) | `tools/build_level.sh alps` |
+| Het voor-en-na-blad | `benchmark/sheets/alpen_beeld_voor_na_1.jpg` |

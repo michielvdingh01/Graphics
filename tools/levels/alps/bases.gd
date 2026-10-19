@@ -1,15 +1,14 @@
 extends "res://tools/levels/alps/plan.gd"
-## The two ends of the Alps, where the two sides begin a match: in the west a
-## camp at the edge of the wood, in the shade of the mountains; in the east one
-## on the meadows below Ehrwald, still in the sun. Each has its vehicles for
-## the long way across: two field cars, two motorcycles with a sidecar, a
-## lorry and a tank. A few more stand about the valley, where whoever is on
-## foot can find one.
+## The two ends of the Alps, where the two sides begin a match: a camp at
+## either end of the Moos, below the wooded slope (CAMPS in plan.gd). Each has
+## its vehicles for the way across: two field cars, two motorcycles with a
+## sidecar, a lorry and a tank. A few more stand about the valley, where
+## whoever is on foot can find one.
 
 ## Where the camps are (x and z): the ends assets/arenas.json gives the
 ## arena, and the ground each is levelled over.
-const WEST_CAMP := Vector2(330, 905)
-const EAST_CAMP := Vector2(2880, 760)
+const WEST_CAMP: Vector2 = CAMPS[0]
+const EAST_CAMP: Vector2 = CAMPS[1]
 const CAMP := Vector2(90, 70)
 
 
@@ -18,13 +17,13 @@ func _describe() -> void:
 	# The west faces east, the way to the other side; the east faces west.
 	_camp(WEST_CAMP, -90.0)
 	_camp(EAST_CAMP, 90.0)
-	# About the valley: on the farm track, by the barns, on the road north.
-	vehicle("jeep", Vector2(1590, 830), 0.0)
-	vehicle("motorcycle", Vector2(1215, 505), -60.0)
-	vehicle("truck", Vector2(2110, 1190), 120.0)
-	vehicle("motorcycle", Vector2(905, 1310), 30.0)
-	vehicle("jeep", Vector2(2290, 420), -150.0)
-	vehicle("motorcycle", Vector2(1905, 960), 80.0)
+	# About the valley: by the farm, the chapel, the cart track, the barns of
+	# the east and the road in the west.
+	vehicle("jeep", Vector2(1085, 862), 20.0)
+	vehicle("motorcycle", Vector2(575, 955), -80.0)
+	vehicle("truck", Vector2(760, 1030), 100.0)
+	vehicle("motorcycle", Vector2(1215, 868), 160.0)
+	vehicle("jeep", Vector2(70, 935), -110.0)
 
 
 ## A camp at `at` whose vehicles face `facing` (the yaw of vehicle(): -90

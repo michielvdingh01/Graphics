@@ -23,6 +23,7 @@ const FAR_CELL := 24.0
 func _describe() -> void:
 	in_zone("")
 	_far_map()
+	_mid_map()
 	var mat := ground_look()
 	var inside := LAND
 	for ring: Array in RINGS:
@@ -100,3 +101,57 @@ func _far_map() -> void:
 	_far_maps = [ImageTexture.create_from_image(first), ImageTexture.create_from_image(second)]
 	_far_rect = Vector4(area.position.x, area.position.y, 1.0 / (across * FAR_CELL), 1.0 / (down * FAR_CELL))
 	print("Far map: %d x %d dots of %d m, in %.1f s" % [across, down, int(FAR_CELL), (Time.get_ticks_msec() - began) / 1000.0])
+
+
+## The middle map: ten kilometres round the land, five metres a dot, as the
+## laser scans (alps_dgm_5m) and the aerial photograph (alps_photo_5m) have it,
+## which lie on the same dots: see photo_cover() in plan.gd for what is read
+## off the photograph. Finer than the far map, which makes the mountains near
+## by look smooth: two images, each RGBA:
+##   the first: which way the ground faces (x and z of its normal), how much of
+##   it is wood, how much rock;
+##   the second: how much scree, how much snow, the light and shade of the
+##   photograph against its surroundings (a half for none), and how much sun
+##   reaches the spot.
+## The fresh snow of October is not on the photograph, and is added above the
+## snow line as lie_of() has it.
+func _mid_map() -> void:
+	var began := Time.get_ticks_msec()
+	if not _read_photo():
+		return
+	var across := _photo_size.x
+	var down := _photo_size.y
+	var heights := _photo_heights
+	var lit: PackedFloat32Array = LIGHT.sun(heights, across, down, PHOTO_CELL, _sunward)
+	var bright := PackedFloat32Array()
+	bright.resize(across * down)
+	for i in bright.size():
+		bright[i] = _photo_cover[i * 5 + 4]
+	var round_about: PackedFloat32Array = LIGHT.evened(bright, across, down, 8)
+	var first := Image.create(across, down, false, Image.FORMAT_RGBA8)
+	var second := Image.create(across, down, false, Image.FORMAT_RGBA8)
+	var far := (_far_maps[0] as ImageTexture).get_image()
+	if far.has_mipmaps():
+		far.clear_mipmaps()
+	for row in down:
+		for column in across:
+			var i := row * across + column
+			var normal := _photo_normal(column, row)
+			var high := heights[i] + SEA
+			# The fresh snow of October, higher on the slopes that had the sun.
+			var sunny := clampf(-normal.x * 0.6 + normal.z * 0.5, -1.0, 1.0)
+			var snow := smoothstep(SNOW_LINE - 70.0, SNOW_LINE + 70.0, high - sunny * 120.0) * smoothstep(SNOW_HOLDS - 0.1, SNOW_HOLDS + 0.1, normal.y)
+			snow = maxf(snow, _photo_cover[i * 5 + 3])
+			var detail := clampf(0.5 + (bright[i] - round_about[i]) / maxf(round_about[i], 0.05) * 0.5, 0.0, 1.0)
+			var at := _photo_origin + Vector2(column, row) * PHOTO_CELL
+			var uv := (at - Vector2(_far_rect.x, _far_rect.y)) * Vector2(_far_rect.z, _far_rect.w) * Vector2(far.get_size()) - Vector2(0.5, 0.5)
+			var sun := minf(lit[i], _bilinear(far, uv).r)
+			first.set_pixel(column, row, Color(normal.x * 0.5 + 0.5, normal.z * 0.5 + 0.5, _photo_cover[i * 5], _photo_cover[i * 5 + 1]))
+			second.set_pixel(column, row, Color(_photo_cover[i * 5 + 2], snow, detail, sun))
+	first.generate_mipmaps()
+	second.generate_mipmaps()
+	_mid_maps = [ImageTexture.create_from_image(first), ImageTexture.create_from_image(second)]
+	# As the far map: the corner of the first dot's square, not its middle.
+	var corner := _photo_origin - Vector2.ONE * PHOTO_CELL * 0.5
+	_mid_rect = Vector4(corner.x, corner.y, 1.0 / (across * PHOTO_CELL), 1.0 / (down * PHOTO_CELL))
+	print("Middle map: %d x %d dots of %d m, in %.1f s" % [across, down, int(PHOTO_CELL), (Time.get_ticks_msec() - began) / 1000.0])
