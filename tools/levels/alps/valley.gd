@@ -101,6 +101,7 @@ func _scatter() -> void:
 				plant("maple", by, dice.randf_range(0.8, 1.1), dice.randf() * 360.0)
 	print("Valley: %d barns more in %d tries" % [built, tries])
 	_strays(dice, placed)
+	_farmland(dice, placed)
 
 
 ## Below a hunter's stand high on a slope, that `looks` the way it looks: a
@@ -126,6 +127,63 @@ func _perch(at: Vector2, looks: float, view: float) -> void:
 	_boulder("boulder_01", at + ahead * 11.0 + aside * 6.0, own.randf() * 360.0, own.randf_range(1.6, 2.1))
 	_boulder("boulder_01", at + ahead * 13.0 - aside * 7.0, own.randf() * 360.0, own.randf_range(1.6, 2.1))
 	_boulder("dead_tree_trunk", at + ahead * 22.0 + aside * own.randf_range(-4.0, 4.0), looks + 90.0 + own.randf_range(-20.0, 20.0), 2.4)
+
+
+## Where the road along the foot of the slope has a fence of Tyrol on its
+## north side, between the meadows on the slope and the road: from x to x,
+## leaving the ways up the slope and the chapel open.
+const ROAD_FENCES := [[160.0, 410.0], [690.0, 880.0], [960.0, 1180.0], [1240.0, 1470.0]]
+
+
+## What a farmed valley has about its barns and along its roads: the fence
+## of Tyrol on the slope side of the road; in front of some barns a row of
+## poles hung with hay; against others a stack of firewood.
+func _farmland(dice: RandomNumberGenerator, barns: Array[Vector2]) -> void:
+	var fences := 0
+	for stretch: Array in ROAD_FENCES:
+		var points: Array = []
+		var x: float = stretch[0]
+		while x <= stretch[1]:
+			points.append(Vector2(x, _road_z(x) - 5.5))
+			x += 12.0
+		if points.size() >= 2:
+			slant_fence(points)
+			for point: Vector2 in points:
+				keep_bare(point, 1.5)
+			fences += 1
+	var poles := 0
+	var piles := 0
+	for i in barns.size():
+		var at: Vector2 = barns[i]
+		var roll := dice.randf()
+		# Not in the way of a fight of the route, nor of the way into it.
+		if _route_fights().any(func(fight: Array) -> bool: return (fight[2] as Rect2).grow(20.0).has_point(at)):
+			continue
+		if roll < 0.35:
+			# Six to nine poles in a row on the meadow beside the barn, across
+			# the strips, if the ground there is open meadow.
+			var along := Vector2.from_angle(dice.randf() * TAU)
+			var start := at + along.orthogonal() * dice.randf_range(16.0, 24.0)
+			var many := dice.randi_range(6, 9)
+			var row: Array[Vector2] = []
+			for k in many:
+				var spot := start + along * (k - many * 0.5) * 3.4
+				if not _grows_on_floor(spot) or road_gap(spot) < 6.0 or slope(spot.x, spot.y, 2.0) > 10.0:
+					row.clear()
+					break
+				row.append(spot)
+			for spot in row:
+				hay_pole(spot)
+				keep_bare(spot, 1.5)
+				poles += 1
+		elif roll < 0.6:
+			var side := Vector2.from_angle(dice.randf() * TAU)
+			var spot := at + side * 6.5
+			if _grows_on_floor(spot) and road_gap(spot) > 4.0:
+				woodpile(spot, rad_to_deg(atan2(side.x, side.y)) + 90.0, dice.randf_range(2.5, 4.0), dice.randf_range(1.2, 1.7))
+				keep_bare(spot, 2.5)
+				piles += 1
+	print("Valley: %d fences along the road, %d hay poles, %d woodpiles" % [fences, poles, piles])
 
 
 ## Boulders the ice left on the floor of the basin and fallen spruces at the

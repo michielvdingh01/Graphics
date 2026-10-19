@@ -153,6 +153,9 @@ func lie_of(at: Vector2, high: float, normal: Vector3) -> Dictionary:
 const PHOTO := "res://assets/maps/alps/photo_5m.jpg"
 const PHOTO_CELL := 5.0
 static var _photo_cover := PackedFloat32Array()
+## Whether each dot of the photograph is built on, or a road: light and not
+## green, grey or warm. Roofs, yards, roads, a harvested field.
+static var _photo_built := PackedByteArray()
 static var _photo_heights := PackedFloat32Array()
 static var _photo_size := Vector2i()
 static var _photo_origin := Vector2()
@@ -222,6 +225,7 @@ func _read_photo() -> bool:
 	var dots := photo.get_data()
 	var cover := PackedFloat32Array()
 	cover.resize(_photo_size.x * _photo_size.y * 5)
+	_photo_built.resize(_photo_size.x * _photo_size.y)
 	for row in _photo_size.y:
 		for column in _photo_size.x:
 			var i := row * _photo_size.x + column
@@ -258,6 +262,8 @@ func _read_photo() -> bool:
 			cover[i * 5 + 2] = scree
 			cover[i * 5 + 3] = firn
 			cover[i * 5 + 4] = r * 0.3 + g * 0.59 + b * 0.11
+			var tint := (most - least) / maxf(most, 0.01)
+			_photo_built[i] = 1 if most > 0.36 and g - b < 0.05 and (tint < 0.25 or r > g + 0.01) else 0
 	_photo_cover = cover
 	print("Photograph: %d x %d dots read in %.1f s" % [_photo_size.x, _photo_size.y, (Time.get_ticks_msec() - began) / 1000.0])
 	return true
