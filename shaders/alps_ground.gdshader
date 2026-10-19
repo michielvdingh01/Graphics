@@ -350,10 +350,14 @@ void fragment() {
 		}
 		colour = mix(colour, white, lying);
 	}
+	// Standing water at the bottom of the deepest ditches of the Moos: dark,
+	// and smooth enough to mirror the sky.
+	float water = smoothstep(0.8, 0.97, wet) * (1.0 - road) * (1.0 - forest);
+	colour = mix(colour, vec3(0.015, 0.02, 0.018), water * 0.92);
 	ALBEDO = colour * mix(relief, 1.0, lying * 0.6);
 	float grassy = (1.0 - forest) * (1.0 - rock) * (1.0 - road);
-	ROUGHNESS = mix(mix(mix(0.92, 0.85, rock), 0.95, grassy) - wet * 0.25, 0.6, lying);
-	SPECULAR = mix(0.3, 0.5, lying);
+	ROUGHNESS = mix(mix(mix(mix(0.92, 0.85, rock), 0.95, grassy) - wet * 0.25, 0.6, lying), 0.04, water);
+	SPECULAR = mix(mix(0.3, 0.5, lying), 0.5, water);
 	// The sky a spot sees, and under the wood the shade of the crowns; close
 	// by, the hollows between the blades.
 	AO = open * mix(1.0, 0.82, forest * near);

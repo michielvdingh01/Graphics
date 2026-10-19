@@ -4374,6 +4374,9 @@ Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" u
 - Ter vergelijking het oude land op 18 oktober, ook zo gespeeld: Moos 74,8, kapel 71,6, boerderij 76,8, hut 46,7, weiden 72,0, dal van boven 59,5.
 - **Het bos is het zwaarst**: op het pad over het terras 46 fps, in het bos ernaast 50 (`--profile`: bomen 7,2 tot 7,5 ms, hun schaduw 6,4 tot 8,7 ms, het land 1,2 tot 1,5 ms). Het oude land had dat ook (de hut, 46,7).
 
+- **Water in de sloten**: op de bodem van de diepste sloten (waar `land_c.g` bijna 1 is) is de grond donker en glad, zodat hij de lucht spiegelt. Een smalle streep, geen eigen oppervlak.
+- **De eerste keer zien**: de eerste blik op Ehrwald maakt 14 tekenpijplijnen, op Lermoos 4 (de huizen en wat er nog meer staat). Op deze Mac stonden ze al in de cache (slechtste beeld 12,8 ms); op een schone machine kan dat de eerste keer haperen. Niet aan `Fx.rehearse()` gegeven.
+
 **Wat ik niet kon beoordelen**
 
 - **Gespeeld is het niet**, en het gras dichtbij is nog het oude (de helper).
