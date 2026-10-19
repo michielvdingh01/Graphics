@@ -31,7 +31,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 13
+const VERSION := 14
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -61,8 +61,9 @@ var players := {}
 ## The ids of those whose level is loaded, as a set.
 var present := {}
 ## What is being played: the level, the checkpoint to carry on from after
-## everybody has died, the kills that stood then, who the enemies are, and
-## the match that it is, if it is one: what Match.open() takes.
+## everybody has died, the kills, the robots that have fallen there (see
+## game.gd), who the enemies are, and the match that it is, if it is one: what
+## Match.open() takes.
 var session := NOBODY.duplicate()
 ## What this player is called, and the address last joined.
 var player_name := "Player"
@@ -214,10 +215,10 @@ func leave() -> void:
 
 
 ## Takes everybody to a level: to its start, or to the checkpoint `at`.
-func load_level(scene: String, at := "", kills := 0) -> void:
+func load_level(scene: String, at := "", kills := 0, fallen := []) -> void:
 	if not active or not multiplayer.is_server():
 		return
-	session = {"level": scene, "at": at, "kills": kills, "theme": Settings.enemy_theme, "match": Match.setup if Match.active else {}}
+	session = {"level": scene, "at": at, "kills": kills, "fallen": fallen, "theme": Settings.enemy_theme, "match": Match.setup if Match.active else {}}
 	present = {}
 	_waiting.clear()
 	game = null

@@ -278,7 +278,8 @@ func _play(scene: String, fresh: bool) -> void:
 		# Together, where everybody goes is the host's to say, and what was
 		# saved of a game alone is left as it is.
 		_show(Screen.NONE)
-		Net.load_level(scene, "" if fresh else Net.session.at, 0 if fresh else Net.session.kills)
+		var again: bool = not fresh and scene == Net.session.level
+		Net.load_level(scene, "" if fresh else Net.session.at, 0 if fresh else Net.session.kills, Net.session.get("fallen", []) if again else [])
 		return
 	if fresh:
 		Save.clear()

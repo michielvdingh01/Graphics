@@ -1,9 +1,10 @@
 extends Node
 ## Checkpoint storage: the level and the place in it the player last reached,
 ## kept in user://save.cfg so both a death and a restart of the game resume
-## there. A checkpoint is named by the id the level gives it; what was cleared
-## on the way to it follows from where it lies on the route, so that is not
-## stored. A benchmark or --snap run never reads or writes it, and a
+## there. A checkpoint is named by the id the level gives it. With it go the
+## robots that have fallen in the level, by their number (see game.gd), up to
+## the last kill and not only to the checkpoint: what has fallen stays down.
+## A benchmark or --snap run never reads or writes it, and a
 ## self-test run keeps a file of its own, one for every checkout of the
 ## project (see SelfTest.own_file). A level that is not in the game's
 ## list of levels, one that is being tried out, keeps its checkpoints for as
@@ -14,8 +15,9 @@ const PATH := "user://save.cfg"
 ## What a run is measured by, see `stats`.
 const STATS: Array[String] = ["seconds", "shots", "hits", "headshots", "deaths"]
 
-## Empty when there is nothing to resume; otherwise {level, at, title, kills},
-## with an empty `at` for the start of the level.
+## Empty when there is nothing to resume; otherwise {level, at, title, kills,
+## fallen}, with an empty `at` for the start of the level. A save from before
+## the fallen were kept has no `fallen`.
 var checkpoint := {}
 ## What the run has come to since "New game": seconds played, shots fired,
 ## shots that hit, headshots and deaths. It goes into the file with every
@@ -54,10 +56,22 @@ func reload() -> void:
 			"title": str(file.get_value("checkpoint", "title", "")),
 			"kills": int(file.get_value("checkpoint", "kills", 0)),
 		}
+		if file.has_section_key("checkpoint", "fallen"):
+			checkpoint.fallen = Array(file.get_value("checkpoint", "fallen", []))
 
 
-func store(level: String, at: String, title: String, kills: int) -> void:
-	checkpoint = {"level": level, "at": at, "title": title, "kills": kills}
+func store(level: String, at: String, title: String, kills: int, fallen := []) -> void:
+	checkpoint = {"level": level, "at": at, "title": title, "kills": kills, "fallen": fallen}
+	_write()
+
+
+## A robot has fallen in `level`: `fallen` are all that have, and `kills` what
+## the run has come to. Kept with the checkpoint, which stays where it was.
+func fell(level: String, fallen: Array, kills: int) -> void:
+	if checkpoint.get("level", "") != level:
+		return
+	checkpoint.fallen = fallen
+	checkpoint.kills = kills
 	_write()
 
 

@@ -13,7 +13,9 @@ extends Node
 ## until its fight starts, that a checkpoint is still there after a restart
 ## of the game and after a death, that the door at the exit is shut until
 ## the level is cleared, and that every crate, box and lamp in it can be
-## broken. Where a level is cut into zones that are only drawn when they can
+## broken. Before that, in the factory, that a checkpoint counts for whoever
+## slips past a fight and that what has fallen stays down (_slip_past()).
+## Where a level is cut into zones that are only drawn when they can
 ## be seen, it looks for lines of sight into a zone from where that zone is
 ## switched off.
 
@@ -28,7 +30,8 @@ const RUNWAY := Vector3(17.5, 0, 5.5)
 ## open floor, with crates and machines to the west of it.
 const FIGHT_STAND := Vector3(12, 0, 4)
 ## A robot may stand in sight of where the player walks into its zone, starts
-## the level or carries on from a checkpoint, but not closer than this.
+## the level or carries on from a checkpoint, but not closer than this; the
+## game has a checkpoint wait for such a zone (TOO_CLOSE in game.gd).
 const SPAWN_DISTANCE := 14.0
 ## Distance in metres between the points a route is sampled at.
 const STRIDE := 0.5
@@ -140,6 +143,9 @@ func _run() -> void:
 		await _music_turns()
 		await _balance()
 		_ran(["handling", "fights", "supplies", "view", "breakables", "music", "balance"])
+
+	await _slip_past()
+	_ran(["slipping past"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -2012,16 +2018,19 @@ func _play_through(level: Dictionary, next: String) -> void:
 				print("    spawn in view: %s/%s at %.1f m" % [zone.id, spawn.name, eye.distance_to(at)])
 	_check("%s: every robot can reach the player from its post" % title, stranded == 0)
 	_check("%s: none stands close by and in view where its zone is walked into" % title, exposed == 0)
-	# Nor where the player appears: at the start, or at a checkpoint with the
-	# zones before it cleared.
+	# Nor where the player appears: at the start, or at a checkpoint, from
+	# any zone but those it waits for, which are cleared before it counts.
+	# What lies before it may have been slipped past, and still stand.
 	var company := 0
-	var poses := [[-1, "the start", game.start.origin]]
+	var poses := [[[], "the start", game.start.origin]]
 	for checkpoint: RefCounted in game.checkpoints:
-		poses.append([checkpoint.order, checkpoint.title, checkpoint.pose.origin])
+		poses.append([checkpoint.among, checkpoint.title, checkpoint.pose.origin])
+		if _routes_only:
+			print("    checkpoint %s waits for %s" % [checkpoint.title, ", ".join(checkpoint.among.map(func(zone: RefCounted) -> String: return zone.title))])
 	for pose: Array in poses:
 		var eye: Vector3 = pose[2] + Vector3.UP * 1.6
 		for zone: RefCounted in game.zones:
-			if zone.order < pose[0]:
+			if zone in pose[0]:
 				continue
 			for spawn: Node3D in _spawns(zone):
 				var at := spawn.global_position
@@ -2149,7 +2158,7 @@ func _play_through(level: Dictionary, next: String) -> void:
 
 	# And out.
 	var lamp := game.exit.get_node_or_null("Lamp") as Node3D
-	_check("%s: the exit opens when every zone is cleared" % title, game.exit_open and (lamp == null or lamp.visible)
+	_check("%s: the exit opens when the last fight is won" % title, game.exit_open and (lamp == null or lamp.visible)
 		and game.objective == game.exit.get_meta(&"title"))
 	var left := []
 	game.finished.connect(func(to: String) -> void: left.append(to))
@@ -2169,6 +2178,86 @@ func _play_through(level: Dictionary, next: String) -> void:
 	else:
 		_check("%s: and that is the end of the game" % title, Save.checkpoint.is_empty())
 	_finished.append(title)
+
+
+## The route goes by place, and what falls stays down, tried in the first
+## level: a checkpoint counts for whoever slips past the fight before it, but
+## not while the zone it lies in is held; what has fallen there and elsewhere
+## is still down after a death and after a restart of the game, also in a
+## zone where others still stand; and the exit opens once the last fight is
+## won, whatever still stands on the way there.
+func _slip_past() -> void:
+	var tree := get_tree()
+	var level: Dictionary = Menu.LEVELS[0]
+	Save.clear()
+	tree.change_scene_to_file(level.scene)
+	await tree.scene_changed
+	await _wait(0.5)
+	await _baked()
+	var game := tree.current_scene
+	# A checkpoint in no zone with a zone before it, and the next one, which
+	# lies in a zone that comes after the first.
+	var open := -1
+	for i in game.checkpoints.size():
+		if open < 0 and game.checkpoints[i].among.is_empty() and game.zones[0].order < game.checkpoints[i].order:
+			open = i
+	var held := open + 1
+	if open < 0 or held >= game.checkpoints.size() or game.checkpoints[held].among.is_empty():
+		_check("%s has a checkpoint past a fight, and after it one in a zone" % level.name, false)
+		return
+	var passed: RefCounted = game.zones[0]
+	var within: RefCounted = game.checkpoints[held].among[0]
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	player.health = 1e6
+	_move(player, game.checkpoints[open].pose.origin)
+	await _wait(0.3)
+	_check("a checkpoint counts for whoever slips past the fight before it", Save.resume_point(level.scene).get("at", "") == game.checkpoints[open].id
+		and not passed.started and not passed.cleared and game.objective == "Reach %s" % within.title)
+	_move(player, game.checkpoints[held].pose.origin)
+	await _wait(0.3)
+	_check("but not where it lies in a zone that is still held", game._checkpoint == open and within.fighting())
+	var one: Node3D = passed.robots[0]
+	one.take_damage(1e6, one.global_position, Vector3.DOWN)
+	for robot: Node3D in within.robots:
+		robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
+	await _wait(0.3)
+	var kills: int = game.kills
+	_check("once that zone is cleared it counts, for whoever stands in it", game._checkpoint == held and within.cleared
+		and Save.resume_point(level.scene).get("at", "") == game.checkpoints[held].id and kills == 1 + within.robots.size())
+	for how: String in ["a death", "a restart of the game"]:
+		var old := game
+		if how == "a death":
+			player.health = 1.0
+			player.take_damage(50.0)
+		else:
+			Save.reload()
+			tree.change_scene_to_file(level.scene)
+		for i in 80:
+			await _wait(0.1)
+			if tree.current_scene != null and tree.current_scene != old:
+				break
+		game = tree.current_scene
+		await _wait(0.5)
+		player = game.player
+		player.force_control = true
+		player.health = 1e6
+		passed = game.zones[0]
+		within = game.checkpoints[held].among[0]
+		var standing: Array = passed.robots.filter(func(robot: Variant) -> bool: return is_instance_valid(robot) and not robot.dead)
+		_check("after %s, what fell stays down, also where others still stand" % how, game != old
+			and player.global_position.distance_to(game.checkpoints[held].pose.origin) < 0.5 and game.kills == kills
+			and within.cleared and within.robots.is_empty() and not passed.cleared and passed.alive == _spawns(passed).size() - 1
+			and standing.size() == passed.alive and _waiting(standing, _spawns(passed).slice(1)))
+	var last: RefCounted = game.zones[-1]
+	_check("the exit is shut while the last fight is still to be won", not game.exit_open and game.objective == "Reach %s" % game.zones[game.zones.find(within) + 1].title)
+	for robot: Node3D in last.robots:
+		robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
+	await _wait(0.3)
+	_check("and opens once it is, whatever stands on the way there", game.exit_open and not passed.cleared
+		and game.objective == game.exit.get_meta(&"title"))
+	Save.clear()
+	_finished.append("slipping past")
 
 
 ## The way from the start past every checkpoint to the exit, as points
