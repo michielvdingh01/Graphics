@@ -71,6 +71,8 @@ uniform float sway = 0.1;
 uniform float through : hint_range(0.0, 1.0) = 0.14;
 
 varying flat int kind;
+// How high up its card a dot is, 0 at the foot and 1 at the top.
+varying float up_card;
 varying float straw;
 varying float sky;
 varying float shade;
@@ -129,7 +131,8 @@ void vertex() {
 		float sw = texelFetch(land_height, c + ivec2(0, 1), 0).r;
 		float se = texelFetch(land_height, c + ivec2(1, 1), 0).r;
 		float ground = t.x >= t.y ? nw + (ne - nw) * t.x + (se - ne) * t.y : nw + (sw - nw) * t.y + (se - sw) * t.x;
-		float steep = length(vec2(ne - nw + se - sw, sw - nw + se - ne)) * 0.5 / land_cell;
+		vec2 slope = vec2(ne - nw + se - sw, sw - nw + se - ne) * 0.5 / land_cell;
+		float steep = length(slope);
 
 		// Which grass: wet where the map says so, long where it says so, at the
 		// edge of the wood and on the steep, mown elsewhere. Where one gives
@@ -209,9 +212,10 @@ void vertex() {
 			// picture.
 			float close = smoothstep(0.35, 1.1, length(off));
 			vec3 local = spin * (corner * vec3(scale.x * narrow, scale.y * close, scale.x * narrow) * close);
-			// Its foot is sunk as far as the ground falls away under the card, so
-			// that it never stands on air.
-			vec3 world = vec3(at.x, ground - 0.02 * scale.y - steep * scale.x * 0.5, at.y) + local;
+			// Its cards lean with the slope where they meet it, so that on a
+			// hillside no card stands on air or sinks into the ground.
+			vec3 world = vec3(at.x, ground - 0.03 * scale.y, at.y) + local;
+			world.y += dot(slope, local.xz);
 			// Gusts run over the meadow with the wind, and every tuft shivers in
 			// them at its own time; long grass bends further than short.
 			vec2 downwind = normalize(wind);
@@ -219,6 +223,7 @@ void vertex() {
 			vec2 shiver = vec2(sin(TIME * 3.1 + d2 * 6.283), cos(TIME * 2.3 + d2 * 10.7)) * 0.3;
 			vec2 push = (downwind * (0.25 + 0.75 * gust) + shiver * (0.4 + 0.6 * gust)) * sway * COLOR.r * scale.y;
 			world += vec3(push.x, -0.35 * length(push), push.y);
+			up_card = 1.0 - UV.y;
 			UV = mix(rect.xy, rect.zw, UV);
 			VERTEX = (VIEW_MATRIX * vec4(world, 1.0)).xyz;
 			// Lit as the ground is, tipped a little the way the card faces: from
@@ -242,6 +247,11 @@ void fragment() {
 		colour = mix(colour, colour * vec3(1.12, 1.03, 0.72), smoothstep(0.72, 0.85, mown) * on_floor * 0.7);
 	}
 	colour *= COLOR.b * shade;
+	// A band for afar is dense, and was rendered dark at its foot; from afar
+	// its foot is as light as the ground it stands in.
+	if (far_cells) {
+		colour *= mix(1.0, 1.7, smoothstep(0.45, 0.0, up_card));
+	}
 	ALBEDO = colour;
 	ALPHA = blade.a;
 	ALPHA_SCISSOR_THRESHOLD = mix(cut_near, cut_far, smoothstep(5.0, 40.0, depth));

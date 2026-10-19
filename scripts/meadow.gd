@@ -1,6 +1,7 @@
 extends Node3D
-## The grass of a meadow of kilometres, which nobody could strew tuft by tuft:
-## it is drawn round whoever looks, as far as grass is seen, and only there.
+## The grass of a meadow of kilometres, which nobody could strew tuft by tuft,
+## and the flowers between it and the floor of the wood: drawn round whoever
+## looks, as far as each is seen, and only there.
 ## Every tuft stands on a grid in the world, so that it stays where it stands
 ## while the eye moves; where on the grid it is, the shader works out for
 ## itself, and from the maps of the land how high the ground is there, whether
@@ -14,24 +15,67 @@ extends Node3D
 ## square by square, so that the renderer leaves out what is not in sight;
 ## where a ring has a hole for the one inside it, it has no tiles.
 
-## The rings: how far apart the tufts stand, how far out the ring reaches (a
-## ring begins where the one inside it ends), how many cards a tuft is (one
-## turns to the eye), whether it shows the pictures for afar, how much wider
-## and higher than its picture a tuft is, and how many of the tufts of each
-## kind it keeps (mown, long, wet).
-const RINGS := [
-	[0.2, 8.0, 3, false, Vector2(1.0, 1.0), Vector3(1.0, 0.3, 0.45)],
-	[0.4, 16.0, 3, false, Vector2(1.3, 1.05), Vector3(1.0, 0.45, 0.6)],
-	[0.8, 32.0, 2, true, Vector2(1.25, 1.1), Vector3(1.0, 0.75, 0.85)],
-	[1.6, 64.0, 1, true, Vector2(2.2, 1.1), Vector3(1.0, 1.0, 1.0)],
-	[3.2, 128.0, 1, true, Vector2(3.8, 1.1), Vector3(1.0, 1.0, 1.0)],
+## What is drawn: the grass, the flowers and herbs between it, and the floor
+## of the wood, each a layer with a material of its own, the sheet of
+## pictures it is drawn with (tools/gen_plants.py) and rings of its own.
+##
+## A ring: how far apart the tufts stand, how far out the ring reaches (a ring
+## begins where the one inside it ends), how many cards a tuft is (one turns
+## to the eye; with three there is a fourth lying flat), and what the layer's
+## material is told besides.
+const LAYERS := [
+	{
+		"material": "res://materials/alps_grass.tres",
+		"sheet": "res://assets/foliage/alps_meadow.json",
+		"cells": ["mown0", "mown1", "mown2", "mown3", "top0", "top1", "top2", "top3", "long0", "long1", "long2", "long3", "wet0", "wet1", "wet2", "wet3", "far0", "far1", "far2", "far3"],
+		# Each ring: whether it shows the pictures for afar, how much wider
+		# and higher than its picture a tuft is, and how many of the tufts of
+		# each kind it keeps (mown, long, wet).
+		"rings": [
+			[0.2, 8.0, 3, {"far_cells": false, "grown": Vector2(1.0, 1.0), "keep": Vector3(1.0, 0.3, 0.45)}],
+			[0.4, 16.0, 3, {"far_cells": false, "grown": Vector2(1.3, 1.05), "keep": Vector3(1.0, 0.45, 0.6)}],
+			[0.8, 32.0, 2, {"far_cells": false, "grown": Vector2(1.7, 1.1), "keep": Vector3(1.0, 0.75, 0.85)}],
+			[1.6, 64.0, 1, {"far_cells": true, "grown": Vector2(2.2, 1.1), "keep": Vector3(1.0, 1.0, 1.0)}],
+			[3.2, 128.0, 1, {"far_cells": true, "grown": Vector2(3.8, 1.1), "keep": Vector3(1.0, 1.0, 1.0)}],
+		],
+	},
+	{
+		"material": "res://materials/alps_herbs.tres",
+		"sheet": "res://assets/foliage/alps_herbs.json",
+		"cells": ["crocus0", "crocus1", "crocus2", "crocus3", "puff0", "puff1", "puff2", "puff3", "knapweed0", "knapweed1", "yarrow0", "yarrow1", "nettle0", "nettle1", "nettle2", "nettle3", "dandelion0", "dandelion1", "dandelion2", "dandelion3"],
+		# Each ring: how much larger a plant is, and how much likelier a
+		# square holds one, as there are four times fewer squares.
+		"rings": [
+			[0.5, 12.0, 3, {"layer": 0, "grown": Vector2(1.0, 1.0), "more": 1.0}],
+			[1.0, 24.0, 2, {"layer": 0, "grown": Vector2(1.1, 1.05), "more": 4.0}],
+			[2.0, 48.0, 1, {"layer": 0, "grown": Vector2(1.2, 1.1), "more": 16.0}],
+		],
+	},
+	{
+		"material": "res://materials/alps_shrubs.tres",
+		"sheet": "res://assets/foliage/alps_shrubs.json",
+		"cells": ["hazel0", "hazel1", "hazel2", "hazel3", "hazel4", "hazel5", "rowan0", "rowan1", "rowan2", "rowan3", "rowan4", "rowan5", "juniper0", "juniper1", "juniper2", "juniper3", "juniper4", "juniper5"],
+		# Shrubs stand a metre or more high: those near by throw a shadow.
+		"rings": [
+			[3.0, 45.0, 3, {"layer": 2, "grown": Vector2(1.0, 1.0), "more": 1.0}, true],
+			[6.0, 100.0, 1, {"layer": 2, "grown": Vector2(1.0, 1.0), "more": 4.0}],
+			[12.0, 220.0, 1, {"layer": 2, "grown": Vector2(1.0, 1.0), "more": 16.0}],
+		],
+	},
+	{
+		"material": "res://materials/alps_floor.tres",
+		"sheet": "res://assets/foliage/alps_floor.json",
+		"cells": ["bilberry0", "bilberry1", "bilberry2", "bilberry3", "fern0", "fern1", "fern2", "fern3", "seedling0", "seedling1", "seedling2", "seedling3", "moss0", "moss1", "sorrel0", "sorrel1", "moss_top0", "moss_top1", "sorrel_top0", "sorrel_top1"],
+		"rings": [
+			[0.4, 10.0, 3, {"layer": 1, "grown": Vector2(1.0, 1.0), "more": 1.0}],
+			[0.8, 20.0, 2, {"layer": 1, "grown": Vector2(1.5, 1.05), "more": 1.0}],
+			[1.6, 40.0, 1, {"layer": 1, "grown": Vector2(2.4, 1.1), "more": 1.0}],
+			[3.2, 72.0, 1, {"layer": 1, "grown": Vector2(4.0, 1.15), "more": 1.0}],
+		],
+	},
 ]
 ## A ring is so many tiles across.
 const TILES := 6
-## The pictures of the grass, and where on their sheet each one is.
-const GRASS := "res://materials/alps_grass.tres"
-const GRASS_SHEET := "res://assets/foliage/alps_meadow.json"
-const CELLS := ["mown0", "mown1", "mown2", "mown3", "top0", "top1", "top2", "top3", "long0", "long1", "long2", "long3", "wet0", "wet1", "wet2", "wet3", "far0", "far1", "far2", "far3"]
 ## The maps of the land every material here reads.
 const MAPS := ["land_height", "land_a", "land_b", "land_c", "land_rect", "land_cell"]
 
@@ -67,19 +111,34 @@ func _ready() -> void:
 		var image := heights.get_image()
 		_height_size = image.get_size()
 		_heights = image.get_data().to_float32_array()
+	# A level built while the grass did not read land_c yet has it next to its
+	# other maps but not on the material.
+	if maps.land_c == null and maps.land_a is Resource:
+		var beside := (maps.land_a as Resource).resource_path.replace("_land_a.", "_land_c.")
+		if beside != (maps.land_a as Resource).resource_path and ResourceLoader.exists(beside):
+			maps.land_c = load(beside)
 	if maps.land_c == null:
 		maps.land_c = _stand_in_lie(maps.land_a, maps.land_b)
-	var grass := load(GRASS) as ShaderMaterial
-	var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GRASS_SHEET))
+	for layer: Dictionary in LAYERS:
+		if ResourceLoader.exists(layer.material) and FileAccess.file_exists(layer.sheet):
+			_layer(layer, maps)
+	_follow(true)
+
+
+## One layer: a MultiMesh for every ring of it, drawn by the tiles of the ring.
+func _layer(layer: Dictionary, maps: Dictionary) -> void:
+	var look_of := load(layer.material) as ShaderMaterial
+	var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(layer.sheet))
 	var cells := PackedColorArray()
 	var sizes := PackedVector2Array()
-	for cell: String in CELLS:
+	for cell: String in layer.cells:
 		var uv: Array = sheet.cells[cell].uv
 		var size: Array = sheet.cells[cell].size
 		cells.append(Color(uv[0], uv[1], uv[2], uv[3]))
 		sizes.append(Vector2(size[0], size[1]))
 	var inside := 0.0
-	for ring: Array in RINGS:
+	var rings: Array = layer.rings
+	for ring: Array in rings:
 		var spacing: float = ring[0]
 		var reach: float = ring[1]
 		var per_tile := int(ceilf((reach * 2.0 / spacing + 2.0) / TILES))
@@ -92,7 +151,7 @@ func _ready() -> void:
 		# instance stands.
 		for i in multi.instance_count:
 			multi.set_instance_transform(i, Transform3D.IDENTITY)
-		var material := grass.duplicate() as ShaderMaterial
+		var material := look_of.duplicate() as ShaderMaterial
 		for map: String in MAPS:
 			material.set_shader_parameter(map, maps[map])
 		material.set_shader_parameter("cells", cells)
@@ -101,24 +160,24 @@ func _ready() -> void:
 		material.set_shader_parameter("columns", per_tile)
 		material.set_shader_parameter("hole", inside)
 		material.set_shader_parameter("reach", reach)
-		material.set_shader_parameter("last_ring", ring == RINGS[-1])
+		material.set_shader_parameter("last_ring", ring == rings[-1])
 		material.set_shader_parameter("facing_eye", ring[2] == 1)
-		material.set_shader_parameter("far_cells", ring[3])
-		material.set_shader_parameter("grown", ring[4])
-		material.set_shader_parameter("keep", ring[5])
+		var told: Dictionary = ring[3]
+		for parameter: String in told:
+			material.set_shader_parameter(parameter, told[parameter])
 		var index := _rings.size()
 		_rings.append([spacing, per_tile, across])
 		for j in TILES:
 			for i in TILES:
-				# The tile lies wholly where the ring inside draws the grass.
-				var low := mini(i, j) * per_tile - across / 2 - 1
-				var high := (maxi(i, j) + 1) * per_tile - across / 2 + 1
+				# The tile lies wholly where the ring inside draws.
+				var low := mini(i, j) * per_tile - (across >> 1) - 1
+				var high := (maxi(i, j) + 1) * per_tile - (across >> 1) + 1
 				if maxi(absi(low), absi(high)) * spacing < inside * 0.8 - spacing:
 					continue
 				var drawn := MultiMeshInstance3D.new()
 				drawn.multimesh = multi
 				drawn.material_override = material
-				drawn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				drawn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if ring.size() > 4 and ring[4] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				drawn.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 				drawn.top_level = true
 				add_child(drawn)
@@ -126,7 +185,6 @@ func _ready() -> void:
 				_tile_ring.append(index)
 				_tile_at.append(Vector2i(i * per_tile, j * per_tile))
 		inside = reach
-	_follow(true)
 
 
 func _process(_delta: float) -> void:
@@ -143,7 +201,7 @@ func _follow(all: bool) -> void:
 	var firsts: Array[Vector2i] = []
 	for ring: Array in _rings:
 		var spacing: float = ring[0]
-		firsts.append(Vector2i(floori(eye.x / spacing), floori(eye.z / spacing)) - Vector2i.ONE * (ring[2] / 2))
+		firsts.append(Vector2i(floori(eye.x / spacing), floori(eye.z / spacing)) - Vector2i.ONE * (int(ring[2]) >> 1))
 	for index in _tiles.size():
 		var ring: Array = _rings[_tile_ring[index]]
 		var spacing: float = ring[0]
@@ -157,7 +215,7 @@ func _follow(all: bool) -> void:
 		var low := INF
 		var high := -INF
 		for k in 9:
-			var h := _height_at(corner.x + side * 0.5 * (k % 3), corner.z + side * 0.5 * (k / 3))
+			var h := _height_at(corner.x + side * 0.5 * (k % 3), corner.z + side * 0.5 * floorf(k / 3.0))
 			low = minf(low, h)
 			high = maxf(high, h)
 		var pad := 1.0 + side * 0.2
@@ -226,14 +284,14 @@ func _stand_in_lie(land_a: Texture2D, land_b: Texture2D) -> ImageTexture:
 		if image.is_compressed():
 			image.decompress()
 	var step := 4
-	var size := a.get_size() / step
+	var size := Vector2i(a.get_width() >> 2, a.get_height() >> 2)
 	var forest := Image.create(size.x, size.y, false, Image.FORMAT_L8)
 	for y in size.y:
 		for x in size.x:
 			var wood := a.get_pixel(x * step, y * step).b
 			forest.set_pixel(x, y, Color(wood, wood, wood))
 	var soft := forest.duplicate() as Image
-	soft.resize(maxi(1, size.x / 2), maxi(1, size.y / 2), Image.INTERPOLATE_BILINEAR)
+	soft.resize(maxi(1, size.x >> 1), maxi(1, size.y >> 1), Image.INTERPOLATE_BILINEAR)
 	soft.resize(size.x, size.y, Image.INTERPOLATE_BILINEAR)
 	var noise := FastNoiseLite.new()
 	noise.seed = 31

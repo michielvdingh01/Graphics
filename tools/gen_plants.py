@@ -30,6 +30,22 @@ generator this file):
                             sedge, soft rush, and purple moor grass gone gold
                     far     each of the three as a band, for a card that
                             stands for many tufts at once
+    alps_herbs    what flowers between the grass in October: autumn crocus,
+                  pale lilac and without a leaf; dandelion clocks; brown
+                  knapweed and yarrow, half gone over; nettles and dandelion
+                  rosettes from the Poly Haven models
+    alps_floor    the floor of the spruce wood: bilberry gone red and orange,
+                  ferns gone gold and brown and a hart's tongue that stays
+                  green (fern_02), spruce seedlings, cushions of moss and wood
+                  sorrel (shrub_sorrel_01), the last two also from above
+    alps_shrubs   the edge of the wood: hazel gone yellow, rowan with its
+                  red berries, juniper; each grown once and pictured from
+                  three sides, for three cards through each other
+
+A cell of a model (class Model) keeps the model's own material and holes;
+"autumn" turns its colour towards another, keeping light and dark. Poly
+Haven's moss_01 has lost its holes in the jpg it came as, so the moss here
+is grown.
 
 Cycles on the processor, on four threads: the video card is Godot's.
 """
@@ -98,6 +114,8 @@ class Plant:
         self.colours = []
 
     def inside(self, point):
+        if getattr(self, "loose", False):
+            return True
         if self.plan:
             return abs(point[0]) < self.wide * 0.5 - 0.006 and abs(point[1]) < self.wide * 0.5 - 0.006
         up = point[2] / self.high
@@ -594,8 +612,8 @@ def far(plant, cell):
 
 # --- Flowers and herbs ------------------------------------------------------
 
-LILAC = (0.46, 0.25, 0.6)
-LILAC_PALE = (0.62, 0.48, 0.72)
+LILAC = (0.5, 0.33, 0.62)
+LILAC_PALE = (0.66, 0.55, 0.74)
 TUBE = (0.7, 0.66, 0.62)
 KNAPWEED = (0.33, 0.06, 0.32)
 BRACT = (0.16, 0.1, 0.05)
@@ -603,6 +621,31 @@ YARROW = (0.75, 0.73, 0.66)
 YARROW_OLD = (0.42, 0.36, 0.26)
 STEM = (0.09, 0.13, 0.04)
 PAPPUS = (0.8, 0.8, 0.78)
+
+
+def tepal(plant, base, way, out, length, width, open_, colour):
+    """One tepal of a crocus: a long oval, cupped, rising from `base` along
+    `way` and opening by `open_` towards `out`."""
+    side = np.cross(way, out)
+    side /= max(np.linalg.norm(side), 1e-9)
+    first = len(plant.points)
+    faces = len(plant.faces)
+    steps = 6
+    for step in range(steps + 1):
+        t = step / steps
+        along = way * length * t + out * length * open_ * t * t
+        w = width * math.sin(math.pi * min(1.0, 0.1 + t * 0.92)) ** 0.7
+        for across in (-0.5, -0.25, 0.0, 0.25, 0.5):
+            # Cupped: the rim of the tepal bends inwards.
+            cup = -out * (across * across) * w * 0.9
+            point = np.array(base) + along + side * w * across + cup
+            plant.points.append(tuple(point))
+            plant.colours.append(mix(mix(TUBE, colour, min(1.0, t * 2.5)), LILAC_PALE, abs(across) * 0.3))
+        if step:
+            row = first + step * 5
+            for k in range(4):
+                plant.faces.append((row - 5 + k, row - 4 + k, row + 1 + k, row + k))
+    return plant._keep(first, faces)
 
 
 def crocus_flower(plant, x, y, high, open_, lean, colour):
@@ -620,12 +663,16 @@ def crocus_flower(plant, x, y, high, open_, lean, colour):
     way = top - np.array(points[-2])
     way /= np.linalg.norm(way)
     turn = rng.uniform(0.0, math.tau)
+    ref = np.array([0.0, 1.0, 0.0]) if abs(way[1]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    across = np.cross(way, ref)
+    across /= np.linalg.norm(across)
+    behind = np.cross(way, across)
+    length = rng.uniform(0.038, 0.05)
     for k in range(6):
         a = turn + k * math.tau / 6
-        out = np.array([math.cos(a), math.sin(a), 0.0])
-        tepal = way * 1.0 + out * open_
-        tone = mix(colour, LILAC_PALE, rng.random() * 0.4) if k % 2 else darker(colour, rng.random() * 0.15)
-        plant.leaf(tuple(top - way * 0.004), tuple(tepal), rng.uniform(0.035, 0.05), rng.uniform(0.012, 0.017), tone, curl=-0.15 * open_, steps=5)
+        out = across * math.cos(a) + behind * math.sin(a)
+        tone = mix(colour, LILAC_PALE, rng.random() * 0.4) if k % 2 else darker(colour, rng.random() * 0.12)
+        tepal(plant, top - way * 0.003 + out * 0.004, way, out, length * rng.uniform(0.9, 1.05), length * 0.42, open_, tone)
 
 
 def crocus(plant, cell):
@@ -634,12 +681,12 @@ def crocus(plant, cell):
     for i in range(counts):
         x = (i - (counts - 1) * 0.5) * 0.025 + rng.gauss(0.0, 0.006)
         flopped = cell == 3 and i == 0
-        crocus_flower(plant, x, rng.uniform(-0.02, 0.02), rng.uniform(0.05, 0.1), rng.uniform(0.2, 0.55), rng.uniform(-0.2, 0.2) + (1.1 if flopped else 0.0), mix(LILAC, LILAC_PALE, rng.random() * 0.5))
+        crocus_flower(plant, x, rng.uniform(-0.02, 0.02), rng.uniform(0.05, 0.09), rng.uniform(0.15, 0.5), rng.uniform(-0.2, 0.2) + (1.1 if flopped else 0.0), mix(LILAC, LILAC_PALE, rng.random() * 0.5))
 
 
 def knapweed_head(plant, top, gone):
     rng = plant.rng
-    plant.blob(top, 0.011, BRACT, long=1.1, sides=7)
+    plant.blob(top, 0.014, BRACT, long=1.1, sides=7)
     if gone:
         # Gone over: a brown brush of old florets.
         for _ in range(14):
@@ -651,8 +698,8 @@ def knapweed_head(plant, top, gone):
         a = rng.uniform(0.0, math.tau)
         r = rng.uniform(0.0, 1.0)
         out = np.array([math.cos(a) * r, math.sin(a) * r, 0.6 + 0.4 * (1.0 - r)])
-        end = np.array(top) + np.array([0, 0, 0.004]) + out * rng.uniform(0.01, 0.016)
-        plant.stem([tuple(np.array(top) + np.array([0, 0, 0.004])), tuple(end)], 0.0009, mix(KNAPWEED, (0.5, 0.12, 0.45), rng.random()), sides=3)
+        end = np.array(top) + np.array([0, 0, 0.005]) + out * rng.uniform(0.012, 0.02)
+        plant.stem([tuple(np.array(top) + np.array([0, 0, 0.005])), tuple(end)], 0.0012, mix(KNAPWEED, (0.5, 0.12, 0.45), rng.random()), sides=3)
 
 
 def knapweed(plant, cell):
@@ -736,9 +783,9 @@ def puff(plant, cell):
 
 # --- The floor of the wood ----------------------------------------------------
 
-BILBERRY_RED = (0.42, 0.04, 0.025)
-BILBERRY_ORANGE = (0.55, 0.17, 0.02)
-BILBERRY_YELLOW = (0.5, 0.33, 0.04)
+BILBERRY_RED = (0.56, 0.07, 0.035)
+BILBERRY_ORANGE = (0.68, 0.24, 0.03)
+BILBERRY_YELLOW = (0.62, 0.42, 0.06)
 BILBERRY_GREEN = (0.08, 0.17, 0.03)
 BILBERRY_STEM = (0.07, 0.14, 0.04)
 BERRY = (0.025, 0.03, 0.07)
@@ -761,59 +808,298 @@ def bilberry(plant, cell):
         return palette[-1]
 
     def branch(foot, way, length, depth):
-        steps = 4
+        steps = 5
         points = [np.array(foot)]
         heading = np.array(way, dtype=float)
         for k in range(steps):
-            heading = heading + np.array([rng.gauss(0, 0.25), rng.gauss(0, 0.15), 0.15])
+            # Bilberry twigs are angular: they turn at every node.
+            heading = heading + np.array([rng.gauss(0, 0.35), rng.gauss(0, 0.2), 0.12])
             heading /= np.linalg.norm(heading)
             points.append(points[-1] + heading * length / steps)
-        if not plant.stem([tuple(p) for p in points], 0.0016 * (1.0 - depth * 0.3), BILBERRY_STEM, sides=4):
+        if not plant.stem([tuple(p) for p in points], 0.0015 * (1.0 - depth * 0.25), BILBERRY_STEM, sides=4):
             return
         for k in range(1, steps + 1):
-            for _ in range(2):
+            for _ in range(3):
                 a = rng.uniform(0.0, math.tau)
-                plant.leaf(tuple(points[k]), (math.cos(a), math.sin(a), rng.uniform(0.2, 0.9)), rng.uniform(0.014, 0.024), rng.uniform(0.009, 0.014), leaf_colour(), curl=0.3, steps=4)
-            if depth < 2 and rng.random() < 0.55:
+                plant.leaf(tuple(points[k]), (math.cos(a), math.sin(a), rng.uniform(0.1, 0.8)), rng.uniform(0.016, 0.028), rng.uniform(0.011, 0.017), leaf_colour(), curl=0.3, steps=4)
+            if depth < 3 and rng.random() < 0.6:
                 a = rng.uniform(0.0, math.tau)
-                branch(points[k], (math.cos(a) * 0.8, math.sin(a) * 0.5, 0.7), length * 0.55, depth + 1)
+                branch(points[k], (math.cos(a) * 0.8, math.sin(a) * 0.5, 0.75), length * 0.6, depth + 1)
         if rng.random() < 0.15:
             plant.blob(tuple(points[-1] + np.array([0, 0, -0.006])), 0.008, BERRY, long=1.0, sides=7)
 
-    for _ in range(9 + cell * 2):
-        x = rng.gauss(0.0, 0.07)
-        y = rng.gauss(0.0, 0.06)
-        branch((x, y, -0.005), (rng.uniform(-0.4, 0.4), rng.uniform(-0.2, 0.2), 1.0), rng.uniform(0.12, 0.3), 0)
+    for _ in range(14 + cell * 3):
+        r = abs(rng.gauss(0.0, 0.08))
+        a = rng.uniform(0.0, math.tau)
+        x, y = r * math.cos(a), r * math.sin(a) * 0.7
+        # Lower to the rim of the clump.
+        branch((x, y, -0.005), (x * 2.0 + rng.uniform(-0.3, 0.3), rng.uniform(-0.2, 0.2), 1.0), rng.uniform(0.1, 0.2) * (1.0 - r * 2.5), 0)
+
+
+FROND_GOLD = (0.52, 0.33, 0.08)
+FROND_BROWN = (0.25, 0.14, 0.05)
+FROND_GREEN = (0.2, 0.24, 0.06)
+
+
+def fern(plant, cell):
+    """A fern of the wood in October, male fern or lady fern: fronds arching
+    out of one crown, each a rachis with pairs of pinnae, longest a third of
+    the way up; gone gold, the older ones brown and lying."""
+    rng = plant.rng
+    tones = [(FROND_GOLD, FROND_GREEN), (FROND_GOLD, FROND_BROWN), (FROND_BROWN, FROND_GOLD)][cell % 3]
+    fronds = rng.randint(7, 10)
+    turn = rng.uniform(0.0, math.tau)
+    for f in range(fronds):
+        a = turn + f * math.tau / fronds + rng.uniform(-0.3, 0.3)
+        out = np.array([math.cos(a), math.sin(a) * 0.55, 0.0])
+        length = rng.uniform(0.35, 0.7)
+        old = rng.random() < 0.3
+        tone = mix(tones[0], tones[1], rng.random() * (0.9 if old else 0.4))
+        steps = 14
+        rachis = [np.array([0.0, 0.0, 0.0])]
+        # It leaves the crown steeply and arches over towards its tip.
+        lift = rng.uniform(0.95, 1.25) * (0.6 if old else 1.0)
+        for k in range(steps):
+            t = (k + 0.5) / steps
+            angle = lift - (lift + 0.35) * t ** 1.4
+            heading = out * math.cos(angle) + np.array([0.0, 0.0, math.sin(angle)])
+            rachis.append(rachis[-1] + heading * length / steps)
+        if not plant.stem([tuple(p) for p in rachis], 0.0022, lambda t, c=tone: darker(c, 0.3 * (1 - t)), sides=4):
+            continue
+        for k in range(2, steps):
+            t = k / steps
+            p = rachis[k]
+            ahead = rachis[k + 1] - rachis[k - 1]
+            ahead /= np.linalg.norm(ahead)
+            side = np.cross(ahead, np.array([0.0, 0.0, 1.0]))
+            if np.linalg.norm(side) < 1e-6:
+                continue
+            side /= np.linalg.norm(side)
+            long = length * 0.24 * math.sin(math.pi * min(1.0, (t - 0.08) / 0.95)) ** 0.8 * (1.15 - 0.4 * t)
+            for sgn in (-1.0, 1.0):
+                way = side * sgn + ahead * 0.35 + np.array([0.0, 0.0, -0.15])
+                plant.leaf(tuple(p), tuple(way), long, long * 0.32, mix(tone, darker(tone, 0.25), rng.random() * 0.5), curl=0.25, steps=4)
+
+
+MOSS_GREEN = (0.06, 0.12, 0.02)
+MOSS_YELLOW = (0.2, 0.22, 0.04)
+
+
+def moss(plant, cell):
+    """A cushion of moss on the floor of the wood: a low dome of short
+    shoots, each a stalk with tiny leaves, dark green below, yellow-green
+    at the tips; from the side or from above as the cell is."""
+    rng = plant.rng
+    radius = (0.15, 0.19)[cell % 2]
+    for _ in range(2600 + 600 * (cell % 2)):
+        r = radius * math.sqrt(rng.random())
+        a = rng.uniform(0.0, math.tau)
+        x, y = r * math.cos(a), r * math.sin(a) * (1.0 if plant.plan else 0.6)
+        dome = (1.0 - (r / radius) ** 2) * radius * 0.45 + 0.012
+        tone = mix(MOSS_GREEN, MOSS_YELLOW, rng.random() ** 1.5)
+        lean = np.array([rng.gauss(0, 0.25), rng.gauss(0, 0.25), 1.0]) + np.array([x, y, 0.0]) * 3.0
+        lean /= np.linalg.norm(lean)
+        foot = np.array([x, y, -0.005])
+        top = foot + lean * dome
+        plant.stem([tuple(foot), tuple(top)], 0.0009, lambda t, c=tone: mix(darker(c, 0.5), c, t), sides=3)
+        plant.blob(tuple(top), 0.0045, tone, long=1.4, way=tuple(lean), sides=5)
 
 
 def seedling(plant, cell):
     """A spruce seedling of a few years: a leader and whorls of shoots, each
-    a brush of short needles."""
+    a brush of short needles all round."""
     rng = plant.rng
     high = (0.14, 0.24, 0.34, 0.45)[cell]
     whorls = 2 + cell
     lean = rng.uniform(-0.08, 0.08)
 
-    def shoot(foot, way, length):
+    def shoot(foot, way, length, sub):
         way = np.array(way, dtype=float)
         way /= np.linalg.norm(way)
         end = np.array(foot) + way * length
-        plant.stem([tuple(foot), tuple(end)], 0.0012, (0.2, 0.14, 0.08), sides=3)
-        for k in range(int(length / 0.004)):
-            at = np.array(foot) + way * length * (k + 0.5) / int(length / 0.004)
+        plant.stem([tuple(foot), tuple(end)], 0.0013, (0.22, 0.15, 0.08), sides=3)
+        count = int(length / 0.0022)
+        for k in range(count):
+            at = np.array(foot) + way * length * (k + 0.5) / count
             a = rng.uniform(0.0, math.tau)
-            out = np.array([math.cos(a), math.sin(a), 0.6]) + way * 0.8
+            out = np.array([math.cos(a), math.sin(a), 0.7]) + way * 0.7
             out /= np.linalg.norm(out)
-            plant.stem([tuple(at), tuple(at + out * rng.uniform(0.01, 0.016))], 0.0006, mix(SPRUCE_GREEN, (0.07, 0.12, 0.05), rng.random()), sides=3)
+            plant.stem([tuple(at), tuple(at + out * rng.uniform(0.011, 0.017))], 0.0007, mix(SPRUCE_GREEN, (0.07, 0.12, 0.05), rng.random()), sides=3)
+        if sub:
+            for k in range(2):
+                at = np.array(foot) + way * length * (0.45 + 0.3 * k)
+                sgn = 1.0 if k else -1.0
+                side = np.cross(way, np.array([0.0, 0.0, 1.0]))
+                if np.linalg.norm(side) > 1e-6:
+                    shoot(at, way + side / np.linalg.norm(side) * sgn * 0.9, length * 0.4, False)
 
-    shoot((0.0, 0.0, -0.005), (lean, 0.0, 1.0), high)
+    shoot((0.0, 0.0, -0.005), (lean, 0.0, 1.0), high, False)
     for w in range(whorls):
-        z = high * (0.25 + 0.6 * w / max(1, whorls - 1))
-        reach = (high - z) * 0.55 + 0.03
+        z = high * (0.2 + 0.62 * w / max(1, whorls - 1))
+        reach = (high - z) * 0.5 + 0.035
         turn = rng.uniform(0.0, math.tau)
-        for k in range(4):
-            a = turn + k * math.tau / 4
-            shoot((lean * z, 0.0, z), (math.cos(a), math.sin(a), 0.25), reach)
+        for k in range(5):
+            a = turn + k * math.tau / 5
+            shoot((lean * z, 0.0, z), (math.cos(a), math.sin(a), 0.2), reach, reach > 0.07)
+
+
+# --- Shrubs at the edge of the wood -----------------------------------------
+
+HAZEL_BARK = (0.2, 0.16, 0.12)
+HAZEL_YELLOW = (0.55, 0.42, 0.06)
+HAZEL_GREEN = (0.16, 0.22, 0.04)
+HAZEL_BROWN = (0.3, 0.17, 0.05)
+ROWAN_BARK = (0.24, 0.23, 0.21)
+ROWAN_ORANGE = (0.62, 0.2, 0.03)
+ROWAN_RED = (0.5, 0.05, 0.03)
+ROWAN_PURPLE = (0.25, 0.05, 0.06)
+ROWAN_GREEN = (0.12, 0.17, 0.04)
+ROWAN_BERRY = (0.72, 0.06, 0.02)
+JUNIPER = (0.07, 0.11, 0.08)
+JUNIPER_GREY = (0.14, 0.19, 0.16)
+JUNIPER_BARK = (0.18, 0.12, 0.09)
+JUNIPER_BERRY = (0.06, 0.07, 0.13)
+
+
+def turned_points(plant, angle, first=0):
+    """Everything grown so far turned about the upright by `angle`, to
+    picture it from another side."""
+    c, n = math.cos(angle), math.sin(angle)
+    for i in range(first, len(plant.points)):
+        x, y, z = plant.points[i]
+        plant.points[i] = (x * c - y * n, x * n + y * c, z)
+
+
+def limb(plant, foot, way, length, radius, bark, steps, wander, leaves, depth, fork, rng):
+    """A branch that wanders as it grows, forks, and carries `leaves` at
+    every node from its second year on: leaves(at, heading, depth)."""
+    points = [np.array(foot, dtype=float)]
+    heading = np.array(way, dtype=float)
+    heading /= np.linalg.norm(heading)
+    for k in range(steps):
+        heading = heading + np.array([rng.gauss(0, wander), rng.gauss(0, wander), 0.05 - 0.04 * depth])
+        heading /= np.linalg.norm(heading)
+        points.append(points[-1] + heading * length / steps)
+    plant.stem([tuple(p) for p in points], radius, bark, sides=5 if depth == 0 else 3)
+    for k in range(1, steps + 1):
+        if depth >= 1 or k > steps // 2:
+            leaves(points[k], heading, depth)
+        if depth < 3 and rng.random() < fork:
+            a = rng.uniform(0.0, math.tau)
+            side = np.array([math.cos(a), math.sin(a), 0.0])
+            limb(plant, points[k], heading * 0.6 + side * 0.7 + np.array([0, 0, 0.15]), length * rng.uniform(0.4, 0.6), radius * 0.6, bark, max(3, steps - 1), wander, leaves, depth + 1, fork * 0.85, rng)
+
+
+def hazel(plant, cell):
+    """Hazel: a vase of many straight stems out of one stool, round leaves on
+    zigzag twigs, in the middle of October yellow, a few still green, some
+    gone brown."""
+    variant, view = divmod(cell, 3)
+    rng = random.Random(4100 + variant * 31)
+    plant.rng = rng
+    plant.loose = True
+    high = (2.7, 2.2)[variant]
+
+    def leaves(at, heading, depth):
+        for _ in range(5 if depth > 0 else 2):
+            a = rng.uniform(0.0, math.tau)
+            r = rng.random()
+            colour = HAZEL_YELLOW if r < 0.6 else (HAZEL_GREEN if r < 0.78 else HAZEL_BROWN)
+            colour = mix(colour, darker(colour, 0.3), rng.random() * 0.5)
+            way = (math.cos(a), math.sin(a), rng.uniform(-0.4, 0.3))
+            size = rng.uniform(0.07, 0.12)
+            plant.leaf(tuple(at), way, size, size * 0.85, colour, curl=0.25, steps=4)
+
+    for _ in range(11 + variant * 2):
+        a = rng.uniform(0.0, math.tau)
+        spread_ = rng.uniform(0.15, 0.5)
+        way = (math.cos(a) * spread_, math.sin(a) * spread_, 1.0)
+        foot = (rng.gauss(0, 0.08), rng.gauss(0, 0.08), -0.02)
+        limb(plant, foot, way, high * rng.uniform(0.65, 1.0), 0.018, HAZEL_BARK, 7, 0.08, leaves, 0, 0.6, rng)
+    turned_points(plant, view * math.tau / 6)
+
+
+def rowan(plant, cell):
+    """Rowan as it stands at the edge of the wood: a few stems, pinnate
+    leaves gone orange and red and purple, and bunches of scarlet berries."""
+    variant, view = divmod(cell, 3)
+    rng = random.Random(5200 + variant * 37)
+    plant.rng = rng
+    plant.loose = True
+    high = (3.4, 2.8)[variant]
+
+    def leaves(at, heading, depth):
+        if depth == 0:
+            return
+        for _ in range(3):
+            a = rng.uniform(0.0, math.tau)
+            way = np.array([math.cos(a), math.sin(a), rng.uniform(-0.2, 0.4)])
+            way /= np.linalg.norm(way)
+            r = rng.random()
+            colour = ROWAN_ORANGE if r < 0.4 else (ROWAN_RED if r < 0.7 else (ROWAN_PURPLE if r < 0.82 else ROWAN_GREEN))
+            colour = mix(colour, darker(colour, 0.3), rng.random() * 0.5)
+            length = rng.uniform(0.14, 0.2)
+            end = np.array(at) + way * length
+            plant.stem([tuple(at), tuple(end)], 0.0015, darker(colour, 0.4), sides=3)
+            side = np.cross(way, np.array([0.0, 0.0, 1.0]))
+            if np.linalg.norm(side) < 1e-6:
+                continue
+            side /= np.linalg.norm(side)
+            for k in range(6):
+                p = np.array(at) + way * length * (k + 1) / 6.5
+                for sgn in (-1.0, 1.0):
+                    plant.leaf(tuple(p), tuple(side * sgn + way * 0.4 + np.array([0, 0, -0.1])), rng.uniform(0.05, 0.07), 0.02, colour, curl=0.2, steps=3)
+            plant.leaf(tuple(end), tuple(way), 0.045, 0.014, colour, curl=0.2, steps=3)
+        if depth >= 2 and rng.random() < 0.3:
+            # A bunch of berries hanging from the end of a twig.
+            centre = np.array(at) + np.array([0.0, 0.0, -0.05])
+            for _ in range(rng.randint(14, 26)):
+                berry = centre + np.array([rng.gauss(0, 0.03), rng.gauss(0, 0.03), rng.gauss(0, 0.02)])
+                plant.stem([tuple(np.array(at)), tuple(berry)], 0.0008, (0.25, 0.15, 0.06), sides=3)
+                plant.blob(tuple(berry), 0.009, mix(ROWAN_BERRY, (0.55, 0.12, 0.02), rng.random() * 0.4), long=1.0, sides=6)
+
+    for _ in range(3 + variant):
+        a = rng.uniform(0.0, math.tau)
+        spread_ = rng.uniform(0.05, 0.25)
+        way = (math.cos(a) * spread_, math.sin(a) * spread_, 1.0)
+        foot = (rng.gauss(0, 0.1), rng.gauss(0, 0.1), -0.02)
+        limb(plant, foot, way, high * rng.uniform(0.75, 1.0), 0.035, ROWAN_BARK, 8, 0.07, leaves, 0, 0.72, rng)
+    turned_points(plant, view * math.tau / 6)
+
+
+def juniper(plant, cell):
+    """Common juniper as it grows in the Alps: a dense prickly column, blue
+    green to grey green, the odd dark berry."""
+    variant, view = divmod(cell, 3)
+    rng = random.Random(6300 + variant * 41)
+    plant.rng = rng
+    plant.loose = True
+    high = (2.0, 1.3)[variant]
+    wide = (0.32, 0.45)[variant]
+    for _ in range(2600):
+        z = high * rng.random() ** 0.8
+        r = wide * (1.0 - (z / high) ** 1.6) * math.sqrt(rng.random()) + 0.05
+        a = rng.uniform(0.0, math.tau)
+        at = np.array([r * math.cos(a), r * math.sin(a), z])
+        way = np.array([math.cos(a) * 0.4, math.sin(a) * 0.4, 1.0])
+        way /= np.linalg.norm(way)
+        length = rng.uniform(0.06, 0.12)
+        end = at + way * length
+        plant.stem([tuple(at), tuple(end)], 0.0015, JUNIPER_BARK, sides=3)
+        tone = mix(JUNIPER, JUNIPER_GREY, rng.random())
+        for k in range(9):
+            p = at + way * length * (k + 0.5) / 9
+            for m in range(4):
+                b = rng.uniform(0.0, math.tau)
+                out = np.array([math.cos(b), math.sin(b), 0.8]) + way
+                out /= np.linalg.norm(out)
+                plant.stem([tuple(p), tuple(p + out * 0.016)], 0.0009, tone, sides=3)
+        if rng.random() < 0.04:
+            plant.blob(tuple(end), 0.008, JUNIPER_BERRY, long=1.0, sides=6)
+    for _ in range(5):
+        a = rng.uniform(0.0, math.tau)
+        plant.stem([(0.0, 0.0, -0.02), (math.cos(a) * 0.05, math.sin(a) * 0.05, high * 0.3), (math.cos(a) * 0.03, math.sin(a) * 0.03, high * 0.5)], 0.012, JUNIPER_BARK, sides=5)
+    turned_points(plant, view * math.tau / 6)
 
 
 class Model:
@@ -900,28 +1186,25 @@ def recolour(material, target, amount):
 
 
 def facing_with_holes(material, plan):
-    """facing_material(), with the holes of a model's own material."""
-    facing = facing_material(plan)
+    """A copy of a model's material that shows which way it faces instead of
+    its colour, with the holes it has."""
     if material is None:
+        return facing_material(plan)
+    facing = material.copy()
+    tree = facing.node_tree
+    bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    out = next(n for n in tree.nodes if n.type == "OUTPUT_MATERIAL")
+    glow = facing_nodes(tree, plan)
+    alpha = bsdf.inputs["Alpha"].links[0].from_socket if bsdf is not None and bsdf.inputs["Alpha"].links else None
+    if alpha is None:
+        tree.links.new(glow.outputs[0], out.inputs["Surface"])
         return facing
-    bsdf = next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
-    if bsdf is None or not bsdf.inputs["Alpha"].links:
-        return facing
-    alpha_from = bsdf.inputs["Alpha"].links[0].from_node
-    nodes = facing.node_tree.nodes
-    links = facing.node_tree.links
-    image = nodes.new("ShaderNodeTexImage")
-    image.image = alpha_from.image
-    uv = nodes.new("ShaderNodeTexCoord")
-    links.new(uv.outputs["UV"], image.inputs["Vector"])
-    out = next(n for n in nodes if n.type == "OUTPUT_MATERIAL")
-    glow = next(n for n in nodes if n.type == "EMISSION")
-    clear = nodes.new("ShaderNodeBsdfTransparent")
-    both = nodes.new("ShaderNodeMixShader")
-    links.new(image.outputs["Alpha"], both.inputs[0])
-    links.new(clear.outputs[0], both.inputs[1])
-    links.new(glow.outputs[0], both.inputs[2])
-    links.new(both.outputs[0], out.inputs["Surface"])
+    clear = tree.nodes.new("ShaderNodeBsdfTransparent")
+    both = tree.nodes.new("ShaderNodeMixShader")
+    tree.links.new(alpha, both.inputs[0])
+    tree.links.new(clear.outputs[0], both.inputs[1])
+    tree.links.new(glow.outputs[0], both.inputs[2])
+    tree.links.new(both.outputs[0], out.inputs["Surface"])
     return facing
 
 
@@ -929,7 +1212,6 @@ FERN = "assets/models/fern_02/fern_02_1k.gltf"
 SORREL = "assets/models/shrub_sorrel_01/shrub_sorrel_01_2k.gltf"
 NETTLE = "assets/models/nettle_plant/nettle_plant_2k.gltf"
 DANDELION = "assets/models/dandelion_01/dandelion_01_2k.gltf"
-MOSS = "assets/models/moss_01/moss_01_2k.gltf"
 
 
 # Every sheet: how large it is, and its cells, each where it lies on the
@@ -958,15 +1240,24 @@ SHEETS = {
             + [("dandelion%d" % i, (i * 512, 1280, 512, 256), 0.3, Model(DANDELION, ["dandelion_01_" + "abce"[i]], autumn=(0.3, 0.24, 0.06), amount=0.15 * i), i, 0.5, False) for i in range(4)]
         ),
     },
+    "shrubs": {
+        "size": (3072, 3072),
+        "cells": (
+            [("hazel%d" % i, ((i % 4) * 768, (i // 4) * 768, 768, 768), 4.2, hazel, i, 0.5, False) for i in range(6)]
+            + [("rowan%d" % i, (((i + 6) % 4) * 768, ((i + 6) // 4) * 768, 768, 768), 5.0, rowan, i, 0.5, False) for i in range(6)]
+            + [("juniper%d" % i, (i * 384, 2304, 384, 768), 1.2, juniper, i, 0.5, False) for i in range(6)]
+        ),
+    },
     "floor": {
         "size": (2048, 2048),
         "cells": (
             [("bilberry%d" % i, (i * 512, 0, 512, 512), 0.5, bilberry, i, 0.5, False) for i in range(4)]
-            + [("fern%d" % i, (i * 512, 512, 512, 512), (1.0, 0.9, 0.62, 0.62)[i], Model(FERN, ["fern_02_" + "bcad"[i]], autumn=((0.42, 0.3, 0.07), (0.36, 0.2, 0.06), (0.4, 0.33, 0.1), (0.25, 0.15, 0.06))[i], amount=(0.75, 0.9, 0.45, 0.95)[i]), i, 0.5, False) for i in range(4)]
+            + [("fern%d" % i, (i * 512, 512, 512, 512), 1.0, fern, i, 0.5, False) for i in range(3)]
+            + [("fern3", (1536, 512, 512, 512), 1.0, Model(FERN, ["fern_02_b"]), 3, 0.5, False)]
             + [("seedling%d" % i, (i * 512, 1024, 512, 512), 0.5, seedling, i, 0.5, False) for i in range(4)]
-            + [("moss%d" % i, (i * 512, 1536, 512, 256), 0.44, Model(MOSS, ["moss_01"], scatter=900 + 300 * i, radius=0.17 + 0.03 * i), i, 0.5, False) for i in range(2)]
+            + [("moss%d" % i, (i * 512, 1536, 512, 256), 0.44, moss, i, 0.5, False) for i in range(2)]
             + [("sorrel%d" % i, (1024 + i * 512, 1536, 512, 256), 0.32, Model(SORREL, ["shrub_sorrel_01"], scatter=40 + 20 * i, radius=0.11 + 0.02 * i), i, 0.5, False) for i in range(2)]
-            + [("moss_top%d" % i, (i * 256, 1792, 256, 256), 0.44, Model(MOSS, ["moss_01"], scatter=900 + 300 * i, radius=0.17 + 0.03 * i), i, 0.5, True) for i in range(2)]
+            + [("moss_top%d" % i, (i * 256, 1792, 256, 256), 0.44, moss, i, 0.5, True) for i in range(2)]
             + [("sorrel_top%d" % i, (512 + i * 256, 1792, 256, 256), 0.32, Model(SORREL, ["shrub_sorrel_01"], scatter=40 + 20 * i, radius=0.11 + 0.02 * i), i, 0.5, True) for i in range(2)]
         ),
     },
@@ -987,18 +1278,13 @@ def blade_material():
     return material
 
 
-def facing_material(plan=False):
-    """Which way a surface faces, as a colour, for a card that is looked at
-    from the front: red to the right, green up, blue towards whoever looks.
-    Seen from above, up on the picture is north (+y) and whoever looks is up
-    (+z)."""
-    material = bpy.data.materials.new("facing")
-    if material.node_tree is None:
-        material.use_nodes = True
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-    nodes.clear()
-    out = nodes.new("ShaderNodeOutputMaterial")
+def facing_nodes(tree, plan):
+    """Nodes in `tree` that glow with which way a surface faces, as a colour
+    for a card looked at from the front: red to the right, green up, blue
+    towards whoever looks. Seen from above, up on the picture is north (+y)
+    and whoever looks is up (+z). Returns the glow."""
+    nodes = tree.nodes
+    links = tree.links
     glow = nodes.new("ShaderNodeEmission")
     geometry = nodes.new("ShaderNodeNewGeometry")
     apart = nodes.new("ShaderNodeSeparateXYZ")
@@ -1021,7 +1307,18 @@ def facing_material(plan=False):
         links.new(away.outputs[0], together.inputs["Z"])
     links.new(together.outputs[0], half.inputs[0])
     links.new(half.outputs[0], glow.inputs["Color"])
-    links.new(glow.outputs[0], out.inputs["Surface"])
+    return glow
+
+
+def facing_material(plan=False):
+    """A material that shows which way a surface faces, see facing_nodes()."""
+    material = bpy.data.materials.new("facing")
+    if material.node_tree is None:
+        material.use_nodes = True
+    material.node_tree.nodes.clear()
+    out = material.node_tree.nodes.new("ShaderNodeOutputMaterial")
+    glow = facing_nodes(material.node_tree, plan)
+    material.node_tree.links.new(glow.outputs[0], out.inputs["Surface"])
     return material
 
 
@@ -1033,6 +1330,9 @@ def set_scene(samples):
     scene.cycles.samples = samples
     scene.cycles.use_denoising = False
     scene.cycles.max_bounces = 3
+    # A look goes through many cards and leaves with holes before it meets
+    # something: with the eight Cycles allows by itself moss comes out black.
+    scene.cycles.transparent_max_bounces = 64
     scene.render.threads_mode = "FIXED"
     scene.render.threads = 4
     scene.render.film_transparent = True
