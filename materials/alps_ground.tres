@@ -3,10 +3,8 @@
 [ext_resource type="Shader" path="res://shaders/alps_ground.gdshader" id="shader"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_ground/grass_ground_diff.jpg" id="meadow"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_ground/grass_ground_nor_gl.jpg" id="meadow_nor"]
-[ext_resource type="Texture2D" path="res://assets/textures/grass_ground/grass_ground_arm.jpg" id="meadow_arm"]
 [ext_resource type="Texture2D" path="res://assets/textures/withered_grass/withered_grass_diff.jpg" id="straw"]
 [ext_resource type="Texture2D" path="res://assets/textures/withered_grass/withered_grass_nor_gl.jpg" id="straw_nor"]
-[ext_resource type="Texture2D" path="res://assets/textures/withered_grass/withered_grass_arm.jpg" id="straw_arm"]
 [ext_resource type="Texture2D" path="res://assets/textures/dirt/dirt_diff.jpg" id="soil"]
 [ext_resource type="Texture2D" path="res://assets/textures/dirt/dirt_nor_gl.jpg" id="soil_nor"]
 [ext_resource type="Texture2D" path="res://assets/textures/forest_leaves_02/forest_leaves_02_diff.jpg" id="forest"]
@@ -26,10 +24,8 @@
 shader = ExtResource("shader")
 shader_parameter/meadow_tex = ExtResource("meadow")
 shader_parameter/meadow_nor = ExtResource("meadow_nor")
-shader_parameter/meadow_arm = ExtResource("meadow_arm")
 shader_parameter/straw_tex = ExtResource("straw")
 shader_parameter/straw_nor = ExtResource("straw_nor")
-shader_parameter/straw_arm = ExtResource("straw_arm")
 shader_parameter/soil_tex = ExtResource("soil")
 shader_parameter/soil_nor = ExtResource("soil_nor")
 shader_parameter/forest_tex = ExtResource("forest")

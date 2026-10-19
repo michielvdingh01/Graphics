@@ -153,6 +153,9 @@ func lie_of(at: Vector2, high: float, normal: Vector3) -> Dictionary:
 const PHOTO := "res://assets/maps/alps/photo_5m.jpg"
 const PHOTO_CELL := 5.0
 static var _photo_cover := PackedFloat32Array()
+## Whether each dot of the photograph is built on, or a road: light and not
+## green, grey or warm. Roofs, yards, roads, a harvested field.
+static var _photo_built := PackedByteArray()
 static var _photo_heights := PackedFloat32Array()
 static var _photo_size := Vector2i()
 static var _photo_origin := Vector2()
@@ -222,6 +225,7 @@ func _read_photo() -> bool:
 	var dots := photo.get_data()
 	var cover := PackedFloat32Array()
 	cover.resize(_photo_size.x * _photo_size.y * 5)
+	_photo_built.resize(_photo_size.x * _photo_size.y)
 	for row in _photo_size.y:
 		for column in _photo_size.x:
 			var i := row * _photo_size.x + column
@@ -258,6 +262,8 @@ func _read_photo() -> bool:
 			cover[i * 5 + 2] = scree
 			cover[i * 5 + 3] = firn
 			cover[i * 5 + 4] = r * 0.3 + g * 0.59 + b * 0.11
+			var tint := (most - least) / maxf(most, 0.01)
+			_photo_built[i] = 1 if most > 0.36 and g - b < 0.05 and (tint < 0.25 or r > g + 0.01) else 0
 	_photo_cover = cover
 	print("Photograph: %d x %d dots read in %.1f s" % [_photo_size.x, _photo_size.y, (Time.get_ticks_msec() - began) / 1000.0])
 	return true
@@ -339,6 +345,9 @@ func road_gap(at: Vector2) -> float:
 
 
 var _road_gaps := PackedFloat32Array()
+## The fences that were put up, each the points it runs through: the grass
+## along them is long (see _grass_map()).
+var _fence_lines: Array = []
 
 
 ## How far from the middle of the nearest road every spot of the land lies, up
@@ -393,7 +402,7 @@ const GROUND := preload("res://tools/levels/alps/ground.gd")
 ## three meshes: every how many-th height each takes, and from how far to
 ## how far off it is drawn, in metres.
 const BLOCK := 128
-const LAND_LODS := [[1, 0.0, 180.0], [2, 180.0, 450.0], [4, 450.0, 1000.0], [16, 1000.0, 0.0]]
+const LAND_LODS := [[1, 0.0, 50.0], [2, 50.0, 150.0], [4, 150.0, 500.0], [16, 500.0, 0.0]]
 
 ## The meshes of the land and of what lies round it, made by this file and
 ## vista.gd. They go into a scene of their own when everything stands, see
@@ -426,6 +435,7 @@ func ground_look() -> ShaderMaterial:
 	if _look == null:
 		_look = (load("res://materials/alps_ground.tres") as ShaderMaterial).duplicate()
 		_look.set_shader_parameter("sea", SEA)
+		_look.set_shader_parameter("sunward", _sunward)
 	if not _far_maps.is_empty():
 		_look.set_shader_parameter("far_a", _far_maps[0])
 		_look.set_shader_parameter("far_b", _far_maps[1])
@@ -520,18 +530,31 @@ func _grass_map(woody: PackedFloat32Array, upright: PackedFloat32Array, roads: A
 					continue
 				_stamp(long, foot, 3.5, 1.0)
 	# At the walls of whatever was built: the small open places keep_open()
-	# was given, which are those of barns, huts and the like.
+	# was given, which are those of barns, huts and the like. Right at the
+	# wall the ground is trodden (and grows nettles), a little further off
+	# the grass is long.
+	var trodden := PackedFloat32Array()
+	trodden.resize(across * down)
 	for area: Rect2 in _open:
 		if area.size.x > 40.0 or area.size.y > 40.0:
 			continue
-		var box := _spots_in(area.grow(2.5))
+		var box := _spots_in(area.grow(3.0))
 		for row in range(box[1], box[3] + 1):
 			for column in range(box[0], box[2] + 1):
 				var at := _spot(column, row)
 				var off := maxf(maxf(area.position.x - at.x, at.x - area.end.x), maxf(area.position.y - at.y, at.y - area.end.y))
-				if off > -2.0:
+				if off > -2.5:
 					var i := row * across + column
-					long[i] = maxf(long[i], 1.0 - smoothstep(0.5, 1.8, absf(off + 0.5)))
+					trodden[i] = maxf(trodden[i], 0.6 * (1.0 - smoothstep(-0.5, 0.8, off)))
+					long[i] = maxf(long[i], 1.0 - smoothstep(0.8, 2.6, absf(off - 0.6)))
+	# Along the fences, where no mower comes.
+	for line: Array in _fence_lines:
+		for k in line.size() - 1:
+			var from: Vector2 = line[k]
+			var to: Vector2 = line[k + 1]
+			var steps := maxi(1, int(from.distance_to(to) / 1.5))
+			for j in steps + 1:
+				_stamp(long, from.lerp(to, float(j) / steps), 1.8, 1.0)
 	var near_wood: PackedFloat32Array = LIGHT.evened(woody, across, down, maxi(1, roundi(5.0 / _cell)))
 	var round_about: PackedFloat32Array = LIGHT.evened(_heights, across, down, maxi(1, roundi(3.0 / _cell)))
 	var camps: Array[Rect2] = []
@@ -551,7 +574,7 @@ func _grass_map(woody: PackedFloat32Array, upright: PackedFloat32Array, roads: A
 			if half_wide > 0.0:
 				var from_middle: float = roads[0][i]
 				verge = smoothstep(half_wide - 0.5, half_wide + 0.3, from_middle) * (1.0 - smoothstep(half_wide + 1.2, half_wide + 3.0, from_middle))
-			var b := verge
+			var b := maxf(verge, trodden[i])
 			var at := _spot(column, row)
 			for camp: Rect2 in camps:
 				if camp.has_point(at):

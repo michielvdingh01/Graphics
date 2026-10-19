@@ -264,3 +264,19 @@ night={
 "type": "float",
 "value": 0.0
 }
+cloud_drift={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+cloud_shade={
+"type": "float",
+"value": 0.0
+}
+cloud_here={
+"type": "float",
+"value": 0.0
+}
+cloud_field={
+"type": "sampler2D",
+"value": "res://assets/noise/alps_fbm.png"
+}

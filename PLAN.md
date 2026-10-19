@@ -4357,9 +4357,30 @@ Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" u
 - **Lucht en licht.** `table_mountain_1_puresky` (wolkenbanken, zon op 12,9 graden in de scan), 5,1 graden gekanteld zodat zijn zon op 18 graden uit 228 graden staat, half vijf: vanaf het speelveld staan de bergen in het zuidwesten 10 tot 15 graden hoog, dus de helling en het Moos hebben zon en de noordhellingen aan de overkant liggen in de schaduw. De mist ligt niet meer over de lucht (`fog_sky_affect = 0`), met meer kleur van de lucht in de verte (`fog_aerial_perspective = 0.8`).
 - **De grond** (`shaders/alps_ground.gdshader`): wei van groen gras en verwelkt herfstgras (`grass_ground`, `withered_grass`, 2k), twee keer gelezen tegen herhaling, met AO en ruwheid; de kleur gestuurd met twee doelkleuren (`green_seen`, `straw_seen`) zodat dichtbij en ver dezelfde kleur hebben; bosgrond van mos en strooisel, kalksteen met korstmos, grijs grind op de weg, aarde op de paden. De kaart `land_c` (lang gras, nat, vertrapt, bosrand; `_grass_map()`) leest de helper ook.
 
+- **Een bewoond dal** (`_farmland()` in valley.gd): Tiroler hekken (Kreuzzaun) aan de hellingkant van de weg, met openingen waar de paden omhoog gaan en bij de kapel; rijen hooiruiters naast een derde van de schuren; houtstapels tegen een kwart. Nooit binnen 20 m van een gevecht van de route.
+- **De dorpen** (`tools/levels/alps/villages.gd`, `shaders/alps_house_far.gdshader`): Lermoos in het westen en Ehrwald in het oosten, een huis waar de luchtfoto binnen 14 m voor meer dan 60% bebouwd is (2375 huizen), en een kerk met spits waar het dichtst gebouwd is. Elk huis is een paar gekleurde vlakken: wit gepleisterd onder, hout boven, een laag dak dat ver uitsteekt. Minstens 100 m van het land; er komt niemand. Ze liggen in de schaduw van de bergen en de wolken zoals de grond eromheen.
+- **Wolkschaduwen** (`scripts/cloud.gd` met `drifting`, `shaders/cloud_shadow.gdshaderinc`): een veld van ruis, wolken van zo'n 800 m, ongeveer een kwart van het land eronder, dat met de wind uit het westzuidwesten meedrijft (6 m/s). Verder dan 120 à 260 m tekenen de grond en de verre bomen de schaduw zelf; dichtbij dimt de zon wanneer er een wolk boven het oog hangt, zodat schuren en voertuigen meedoen. Drie globale shaderwaarden (`cloud_drift`, `cloud_shade`, `cloud_here`) en een globale textuur; in elk ander level is `cloud_shade` nul.
+- **Een oog dat zich aanpast** (`CameraAttributesPractical` in `scenes/alps.tscn`): begrensd, zodat het bos van binnen tot ongeveer twee keer lichter wordt en het open land blijft zoals het was. Zonder zag je in het bos bijna niets.
+- **De grond goedkoper**: zonder `NORMAL_MAP` en zonder ruwheid uit texturen (SSAO laat de shader daarvoor een tweede keer draaien), het reliëf van de textuur in de kleur gevouwen naar de stand van de zon. De normal maps zijn als normal map geïmporteerd: alleen rood en groen, de derde as rekent de shader uit (eerst niet, en toen was alles donker). Het land in driehoeken van 1 m tot 50 m, 2 m tot 150 m, 4 m tot 500 m, daarna 16 m. De zonneschaduw in twee lagen.
+
+**Gemeten** op 19 oktober 2026 tussen 9:30 en 10:20, M1 Pro aan de lader van 94 W, load 1,3 tot 4; de helper mat op dezelfde GPU, het slot hield ons uit elkaar. Om en om met een bevroren kopie, twee rondes, zoals Michiel speelt (3456×2160, MetalFX, schaal vanzelf); de rondes lagen binnen 0,4 fps van elkaar.
+
+| Fps gemiddeld | Weg langs de helling | Kapel | Boerderij | Jagershut op de uitloper | Moos oost | Dal van 60 m |
+|---|---|---|---|---|---|---|
+| Nieuw land, grond met normal maps, land fijn tot 180 m | 60,5 | 61,5 | 64,4 | 52,3 | 72,7 | 54,3 |
+| Grond zonder normal maps, land fijn tot 50 m | 65,5 | 69,0 | 68,6 | 57,6 | 77,2 | 67,2 |
+| En de zonneschaduw in twee lagen | 67,4 | | | 59,2 | | |
+
+- Ter vergelijking het oude land op 18 oktober, ook zo gespeeld: Moos 74,8, kapel 71,6, boerderij 76,8, hut 46,7, weiden 72,0, dal van boven 59,5.
+- **Het bos is het zwaarst**: op het pad over het terras 46 fps, in het bos ernaast 50 (`--profile`: bomen 7,2 tot 7,5 ms, hun schaduw 6,4 tot 8,7 ms, het land 1,2 tot 1,5 ms). Het oude land had dat ook (de hut, 46,7).
+
+- **Water in de sloten**: op de bodem van de diepste sloten (waar `land_c.g` bijna 1 is) is de grond donker en glad, zodat hij de lucht spiegelt. Een smalle streep, geen eigen oppervlak.
+- **De eerste keer zien**: de eerste blik op Ehrwald maakt 14 tekenpijplijnen, op Lermoos 4 (de huizen en wat er nog meer staat). Op deze Mac stonden ze al in de cache (slechtste beeld 12,8 ms); op een schone machine kan dat de eerste keer haperen. Niet aan `Fx.rehearse()` gegeven.
+
 **Wat ik niet kon beoordelen**
 
 - **Gespeeld is het niet**, en het gras dichtbij is nog het oude (de helper).
+- Hoe de wolkschaduwen bewegen en hoe snel het oog zich aanpast: alleen op stilstaande beelden gezien.
 - Of de kleur van de wei en het stro klopt voor oktober; of de bleke strook langs de schuren goed is.
 - De route is nieuw en alleen door de selftest gelopen.
 

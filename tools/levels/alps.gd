@@ -10,6 +10,7 @@ extends "res://tools/levels/alps/plan.gd"
 func _describe() -> void:
 	_lie_of_the_land()
 	build("vista")
+	build("villages")
 	# The camps at either end are kept clear of the wood.
 	for camp: Vector2 in CAMPS:
 		keep_open(Rect2(camp - Vector2(70, 60), Vector2(140, 120)))

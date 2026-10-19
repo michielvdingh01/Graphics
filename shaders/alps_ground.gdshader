@@ -44,10 +44,8 @@ uniform float land_cell = 2.0;
 // The sward: green grass on earth, and the grass of October gone to straw.
 uniform sampler2D meadow_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D meadow_nor : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D meadow_arm : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D straw_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D straw_nor : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D straw_arm : filter_linear_mipmap_anisotropic, repeat_enable;
 // Bare earth: the verges and the camps.
 uniform sampler2D soil_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D soil_nor : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -75,11 +73,20 @@ uniform vec3 larch : source_color = vec3(0.5, 0.33, 0.07);
 uniform vec3 rock_far : source_color = vec3(0.5, 0.49, 0.47);
 uniform vec3 scree_far : source_color = vec3(0.55, 0.54, 0.51);
 uniform vec3 snow_far : source_color = vec3(0.9, 0.92, 0.96);
-// The colours the meadow is seen as: the green of a mown meadow in October
-// and the straw of what was left standing. The scans keep their detail but
-// are brought to these on the mean, so that near and far are one colour.
-uniform vec3 green_seen : source_color = vec3(0.35, 0.42, 0.19);
-uniform vec3 straw_seen : source_color = vec3(0.62, 0.54, 0.32);
+// The colours the meadow is seen as: the green of a mown meadow in October,
+// the straw of what was left standing, and the moor grass of the wet, gone
+// orange. They are those of the grass drawn round the eye from afar
+// (shaders/alps_grass.gdshader), so that where it ends the ground goes on
+// in its colour. The scans keep their detail but are brought to these on
+// the mean, so that near and far are one colour.
+uniform vec3 green_seen : source_color = vec3(0.26, 0.33, 0.18);
+uniform vec3 straw_seen : source_color = vec3(0.44, 0.41, 0.29);
+uniform vec3 wet_seen : source_color = vec3(0.48, 0.4, 0.23);
+// Which way the sun is, from the ground: the relief of the near textures is
+// folded into their colour by it (see the end of fragment()), which keeps it
+// out of the pre-pass SSAO makes the renderer run the shader through again
+// for its normals.
+uniform vec3 sunward = vec3(0.0, 1.0, 0.0);
 // How far off the near textures are gone, in metres, and between which
 // distances the map's shadow takes over from the sun's own.
 uniform float near_reach = 280.0;
@@ -91,6 +98,8 @@ uniform float shade_floor = 0.0;
 varying vec3 world;
 varying vec3 world_normal;
 varying float sun_seen;
+
+#include "cloud_shadow.gdshaderinc"
 
 // Four octaves of value noise, read from a picture of it that tiles
 // (tools/gen_noise.gd), a cell of the first octave a unit of `p` across:
@@ -235,20 +244,17 @@ void fragment() {
 	vec3 to_straw = straw_seen / max(mean_of(straw_tex), vec3(0.005));
 	vec3 meadow = mix(green_seen, straw_seen, dry);
 	vec3 meadow_n = vec3(0.5, 0.5, 1.0);
-	float meadow_ao = 1.0;
-	float meadow_rough = 0.95;
 	if (near > 0.0) {
 		vec3 green = texture(meadow_tex, p * 0.31).rgb;
 		// A second reading, turned and coarser, breaks up the tiles.
 		vec2 q = turned(p, 0.7) * 0.113 + 0.31;
 		green = mix(green, texture(meadow_tex, q).rgb, 0.3) * to_green;
+		// Under the grass that is drawn the earth of the scan would show
+		// through between the tufts: half of it is the sward's colour.
+		green = mix(green, green_seen, 0.4);
 		vec3 straw = texture(straw_tex, turned(p, -0.4) * 0.27 + 0.57).rgb * to_straw;
 		float k = over(dot(green, vec3(0.333)) * 1.6, dot(straw, vec3(0.333)) * 1.6, dry);
 		vec3 sward = mix(green, straw, k);
-		vec4 arm_g = texture(meadow_arm, p * 0.31);
-		vec4 arm_s = texture(straw_arm, turned(p, -0.4) * 0.27 + 0.57);
-		meadow_ao = mix(mix(arm_g.r, arm_s.r, k), 1.0, 1.0 - near);
-		meadow_rough = mix(mix(arm_g.g, arm_s.g, k), 0.95, 1.0 - near);
 		meadow_n = mix(texture(meadow_nor, p * 0.31).rgb, texture(straw_nor, turned(p, -0.4) * 0.27 + 0.57).rgb, k);
 		meadow = mix(sward, meadow, 1.0 - near);
 	}
@@ -256,8 +262,9 @@ void fragment() {
 	// The pastures of the mountains round the land: grazed short and gone
 	// olive, and seen through kilometres of air.
 	meadow *= mix(vec3(1.0), vec3(0.78, 0.8, 0.82), 1.0 - inland);
-	// Wet: the ditches, darker and greener, the earth showing.
-	meadow = mix(meadow, meadow * vec3(0.62, 0.7, 0.55), wet * 0.8);
+	// Wet: the ditches, grown with moor grass gone orange, darker at the
+	// bottom.
+	meadow = mix(meadow, wet_seen * mix(1.0, 0.7, wet), wet * 0.75);
 	// Trodden: bare earth through the grass at the verges and in the camps.
 	vec3 colour = meadow;
 	if (trodden > 0.0) {
@@ -297,7 +304,7 @@ void fragment() {
 			vec3 moss = texture(moss_tex, turned(p, 1.1) * 0.21).rgb;
 			float mossy = smoothstep(0.45, 0.65, fbm(p * 0.09 + 2.0) + (1.0 - open) * 0.3);
 			vec3 ground_floor = mix(litter, moss * vec3(0.85, 0.95, 0.8), mossy);
-			wood = mix(ground_floor * 0.8, canopy, 1.0 - near);
+			wood = mix(ground_floor * 0.9, canopy, 1.0 - near);
 			floor_n = texture(forest_nor, p * 0.35).rgb;
 		}
 		forest = stands;
@@ -351,19 +358,25 @@ void fragment() {
 		}
 		colour = mix(colour, white, lying);
 	}
+	// Standing water at the bottom of the deepest ditches of the Moos: dark,
+	// and smooth enough to mirror the sky.
+	float water = smoothstep(0.8, 0.97, wet) * (1.0 - road) * (1.0 - forest);
+	colour = mix(colour, vec3(0.015, 0.02, 0.018), water * 0.92);
 	ALBEDO = colour * mix(relief, 1.0, lying * 0.6);
 	float grassy = (1.0 - forest) * (1.0 - rock) * (1.0 - road);
-	ROUGHNESS = mix(mix(mix(0.92, 0.85, rock), meadow_rough, grassy) - wet * 0.25, 0.6, lying);
-	SPECULAR = mix(0.3, 0.5, lying);
+	ROUGHNESS = mix(mix(mix(mix(0.92, 0.85, rock), 0.95, grassy) - wet * 0.25, 0.6, lying), 0.04, water);
+	SPECULAR = mix(mix(0.3, 0.5, lying), 0.5, water);
 	// The sky a spot sees, and under the wood the shade of the crowns; close
 	// by, the hollows between the blades.
-	AO = open * mix(1.0, 0.7, forest * near) * mix(1.0, meadow_ao, grassy);
+	AO = open * mix(1.0, 0.82, forest * near);
 	AO_LIGHT_AFFECT = 0.0;
 	sun_seen = mix(1.0, lit, smoothstep(shadow_hand_over.x, shadow_hand_over.y, depth));
-	sun_seen = max(sun_seen, shade_floor);
+	sun_seen = max(sun_seen, shade_floor) * cloud_light(p, depth);
 
-	// The normal: the map's for the mountains, the relief of the near
-	// textures close by.
+	// The normal: the map's for the mountains, the mesh's close by. The
+	// relief of the near textures goes into the colour: how much more or
+	// less of the sun a blade, a stone, a rut faces than the ground it lies
+	// on, with the light of the sky that both see.
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	if (near > 0.0) {
 		vec3 nm = meadow_n;
@@ -376,7 +389,14 @@ void fragment() {
 		if (road > 0.0) {
 			nm = mix(nm, texture(gravel_nor, p * 0.45).rgb, road);
 		}
-		NORMAL_MAP = mix(vec3(0.5, 0.5, 1.0), nm, near * (1.0 - lying * 0.7));
+		// The normal maps are imported as such: only red and green are kept,
+		// and the third axis is what makes it a unit long.
+		vec3 tn = vec3(nm.xy * 2.0 - 1.0, 0.0);
+		tn.z = sqrt(max(1.0 - dot(tn.xy, tn.xy), 0.0));
+		vec3 tilted = normalize(tn.x * vec3(1.0, 0.0, 0.0) + tn.y * vec3(0.0, 0.0, -1.0) + tn.z * n);
+		float sky_share = 0.35;
+		float relief_near = (sky_share + max(dot(tilted, sunward), 0.0)) / (sky_share + max(dot(n, sunward), 0.0));
+		ALBEDO *= mix(1.0, relief_near, near * (1.0 - lying * 0.7));
 	}
 }
 
