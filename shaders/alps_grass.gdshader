@@ -57,8 +57,8 @@ uniform sampler2D blades_normal : hint_normal, filter_linear_mipmap, repeat_disa
 // metres it shows: mown 0 to 3, mown from above 4 to 7, long 8 to 11, wet 12
 // to 15, the bands 16 to 19 (mown, long, wet, trampled). meadow.gd reads them
 // from alps_meadow.json.
-uniform vec4 cells[20];
-uniform vec2 cell_size[20];
+uniform vec4 cells[24];
+uniform vec4 cell_size[24];
 // The colour each grass is seen as from afar: that of the ground under it,
 // green_seen and straw_seen of shaders/alps_ground.gdshader, which meadow.gd
 // takes from the level's ground. Wet grass has no ground of its own.
@@ -68,7 +68,7 @@ uniform vec3 wet_seen : source_color = vec3(0.45, 0.4, 0.25);
 // What the pictures of each kind this ring shows are on average, linear
 // (meadow.gd reads it from the sheet): a tuft is the colour of its picture
 // times what it is seen as over this.
-uniform vec3 kind_mean[3];
+uniform vec4 kind_mean[3];
 uniform vec3 straw_tint : source_color = vec3(0.86, 0.72, 0.42);
 uniform float cut_near : hint_range(0.0, 1.0) = 0.42;
 uniform float cut_far : hint_range(0.0, 1.0) = 0.2;
@@ -82,11 +82,17 @@ varying flat vec3 tint;
 varying float up_card;
 varying float straw;
 varying float sky;
+// What the sun is taken times where the plant stands, for a cloud there.
+varying float sunned;
 varying float shade;
 // The strip of the floor it grows on, as the ground has it: how lately it
 // was mown.
 varying float mown;
 varying float on_floor;
+
+// Under a drifting cloud the sun is kept off further away too, as the
+// ground has it (scripts/cloud.gd).
+#include "cloud_shadow.gdshaderinc"
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -151,7 +157,7 @@ void vertex() {
 		float wet_here = wet + (fbm(at * 0.22 + 31.0) - 0.47) * 0.75 + (hash(square + 91.7) - 0.5) * 0.25;
 		float long_here = long_grass + (fbm(at * 0.27 + 77.0) - 0.47) * 0.75 + (hash(square + 13.9) - 0.5) * 0.25;
 		kind = wet_here > 0.5 ? 2 : (long_here > 0.5 ? 1 : 0);
-		tint = (kind == 0 ? mown_seen : (kind == 1 ? long_seen : wet_seen)) / max(kind_mean[kind], vec3(0.005));
+		tint = (kind == 0 ? mown_seen : (kind == 1 ? long_seen : wet_seen)) / max(kind_mean[kind].rgb, vec3(0.005));
 		// Long grass thins out where the meadow ends: a tuft is a smaller share
 		// of a full one there.
 		float kept_share = kind == 0 ? keep.x : (kind == 1 ? keep.y : keep.z);
@@ -160,7 +166,8 @@ void vertex() {
 		float bare = smoothstep(0.25, 0.75, trodden + (fbm(at * 0.9) - 0.5) * 0.6);
 		// Strictly less: this far from the origin the dice come out at exactly
 		// nought now and then, and a share of nought should keep none.
-		if (d4 * 0.9 + 0.05 <= meadow && hash(square + 33.3) < kept_share * (1.0 - smoothstep(0.15, 0.45, bare))) {
+		// Nor on the water at the bottom of the deepest ditches.
+		if (d4 * 0.9 + 0.05 <= meadow && wet <= 0.9 && hash(square + 33.3) < kept_share * (1.0 - smoothstep(0.15, 0.45, bare))) {
 			// The cards of a tuft each show another of the four pictures of its
 			// kind; from afar one card shows the band of it. The card that lies
 			// in the grass shows the mown meadow from above, and is only there.
@@ -183,7 +190,7 @@ void vertex() {
 				cell = 4 + variant;
 			}
 			vec4 rect = cells[cell];
-			vec2 metres = cell_size[cell];
+			vec2 metres = cell_size[cell].xy;
 			float size = mix(0.75, 1.2, d4) * mix(1.0, 0.55, trodden);
 			// Where the meadow peters out the grass is lower.
 			size *= mix(0.6, 1.0, smoothstep(0.2, 0.7, meadow));
@@ -204,6 +211,7 @@ void vertex() {
 			}
 			straw = smoothstep(0.85, 1.0, hash(square + 7.7)) * 0.35 + smoothstep(0.5, 0.0, meadow) * 0.3;
 			sky = map.g;
+			sunned = cloud_light(at, length(off));
 			shade = mix(0.88, 1.1, hash(square + 61.1));
 			on_floor = 1.0 - smoothstep(100.0, 140.0, ground);
 			float across_strips = (at.x + (fbm(at * 0.0025) - 0.5) * 70.0) / 31.0;
@@ -259,7 +267,9 @@ void fragment() {
 		colour *= mix(1.0, mix(0.84, 1.12, mown), on_floor);
 		colour = mix(colour, colour * vec3(1.12, 1.03, 0.72), smoothstep(0.72, 0.85, mown) * on_floor * 0.7);
 	}
-	colour *= COLOR.b * shade;
+	// Most of what lights a tuft is the low sun: under a cloud the tuft is
+	// darker by that much.
+	colour *= COLOR.b * shade * mix(1.0, sunned, 0.75);
 	// A band for afar is dense, and was rendered dark at its foot; from afar
 	// its foot is as light as the ground it stands in.
 	if (far_cells) {

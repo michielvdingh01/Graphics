@@ -26,6 +26,9 @@ extends Node3D
 const LAYERS := [
 	{
 		"material": "res://materials/alps_grass.tres",
+		# Its tufts of three cards have a fourth lying in them, for what is
+		# seen from above.
+		"lying": true,
 		"sheet": "res://assets/foliage/alps_meadow.json",
 		"cells": ["mown0", "mown1", "mown2", "mown3", "top0", "top1", "top2", "top3", "long0", "long1", "long2", "long3", "wet0", "wet1", "wet2", "wet3", "far0", "far1", "far2", "far3"],
 		# Which pictures each kind is drawn with, up close and from afar, to
@@ -68,6 +71,7 @@ const LAYERS := [
 	},
 	{
 		"material": "res://materials/alps_floor.tres",
+		"lying": true,
 		"sheet": "res://assets/foliage/alps_floor.json",
 		"cells": ["bilberry0", "bilberry1", "bilberry2", "bilberry3", "fern0", "fern1", "fern2", "fern3", "seedling0", "seedling1", "seedling2", "seedling3", "moss0", "moss1", "sorrel0", "sorrel1", "moss_top0", "moss_top1", "sorrel_top0", "sorrel_top1"],
 		"rings": [
@@ -130,7 +134,7 @@ func _ready() -> void:
 		var ground := (maps.land_a as Resource).resource_path.replace("_land_a.", "_ground_look.")
 		if ResourceLoader.exists(ground):
 			var ground_look := load(ground) as ShaderMaterial
-			for seen: Array in [["green_seen", "mown_seen"], ["straw_seen", "long_seen"]]:
+			for seen: Array in [["green_seen", "mown_seen"], ["straw_seen", "long_seen"], ["wet_seen", "wet_seen"]]:
 				var colour: Variant = ground_look.get_shader_parameter(seen[0]) if ground_look else null
 				# A colour the level left as the ground shader has it.
 				if colour == null and ground_look and ground_look.shader:
@@ -149,13 +153,16 @@ func _ready() -> void:
 func _layer(layer: Dictionary, maps: Dictionary) -> void:
 	var look_of := load(layer.material) as ShaderMaterial
 	var sheet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(layer.sheet))
-	var cells := PackedColorArray()
-	var sizes := PackedVector2Array()
+	# As vectors and not as colours: a colour handed to a shader is made
+	# linear on the way, and every picture was then read from the wrong place
+	# on its sheet, at the wrong size.
+	var cells := PackedVector4Array()
+	var sizes := PackedVector4Array()
 	for cell: String in layer.cells:
 		var uv: Array = sheet.cells[cell].uv
 		var size: Array = sheet.cells[cell].size
-		cells.append(Color(uv[0], uv[1], uv[2], uv[3]))
-		sizes.append(Vector2(size[0], size[1]))
+		cells.append(Vector4(uv[0], uv[1], uv[2], uv[3]))
+		sizes.append(Vector4(size[0], size[1], 0.0, 0.0))
 	var inside := 0.0
 	var rings: Array = layer.rings
 	for ring: Array in rings:
@@ -165,7 +172,7 @@ func _layer(layer: Dictionary, maps: Dictionary) -> void:
 		var across := per_tile * TILES
 		var multi := MultiMesh.new()
 		multi.transform_format = MultiMesh.TRANSFORM_3D
-		multi.mesh = _tuft(ring[2])
+		multi.mesh = _tuft(ring[2], layer.get("lying", false))
 		multi.instance_count = per_tile * per_tile
 		# The tufts take where they stand from the tile, which is where the
 		# instance stands.
@@ -186,13 +193,14 @@ func _layer(layer: Dictionary, maps: Dictionary) -> void:
 		for parameter: String in told:
 			material.set_shader_parameter(parameter, told[parameter])
 		if layer.has("kinds"):
-			var means := PackedVector3Array()
+			var means := PackedVector4Array()
 			for pictures: Array in (layer.far_kinds if told.get("far_cells", false) else layer.kinds):
 				var sum := Vector3.ZERO
 				for index: int in pictures:
 					var mean: Array = sheet.cells[layer.cells[index]].get("mean", [0.1, 0.1, 0.1])
 					sum += Vector3(mean[0], mean[1], mean[2])
-				means.append(sum / pictures.size())
+				var mean_of := sum / pictures.size()
+				means.append(Vector4(mean_of.x, mean_of.y, mean_of.z, 0.0))
 			material.set_shader_parameter("kind_mean", means)
 			for parameter: String in _seen:
 				material.set_shader_parameter(parameter, _seen[parameter])
@@ -261,12 +269,12 @@ func _height_at(x: float, z: float) -> float:
 
 
 ## One tuft: so many cards through each other, each a unit wide and high,
-## its foot at the origin, and with three of them one that lies in the grass
-## at a third of its height, for the meadow seen from above. The vertex
+## its foot at the origin, and with three of them, if `lying`, one that lies
+## in the grass at a third of its height, for the meadow seen from above. The vertex
 ## colour says what the shader takes it to say: red how far a corner bends in
 ## the wind, blue how much light gets to it. UV2.x is which card it is, so
 ## that each shows another picture, and UV2.y is 1 on the one that lies.
-func _tuft(cards: int) -> ArrayMesh:
+func _tuft(cards: int, lying: bool) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var dice := RandomNumberGenerator.new()
@@ -289,7 +297,7 @@ func _tuft(cards: int) -> ArrayMesh:
 			st.set_uv(uvs[corner])
 			st.set_uv2(Vector2(card, 0.0))
 			st.add_vertex(corners[corner])
-	if cards == 3:
+	if cards == 3 and lying:
 		# Up on its picture is north.
 		var corners: Array[Vector3] = [Vector3(-0.5, 0.35, 0.5), Vector3(0.5, 0.35, 0.5), Vector3(0.5, 0.35, -0.5), Vector3(-0.5, 0.35, -0.5)]
 		var uvs: Array[Vector2] = [Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(1.0, 0.0), Vector2(0.0, 0.0)]

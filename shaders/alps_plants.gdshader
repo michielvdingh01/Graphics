@@ -46,7 +46,7 @@ uniform sampler2D plants_normal : hint_normal, filter_linear_mipmap, repeat_disa
 // Where on the sheet every picture is and how many metres it shows, as
 // meadow.gd reads them from the sheet's json, in the order of its CELLS.
 uniform vec4 cells[24];
-uniform vec2 cell_size[24];
+uniform vec4 cell_size[24];
 uniform float cut_near : hint_range(0.0, 1.0) = 0.4;
 uniform float cut_far : hint_range(0.0, 1.0) = 0.25;
 uniform vec2 wind = vec2(0.6, 0.8);
@@ -54,7 +54,13 @@ uniform float sway = 0.06;
 uniform float through : hint_range(0.0, 1.0) = 0.3;
 
 varying float sky;
+// What the sun is taken times where the plant stands, for a cloud there.
+varying float sunned;
 varying float shade;
+
+// Under a drifting cloud the sun is kept off further away too, as the
+// ground has it (scripts/cloud.gd).
+#include "cloud_shadow.gdshaderinc"
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -84,12 +90,15 @@ void pick(vec2 at, vec2 square, vec4 map, vec4 lie, float meadow, float steep, f
 		bool tall = !wet && long_here > 0.5;
 		float drift = smoothstep(0.52, 0.62, fbm(at * 0.045 + 5.0));
 		float clump = smoothstep(0.5, 0.6, fbm(at * 0.2 + 13.0));
-		// Nettles by the barns and in the camps, not on the verge of a road.
-		float nettles = max(smoothstep(0.35, 0.7, lie.b) * (1.0 - verge), lie.a * 0.4) * clump;
-		// The chances add up: each kind takes the next stretch of the dice.
-		float p1 = nettles * 0.7 * more;
-		// Bare earth, as the ground has it: only nettles stand at its rim.
+		// Bare earth, as the ground has it.
 		float bare = smoothstep(0.25, 0.75, lie.b + (fbm(at * 0.9) - 0.5) * 0.6);
+		// Nettles in clumps at the rim of the bare earth by barns and in the
+		// camps, not on the verge of a road; the odd one at the edge of the
+		// wood.
+		float rim = smoothstep(0.1, 0.35, bare) * (1.0 - smoothstep(0.5, 0.8, bare));
+		float nettles = max(rim * (1.0 - verge), lie.a * 0.4) * clump;
+		// The chances add up: each kind takes the next stretch of the dice.
+		float p1 = nettles * 0.4 * more;
 		if (r < p1) {
 			cell = 12 + int(v * 4.0);
 		} else if (wet || bare > 0.3) {
@@ -207,13 +216,14 @@ void vertex() {
 		}
 		if (cell >= 0) {
 			vec4 rect = cells[cell];
-			vec2 metres = cell_size[cell];
+			vec2 metres = cell_size[cell].xy;
 			float size = mix(0.8, 1.2, d4);
 			if (last_ring) {
 				size *= 1.0 - smoothstep(reach * 0.75, reach, ring);
 			}
 			vec2 scale = metres * grown * size;
 			sky = map.g;
+			sunned = cloud_light(at, length(off));
 			shade = mix(0.85, 1.12, hash(square + 61.1));
 			float turn = facing_eye ? atan(off.x, off.y) : d1 * 6.2831853;
 			mat3 spin = mat3(vec3(cos(turn), 0.0, -sin(turn)), vec3(0.0, 1.0, 0.0), vec3(sin(turn), 0.0, cos(turn)));
@@ -224,8 +234,12 @@ void vertex() {
 			float narrow = lying ? smoothstep(0.15, 0.4, down) : (facing_eye ? 1.0 : smoothstep(0.2, 0.5, across) * (1.0 - smoothstep(0.6, 0.85, down)));
 			float close = smoothstep(0.3, 0.9, length(off));
 			vec3 local = spin * (corner * vec3(scale.x * narrow, lying ? 0.2 * scale.x : scale.y * close, scale.x * narrow) * close);
-			vec3 world = vec3(at.x, ground - 0.03 * scale.y, at.y) + local;
-			world.y += dot(slope, local.xz);
+			// A small plant leans with the slope where it meets it; a shrub is
+			// too wide for that (a step in the ground would shear it into
+			// streaks), and sinks as far as the ground falls away under it.
+			float shear = 1.0 - smoothstep(0.6, 1.5, scale.x);
+			vec3 world = vec3(at.x, ground - 0.03 * scale.y - min(steep, 1.0) * scale.x * 0.3 * (1.0 - shear), at.y) + local;
+			world.y += dot(slope, local.xz) * shear;
 			vec2 downwind = normalize(wind);
 			float gust = 0.5 + 0.5 * sin(dot(world.xz, downwind) * 0.19 - TIME * 1.3 + sin(world.x * 0.07 + TIME * 0.21) * 2.0);
 			vec2 shiver = vec2(sin(TIME * 2.7 + d2 * 6.283), cos(TIME * 2.1 + d2 * 10.7)) * 0.3;
@@ -244,7 +258,7 @@ void vertex() {
 void fragment() {
 	vec4 leaf = texture(plants_tex, UV);
 	float depth = -VERTEX.z;
-	vec3 colour = leaf.rgb * COLOR.b * shade;
+	vec3 colour = leaf.rgb * COLOR.b * shade * mix(1.0, sunned, 0.75);
 	ALBEDO = colour;
 	ALPHA = leaf.a;
 	ALPHA_SCISSOR_THRESHOLD = mix(cut_near, cut_far, smoothstep(5.0, 30.0, depth));
