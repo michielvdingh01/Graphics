@@ -93,7 +93,7 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(vehicle):
 		return
 	_idle += delta
-	if player.fires_from_the_wheel() and (Input.is_action_pressed("fire") or Input.is_action_pressed("ads")):
+	if player.fires_from_the_wheel() and (Input.is_action_pressed("fire") or Input.is_action_pressed("ads") or player.weapons.ads_blend > 0.0):
 		# Whoever is firing keeps the view where they hold it.
 		_idle = 0.0
 	_place(delta)
