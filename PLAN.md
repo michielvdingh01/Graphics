@@ -4389,7 +4389,14 @@ Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" u
 
 - **Het groen van de helper** (`db4a97e`, zie "De Alpen: gras, bloemen en bosgrond") is op Michiels woord samengevoegd (`eac0a5e`). De wei heeft de kleuren van dat gras (`green_seen`, `straw_seen`, `wet_seen`), en het gras leest ze van de grond; de kampen zijn grotendeels begroeid met een paar kale plekken, anders stonden ze vol brandnetels.
 - **De trunk erin** (`3cf99b5`): de muren langs de rand van het land en de Triumph van de motorsessie. Selftest, `tools/test_vehicles.sh --only=motorcycle` en `tools/nettest.sh --ride` geslaagd.
-- **De eindmeting en het eindblad wachten**: om 18:30 draaide Michiels eigen Godot en liep de laptop op de accu; de ronde die ik toen begon telt niet.
+- **De eindmeting** (19 oktober 18:52 tot 18:56, na de merge van het groen en de trunk, `dba5dde`): lader van 94 W, geen Godot op de GPU naast de mijne, load 2,3 tot 4,3 (een selftest van een andere sessie liep op de CPU). Twee rondes zoals Michiel speelt; per standpunt binnen 1,2 fps van elkaar.
+
+| Fps gemiddeld | Weg langs de helling | Kapel | Boerderij | Jagershut op de uitloper | Moos oost | Dal van 60 m | Pad over het terras | In het bos |
+|---|---|---|---|---|---|---|---|---|
+| Ronde 1 | 65,6 | 68,5 | 70,3 | 59,7 | 79,7 | 68,3 | 46,7 | 50,1 |
+| Ronde 2 | 66,8 | 68,7 | 70,4 | 59,8 | 80,0 | 68,5 | 46,8 | 50,2 |
+
+  Het oude land haalde op 18 oktober zo gespeeld: Moos 74,8, kapel 71,6, boerderij 76,8, hut in het bos 46,7, weiden 72,0, dal van boven 59,5. Het open land is een paar fps trager dan het lege oude land, met veel meer erop; het bos is even zwaar als toen. Het eindblad: `benchmark/sheets/alpen_beeld_voor_na.jpg`.
 
 **Wat ik niet kon beoordelen**
 
@@ -4398,6 +4405,12 @@ Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" u
 - Of de kleur van de wei en het stro klopt voor oktober; of de bleke strook langs de schuren goed is.
 - De route is nieuw en alleen door de selftest gelopen.
 
+**Nog open**
+
+- **Het bos is het zwaarst**: 46,8 fps op het pad over het terras, 50 erin (bomen 7 ms, hun schaduw 6 tot 9 ms). Voorgesteld als eigen klus: "Alpen: het bos sneller en lichter".
+- **De Zugspitzewand** ligt net buiten de middenkaart van 10 km en is daardoor gladder dan de rest; uitbreiden vraagt ~20 MB hoogtes en ~2 MB luchtfoto (gevraagd, nog geen antwoord).
+- Bots nemen geen voertuig: in 90 s twintig tegen twintig komen ze niet bij elkaar (de kampen liggen 1170 m uit elkaar).
+
 **Werkwijze**
 
 | Wat | Hoe |
@@ -4405,7 +4418,7 @@ Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" u
 | De hoogtes van het Land Tirol halen (bewaard in `.cache/dgm`) | `tools/fetch_dgm.py` |
 | De luchtfoto halen | `tools/fetch_photos.py` |
 | Het level bouwen (70 s) | `tools/build_level.sh alps` |
-| Het voor-en-na-blad | `benchmark/sheets/alpen_beeld_voor_na_1.jpg` |
+| Het voor-en-na-blad | `benchmark/sheets/alpen_beeld_voor_na.jpg` |
 
 ## De Alpen: gras, bloemen en bosgrond
 
