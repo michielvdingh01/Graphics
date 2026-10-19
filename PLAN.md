@@ -4281,11 +4281,19 @@ Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal
 - **Gras** (`scripts/meadow.gd`, `shaders/alps_grass.gdshader`): drie ringen plukjes rond het oog tot 55 m, alleen op de weide, niet op weg of in bos.
 - **Wat mensen bouwden** (`tools/kit/alpine.gd`, gemaakt door de helper `alpen-dorp`; geplaatst in `valley.gd`): 81 hooischuren (11 op vaste plekken bij de gevechten, 70 verspreid over de weiden, met de stroken mee gedraaid), de kapel aan de weg met een kruisbeeld en twee esdoorns, de boerderij (een Einhof) met houtstapel, trog, hooiruiters en hekken, een marterl en een kruis bij de bocht, een lijn houten palen met draden langs de weg naar het oosten, en zes jagershutten: één bij de route, vijf hoog in de hoeken van het land die naar het midden van het dal kijken, langs een strook die het bos voor hun uitzicht openlaat, met een rotswand erachter, twee keien ervoor om achter te liggen, een omgevallen stam en de stronken van wat er gekapt is.
 - **De kampen** (`bases.gd`) in het westen (330, 905), in de schaduw aan de bosrand, en in het oosten (2880, 760) in de zon: elk twee jeeps, twee motorfietsen met zijspan, een vrachtwagen en een tank, een tent met een lamp, zandzakken, vaten, brandstof en kisten. Verspreid over het dal nog twee jeeps, een vrachtwagen en drie motorfietsen.
-- **De motorfiets met zijspan** (`tools/models/vehicles.gd`, `vehicles/motorcycle.tres`): een zware legermotor uit 1940 met een boxermotor en het zijspan rechts, dat meedrijft. Drie rijden mee: de bestuurder (zonder wapen in handen), één achterop en één in het zijspan; die laatste twee houden hun wapens en schieten. Twaalf CC0-opnamen van Freesound (de openbare previews, 13,4 MB, meer dan de ~8 MB die ik had genoemd) gesneden tot stationair, onder last, hoog toerental, starten (twee varianten) en afzetten.
+- **De motorfiets met zijspan** (`tools/models/vehicles.gd`, `vehicles/motorcycle.tres`): een zware legermotor uit 1940 met een boxermotor en het zijspan rechts, dat meedrijft. Drie rijden mee: de bestuurder, één achterop en één in het zijspan; alle drie schieten. Twaalf CC0-opnamen van Freesound (de openbare previews, 13,4 MB, meer dan de ~8 MB die ik had genoemd) gesneden tot stationair, onder last, hoog toerental, starten (twee varianten) en afzetten.
 - **Samen rijden** (`scripts/vehicle.gd`, `scripts/net.gd`). De host beslist wie waar zit en hoe versleten een voertuig is; de machine van wie stuurt rekent het voertuig door en vertelt de anderen 30 keer per seconde hoe het staat; zij volgen het met 0,1 s vertraging. Wie in een zijspan of op een stoel zit, rijdt mee met wie stuurt, ook als dat de gast is. `Net.VERSION` is 12.
 - **Als arena** (`assets/arenas.json`, `assets/match.json`): "huge", twintig per kant, de twee kampen als beginpunten. Bots zoeken de weg met `scripts/way.gd` (zonder de grens van 4096 veelhoeken van Godot) en zoeken een doel ver weg minder vaak opnieuw (tot eens per 4 s).
 - **Als route** (`route.gd`), alleen of samen: van het kamp in het westen langs de bosrand, de schuren van het Moos, de kapel, de boerderij, het marterl, de jagershut en de weiden onder Ehrwald naar het kamp in het oosten en de weg naar Ehrwald: acht gevechten, negen checkpoints, elk met een voertuig in de buurt. Na de duinen gaat de route verder in de Alpen (in het menu na Dunes).
 - **Het navmesh** in vierkanten van 128 m, elk een eigen regio, 53.925 veelhoeken; samengenaaid tot één mesh om te lezen, dat niet op de kaart staat.
+
+**Na Michiels eerste rit** (19 oktober 2026), op zijn woorden:
+
+- **Het geluid van de motorfiets.** Hij koos het startgeluid van de BMW-boxer op zijn starter (nu `motorcycle_start`, de kickstart is variant b) en, uit drie rijgeluiden, de Triumph Bonneville opgenomen tijdens het rijden (`motorcycle_idle`, `_low`, `_high`). De Harley-rit en een Royal Enfield Bullet vielen af. Vijf opnamen meer van Freesound (CC0, op zijn ja), 13 MB in plaats van de 9 die ik noemde.
+- **De motorfiets viel bijna om** bij een beetje sturen: voor- en achterwiel staan op één lijn en alleen het zijspan heeft een wiel opzij, zodat naar links alleen het zwaartepunt (38 cm opzij, 50 cm hoog) hem overeind hield. Nu houdt een veer om de lengteas hem tegen de grond onder zijn wielen recht (`steady` in `scripts/vehicle_data.gd`, 1,4 Hz; alleen voor wat het opgeeft), en ligt het zwaartepunt lager. Hard sturen vanaf 60 km/u: eerst 40 graden overhellen naar rechts, nu 5. Van 0 tot 60 km/u: 4,4 s, nu 3,1 (meer koppel). Getest in `tools/test_vehicles.sh --only=motorcycle`.
+- **Schieten op de motorfiets** zoals in de jeep (`driver_fires`).
+- **De zandzakpost van elk kamp** stond 18 m recht voor de rij voertuigen, dwars over de weg naar buiten: wie wegreed, reed ertegenaan (en de test van samen rijden soms ook). Nu staat hij naast de rij.
+- **Een eindeloos gat aan het eind van de map.** Buiten het land van 3200 bij 1792 m tekent het level de bergen, maar zonder grond eronder. Nu staat langs elke rand een wand die niemand ziet, 4 m binnen de rand en 60 m boven de hoogste grond van elk stuk (`_shut_in()` in `tools/levels/alps/plan.gd`), in een eigen lichaam dat geen dekking telt. En wie toch onder de wereld valt (60 m onder de laagste vloer van het navmesh), sterft en komt terug waar een dood hem neerzet (`_fall_out()` in `scripts/game.gd`, voor elk level).
 
 **De bomen** (helper `alpen-bomen`, `tools/models/trees.gd`, `tools/gen_sprigs.py`): fijnspar met kamtakken, lariks met naalden in rozetten, goud en oranje, latsche, bergahorn; elk takje gegroeid en in Blender gerenderd. Body tot 23 à 32 m, Mid tot 52 à 110 m, Far als kaart tot 1500 m, één schaduwmesh. Van ver een kaart van acht kanten met in de alfa hoeveel licht de naalden doorlaten.
 
@@ -4318,7 +4326,7 @@ Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal
 
 - **Gespeeld is het niet.** Hoe ver het rijden voelt, of de sluipschuttersposten goed liggen, of de gevechten van de route te zwaar of te licht zijn.
 - **De bergen zijn hoog, het speelveld niet.** Het land loopt in de hoeken maar 150 à 190 m op; de echte bergen liggen buiten het speelveld. De hutten in de hoeken zijn de hoogste plekken. Hoger schieten vraagt een groter land (meer navmesh, meer bouwtijd).
-- **De geluiden van de motorfiets** zijn gekozen op spectrogram en toonhoogte, niet op het oor.
+- **De geluiden van de motorfiets** zijn gekozen op spectrogram en luidheid; de overgang tussen rustig rijden en vol gas van de Triumph kan zweven, want de wind op de rit maakte het toerental lastig te meten.
 - **De kleur**: het goud van lariks en esdoorn, het groen van de wei in de schaduw, de stroken.
 - Hoe het licht verloopt als de wolken over de zon trekken (`scripts/cloud.gd`) heb ik alleen op losse beelden gezien.
 
@@ -4339,5 +4347,7 @@ Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal
 | De hoogtes opnieuw halen | `tools/fetch_map.py alps` |
 | De ruis van de grond | `Godot --headless --path . --script tools/gen_noise.gd` |
 | Samen rijden testen | `tools/nettest.sh --ride` |
+| De motorfiets: optrekken en hard sturen | `tools/test_vehicles.sh --only=motorcycle` |
+| Een rit horen | `tools/hear.py drive motorcycle` (`drive b` met de kickstart) |
 | Twintig tegen twintig, anderhalve minuut | `tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90` |
 | Wat het dal kost | `tools/benchmark.sh --scene=res://scenes/alps.tscn --at="1150,+60,700,-120,-14" --profile --only=landmesh,meadow,trees` |

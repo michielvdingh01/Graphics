@@ -149,6 +149,11 @@ var _breakables: Array[Node] = []
 var _robot_tick := 0.0
 var _watch_tick := 0.0
 var _wiped := false
+## How low somebody can be and still be in the level: well under the lowest
+## floor of its navmesh, worked out once that is there. Whoever falls below
+## it, off the edge of land that is drawn further than it goes, dies.
+var _world_floor := -INF
+const BELOW_THE_WORLD := 60.0
 ## True once the navmesh has been baked, see the signal `baked`, or once it
 ## is clear that this machine bakes none: a guest finds no ways itself.
 var is_baked := false
@@ -423,10 +428,30 @@ func _approach(zone: Zone) -> Vector3:
 func _physics_process(delta: float) -> void:
 	if _playing:
 		_stir(delta)
+		_fall_out()
 	if Net.active and not Net.is_guest():
 		_tell_robots(delta)
 		_check_exit()
 		_check_wipe()
+
+
+## The player who has fallen out of the level dies, and is back where a
+## death puts them.
+func _fall_out() -> void:
+	if _world_floor == -INF:
+		var corners := nav_region.navigation_mesh.get_vertices() if nav_region.navigation_mesh else PackedVector3Array()
+		if corners.is_empty():
+			return
+		var lowest := INF
+		for corner in corners:
+			lowest = minf(lowest, corner.y)
+		_world_floor = (nav_region.global_transform * Vector3(0, lowest, 0)).y - BELOW_THE_WORLD
+	if not player.dead and player.global_position.y < _world_floor:
+		if player.invulnerable:
+			# Who cannot die is put back at the start.
+			_put_player(start)
+		else:
+			player.take_damage(1e6)
 
 
 ## Has the watch of every zone that is near a player up and about, and lets

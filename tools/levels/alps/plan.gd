@@ -242,6 +242,52 @@ func _lie_of_the_land() -> void:
 		level_off(Rect2(camp - Vector2(45, 35), Vector2(90, 70)), NAN, 18.0)
 	_roads()
 	lay_ground("alps_ground")
+	_shut_in()
+
+
+## What keeps everybody on the land: beyond its edge the mountains are only
+## drawn, with nothing under them to stand on, and whoever went over it fell
+## for ever. A wall nobody sees along every edge, EDGE_IN metres inside it,
+## from under the lowest ground of each stretch to well over the highest:
+## higher than a motorcycle jumps.
+const EDGE_IN := 4.0
+const EDGE_THICK := 4.0
+const EDGE_STRETCH := 64.0
+const EDGE_OVER := 60.0
+
+
+func _shut_in() -> void:
+	# A body of its own, which nobody looks to for cover (Squad).
+	var edge := StaticBody3D.new()
+	edge.name = "Edge"
+	_add(edge, _root)
+	edge.add_to_group(&"no_cover", true)
+	_into = edge
+	var inner := _land.grow(-EDGE_IN)
+	var corners := [inner.position, Vector2(inner.end.x, inner.position.y), inner.end, Vector2(inner.position.x, inner.end.y)]
+	for side in 4:
+		var from: Vector2 = corners[side]
+		var to: Vector2 = corners[(side + 1) % 4]
+		var length := from.distance_to(to)
+		var along := (to - from) / length
+		var out := Vector2(along.y, -along.x)
+		var done := 0.0
+		while done < length:
+			var stretch := minf(EDGE_STRETCH, length - done)
+			var a := from + along * done
+			var b := from + along * (done + stretch)
+			var low := INF
+			var high := -INF
+			for i in 9:
+				var at := a.lerp(b, i / 8.0)
+				low = minf(low, ground_height(at.x, at.y))
+				high = maxf(high, ground_height(at.x, at.y))
+			var middle := (a + b) * 0.5 + out * EDGE_THICK * 0.5
+			var size := Vector3(EDGE_THICK, high - low + EDGE_OVER + 20.0, stretch + EDGE_THICK)
+			var turn := Basis(Vector3.UP, atan2(along.x, along.y))
+			_collide_box(Transform3D(turn, Vector3(middle.x, low - 20.0 + size.y * 0.5, middle.y)), size, "")
+			done += stretch
+	_into = null
 
 
 # --- The mesh of the land ---------------------------------------------------------

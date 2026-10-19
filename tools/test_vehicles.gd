@@ -9,8 +9,8 @@ extends SceneTree
 ## drives out of gate 2 through its barrier and its wire.
 ##
 ##   tools/test_vehicles.sh             all of it
-##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, hills,
-##                                      wear, run_over, dunes, gate, match
+##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, motorcycle,
+##                                      hills, wear, run_over, dunes, gate, match
 
 const LIMIT := 600.0
 ## Loaded once the game runs, not as this is read: the autoloads they name
@@ -46,7 +46,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--only="):
 			only = argument.trim_prefix("--only=")
-	for part: String in ["jeep", "truck", "tank", "hills", "wear", "run_over", "dunes", "gate", "match"]:
+	for part: String in ["jeep", "truck", "tank", "motorcycle", "hills", "wear", "run_over", "dunes", "gate", "match"]:
 		if only == "" or only == part:
 			print("-- ", part)
 			await call("_" + part)
@@ -232,6 +232,45 @@ func _drive_wheels(vehicle: RigidBody3D, title: String, top: float) -> void:
 	check(not vehicle.engine_on, "%s: the engine stops once the driver is out" % title)
 	await seconds(3.0)
 	check(vehicle.freeze, "%s: and it is frozen again once it stands still" % title)
+
+
+## The motorcycle with its sidecar: it pulls away briskly, and it stays on
+## its wheels when it is steered hard either way at speed, though it has no
+## wheel on its left. Its rider fires as he rides.
+func _motorcycle() -> void:
+	var bike := await _yard("motorcycle")
+	await _press("use")
+	check(player.riding == bike and player.seat == 0, "motorcycle: E puts the player on the saddle")
+	check(player.fires_from_the_wheel(), "motorcycle: the rider has his weapon in hand")
+	await seconds(bike.data.start_time + 0.3)
+	Input.action_press("move_forward")
+	var began := Time.get_ticks_msec()
+	var to_sixty := INF
+	for i in int(5.0 * Engine.physics_ticks_per_second):
+		await physics_frame
+		if bike.speed * 3.6 >= 60.0 and to_sixty == INF:
+			to_sixty = i / float(Engine.physics_ticks_per_second)
+			break
+	print("    motorcycle: 0 to 60 km/h in %.1f s" % to_sixty)
+	check(to_sixty < 4.0, "motorcycle: it is at 60 km/h within 4 s (%.1f s)" % to_sixty)
+	# Off the gas, steered hard one way and then the other, at the speed it
+	# has then; with the gas between, to keep it going.
+	for way: String in ["move_right", "move_left"]:
+		var lowest := 1.0
+		var at: float = bike.speed * 3.6
+		Input.action_release("move_forward")
+		Input.action_press(way)
+		for i in int(2.0 * Engine.physics_ticks_per_second):
+			await physics_frame
+			lowest = minf(lowest, bike.global_basis.y.y)
+		Input.action_release(way)
+		Input.action_press("move_forward")
+		await seconds(1.5)
+		var turned := "right" if way == "move_right" else "left"
+		print("    motorcycle: steered hard %s from %.0f km/h, it leaned to %.0f degrees at most" % [turned, at, rad_to_deg(acos(clampf(lowest, -1.0, 1.0)))])
+		check(lowest > cos(deg_to_rad(25.0)), "motorcycle: steered hard %s at speed it stays on its wheels" % turned)
+	Input.action_release("move_forward")
+	check(bike.global_basis.y.y > 0.9, "motorcycle: and stands upright after")
 
 
 func _jeep() -> void:
