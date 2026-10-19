@@ -4341,3 +4341,35 @@ Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal
 | Samen rijden testen | `tools/nettest.sh --ride` |
 | Twintig tegen twintig, anderhalve minuut | `tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90` |
 | Wat het dal kost | `tools/benchmark.sh --scene=res://scenes/alps.tscn --at="1150,+60,700,-120,-14" --profile --only=landmesh,meadow,trees` |
+
+## De Alpen: gras, bloemen en bosgrond
+
+Helper van `alpen-beeld`, branch `claude/alpen-planten-84f2e7`, 19 oktober 2026: al het kleine groen van de kleinere Alpenkaart, getekend rond het oog. Het land, de lucht, de grond, de bergen en waar schuren, bomen en kampen staan zijn van de hoofdsessie; de maps van het land lees ik alleen.
+
+**Het gras** (`scripts/meadow.gd`, `shaders/alps_grass.gdshader`, `materials/alps_grass.tres`)
+
+- **Drie soorten, halm voor halm gegroeid** in Blender (`tools/gen_plants.py`, `tools/gen_plants.sh alps_meadow`, anderhalve minuut): de gemaaide wei na de laatste snede, een hand hoog en rechtop, met klaver, weegbree en hier en daar een strogele punt; lang gras dat niemand maaide, tot de knie, in zaad (glanshaver, kropaar, timoteegras, witbol), veel stro en deels gelegerd; en nat gras van het Moos: een pol zegge, pitrus en pijpenstrootje dat goud is geworden. Vier plaatjes van elk van opzij, de gemaaide wei ook van boven, en van elke soort een band voor van ver (`assets/foliage/alps_meadow.png`, met `_n` voor hoe elke stip staat en `.json` voor waar elk plaatje zit).
+- **Vijf ringen tot 128 m** in plaats van drie tot 55: plukjes om de 0,2, 0,4, 0,8, 1,6 en 3,2 m. Dichtbij drie kaarten door elkaar en één die plat in het gras ligt (de wei van boven, voor wie omlaag kijkt), dan twee, en vanaf 32 m één die naar het oog draait met een band gras erop. De laatste ring zakt tussen 92 en 124 m de grond in.
+- **In tegels die het oog volgen.** Elke ring is zes bij zes tegels, en de middelste vier vallen weg waar de ring erbinnen al gras tekent. Een tegel is een `MultiMeshInstance3D` die zo hoog is als het land eronder, zodat Godot overslaat wat niet in beeld is. Het oude gras rekende elk plukje van het hele vierkant rond het oog door, ook achter je.
+- **Welke soort waar** leest de shader uit `land_c` (r lang, g nat, b vertrapt, a bosrand); steiler dan 25 graden wordt ook lang. Waar soorten in elkaar overgaan gebeurt dat in plekken van een paar meter, niet plukje om plukje. Zolang het level geen `land_c` heeft maakt `meadow.gd` er een vervanger bij (8 m per stip, 52 ms bij het laden): lang langs de bosrand, de bermen en in plekken ruis, nat in andere plekken.
+- **Een kaart die je op zijn kant ziet wordt smal**, en van schuin boven ook, anders zie je strepen; de platte kaart wordt smal als je er laag langs kijkt. Wat vlak bij het oog staat buigt weg.
+- Van ver heeft het gras het licht van de grond eronder (normaal recht omhoog, ruwheid 0,9, specular 0,08, AO uit `land_a.g`) en de stroken van de gemaaide bodem met dezelfde formule als `alps_ground.gdshader`. De kleur van ver, lineair: gemaaid ongeveer (0,048, 0,080, 0,024), lang (0,16, 0,14, 0,07), nat (0,20, 0,13, 0,04). Die heeft de hoofdsessie om de grond op te laten aansluiten.
+
+**Gemeten** op 19 oktober tussen 09:08 en 09:25, M1 Pro aan de lader, accu vol, load 1,7 tot 2,4, een andere sessie die ook op de GPU mat (het slot liet ons om de beurt), Michiel speelde niet. Om en om vanuit deze worktree en een kloon met het oude gras, drie rondes plus een profielronde, op zeven standpunten zoals Michiel speelt (3456×2160, MetalFX, kwaliteit 3, schaal vanzelf); de rondes lagen per standpunt binnen 0,4 fps van elkaar. "Gras" is wat `--profile --only=meadow` meet: het verschil tussen met en zonder.
+
+| | Moos, schaduw | Bosrand, schaduw | In het bos | Wei, zon, omlaag | Dal van 14 m | Wei, tegenlicht | Bosrand, zon |
+|---|---|---|---|---|---|---|---|
+| Fps, oud gras | 71,1 | 43,6 | 49,6 | 73,0 | 63,6 | 74,0 | 57,1 |
+| Fps, nieuw gras | 73,9 | 44,3 | 51,6 | 74,0 | 67,5 | 77,6 | 58,4 |
+| Gras, oud (ms) | 2,44 | 2,84 | 1,07 | 2,84 | 2,10 | 2,34 | 2,19 |
+| Gras, nieuw (ms) | 1,99 | 2,51 | 0,31 | 2,80 | 1,17 | 1,77 | 1,93 |
+
+- Standpunten (`--at`): `1150,+1.7,700,-90,-4`, `490,+1.7,165,0,-2`, `800,+1.7,189,0,-8`, `2300,+1.7,500,180,-35`, `1150,+14,700,-60,-9`, `2300,+1.7,500,135,-3`, `1180,+1.7,125,0,-3`, op het Alpenlevel zoals `alpen-beeld` het die ochtend had (het grote land van gisteren).
+- Het nieuwe gras is overal goedkoper dan het oude, 0,2 tot 0,9 ms per beeld, ondanks twee keer zo ver en veel dichter. Het duurst is omlaag kijken in de wei: 2,8 ms. Van de 3 ms die al het kleine groen mag kosten blijft in de wei dus weinig over voor bloemen; in het bos (0,3 ms gras) veel.
+- Het blad met voor en na: `benchmark/sheets/alps_gras_voor_na.jpg` (zes standpunten, zoals Michiel speelt).
+
+**Wat ik niet kon beoordelen**
+
+- **Op het nieuwe land** heb ik het niet gezien: het staat op het land van gisteren, met de oude grond eronder. Die grond is onder het gras donkerbruin; tussen de plukjes zie je dat. Met de grond in de kleur van het gras hierboven wordt de wei één geheel.
+- **`land_c` is nog een vervanger.** Langs de bosrand in de schaduw lijkt het lange gras van 16 tot 32 m op donkere blokken (de band voor van ver); waar het echt staat, hangt van de echte kaart af.
+- Hoe het beweegt in de wind en hoe het golft als je loopt heb ik alleen op stilstaande beelden gezien.

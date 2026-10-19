@@ -675,6 +675,7 @@
 		{"id": "tank_load", "type": "sound", "source": "freesound_vehicles", "license": "CC0", "files": "418882_*.mp3", "drive": 1.5, "layers": [{"source": "mechanical", "files": "clank1.wav", "lowpass": 1500, "pitch": 0.75, "gain": -2, "delay": 180}], "use": "the next shell going into the breech, and the breech shutting on it"},
 		{"id": "blood_1", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood", "size": [256, 256], "seed": 121, "use": "blood on the floor or the wall behind somebody who is shot"},
 		{"id": "blood_2", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood", "size": [256, 256], "seed": 122, "use": "blood on the floor or the wall behind somebody who is shot"},
-		{"id": "blood_pool", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood_pool", "size": [512, 512], "seed": 123, "use": "blood that runs out from under a body"}
+		{"id": "blood_pool", "type": "decal", "source": "procedural", "generator": "tools/gen_decals.gd", "kind": "blood_pool", "size": [512, 512], "seed": 123, "use": "blood that runs out from under a body"},
+		{"id": "alps_meadow", "type": "foliage", "source": "rendered", "generator": "tools/gen_plants.py", "sheet": "meadow", "seed": 5, "samples": 48, "use": "Alps: the grass of the meadows in October, grown blade by blade and rendered: mown, long and wet, four of each, and the three as bands for afar, with alps_meadow_n for which way they face; drawn round the eye by scripts/meadow.gd"}
 	]
 }
