@@ -4387,9 +4387,13 @@ Op 19 oktober 2026 vond Michiel de Alpenkaart van de dag ervoor er "old skool" u
 - **Water in de sloten**: op de bodem van de diepste sloten (waar `land_c.g` bijna 1 is) is de grond donker en glad, zodat hij de lucht spiegelt. Een smalle streep, geen eigen oppervlak.
 - **De eerste keer zien**: de eerste blik op Ehrwald maakt 14 tekenpijplijnen, op Lermoos 4 (de huizen en wat er nog meer staat). Op deze Mac stonden ze al in de cache (slechtste beeld 12,8 ms); op een schone machine kan dat de eerste keer haperen. Niet aan `Fx.rehearse()` gegeven.
 
+- **Het groen van de helper** (`db4a97e`, zie "De Alpen: gras, bloemen en bosgrond") is op Michiels woord samengevoegd (`eac0a5e`). De wei heeft de kleuren van dat gras (`green_seen`, `straw_seen`, `wet_seen`), en het gras leest ze van de grond; de kampen zijn grotendeels begroeid met een paar kale plekken, anders stonden ze vol brandnetels.
+- **De trunk erin** (`3cf99b5`): de muren langs de rand van het land en de Triumph van de motorsessie. Selftest, `tools/test_vehicles.sh --only=motorcycle` en `tools/nettest.sh --ride` geslaagd.
+- **De eindmeting en het eindblad wachten**: om 18:30 draaide Michiels eigen Godot en liep de laptop op de accu; de ronde die ik toen begon telt niet.
+
 **Wat ik niet kon beoordelen**
 
-- **Gespeeld is het niet**, en het gras dichtbij is nog het oude (de helper).
+- **Gespeeld is het niet.**
 - Hoe de wolkschaduwen bewegen en hoe snel het oog zich aanpast: alleen op stilstaande beelden gezien.
 - Of de kleur van de wei en het stro klopt voor oktober; of de bleke strook langs de schuren goed is.
 - De route is nieuw en alleen door de selftest gelopen.
