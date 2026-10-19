@@ -48,6 +48,7 @@ uniform vec4 sun_rect = vec4(0.0);
 uniform vec2 shadow_hand_over = vec2(200.0, 280.0);
 
 #include "tree_lod.gdshaderinc"
+#include "cloud_shadow.gdshaderinc"
 
 varying vec3 own;
 varying float lets;
@@ -86,6 +87,7 @@ void vertex() {
 	if (sun_rect.z > 0.0) {
 		float lit = textureLod(sun_map, (foot.xz - sun_rect.xy) * sun_rect.zw, 0.0).r;
 		sun_seen = mix(1.0, lit, smoothstep(shadow_hand_over.x, shadow_hand_over.y, distance(foot, eye_at)));
+		sun_seen *= cloud_light(foot.xz, distance(foot, eye_at));
 	}
 }
 

@@ -393,7 +393,7 @@ const GROUND := preload("res://tools/levels/alps/ground.gd")
 ## three meshes: every how many-th height each takes, and from how far to
 ## how far off it is drawn, in metres.
 const BLOCK := 128
-const LAND_LODS := [[1, 0.0, 180.0], [2, 180.0, 450.0], [4, 450.0, 1000.0], [16, 1000.0, 0.0]]
+const LAND_LODS := [[1, 0.0, 50.0], [2, 50.0, 150.0], [4, 150.0, 500.0], [16, 500.0, 0.0]]
 
 ## The meshes of the land and of what lies round it, made by this file and
 ## vista.gd. They go into a scene of their own when everything stands, see
@@ -426,6 +426,7 @@ func ground_look() -> ShaderMaterial:
 	if _look == null:
 		_look = (load("res://materials/alps_ground.tres") as ShaderMaterial).duplicate()
 		_look.set_shader_parameter("sea", SEA)
+		_look.set_shader_parameter("sunward", _sunward)
 	if not _far_maps.is_empty():
 		_look.set_shader_parameter("far_a", _far_maps[0])
 		_look.set_shader_parameter("far_b", _far_maps[1])
