@@ -428,8 +428,10 @@ func _host_ride() -> void:
 	_check("and gets into the sidecar", await _until(func() -> bool: return bike.occupants[1] == puppet, 40.0))
 	_check("where it sits, with the motorcycle", await _until(func() -> bool: return puppet.riding == bike and puppet.global_position.distance_to(bike.seat_frame(1).origin) < 1.2, 5.0))
 	var from := bike.global_position
+	# Not so far that it leaves the open ground of the camp: beyond it stand
+	# the trees of a hedge, and the guest rides on from wherever it stops.
 	Input.action_press("move_forward")
-	await _wait(4.0)
+	await _wait(2.5)
 	Input.action_release("move_forward")
 	print("  the motorcycle went %.1f m, at %.1f m/s at the end" % [bike.global_position.distance_to(from), bike.speed])
 	_check("rides off with the guest in the sidecar", bike.global_position.distance_to(from) > 8.0 and bike.occupants[1] == puppet)

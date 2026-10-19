@@ -42,7 +42,9 @@ func _camp(at: Vector2, facing: float) -> void:
 	tent(camp_tent, facing + 90.0)
 	# A bulb under the ridge of the tent, for the evening.
 	bulb(ground(camp_tent.x, camp_tent.y, 2.5), false)
-	sandbag_post(at + ahead * 18.0 + across * 2.0, facing + 180.0)
+	# The post keeps watch beside the way out, not across it: the vehicles
+	# drive straight off from their row.
+	sandbag_post(at + ahead * 18.0 + across * -24.0, facing + 180.0)
 	# What a camp keeps by its vehicles: fuel in drums and cans, and crates
 	# of what it eats and shoots.
 	var store := at - ahead * 22.0 + across * 14.0

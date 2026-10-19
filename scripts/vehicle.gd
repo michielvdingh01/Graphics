@@ -997,6 +997,17 @@ func _drive(delta: float) -> void:
 		return
 	var yaw := angular_velocity.dot(up)
 	var heft := _inertia()
+	if data.steady > 0.0:
+		# Held upright across its length, against the ground its wheels are
+		# on: a spring round its long axis, damped, as a rider holds it.
+		var ground := Vector3.ZERO
+		for wheel in _wheels:
+			if wheel.touching:
+				ground += wheel.normal
+		var lean := ahead.dot(up.cross(ground.normalized()))
+		var rolling_by := angular_velocity.dot(ahead)
+		var spring := TAU * data.steady
+		apply_torque(ahead * heft.z * (lean * spring * spring - rolling_by * 1.6 * spring))
 	if data.tracked:
 		# The tracks driven apart turn it: as fast as asked at a standstill,
 		# less so at speed, and the other way round going backwards, as a
