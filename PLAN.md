@@ -4266,3 +4266,88 @@ De eindstand (19:42 tot 19:47, load 4 tot 6, niemand anders op de GPU): twee ron
 | De schoten met demper horen | `tools/hear.py rifle_sd_shot 620`, `rifle_sd_shot_b 620`, `rifle_sd_shot_c 620`, `pistol_sd_shot`, `shotgun_sd_shot`, `smg_sd_shot 900`, `marksman_sd_shot` |
 | De nacht horen | `tools/hear.py ambience dunes_night --in=yard` |
 | Een nieuwe lamp voor de nacht | `night_bulb()`, `night_beam()`, `storm_lantern()`, `hanging_bulb()` of `searchlight()` in de kit; alleen in een level met `_by_night` |
+
+## De Alpen: het Ehrwalder Becken
+
+Op 18 oktober 2026 gevraagd: een erg grote map in de Oostenrijkse Alpen, een dal tussen twee hoge bergen met sneeuwtoppen, zo groot dat je een voertuig zoekt; jeeps en vrachtwagens, op twee plekken een tank, motorfietsen met zijspan uit de Tweede Wereldoorlog waarin een vriend zit en met zijn eigen wapens schiet; veel beschutting van bomen en struiken tegen sluipschutters op de hellingen; een grafisch meesterwerk, eind van de middag, half bewolkt, aan één kant van het dal nog zon. Branch `alpen`, vanaf de trunk `3c202c2`. Michiel koos vooraf: het echte **Ehrwalder Becken** uit hoogtegegevens, **vroege herfst**, **alle downloads** van de lijst, en **samen spelen in deze klus**. De rest is mijn keuze: dat het een arena is voor wedstrijden (twintig tegen twintig, "huge") én een route om samen te lopen, de kampen aan de twee einden, de stand van de zon, waar de hutten staan, de schuren en de gevechten.
+
+**Wat er staat**
+
+- **Het land** (`tools/levels/alps/plan.gd`, `dem.gd`). 3200 bij 1792 m over het Moos, uit de AWS Terrain Tiles (voor Oostenrijk het 10 m-model van data.gv.at, CC BY), bicubisch op 2 m. Daaromheen drie ringen echte bergen tot 11,5 km (`vista.gd`): Zugspitze, Wetterstein, Daniel en Grubigstein staan waar ze staan. Het land is gedeelde vlakke roosters die een shader optilt naar de hoogtekaart (128 m-blokken, drie fijnheden, met een rok tegen gaten).
+- **Licht.** De lucht is `table_mountain_2_puresky` (Poly Haven, 8k), 4,3 graden gekanteld zodat zijn zon op 11,5 graden staat in het zuidwesten (230 graden). Daardoor ligt bijna de helft van het land in de schaduw van de bergen, de westkant van het dal; het oosten, de weiden onder Ehrwald, heeft nog zon. Voorbij de 200 à 280 m waar de schaduw van de zon reikt, leest de grond (en nu ook een boom van ver) uit een gebakken kaart waar de bergen de zon afhouden. Een tweede kaart zegt hoeveel lucht een plek ziet.
+- **Wat waar ligt** (`lie_of()`): weide op de bodem en de zachte hellingen, sparrenbos tot de boomgrens (1720 m, golvend), latsche erboven, rots waar het steil is, puin eronder, verse sneeuw vanaf 2000 m en hoger op de zonkant. De bodem van het bekken is in stroken van noord naar zuid gemaaid, elke strook een tikje anders van kleur, ook in het gras.
+- **Wegen** (`ROADS`): een grindweg van kamp naar kamp en verder naar Ehrwald, een karrenspoor over het Moos vanuit het zuiden, een spoor de helling op naar de jagershut. Twee sporen met gras ertussen, de berm vertrapt.
+- **Het bos.** 11.307 bomen (`woods()`), getekend als MultiMeshes per 64 m (`scripts/grove.gd`): fijnspar (oud, half, jong), lariks (goud), latsche boven de boomgrens. Op de bodem van het dal 3678 meer als dekking (`tools/levels/alps/valley.gd`): houtwallen van latsche, jonge spar, lariks en bergahorn langs de sloten van het Moos, 55 bosjes, en 88 bomen alleen; 30 zwerfkeien en 14 omgevallen stammen aan de bosranden. De bomen zijn gemaakt door de helper `alpen-bomen`; zie hieronder.
+- **Gras** (`scripts/meadow.gd`, `shaders/alps_grass.gdshader`): drie ringen plukjes rond het oog tot 55 m, alleen op de weide, niet op weg of in bos.
+- **Wat mensen bouwden** (`tools/kit/alpine.gd`, gemaakt door de helper `alpen-dorp`; geplaatst in `valley.gd`): 81 hooischuren (11 op vaste plekken bij de gevechten, 70 verspreid over de weiden, met de stroken mee gedraaid), de kapel aan de weg met een kruisbeeld en twee esdoorns, de boerderij (een Einhof) met houtstapel, trog, hooiruiters en hekken, een marterl en een kruis bij de bocht, een lijn houten palen met draden langs de weg naar het oosten, en zes jagershutten: één bij de route, vijf hoog in de hoeken van het land die naar het midden van het dal kijken, langs een strook die het bos voor hun uitzicht openlaat, met een rotswand erachter, twee keien ervoor om achter te liggen, een omgevallen stam en de stronken van wat er gekapt is.
+- **De kampen** (`bases.gd`) in het westen (330, 905), in de schaduw aan de bosrand, en in het oosten (2880, 760) in de zon: elk twee jeeps, twee motorfietsen met zijspan, een vrachtwagen en een tank, een tent met een lamp, zandzakken, vaten, brandstof en kisten. Verspreid over het dal nog twee jeeps, een vrachtwagen en drie motorfietsen.
+- **De motorfiets met zijspan** (`tools/models/vehicles.gd`, `vehicles/motorcycle.tres`): een zware legermotor uit 1940 met een boxermotor en het zijspan rechts, dat meedrijft. Drie rijden mee: de bestuurder, één achterop en één in het zijspan; alle drie schieten. Twaalf CC0-opnamen van Freesound (de openbare previews, 13,4 MB, meer dan de ~8 MB die ik had genoemd) gesneden tot stationair, onder last, hoog toerental, starten (twee varianten) en afzetten.
+- **Samen rijden** (`scripts/vehicle.gd`, `scripts/net.gd`). De host beslist wie waar zit en hoe versleten een voertuig is; de machine van wie stuurt rekent het voertuig door en vertelt de anderen 30 keer per seconde hoe het staat; zij volgen het met 0,1 s vertraging. Wie in een zijspan of op een stoel zit, rijdt mee met wie stuurt, ook als dat de gast is. `Net.VERSION` is 12.
+- **Als arena** (`assets/arenas.json`, `assets/match.json`): "huge", twintig per kant, de twee kampen als beginpunten. Bots zoeken de weg met `scripts/way.gd` (zonder de grens van 4096 veelhoeken van Godot) en zoeken een doel ver weg minder vaak opnieuw (tot eens per 4 s).
+- **Als route** (`route.gd`), alleen of samen: van het kamp in het westen langs de bosrand, de schuren van het Moos, de kapel, de boerderij, het marterl, de jagershut en de weiden onder Ehrwald naar het kamp in het oosten en de weg naar Ehrwald: acht gevechten, negen checkpoints, elk met een voertuig in de buurt. Na de duinen gaat de route verder in de Alpen (in het menu na Dunes).
+- **Het navmesh** in vierkanten van 128 m, elk een eigen regio, 53.925 veelhoeken; samengenaaid tot één mesh om te lezen, dat niet op de kaart staat.
+
+**Na Michiels eerste rit** (19 oktober 2026), op zijn woorden:
+
+- **Het geluid van de motorfiets.** Hij koos het startgeluid van de BMW-boxer op zijn starter (nu `motorcycle_start`, de kickstart is variant b) en, uit drie rijgeluiden, de Triumph Bonneville opgenomen tijdens het rijden (`motorcycle_idle`, `_low`, `_high`). De Harley-rit en een Royal Enfield Bullet vielen af. Vijf opnamen meer van Freesound (CC0, op zijn ja), 13 MB in plaats van de 9 die ik noemde.
+- **De motorfiets viel bijna om** bij een beetje sturen: voor- en achterwiel staan op één lijn en alleen het zijspan heeft een wiel opzij, zodat naar links alleen het zwaartepunt (38 cm opzij, 50 cm hoog) hem overeind hield. Nu houdt een veer om de lengteas hem tegen de grond onder zijn wielen recht (`steady` in `scripts/vehicle_data.gd`, 1,4 Hz; alleen voor wat het opgeeft), en ligt het zwaartepunt lager. Hard sturen vanaf 60 km/u: eerst 40 graden overhellen naar rechts, nu 5. Van 0 tot 60 km/u: 4,4 s, nu 3,1 (meer koppel). Getest in `tools/test_vehicles.sh --only=motorcycle`.
+- **Schieten op de motorfiets** zoals in de jeep (`driver_fires`).
+- **De zandzakpost van elk kamp** stond 18 m recht voor de rij voertuigen, dwars over de weg naar buiten: wie wegreed, reed ertegenaan (en de test van samen rijden soms ook). Nu staat hij naast de rij.
+- **Een eindeloos gat aan het eind van de map.** Buiten het land van 3200 bij 1792 m tekent het level de bergen, maar zonder grond eronder. Nu staat langs elke rand een wand die niemand ziet, 4 m binnen de rand en 60 m boven de hoogste grond van elk stuk (`_shut_in()` in `tools/levels/alps/plan.gd`), in een eigen lichaam dat geen dekking telt. En wie toch onder de wereld valt (60 m onder de laagste vloer van het navmesh), sterft en komt terug waar een dood hem neerzet (`_fall_out()` in `scripts/game.gd`, voor elk level).
+
+**De bomen** (helper `alpen-bomen`, `tools/models/trees.gd`, `tools/gen_sprigs.py`): fijnspar met kamtakken, lariks met naalden in rozetten, goud en oranje, latsche, bergahorn; elk takje gegroeid en in Blender gerenderd. Body tot 23 à 32 m, Mid tot 52 à 110 m, Far als kaart tot 1500 m, één schaduwmesh. Van ver een kaart van acht kanten met in de alfa hoeveel licht de naalden doorlaten.
+
+**De gebouwen** (helper `alpen-dorp`, `tools/kit/alpine.gd`): hooischuren in drie maten, van balken of planken, met een dak van planken met stenen, van schindels of van golfplaat, op stenen of blokken; binnen hooi, een zolder, bij de grote een trap. Een schuur is dekking en je kunt erin; tussen de balken door schiet je naar buiten. De boerderij, de kapel, het kruis, het marterl, de jagershut, twee soorten hek, hooiruiters, houtstapels, een vlonder, palen met draden en een trog. Alles twee keer gebouwd: zoals het is, en als een paar gekleurde vlakken voor van ver (vanaf 240 m). Geen lightmap; wat verweert, leest de shader af aan hoe een vlak ligt.
+
+**Onderweg gevonden**
+
+- **Hoogtenevel in Godot telt de afstand niet mee.** Alles onder de 400 m van het level kreeg 23% nevel, ook op tien meter: het hele dal grijs. Uitgezet; alleen nevel op afstand.
+- **Een uitgezette navigatieregio staat nog op de kaart.** Het samengenaaide navmesh (`enabled = false`) gaf nog antwoord op "waar is de vloer", over al zijn 53.000 veelhoeken en dubbel met de vierkanten. Nu haalt `game.gd` het van de kaart. "Waar is de vloer" vraagt `Way.closest()` nu aan het vierkant van de plek (0,018 ms tegen 1,25 ms per vraag).
+- **De host stond 53 s stil na het laden.** Het onderzoek naar dekking voor de robots keek naast elke botsvorm (5461, de meeste van de schuren), 19.522 plekken, elk met die trage vraag. De gast verloor de verbinding. Nu een paar seconden, en sinds de trunk erin is verdeeld over de beelden, 4 ms per beeld, zoals de trunk het voor de duinen deed (`_near_things()` en `_near_spot()` in `scripts/squad.gd`).
+- **Een pad over het dal viel halverwege af**: Godot zoekt standaard niet verder dan 4096 veelhoeken (`path_search_max_polygons`).
+- **De grond kostte 14 van de 22,6 ms** op 1080p (profiel met `--only=landmesh`). Twaalf keer ruis van vier octaven per pixel, en elke laag gelezen ook waar die er niet is. Nu één leesbeurt per ruis uit `assets/noise/alps_fbm.png` (`tools/gen_noise.gd`) en alleen de lagen die er zijn.
+
+**Gemeten** op 18 oktober 2026 tussen 21:26 en 21:45, M1 Pro aan de lader van 94 W, load 1 tot 4,6 (andere sessies draaiden tests), geen Godot op de GPU naast de mijne en Michiel speelde niet. Om en om vanuit deze branch en een kloon ervan met de oude grond-shader, op zes standpunten (`--at`, zie de werkwijze): de weg door het Moos, de kapel, de boerderij, de hut in het noordwesten, de weiden in het oosten en het dal van 60 m hoog. Twee rondes op 1440p met FSR 2 op 67%, één zoals Michiel speelt; de rondes lagen per standpunt binnen 0,3 fps van elkaar.
+
+| Fps gemiddeld (1% laagste) | Moos | Kapel | Boerderij | Hut | Weiden | Dal van boven |
+|---|---|---|---|---|---|---|
+| 1440p FSR 2 67%, grond van eerst | 70,5 (67,9) | 67,9 (65,3) | 72,0 (68,9) | 46,1 (44,5) | 69,3 (66,7) | 53,8 (51,9) |
+| 1440p FSR 2 67%, nu | 82,6 (78,7) | 80,2 (76,2) | 85,2 (80,8) | 51,1 (49,2) | 81,2 (77,5) | 75,5 (72,3) |
+| 3456×2160 MetalFX Ultra, schaal vanzelf (0,5), grond van eerst | 59,9 | 57,2 | 60,5 | 39,1 | 57,6 | 36,8 |
+| 3456×2160 MetalFX Ultra, schaal vanzelf (0,5), nu | 74,8 | 71,6 | 76,8 | 46,7 | 72,0 | 59,5 |
+
+- Tekenopdrachten 1000 tot 1500 per beeld, driehoeken 1,2 tot 3,3 miljoen; gelijk tussen de twee standen.
+- **De hut haalt de 60 niet.** Daar kosten de schaduw van de zon 7,1 ms en de bomen 6,9 ms (`--profile`): de grote sparren vlak voor de hut vullen half het beeld met takkaarten die elk in de schaduwkaart kijken. Een kortere schaduw (200 in plaats van 300 m, bomen tot 160 m) scheelde 0,4 miljoen driehoeken en geen fps (51,0 tegen 51,1, twee rondes om en om); teruggedraaid.
+- Op 1080p zonder upscaler kostte de grond eerst 14 van de 22,6 ms in het dal van boven; het gras 0,9 ms; de bomen daar niets meetbaars.
+- **Twintig tegen twintig** (`tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90`), zonder GPU, niet om en om en bij wisselende drukte: de physics van een beeld kostte op het 95e percentiel 17 ms voor de bots een ver doel minder vaak opnieuw zochten, 8,7 ms erna (zonder dal; Michiel speelde toen), 16,1 ms met het dal en 12,4 tot 14,8 ms in vier runs na de trunk. De eerste meting na het begin is steeds 3,1 s: dat is het opzetten van de wedstrijd achter het zwarte scherm (geen beeld en geen physicsstap erna duurde langer dan 0,2 s), en het trekt het gemiddelde dat de test noemt omhoog. De bots komen in anderhalve minuut niet bij elkaar: de dichtstbijzijnde twee bleven 690 tot 770 m uit elkaar. Ze stappen niet in voertuigen.
+- **Laden.** Het level laadt headless in 3 s (de grove 0,2 s). Het onderzoek naar dekking voor de robots van de route kijkt naar 19.522 plekken naast de schuren en de kampen.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet.** Hoe ver het rijden voelt, of de sluipschuttersposten goed liggen, of de gevechten van de route te zwaar of te licht zijn.
+- **De bergen zijn hoog, het speelveld niet.** Het land loopt in de hoeken maar 150 à 190 m op; de echte bergen liggen buiten het speelveld. De hutten in de hoeken zijn de hoogste plekken. Hoger schieten vraagt een groter land (meer navmesh, meer bouwtijd).
+- **De geluiden van de motorfiets** zijn gekozen op spectrogram en luidheid; de overgang tussen rustig rijden en vol gas van de Triumph kan zweven, want de wind op de rit maakte het toerental lastig te meten.
+- **De kleur**: het goud van lariks en esdoorn, het groen van de wei in de schaduw, de stroken.
+- Hoe het licht verloopt als de wolken over de zon trekken (`scripts/cloud.gd`) heb ik alleen op losse beelden gezien.
+
+**Nog open**
+
+- Een land dat verder de bergen op gaat, als hij van hoger wil schieten.
+- Een beek door het Moos (de textuur `river_small_rocks` is er al).
+- De verre schuren als één mesh in plaats van één per blok van 64 m.
+- Van de rotsen uit de downloads staan `boulder_01`, `rock_face_01`, `dead_tree_trunk` en `tree_stump_02` in het level; `rock_moss_set_01/02` en `rock_07` nog niet (een set is één scène met zes of zeven rotsen naast elkaar). De modellen zijn zwaar (66.000 driehoeken een kei, 100.000 een stam); hun LOD maakt de importer.
+- De hut haalt op 1440p 51 fps: minder takkaarten dichtbij, of een goedkopere schaduw op de naalden.
+- Bots die zelf een voertuig nemen.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| Het level bouwen (een minuut) | `tools/build_level.sh alps` |
+| De hoogtes opnieuw halen | `tools/fetch_map.py alps` |
+| De ruis van de grond | `Godot --headless --path . --script tools/gen_noise.gd` |
+| Samen rijden testen | `tools/nettest.sh --ride` |
+| De motorfiets: optrekken en hard sturen | `tools/test_vehicles.sh --only=motorcycle` |
+| Een rit horen | `tools/hear.py drive motorcycle` (`drive b` met de kickstart) |
+| Twintig tegen twintig, anderhalve minuut | `tools/test_match.sh --match=tdm:alps:20 --only-bots --soak=90` |
+| Wat het dal kost | `tools/benchmark.sh --scene=res://scenes/alps.tscn --at="1150,+60,700,-120,-14" --profile --only=landmesh,meadow,trees` |

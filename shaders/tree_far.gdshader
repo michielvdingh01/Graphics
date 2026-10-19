@@ -29,11 +29,29 @@ uniform float wrap : hint_range(0.0, 1.0) = 0.35;
 uniform float roughness : hint_range(0.0, 1.0) = 0.85;
 // How much one tree differs from the next in colour, by where it stands.
 uniform float vary : hint_range(0.0, 0.5) = 0.12;
+// Whether the alpha of the facing sheet says how much light the needles of
+// that tree let through, as a share of `through`, rather than only that
+// they are needles: 0 for wood, and from one half up for needles, a half for
+// none and one for all of `through`. The trees of the Alps are pictured so,
+// for a larch lets the sun through where a spruce does not.
+uniform bool graded = false;
+// How much of the sky the crown sees, as shaders/crown.gdshader has it.
+uniform float sky_seen : hint_range(0.0, 1.0) = 1.0;
+// Where the mountains keep the sun off, for a tree beyond the sun's own
+// shadow: a map of the level's (its red is how much of the sun gets to the
+// ground there), where it lies, as (west, north, 1 / width, 1 / depth), and
+// over which distances it takes over from the sun's shadow, as the ground
+// takes it over (shaders/alps_ground.gdshader). Without a map every tree far
+// off is in the sun.
+uniform sampler2D sun_map : hint_default_white, filter_linear, repeat_disable;
+uniform vec4 sun_rect = vec4(0.0);
+uniform vec2 shadow_hand_over = vec2(200.0, 280.0);
 
 #include "tree_lod.gdshaderinc"
 
 varying vec3 own;
 varying float lets;
+varying float sun_seen;
 
 void vertex() {
 	float turned = COLOR.r * 6.2831853;
@@ -57,8 +75,17 @@ void vertex() {
 	float warm = fract(sin(dot(stands, vec2(12.9898, 78.233))) * 43758.5453) * 2.0 - 1.0;
 	float light = fract(sin(dot(stands, vec2(39.346, 11.135))) * 24634.6345) * 2.0 - 1.0;
 	own = vec3(1.0 + vary * warm, 1.0 + vary * 0.35 * warm, 1.0 - vary * 0.8 * warm) * (1.0 + vary * light) * COLOR.g;
-	if (given_way(NODE_POSITION_WORLD, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, 0.5)) {
+	vec3 foot = MODEL_MATRIX[3].xyz;
+	vec3 eye_at = MAIN_CAM_INV_VIEW_MATRIX[3].xyz;
+	// Where the far cards go, each tree goes at a distance of its own.
+	float own_end = fract(sin(dot(stands, vec2(93.989, 67.345))) * 23421.631);
+	if (given_way_by(foot, eye_at, 0.5, own_end)) {
 		VERTEX = vec3(0.0);
+	}
+	sun_seen = 1.0;
+	if (sun_rect.z > 0.0) {
+		float lit = textureLod(sun_map, (foot.xz - sun_rect.xy) * sun_rect.zw, 0.0).r;
+		sun_seen = mix(1.0, lit, smoothstep(shadow_hand_over.x, shadow_hand_over.y, distance(foot, eye_at)));
 	}
 }
 
@@ -70,15 +97,17 @@ void fragment() {
 	vec3 way = faces.rgb * 2.0 - 1.0;
 	NORMAL = normalize(TANGENT * way.x + BINORMAL * way.y + NORMAL * way.z);
 	// Only needles differ from tree to tree: bark is bark.
-	ALBEDO = seen.rgb * mix(vec3(dot(own, vec3(0.333))), own, faces.a);
+	float needles = graded ? smoothstep(0.2, 0.45, faces.a) : faces.a;
+	ALBEDO = seen.rgb * mix(vec3(dot(own, vec3(0.333))), own, needles);
 	ROUGHNESS = roughness;
 	SPECULAR = 0.1;
-	lets = through * faces.a;
+	AO = sky_seen;
+	lets = through * (graded ? clamp(faces.a * 2.0 - 1.0, 0.0, 1.0) : faces.a);
 }
 
 void light() {
 	float facing = dot(NORMAL, LIGHT);
 	float lit = clamp((facing + wrap) / (1.0 + wrap), 0.0, 1.0) + clamp(-facing, 0.0, 1.0) * lets;
-	float reaches = LIGHT_IS_DIRECTIONAL ? mix(scatter, 1.0, ATTENUATION) : ATTENUATION;
+	float reaches = LIGHT_IS_DIRECTIONAL ? mix(scatter, 1.0, ATTENUATION * sun_seen) : ATTENUATION;
 	DIFFUSE_LIGHT += LIGHT_COLOR * lit * reaches / PI;
 }

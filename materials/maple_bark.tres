@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/bark.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/pine_bark/pine_bark_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/pine_bark/pine_bark_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/pine_bark/pine_bark_arm.jpg" id="arm"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/albedo_tex = ExtResource("diff")
+shader_parameter/orm_tex = ExtResource("arm")
+shader_parameter/normal_tex = ExtResource("nor")
+shader_parameter/albedo = Color(1.0, 1.0, 1.0, 1)
+shader_parameter/uv_scale = Vector2(1.2, 0.6)

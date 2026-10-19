@@ -41,6 +41,7 @@ signal baked
 const GRUNT := preload("res://scenes/enemy.tscn")
 const RUSHER := preload("res://scenes/enemy_rusher.tscn")
 const HEAVY := preload("res://scenes/enemy_heavy.tscn")
+const WAY := preload("res://scripts/way.gd")
 ## What a zone can list.
 const ENEMIES := {"grunt": GRUNT, "rusher": RUSHER, "heavy": HEAVY}
 ## Shortest and longest time before a robot whose fight has started comes
@@ -148,6 +149,11 @@ var _breakables: Array[Node] = []
 var _robot_tick := 0.0
 var _watch_tick := 0.0
 var _wiped := false
+## How low somebody can be and still be in the level: well under the lowest
+## floor of its navmesh, worked out once that is there. Whoever falls below
+## it, off the edge of land that is drawn further than it goes, dies.
+var _world_floor := -INF
+const BELOW_THE_WORLD := 60.0
 ## True once the navmesh has been baked, see the signal `baked`, or once it
 ## is clear that this machine bakes none: a guest finds no ways itself.
 var is_baked := false
@@ -186,6 +192,14 @@ func _ready() -> void:
 		_meet()
 	elif exit:
 		_put_player(start)
+	# A navmesh brought along is on the map at once, before the map first
+	# takes in what is on it; on a guest as well, for what asks where the
+	# floor is.
+	var prebaked: bool = nav_region.get_meta(&"prebaked", false)
+	if prebaked:
+		_lay_prebaked()
+	else:
+		WAY.forget_squares()
 	# Only the host's robots find their own way.
 	if Net.is_guest():
 		is_baked = true
@@ -199,7 +213,8 @@ func _ready() -> void:
 			return
 	# In the dunes that takes a third of a second, in one frame: the HUD keeps
 	# the screen black until it is done.
-	nav_region.bake_navigation_mesh(false)
+	if not prebaked:
+		nav_region.bake_navigation_mesh(false)
 	is_baked = true
 	baked.emit()
 	# Cover is only looked for where there is fighting: in the zones.
@@ -213,6 +228,34 @@ func _ready() -> void:
 		# black, not when the first fight asks for it.
 		await get_tree().physics_frame
 		Squad.prepare()
+
+
+## A level of kilometres brings its navmesh with it, baked in squares on a
+## coarser grid (see tools/levels/alps/plan.gd). Each square finds the way as
+## a region of its own, and the map joins them where their edges meet; the
+## whole of it sewn together is only there to be read (scripts/arena.gd,
+## scripts/squad.gd). The map takes the grid of the navmesh.
+func _lay_prebaked() -> void:
+	var map := get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(map, nav_region.navigation_mesh.cell_size)
+	NavigationServer3D.map_set_cell_height(map, nav_region.navigation_mesh.cell_height)
+	var tiles: Resource = nav_region.get_meta(&"tiles", null)
+	if tiles == null:
+		WAY.forget_squares()
+		return
+	NavigationServer3D.map_set_edge_connection_margin(map, nav_region.get_meta(&"joins", 0.6))
+	nav_region.enabled = false
+	# Off is not enough: a region that is off still answers where the nearest
+	# floor is, from all of its polygons, and lies over the squares on the
+	# map. Off the map, it is only there to be read.
+	NavigationServer3D.region_set_map(nav_region.get_rid(), RID())
+	var squares: Array[NavigationRegion3D] = []
+	for tile: NavigationMesh in tiles.get_meta(&"tiles", []):
+		var region := NavigationRegion3D.new()
+		region.navigation_mesh = tile
+		nav_region.add_child(region)
+		squares.append(region)
+	WAY.know_squares(squares, tiles.get_meta(&"square", 0.0))
 
 
 func _exit_tree() -> void:
@@ -385,10 +428,30 @@ func _approach(zone: Zone) -> Vector3:
 func _physics_process(delta: float) -> void:
 	if _playing:
 		_stir(delta)
+		_fall_out()
 	if Net.active and not Net.is_guest():
 		_tell_robots(delta)
 		_check_exit()
 		_check_wipe()
+
+
+## The player who has fallen out of the level dies, and is back where a
+## death puts them.
+func _fall_out() -> void:
+	if _world_floor == -INF:
+		var corners := nav_region.navigation_mesh.get_vertices() if nav_region.navigation_mesh else PackedVector3Array()
+		if corners.is_empty():
+			return
+		var lowest := INF
+		for corner in corners:
+			lowest = minf(lowest, corner.y)
+		_world_floor = (nav_region.global_transform * Vector3(0, lowest, 0)).y - BELOW_THE_WORLD
+	if not player.dead and player.global_position.y < _world_floor:
+		if player.invulnerable:
+			# Who cannot die is put back at the start.
+			_put_player(start)
+		else:
+			player.take_damage(1e6)
 
 
 ## Has the watch of every zone that is near a player up and about, and lets

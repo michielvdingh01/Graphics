@@ -97,6 +97,7 @@ func _describe() -> void:
 	_twice(_truck)
 	_twice(_tank.bind("tank", 0.0), true)
 	_twice(_tank.bind("tank_b", 38.0), true)
+	_twice(_motorcycle)
 
 
 ## Builds a vehicle as `build` describes it, and then once more as its far
@@ -533,6 +534,150 @@ func _jeep() -> void:
 	for x: float in [-1.0, 1.0]:
 		_stencil_side(STAR, Vector3(x * 0.727, 0.915, 1.01), x, Vector2(0.18, 0.18))
 		_stencil_side(TYRE_PRESSURE, Vector3(x * 0.727, 0.99, -0.56), x, Vector2(0.16, 0.04))
+
+
+# --- The motorcycle with its sidecar -------------------------------------------------
+
+
+## A heavy army motorcycle with a sidecar on its right, of the kind that went
+## to war in 1940: a flat twin whose cylinders stand out either side under
+## the tank, a sprung saddle and a pillion behind it, a girder of tubes out
+## to the sidecar and its wheel, which drives as well, and the sidecar a
+## boat of pressed steel with a seat, a spare wheel on its back and a mount
+## for a gun on its nose. Three ride: the driver, one on the pillion and one
+## in the sidecar, who has their own weapons and the mount to rest them on.
+## Nothing keeps a shot off any of them.
+func _motorcycle() -> void:
+	model("motorcycle")
+	_solid(Vector3(0, 0.62, -0.02), Vector3(0.62, 0.86, 2.15))
+	_solid(Vector3(1.06, 0.62, -0.06), Vector3(0.7, 0.5, 1.72))
+	_solid(Vector3(0.55, 0.4, 0.3), Vector3(0.5, 0.12, 0.6))
+	_dye = Color(0.25, 0.5, 0.85, 0.0)
+	var r := 0.33
+	var front := Vector3(0, r, -0.76)
+	var back := Vector3(0, r, 0.68)
+	var side := Vector3(1.12, r, 0.5)
+	# The wheels: the front one steers, the back one and the sidecar's drive.
+	_on("WheelF", Transform3D(Basis(), front))
+	_wheel(front, r, 0.11, Vector3.RIGHT, 10)
+	_touches("WheelF", front, r, true, false)
+	_on("WheelR", Transform3D(Basis(), back))
+	_wheel(back, r, 0.11, Vector3.RIGHT, 10)
+	_touches("WheelR", back, r, false)
+	_on("WheelS", Transform3D(Basis(), side))
+	_wheel(side, r, 0.11, Vector3.RIGHT, 10)
+	_touches("WheelS", side, r, false)
+	_on("Body")
+
+	# The frame: two tubes from the head down round the engine to the back
+	# wheel, and the stays of the back wheel.
+	var head := Vector3(0, 0.95, -0.5)
+	for x: float in [-0.07, 0.07]:
+		_rail(IRON, [head + Vector3(x, 0, 0), Vector3(x, 0.78, -0.2), Vector3(x * 1.4, 0.72, 0.3), Vector3(x * 1.3, 0.55, 0.62), back + Vector3(x * 1.2, 0, 0)], 0.016)
+		_rail(IRON, [head + Vector3(x, -0.08, 0.02), Vector3(x * 1.3, 0.35, -0.32), Vector3(x * 1.3, 0.24, 0.05), Vector3(x * 1.3, 0.26, 0.4), back + Vector3(x * 1.2, 0, 0)], 0.016)
+	_bar(IRON, head + Vector3(0, -0.1, 0.0), head + Vector3(0, 0.08, 0.04), 0.035, 8)
+	# The engine: a crankcase and, either side under the tank, a cylinder
+	# with its fins and its head, and the gearbox behind.
+	_block(IRON, Vector3(0, 0.38, -0.08), Vector3(0.26, 0.26, 0.42), 0.06)
+	_block(ARMY, Vector3(0, 0.42, 0.2), Vector3(0.22, 0.22, 0.24), 0.04)
+	for x: float in [-1.0, 1.0]:
+		var from := Vector3(x * 0.12, 0.45, -0.16)
+		var out := Vector3(x, 0.06, 0).normalized()
+		var fins := PackedVector2Array([Vector2(0, 0)])
+		for i in 7:
+			fins.append(Vector2(0.06, i * 0.026))
+			fins.append(Vector2(0.085, i * 0.026 + 0.004))
+			fins.append(Vector2(0.085, i * 0.026 + 0.012))
+			fins.append(Vector2(0.06, i * 0.026 + 0.016))
+		fins.append(Vector2(0.075, 0.19))
+		fins.append(Vector2(0.075, 0.25))
+		fins.append(Vector2(0, 0.26))
+		_turned(IRON, from, out, fins, 10)
+		# The exhaust from the head, down and back to the silencer on the left.
+		_rail(IRON, [from + out * 0.2 + Vector3(0, -0.04, 0.04), Vector3(x * 0.26, 0.28, -0.1), Vector3(-0.2, 0.26, 0.2)], 0.022)
+	_bar(IRON, Vector3(-0.2, 0.28, 0.2), Vector3(-0.22, 0.34, 0.86), 0.045, 8)
+	_bar(IRON, Vector3(-0.22, 0.34, 0.86), Vector3(-0.22, 0.35, 0.95), 0.02, 6)
+	# The tank, with its pads for the knees, and the toolbox let into it.
+	_block(ARMY, Vector3(0, 0.88, -0.2), Vector3(0.26, 0.2, 0.52), 0.07)
+	_piece(ARMY, Vector3(0, 0.985, -0.2), Vector3(0.1, 0.01, 0.2))
+	for x: float in [-0.135, 0.135]:
+		_plate(RUBBER, Vector3(x, 0.82, -0.12), Vector3(0.01, 0.1, 0.16))
+	# The saddle on its springs, and the pillion behind it.
+	_block(CANVAS, Vector3(0, 0.88, 0.14), Vector3(0.24, 0.07, 0.3), 0.03)
+	for x: float in [-0.08, 0.08]:
+		_turned(IRON, Vector3(x, 0.74, 0.22), Vector3.UP, PackedVector2Array([Vector2(0.02, 0), Vector2(0.02, 0.1)]), 6)
+	_block(CANVAS, Vector3(0, 0.84, 0.52), Vector3(0.22, 0.06, 0.24), 0.025)
+	_rail(IRON, [Vector3(-0.12, 0.86, 0.38), Vector3(-0.14, 0.92, 0.42), Vector3(-0.14, 0.92, 0.5)], 0.012)
+	# The mudguards over the two wheels of the motorcycle, and the stand
+	# and the carrier at the back.
+	var arc := PackedVector3Array()
+	for i in 7:
+		var a := lerpf(-0.3, 2.2, i / 6.0)
+		arc.append(Vector3(0, r + sin(a) * (r + 0.07), back.z - cos(a) * (r + 0.07)))
+	for i in arc.size() - 1:
+		_piece(ARMY, (arc[i] + arc[i + 1]) * 0.5, Vector3(0.15, 0.012, arc[i].distance_to(arc[i + 1]) + 0.01), Vector3(rad_to_deg(atan2(arc[i + 1].y - arc[i].y, -(arc[i + 1].z - arc[i].z))), 0, 0))
+	_piece(IRON, Vector3(0, 0.9, 0.86), Vector3(0.2, 0.02, 0.24))
+	_lamp(Vector3(0, 0.66, 1.02), Vector3.BACK, 0.035)
+	# The pedals, the footrests and the kick start.
+	for x: float in [-1.0, 1.0]:
+		_piece(RUBBER, Vector3(x * 0.24, 0.3, -0.02), Vector3(0.14, 0.03, 0.08))
+		_piece(RUBBER, Vector3(x * 0.2, 0.42, 0.48), Vector3(0.1, 0.025, 0.06))
+	_bar(IRON, Vector3(0.16, 0.42, 0.14), Vector3(0.24, 0.28, 0.3), 0.012, 4)
+
+	# The fork, the handlebars and the lamp turn with the front wheel: a part
+	# of their own, "Steering", that turns about the head.
+	_on("Steering", Transform3D(Basis(), head))
+	for x: float in [-0.085, 0.085]:
+		_bar(ARMY, head + Vector3(x, 0.05, 0.0), front + Vector3(x, 0, 0), 0.022, 6)
+	_piece(ARMY, head + Vector3(0, 0.02, -0.02), Vector3(0.22, 0.05, 0.08))
+	var arc_front := PackedVector3Array()
+	for i in 6:
+		var a := lerpf(0.5, 2.6, i / 5.0)
+		arc_front.append(Vector3(0, r + sin(a) * (r + 0.06), front.z + cos(a) * (r + 0.06)))
+	for i in arc_front.size() - 1:
+		_piece(ARMY, (arc_front[i] + arc_front[i + 1]) * 0.5, Vector3(0.14, 0.012, arc_front[i].distance_to(arc_front[i + 1]) + 0.01), Vector3(rad_to_deg(atan2(arc_front[i + 1].y - arc_front[i].y, -(arc_front[i + 1].z - arc_front[i].z))), 0, 0))
+	_rail(IRON, [head + Vector3(-0.34, 0.16, 0.12), head + Vector3(-0.2, 0.12, 0.06), head + Vector3(0, 0.1, 0.02), head + Vector3(0.2, 0.12, 0.06), head + Vector3(0.34, 0.16, 0.12)], 0.013)
+	for x: float in [-1.0, 1.0]:
+		_bar(RUBBER, head + Vector3(x * 0.26, 0.15, 0.1), head + Vector3(x * 0.36, 0.165, 0.125), 0.02, 6)
+		_bar(IRON, head + Vector3(x * 0.25, 0.155, 0.08), head + Vector3(x * 0.3, 0.13, -0.02), 0.006, 4)
+	_lamp(head + Vector3(0, -0.02, -0.16), Vector3.FORWARD, 0.09)
+	_on("Body")
+
+	# The sidecar: the girder out to its wheel, its mudguard, and the boat.
+	_rail(IRON, [Vector3(0.1, 0.32, -0.3), Vector3(0.8, 0.36, -0.3), Vector3(1.05, 0.4, -0.2)], 0.02)
+	_rail(IRON, [Vector3(0.1, 0.34, 0.5), Vector3(0.8, 0.36, 0.5), side + Vector3(-0.08, 0, 0)], 0.02)
+	_bar(IRON, Vector3(0.1, 0.72, 0.3), Vector3(0.8, 0.6, 0.35), 0.016, 5)
+	var tub := Vector3(1.06, 0.5, -0.08)
+	_block(ARMY, tub + Vector3(0, 0.1, 0.18), Vector3(0.6, 0.42, 1.04), 0.12)
+	_block(ARMY, tub + Vector3(0, 0.1, -0.52), Vector3(0.5, 0.36, 0.44), 0.14, Vector3(-8, 0, 0))
+	_block(ARMY, tub + Vector3(0, 0.06, -0.82), Vector3(0.32, 0.24, 0.3), 0.12, Vector3(-18, 0, 0))
+	# The cockpit: a dark well with the seat and its back in it, and a rim.
+	_piece(RUBBER, tub + Vector3(0, 0.31, 0.2), Vector3(0.46, 0.02, 0.62))
+	_rail(IRON, [tub + Vector3(-0.24, 0.32, -0.1), tub + Vector3(-0.26, 0.32, 0.2), tub + Vector3(-0.24, 0.32, 0.52), tub + Vector3(0, 0.33, 0.56), tub + Vector3(0.24, 0.32, 0.52), tub + Vector3(0.26, 0.32, 0.2), tub + Vector3(0.24, 0.32, -0.1), tub + Vector3(0, 0.33, -0.14), tub + Vector3(-0.24, 0.32, -0.1)], 0.014)
+	_block(CANVAS, tub + Vector3(0, 0.36, 0.42), Vector3(0.4, 0.3, 0.08), 0.03, Vector3(-12, 0, 0))
+	# Its mudguard and the spare wheel on its back.
+	var arc_side := PackedVector3Array()
+	for i in 6:
+		var a := lerpf(0.2, 2.4, i / 5.0)
+		arc_side.append(Vector3(side.x, r + sin(a) * (r + 0.06), side.z - cos(a) * (r + 0.06)))
+	for i in arc_side.size() - 1:
+		_piece(ARMY, (arc_side[i] + arc_side[i + 1]) * 0.5 + Vector3(0.12, 0, 0), Vector3(0.15, 0.012, arc_side[i].distance_to(arc_side[i + 1]) + 0.01), Vector3(rad_to_deg(atan2(arc_side[i + 1].y - arc_side[i].y, -(arc_side[i + 1].z - arc_side[i].z))), 0, 0))
+	_wheel(tub + Vector3(0, 0.18, 0.74), r, 0.11, Vector3.BACK, 10)
+	# The mount on its nose, a pin a gun is laid in, and a grip for whoever
+	# rides there.
+	_bar(IRON, tub + Vector3(0, 0.3, -0.42), tub + Vector3(0, 0.52, -0.46), 0.018, 6)
+	_piece(IRON, tub + Vector3(0, 0.54, -0.46), Vector3(0.06, 0.05, 0.12))
+	_rail(IRON, [tub + Vector3(-0.2, 0.32, -0.08), tub + Vector3(-0.22, 0.42, -0.1), tub + Vector3(-0.24, 0.42, 0.06)], 0.012)
+
+	# Where they sit. The driver astride the saddle, the eyes over the bars;
+	# one on the pillion behind; one in the sidecar, low in its well. Each
+	# gets off on their own side.
+	_sits("driver", Vector3(0, 0.92, 0.12), Vector3(0, 1.66, 0.02), Vector3(-1.0, 0.0, 0.1), true)
+	_sits("passenger", Vector3(1.06, 0.6, 0.08), Vector3(1.06, 1.26, -0.02), Vector3(1.85, 0.0, 0.1), true)
+	_sits("passenger", Vector3(0, 0.88, 0.52), Vector3(0, 1.64, 0.48), Vector3(-1.0, 0.0, 0.62), true)
+
+	_stencil_side(TACTICAL, tub + Vector3(0.302, 0.12, -0.2), 1.0, Vector2(0.16, 0.16))
+	_stencil_side(NUMBER_14, tub + Vector3(0.302, 0.12, 0.3), 1.0, Vector2(0.14, 0.14))
 
 
 # --- The lorry -----------------------------------------------------------------------

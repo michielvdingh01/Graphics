@@ -33,7 +33,9 @@ extends RigidBody3D
 ## Standing still with nobody in it, it is frozen and costs nothing; whatever
 ## gets in, hits it or runs into it wakes it.
 ##
-## For now it is driven on one machine: in a game with others nobody gets in.
+## In a game with others the host says who sits where, and how worn it is;
+## the machine whose player drives it runs it and tells the others how it
+## stands. See "Over the network" below.
 
 ## A vehicle has been got into or out of: `seat` is the number of the seat.
 signal entered(body: Node3D, seat: int)
@@ -156,6 +158,9 @@ var autopilot := false
 ## Seconds a wreck of it lies in a match before a new one stands where it
 ## stood.
 var comes_back_after := COMES_BACK
+## The machine that runs it, as Net numbers them: that of whoever drives it,
+## or the host. See runs_here().
+var run_by := 1
 
 ## The level whose vehicles have been rehearsed, see looks().
 static var _rehearsed := {}
@@ -202,6 +207,10 @@ var _rider: Node3D
 var _pristine: Node
 var _braked_hard := false
 var _turret_moving := 0.0
+## How it stood on the machine that runs it, as that one told it, with when:
+## [seconds, state], see _how_it_stands().
+var _reports: Array[Array] = []
+var _since_report := 0.0
 
 
 ## A wheel, or the stretch of a track over one road wheel: where it hangs
@@ -444,9 +453,6 @@ static func within_reach(body: Node3D) -> Dictionary:
 func can_take(body: Node3D) -> bool:
 	if condition == Condition.WRECKED or body in occupants:
 		return false
-	# Over the wire the others would not see it move: not yet.
-	if Net.active and Net.players.size() > 1:
-		return false
 	return reach_of(body.global_position) < REACH
 
 
@@ -510,7 +516,9 @@ func enter(body: Node3D, seat := -1) -> int:
 		_take_the_wheel(body)
 	elif was == 0:
 		_leave_the_wheel(body)
-	wake()
+	_hand_over()
+	if runs_here():
+		wake()
 	entered.emit(body, seat)
 	return seat
 
@@ -530,12 +538,15 @@ func leave(body: Node3D) -> void:
 	if body.has_method("stand"):
 		body.stand(out, linear_velocity * 0.5)
 	_play(data.door_sound, seat_frame_local(seat).origin, -2.0)
+	_hand_over()
 	left.emit(body, seat)
 
 
 ## Who drives, if anybody.
 func driver() -> Node3D:
-	return occupants[0] if not occupants.is_empty() else null
+	if occupants.is_empty() or not is_instance_valid(occupants[0]):
+		return null
+	return occupants[0]
 
 
 func seat_of(body: Node3D) -> int:
@@ -571,19 +582,21 @@ func _take_the_wheel(body: Node3D) -> void:
 	if not engine_on and _starting <= 0.0 and condition != Condition.WRECKED:
 		_starting = data.start_time
 		_play(data.start_sound, data.engine_at, 0.0)
-	if body.is_in_group("player"):
+	if _is_mine(body):
 		_view = VIEW.new()
 		_view.name = "View"
 		add_child(_view)
 		_view.setup(self, body)
-		if seats[0].exposed:
-			_rider = RIDER.new()
-			_rider.name = "Rider"
-			add_child(_rider)
-			_rider.position = seats[0].at
-			if not _rider.setup(body, "drive"):
-				_rider.queue_free()
-				_rider = null
+	# Whoever drives is seen at the wheel: the player of this machine while
+	# its view is from behind, somebody else's always.
+	if seats[0].exposed:
+		_rider = RIDER.new()
+		_rider.name = "Rider"
+		add_child(_rider)
+		_rider.position = seats[0].at
+		if not _rider.setup(body, "drive"):
+			_rider.queue_free()
+			_rider = null
 
 
 func _leave_the_wheel(_body: Node3D) -> void:
@@ -637,13 +650,20 @@ func _way_out(seat: int, body: Node3D) -> Transform3D:
 # --- Waking and resting -------------------------------------------------------------
 
 
-## Somebody joined: the others would not see this vehicle move, so whoever
-## is in it gets out.
+## Somebody came or went. Whoever came is told by the host who sits where,
+## how worn it is and how it stands; whoever went is out of it.
 func _on_net_changed() -> void:
-	if Net.active and Net.players.size() > 1:
-		for body in occupants.duplicate():
-			if body:
-				leave(body)
+	for i in occupants.size():
+		if occupants[i] != null and not is_instance_valid(occupants[i]):
+			occupants[i] = null
+	_hand_over()
+	if not Net.active or not Net.is_host():
+		return
+	for i in occupants.size():
+		if occupants[i] != null:
+			Net.tell(self, &"_seated", [_peer_of(occupants[i]), i])
+	Net.tell(self, &"_wore", [health, condition])
+	Net.vehicle_state(self, _how_it_stands())
 
 
 ## Lets it move: it is frozen while it stands still with nobody in it.
@@ -680,8 +700,18 @@ func _settle(delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	_clock += delta
+	if not runs_here():
+		# Another machine runs it: it is where that one says, and burns and
+		# smokes as it should here.
+		_follow()
+		if condition == Condition.WRECKED:
+			_lie_as_wreck(delta)
+		else:
+			_wear(delta)
+		return
 	if condition == Condition.WRECKED:
 		_lie_as_wreck(delta)
+		_report(delta)
 		return
 	_wear(delta)
 	_controls()
@@ -694,6 +724,7 @@ func _physics_process(delta: float) -> void:
 		_run_over_people(delta)
 		_settle(delta)
 	_carry_occupants()
+	_report(delta)
 
 
 ## What the driver asks of it, if the driver is the player on this machine.
@@ -966,6 +997,17 @@ func _drive(delta: float) -> void:
 		return
 	var yaw := angular_velocity.dot(up)
 	var heft := _inertia()
+	if data.steady > 0.0:
+		# Held upright across its length, against the ground its wheels are
+		# on: a spring round its long axis, damped, as a rider holds it.
+		var ground := Vector3.ZERO
+		for wheel in _wheels:
+			if wheel.touching:
+				ground += wheel.normal
+		var lean := ahead.dot(up.cross(ground.normalized()))
+		var rolling_by := angular_velocity.dot(ahead)
+		var spring := TAU * data.steady
+		apply_torque(ahead * heft.z * (lean * spring * spring - rolling_by * 1.6 * spring))
 	if data.tracked:
 		# The tracks driven apart turn it: as fast as asked at a standstill,
 		# less so at speed, and the other way round going backwards, as a
@@ -1133,6 +1175,7 @@ func _carry_occupants() -> void:
 			continue
 		if not is_instance_valid(body):
 			occupants[i] = null
+			_hand_over()
 			continue
 		if body.has_method("ride"):
 			body.ride(seat_frame(i))
@@ -1198,6 +1241,7 @@ func fire() -> bool:
 	loaded = 0.0
 	var from := _muzzle.global_transform
 	var way := -from.basis.z.normalized()
+	Net.vehicle_did(self, &"_fired_here", [from.origin + way * 0.3, way * data.shell_speed + linear_velocity])
 	var shell: Node3D = SHELL.new()
 	shell.velocity = way * data.shell_speed + linear_velocity
 	shell.shooter = driver() as CollisionObject3D
@@ -1259,6 +1303,11 @@ func take_blast(amount: float, at: Vector3, push: Vector3) -> void:
 func _hurt(amount: float, _at: Vector3) -> void:
 	if amount <= 0.0 or condition == Condition.WRECKED:
 		return
+	# How worn it is, is the host's to say: what happens to it elsewhere,
+	# a crash where a guest drives it, is told to the host.
+	if Net.is_guest():
+		Net.ask(self, &"worn_by", [amount])
+		return
 	health -= amount
 	wake()
 	var share := health / data.health
@@ -1274,6 +1323,7 @@ func _hurt(amount: float, _at: Vector3) -> void:
 		condition = now
 		if now == Condition.BURNING:
 			_catch_fire()
+	Net.tell(self, &"_wore", [health, condition], now == condition)
 
 
 ## The engine of one that is hit misfires; one that is alight burns down.
@@ -1294,13 +1344,15 @@ func _wear(delta: float) -> void:
 			_sound.misfire()
 	if condition == Condition.BURNING:
 		_feed_fire()
-		_hurt(data.health * data.burn_rate * delta, engine)
+		if not Net.is_guest():
+			_hurt(data.health * data.burn_rate * delta, engine)
 
 
 func _catch_fire() -> void:
 	var at := global_transform * Transform3D(Basis(), data.engine_at - Vector3.UP * 0.3)
 	_flames = Fx.blaze(at, Vector3(0.9, 0.5, 0.9), 600.0)
-	_fire = Blast.kindle(at.origin, 1.2, 1.5, 600.0)
+	if not Net.is_guest():
+		_fire = Blast.kindle(at.origin, 1.2, 1.5, 600.0)
 
 
 func _feed_fire() -> void:
@@ -1348,6 +1400,7 @@ func _go_up() -> void:
 	_view = null
 	if Match.active:
 		_comes_back = comes_back_after
+	Net.tell(self, &"_went_up_here", [])
 	went_up.emit()
 
 
@@ -1406,7 +1459,7 @@ func _lie_as_wreck(delta: float) -> void:
 		_feed_fire()
 	if _comes_back > 0.0:
 		_comes_back -= delta
-		if _comes_back <= 0.0:
+		if _comes_back <= 0.0 and not Net.is_guest():
 			_come_back()
 
 
@@ -1424,9 +1477,21 @@ func _come_back() -> void:
 	if not space.intersect_shape(query, 1).is_empty():
 		_comes_back = 5.0
 		return
+	Net.show(self, &"_back_again", [])
+
+
+## A new one in the place of the wreck, on every machine: it takes the name
+## the first had, so that the machines still mean the same vehicle by it.
+func _back_again() -> void:
+	if _pristine == null:
+		return
 	var fresh: Node3D = _pristine
 	_pristine = null
-	get_parent().add_child(fresh)
+	var parent := get_parent()
+	var own_name := name
+	name = String(own_name) + "Wreck"
+	fresh.name = own_name
+	parent.add_child(fresh)
 	fresh.global_transform = spawn
 	if is_instance_valid(_flames):
 		_flames.queue_free()
@@ -1442,7 +1507,7 @@ func _process(delta: float) -> void:
 	if condition != Condition.WRECKED:
 		_turn_wheels(delta)
 	if is_instance_valid(_rider):
-		_rider.visible = is_instance_valid(_view) and not _view.first_person
+		_rider.visible = not _is_mine(driver()) or (is_instance_valid(_view) and not _view.first_person)
 	_sound.listen(delta)
 
 
@@ -1469,7 +1534,7 @@ func _turn_wheels(delta: float) -> void:
 		var rest: Transform3D = axle[1]
 		node.transform = Transform3D(rest.basis * steer * Basis(Vector3.FORWARD, tilt) * Basis(Vector3.RIGHT, (on[0] as Wheel).turned), rest.origin + Vector3.UP * drop * 0.8)
 	if _steering_wheel:
-		_steering_wheel.transform = (_rests[_steering_wheel] as Transform3D) * Transform3D(Basis(Vector3.UP, _steer * 9.0), Vector3.ZERO)
+		_steering_wheel.transform = (_rests[_steering_wheel] as Transform3D) * Transform3D(Basis(Vector3.UP, _steer * data.steering_turns), Vector3.ZERO)
 
 
 ## How fast its wheels go round, for the sound: the average of those that
@@ -1537,3 +1602,243 @@ func _exit_tree() -> void:
 		_fire.left = 0.0
 	if _pristine and not _pristine.is_inside_tree():
 		_pristine.free()
+
+
+# --- Over the network ------------------------------------------------------------------
+# In a game with others the host says who sits where: a machine asks it for
+# its own player (request_seat(), request_leave()), and it tells every
+# machine (_seated(), _unseated()). It says how worn a vehicle is as well
+# (_wore()), and that it went up. The machine whose player drives it runs it,
+# as it runs that player, and tells the others thirty times a second how it
+# stands (Net.vehicle_state()); there it follows what it is told, a moment
+# behind, as a puppet follows its player. With nobody at the wheel the host
+# runs it.
+
+## Seconds between two reports of how it stands, and how far behind them
+## what is shown of a vehicle another machine runs lies.
+const REPORT := 1.0 / 30.0
+const BEHIND := 0.1
+## Seconds past the last report it carries on the way it was going.
+const COASTS := 0.25
+
+
+## True if this machine runs it: alone, or as the machine of its driver, or
+## as the host when nobody drives it.
+func runs_here() -> bool:
+	return not Net.active or run_by == Net.id()
+
+
+## Asks for the player of this machine, `body`, to get into `seat`, or the
+## best free one.
+func request_seat(body: Node3D, seat := -1) -> void:
+	if seat < 0:
+		seat = free_seat_near(body.global_position)
+	if seat < 0:
+		return
+	if Net.active:
+		Net.ask(self, &"seat_asked", [Net.id(), seat])
+	else:
+		enter(body, seat)
+
+
+## Asks for the player of this machine to get out. It gets out here at once;
+## the others hear it from the host.
+func request_leave(body: Node3D) -> void:
+	if not occupants.has(body):
+		return
+	leave(body)
+	if Net.active:
+		Net.ask(self, &"seat_left_asked", [Net.id()])
+
+
+## On the host: `player` would like to sit in `seat`. Everybody is told so
+## if it is free.
+func seat_asked(player: int, seat: int) -> void:
+	var body := Net.body(player)
+	if body == null or seat < 0 or seat >= seats.size() or condition == Condition.WRECKED or occupants[seat] != null:
+		return
+	if body.get(&"dead") == true:
+		return
+	Net.show(self, &"_seated", [player, seat])
+
+
+## On the host: `player` got out.
+func seat_left_asked(player: int) -> void:
+	Net.show(self, &"_unseated", [player])
+
+
+## On the host: something that happened where another machine runs it, a
+## crash, wore it down by `amount`.
+func worn_by(amount: float) -> void:
+	_hurt(amount, global_position)
+
+
+func _seated(player: int, seat: int) -> void:
+	var body := Net.body(player)
+	if body:
+		enter(body, seat)
+
+
+func _unseated(player: int) -> void:
+	var body := Net.body(player)
+	if body:
+		leave(body)
+
+
+## How worn it is, as the host says. A machine where it was not yet alight
+## sees it catch fire.
+func _wore(left: float, now: int) -> void:
+	health = left
+	if now > condition and now != Condition.WRECKED:
+		condition = now as Condition
+		if now == Condition.BURNING:
+			_catch_fire()
+
+
+## It went up on the host: here it is a burning wreck too, and whoever was
+## in it is out. What that did to them, and the blast, the host says.
+func _went_up_here() -> void:
+	if condition == Condition.WRECKED:
+		return
+	health = 0.0
+	condition = Condition.WRECKED
+	engine_on = false
+	_starting = 0.0
+	for body in occupants.duplicate():
+		if body:
+			leave(body)
+	if Sfx.has(data.explode_sound):
+		Sfx.play_at(data.explode_sound, global_transform * _hull.get_center(), 8.0)
+	_char()
+	if _flames == null:
+		_flames = Fx.blaze(global_transform, _hull.size, WRECK_BURNS)
+	_burns_for = WRECK_BURNS
+	if is_instance_valid(_view):
+		_view.close()
+	_view = null
+	went_up.emit()
+
+
+## The gun was fired where another machine runs it: here the shell flies and
+## the gun flashes, and does nothing, for the machine that fired it has the
+## host see to what it hits.
+func _fired_here(from: Vector3, going: Vector3) -> void:
+	var shell: Node3D = SHELL.new()
+	shell.velocity = going
+	shell.harmless = true
+	shell.skip = get_rid()
+	get_tree().current_scene.add_child(shell)
+	shell.global_position = from
+	if _muzzle:
+		Fx.muzzle_flash(_muzzle, Transform3D(), 2.2, 4, Color(1.0, 0.6, 0.25), 6.0)
+	Fx.gun_smoke(from, going.normalized(), 1.0)
+	if Sfx.has(data.cannon_sound):
+		Sfx.play_at(data.cannon_sound, from, 6.0)
+	loaded = 0.0
+
+
+## The machine that runs it now: that of its driver, or the host. Here it
+## runs as a body of its own, or follows what it is told.
+func _hand_over() -> void:
+	var who := driver()
+	var now := _peer_of(who) if who else 1
+	if now == run_by:
+		return
+	run_by = now
+	_reports.clear()
+	if runs_here():
+		# It goes on from how it went where it was followed: that is no crash.
+		_last_velocity = linear_velocity
+		_bumped = 0.5
+		freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+		wake()
+	else:
+		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		freeze = true
+		set_physics_process(true)
+		set_process(true)
+
+
+## The machine that `body` is the player of: the one of a puppet is the
+## machine it stands for (scripts/puppet.gd).
+func _peer_of(body: Variant) -> int:
+	if not is_instance_valid(body):
+		return 1
+	if _is_mine(body):
+		return Net.id()
+	var id: Variant = (body as Object).get(&"id")
+	return id if id is int and id > 0 else 1
+
+
+## True for the player of this machine. A puppet is in the group "player"
+## too, for the enemies' sake.
+func _is_mine(body: Variant) -> bool:
+	return is_instance_valid(body) and (body as Object).has_method("has_control")
+
+
+## How it stands, for the others: where and how it is turned, how fast it
+## goes and turns, its steering, its engine and its gun.
+func _how_it_stands() -> Array:
+	return [global_position, global_basis.get_rotation_quaternion(), linear_velocity, angular_velocity, _steer, rpm, gear, gas, braking, engine_on, speed, turret_yaw, gun_pitch]
+
+
+func _report(delta: float) -> void:
+	if not Net.active or Net.present.size() < 2:
+		return
+	_since_report += delta
+	if _since_report < REPORT:
+		return
+	_since_report = 0.0
+	Net.vehicle_state(self, _how_it_stands())
+
+
+## How it stands on the machine that runs it, as that one tells: what a
+## machine that does not run it follows.
+func net_state(from: int, state: Array) -> void:
+	if from != run_by or runs_here() or state.size() < 13:
+		return
+	_reports.append([Time.get_ticks_msec() * 0.001, state])
+	if _reports.size() > 10:
+		_reports.pop_front()
+	set_physics_process(true)
+	set_process(true)
+
+
+## Where it is told it is, between the two reports the moment to show lies
+## between, or past the last as it was going.
+func _follow() -> void:
+	if _reports.is_empty():
+		_carry_occupants()
+		return
+	var now := Time.get_ticks_msec() * 0.001 - BEHIND
+	var i := _reports.size() - 1
+	while i > 0 and _reports[i][0] > now:
+		i -= 1
+	var from: Array = _reports[i][1]
+	var at: Vector3 = from[0]
+	var turned: Quaternion = from[1]
+	if i + 1 < _reports.size():
+		var to: Array = _reports[i + 1][1]
+		var between := clampf(inverse_lerp(_reports[i][0], _reports[i + 1][0], now), 0.0, 1.0)
+		at = at.lerp(to[0], between)
+		turned = turned.slerp(to[1], between)
+	else:
+		at += (from[2] as Vector3) * clampf(now - _reports[i][0], 0.0, COASTS)
+	global_transform = Transform3D(Basis(turned), at)
+	linear_velocity = from[2]
+	angular_velocity = from[3]
+	_last_velocity = linear_velocity
+	_steer = from[4]
+	rpm = from[5]
+	gear = from[6]
+	gas = from[7]
+	braking = from[8]
+	engine_on = from[9]
+	speed = from[10]
+	turret_yaw = from[11]
+	gun_pitch = from[12]
+	_lay_gun()
+	for wheel in _wheels:
+		wheel.spin = speed / maxf(wheel.radius, 0.1)
+		wheel.touching = true
+	_carry_occupants()

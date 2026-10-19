@@ -17,6 +17,7 @@ extends Node
 ## pause after each: the others wait behind something or move. That is what
 ## leaves the player room to move as well, and what makes a fight read as one.
 
+const WAY := preload("res://scripts/way.gd")
 const WORLD := 1
 ## Distance between the spots the survey looks at.
 const GRID := 1.0
@@ -51,6 +52,10 @@ const AROUND := 8
 const SHORTLIST := 8
 ## Microseconds of a frame the survey of a level that is coming up takes.
 const SLICE := 4000
+## How far apart the survey of land of kilometres looks, near what stands
+## on it (see _near_things()): a spot moves up against what it finds
+## anyway, and the barns of a valley are many.
+const NEAR_GRID := 2.0
 ## A turn to attack that is not given back lapses after this long.
 const TURN_TIME := 6.0
 ## Somebody who asked for a turn this long ago is no longer waiting for one.
@@ -90,6 +95,8 @@ var _surveyed := [0, 0]:
 var _job := [0, 0]
 var _job_polygon := 0
 var _job_spots := PackedVector3Array()
+## How far down from each of _job_spots the survey near what stands looks.
+var _job_drops := PackedFloat32Array()
 var _job_spot := 0
 var _looked := {}
 var _kept := {}
@@ -338,7 +345,7 @@ func find_refuge(seeker: Node3D, from_what: Dictionary) -> Vector3:
 		out = seeker.global_basis.z
 	var map := seeker.get_world_3d().navigation_map
 	# If nothing better turns up: straight away from it.
-	var refuge := NavigationServer3D.map_get_closest_point(map, from + out.normalized() * maxf(clear - out.length() + 1.0, 2.0))
+	var refuge := WAY.closest(map, from + out.normalized() * maxf(clear - out.length() + 1.0, 2.0))
 	if not _survey():
 		return refuge
 	var space := seeker.get_world_3d().direct_space_state
@@ -433,7 +440,10 @@ func _survey(budget := -1) -> bool:
 	var corners := navmesh.get_vertices()
 	# A navmesh that has just been baked is only on the map a few frames
 	# later. Until then the map knows of no floor to put a spot on.
-	if corners.is_empty() or NavigationServer3D.map_get_closest_point_owner(map, to_world * corners[0]) != region.get_rid():
+	# A navmesh that finds the way in squares of its own (see scripts/game.gd)
+	# is read whole, and is on the map as those squares.
+	var owner := NavigationServer3D.map_get_closest_point_owner(map, to_world * corners[0]) if not corners.is_empty() else RID()
+	if corners.is_empty() or (region.enabled and owner != region.get_rid()) or (not region.enabled and not owner.is_valid()):
 		return false
 	var key := [scene.get_instance_id(), made]
 	if _job != key:
@@ -445,15 +455,30 @@ func _survey(budget := -1) -> bool:
 		_job = key
 		_job_polygon = 0
 		_job_spots = PackedVector3Array()
+		_job_drops = PackedFloat32Array()
 		_job_spot = 0
 		_looked = {}
 		_kept = {}
 	var space := region.get_world_3d().direct_space_state
+	# On land of kilometres only what lies near something that stands: all
+	# of that is found at once, and looked at a spot at a time. That is
+	# thousands of spots around the barns of a valley: whoever asks before
+	# it is done does not wait for it, and makes do without.
+	var near_things: bool = region.get_meta(&"cover_near_things", false)
+	if near_things and budget < 0:
+		budget = SLICE
 	var until := Time.get_ticks_usec() + budget
+	if near_things and _job_polygon == 0 and _job_spots.is_empty():
+		_job_spots = _near_things(scene)
+		_job_spot = 0
+		_job_polygon = navmesh.get_polygon_count()
 	# Polygon by polygon, and spot by spot in the order the polygon has them.
 	while true:
 		while _job_spot < _job_spots.size():
-			_look_at(space, map, _job_spots[_job_spot], _kept)
+			if near_things:
+				_near_spot(space, map, _job_spot)
+			else:
+				_look_at(space, map, _job_spots[_job_spot], _kept)
 			_job_spot += 1
 			if budget >= 0 and Time.get_ticks_usec() > until:
 				return false
@@ -512,6 +537,55 @@ func _spots_on(p: int, navmesh: NavigationMesh, corners: PackedVector3Array, to_
 	return found
 
 
+## The survey of land of kilometres, for a level whose navmesh says so
+## (metadata/cover_near_things, see tools/levels/alps/plan.gd): the floor is
+## looked at only within NEAR of something that stands on it and could be
+## cover, every collider but the ground, the walls nobody sees and what is
+## in the group "no_cover" (the trunks of a wood). Every metre of a meadow of
+## five square kilometres, eight rays each, took eight minutes; there is no
+## cover on a meadow, and a bot in the open runs to what it sees. The spots
+## are where to look down from, over the top of what stands there; how far
+## down goes into _job_drops.
+func _near_things(scene: Node) -> PackedVector3Array:
+	var found := PackedVector3Array()
+	_job_drops = PackedFloat32Array()
+	var looked := {}
+	for body: StaticBody3D in scene.find_children("*", "StaticBody3D", true, false):
+		if body.is_in_group(&"no_cover"):
+			continue
+		for child in body.get_children():
+			var collider := child as CollisionShape3D
+			if collider == null or collider.shape == null or collider.shape is HeightMapShape3D or collider.shape is WorldBoundaryShape3D:
+				continue
+			var box := collider.global_transform * collider.shape.get_debug_mesh().get_aabb()
+			if box.size.x > 200.0 or box.size.z > 200.0:
+				continue
+			box = box.grow(NEAR)
+			for x in range(floori(box.position.x / NEAR_GRID), ceili(box.end.x / NEAR_GRID) + 1):
+				for z in range(floori(box.position.z / NEAR_GRID), ceili(box.end.z / NEAR_GRID) + 1):
+					var flat := Vector2i(x, z)
+					if looked.has(flat):
+						continue
+					looked[flat] = true
+					found.append(Vector3(x * NEAR_GRID, box.end.y + 1.0, z * NEAR_GRID))
+					_job_drops.append(box.size.y + 4.0)
+	return found
+
+
+## Looks at spot `i` of the survey near what stands: the floor under it, if
+## the navmesh has floor there.
+func _near_spot(space: PhysicsDirectSpaceState3D, map: RID, i: int) -> void:
+	var top := _job_spots[i]
+	var ground := _ray(space, top, top + Vector3.DOWN * _job_drops[i])
+	if ground.is_empty():
+		return
+	var at: Vector3 = ground.position
+	var on_map := WAY.closest(map, at)
+	if _flat(on_map, at) > 0.3 or absf(on_map.y - at.y) > HOVER:
+		return
+	_look_at(space, map, at, _kept)
+
+
 ## Files one spot of the survey: as cover if something stands by it, moved
 ## up against that, or else as open floor.
 func _look_at(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, kept: Dictionary) -> void:
@@ -533,7 +607,7 @@ func _look_at(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, kept: Dic
 		# Asked from a hair beside it as well: a spot that walks up to a
 		# pillar on its own line would otherwise end up left or right of it
 		# by the last digit.
-		var moved := NavigationServer3D.map_get_closest_point(map, at + towards * (closest - HUG) + ASIDE)
+		var moved := WAY.closest(map, at + towards * (closest - HUG) + ASIDE)
 		if _flat(moved, at) < NEAR and absf(moved.y - at.y) < HOVER:
 			at = _on_floor(space, moved)
 	# Two spots that were moved up against the same thing may have met.
@@ -586,7 +660,7 @@ func _suits(space: PhysicsDirectSpaceState3D, map: RID, at: Vector3, foe: Vector
 	if _hides(space, foe, at, across, [eyes + 0.15, eyes * 0.7]):
 		# Hidden standing up: it shoots from a step to the side.
 		for step: Vector3 in [across * 1.2, -across * 1.2, across * 1.9, -across * 1.9, across * 1.2 + ahead * 0.8, -across * 1.2 + ahead * 0.8]:
-			var spot := NavigationServer3D.map_get_closest_point(map, at + step)
+			var spot := WAY.closest(map, at + step)
 			if _flat(spot, at + step) > 0.45 or absf(spot.y - at.y) > HOVER:
 				continue
 			spot = _on_floor(space, spot)
