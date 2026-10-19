@@ -72,10 +72,7 @@ What an entry can say besides its source:
             "burst": [seconds, from Hz, to Hz, fall]: noise that is there at
             once and white, and turns brown within `fall` seconds as it dies
             away, which is what a shot does that lands in something soft
-            and wet. Or "chirp": [seconds, Hz, how many] is crickets in the
-            grass at night, that many of them about that pitch, each with a
-            chirp of its own, here and there between left and right. An echo
-            needs
+            and wet. An echo needs
             nothing new: it is the recording again as a layer, later,
             quieter and duller. A layer can say lowpass and highpass
             (Hz, 24 dB per octave), length (seconds), gain (dB against the
@@ -275,8 +272,6 @@ def excerpts(spec: dict, packs: dict, scratch: pathlib.Path, stereo: bool) -> li
         return [hum(spec["hum"][0], spec["hum"][1:], seed) for seed in range(4)]
     if "burst" in spec:
         return [[burst(*spec["burst"], seed)] for seed in range(5)]
-    if "chirp" in spec:
-        return [chirp(*spec["chirp"], seed) for seed in range(2)]
     source = spec["source"]
     patterns = spec["files"] if isinstance(spec["files"], list) else [spec["files"]]
     sources = []
@@ -415,41 +410,6 @@ def hum(seconds: float, pitches: list, seed: int) -> list:
     return out
 
 
-def chirp(seconds: float, pitch: float, count: int, seed: int) -> list:
-    """Crickets in the grass, `count` of them about `pitch` Hz, in two
-    channels. A field cricket chirps: two to four pulses of its tone, a few
-    hundredths of a second each, and again a third to half a second later;
-    now and then it stops for a while. Each has a pitch, a pace, a place
-    between left and right and a distance of its own."""
-    total = int(seconds * RATE)
-    chance = random.Random(3000 + seed)
-    out = [[0.0] * total for _ in range(2)]
-    for _ in range(count):
-        tone = math.tau * pitch * chance.uniform(0.88, 1.12) / RATE
-        pan = chance.uniform(-0.8, 0.8)
-        level = chance.uniform(0.25, 1.0) ** 1.5
-        gains = (level * min(1.0, 1.0 - pan), level * min(1.0, 1.0 + pan))
-        pulses = chance.choice([2, 3, 3, 4])
-        pulse = chance.uniform(0.012, 0.02)
-        gap = chance.uniform(0.022, 0.034)
-        every = chance.uniform(0.28, 0.6)
-        t = chance.uniform(0.0, every)
-        while t < seconds - 0.2:
-            if chance.random() < 0.03:
-                t += chance.uniform(1.0, 4.0)
-                continue
-            for p in range(pulses):
-                start = int((t + p * (pulse + gap)) * RATE)
-                length = int(pulse * RATE)
-                for i in range(min(length, total - start)):
-                    k = start + i
-                    sample = math.sin(tone * k) * math.sin(math.pi * i / length) ** 2
-                    out[0][k] += sample * gains[0]
-                    out[1][k] += sample * gains[1]
-            t += every * chance.uniform(0.92, 1.08)
-    return out
-
-
 def seamless(channel: list, seam: int) -> list:
     """A channel that goes round: its last `seam` samples are taken off and
     faded into its first, so that its end runs on into its start."""
@@ -477,7 +437,7 @@ def tiled(take: list, count: int, wide: bool) -> list:
 
 def made(spec: dict) -> bool:
     """True for what is generated here instead of recorded."""
-    return any(kind in spec for kind in ("sweep", "rumble", "air", "hum", "burst", "chirp"))
+    return any(kind in spec for kind in ("sweep", "rumble", "air", "hum", "burst"))
 
 
 def pitched(samples: list, speed: float) -> list:
