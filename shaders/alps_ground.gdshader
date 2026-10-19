@@ -73,11 +73,15 @@ uniform vec3 larch : source_color = vec3(0.5, 0.33, 0.07);
 uniform vec3 rock_far : source_color = vec3(0.5, 0.49, 0.47);
 uniform vec3 scree_far : source_color = vec3(0.55, 0.54, 0.51);
 uniform vec3 snow_far : source_color = vec3(0.9, 0.92, 0.96);
-// The colours the meadow is seen as: the green of a mown meadow in October
-// and the straw of what was left standing. The scans keep their detail but
-// are brought to these on the mean, so that near and far are one colour.
-uniform vec3 green_seen : source_color = vec3(0.35, 0.42, 0.19);
-uniform vec3 straw_seen : source_color = vec3(0.62, 0.54, 0.32);
+// The colours the meadow is seen as: the green of a mown meadow in October,
+// the straw of what was left standing, and the moor grass of the wet, gone
+// orange. They are those of the grass drawn round the eye from afar
+// (shaders/alps_grass.gdshader), so that where it ends the ground goes on
+// in its colour. The scans keep their detail but are brought to these on
+// the mean, so that near and far are one colour.
+uniform vec3 green_seen : source_color = vec3(0.26, 0.33, 0.18);
+uniform vec3 straw_seen : source_color = vec3(0.44, 0.41, 0.29);
+uniform vec3 wet_seen : source_color = vec3(0.48, 0.4, 0.23);
 // Which way the sun is, from the ground: the relief of the near textures is
 // folded into their colour by it (see the end of fragment()), which keeps it
 // out of the pre-pass SSAO makes the renderer run the shader through again
@@ -245,6 +249,9 @@ void fragment() {
 		// A second reading, turned and coarser, breaks up the tiles.
 		vec2 q = turned(p, 0.7) * 0.113 + 0.31;
 		green = mix(green, texture(meadow_tex, q).rgb, 0.3) * to_green;
+		// Under the grass that is drawn the earth of the scan would show
+		// through between the tufts: half of it is the sward's colour.
+		green = mix(green, green_seen, 0.4);
 		vec3 straw = texture(straw_tex, turned(p, -0.4) * 0.27 + 0.57).rgb * to_straw;
 		float k = over(dot(green, vec3(0.333)) * 1.6, dot(straw, vec3(0.333)) * 1.6, dry);
 		vec3 sward = mix(green, straw, k);
@@ -255,8 +262,9 @@ void fragment() {
 	// The pastures of the mountains round the land: grazed short and gone
 	// olive, and seen through kilometres of air.
 	meadow *= mix(vec3(1.0), vec3(0.78, 0.8, 0.82), 1.0 - inland);
-	// Wet: the ditches, darker and greener, the earth showing.
-	meadow = mix(meadow, meadow * vec3(0.62, 0.7, 0.55), wet * 0.8);
+	// Wet: the ditches, grown with moor grass gone orange, darker at the
+	// bottom.
+	meadow = mix(meadow, wet_seen * mix(1.0, 0.7, wet), wet * 0.75);
 	// Trodden: bare earth through the grass at the verges and in the camps.
 	vec3 colour = meadow;
 	if (trodden > 0.0) {

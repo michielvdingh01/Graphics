@@ -345,6 +345,9 @@ func road_gap(at: Vector2) -> float:
 
 
 var _road_gaps := PackedFloat32Array()
+## The fences that were put up, each the points it runs through: the grass
+## along them is long (see _grass_map()).
+var _fence_lines: Array = []
 
 
 ## How far from the middle of the nearest road every spot of the land lies, up
@@ -527,18 +530,31 @@ func _grass_map(woody: PackedFloat32Array, upright: PackedFloat32Array, roads: A
 					continue
 				_stamp(long, foot, 3.5, 1.0)
 	# At the walls of whatever was built: the small open places keep_open()
-	# was given, which are those of barns, huts and the like.
+	# was given, which are those of barns, huts and the like. Right at the
+	# wall the ground is trodden (and grows nettles), a little further off
+	# the grass is long.
+	var trodden := PackedFloat32Array()
+	trodden.resize(across * down)
 	for area: Rect2 in _open:
 		if area.size.x > 40.0 or area.size.y > 40.0:
 			continue
-		var box := _spots_in(area.grow(2.5))
+		var box := _spots_in(area.grow(3.0))
 		for row in range(box[1], box[3] + 1):
 			for column in range(box[0], box[2] + 1):
 				var at := _spot(column, row)
 				var off := maxf(maxf(area.position.x - at.x, at.x - area.end.x), maxf(area.position.y - at.y, at.y - area.end.y))
-				if off > -2.0:
+				if off > -2.5:
 					var i := row * across + column
-					long[i] = maxf(long[i], 1.0 - smoothstep(0.5, 1.8, absf(off + 0.5)))
+					trodden[i] = maxf(trodden[i], 0.6 * (1.0 - smoothstep(-0.5, 0.8, off)))
+					long[i] = maxf(long[i], 1.0 - smoothstep(0.8, 2.6, absf(off - 0.6)))
+	# Along the fences, where no mower comes.
+	for line: Array in _fence_lines:
+		for k in line.size() - 1:
+			var from: Vector2 = line[k]
+			var to: Vector2 = line[k + 1]
+			var steps := maxi(1, int(from.distance_to(to) / 1.5))
+			for j in steps + 1:
+				_stamp(long, from.lerp(to, float(j) / steps), 1.8, 1.0)
 	var near_wood: PackedFloat32Array = LIGHT.evened(woody, across, down, maxi(1, roundi(5.0 / _cell)))
 	var round_about: PackedFloat32Array = LIGHT.evened(_heights, across, down, maxi(1, roundi(3.0 / _cell)))
 	var camps: Array[Rect2] = []
@@ -558,7 +574,7 @@ func _grass_map(woody: PackedFloat32Array, upright: PackedFloat32Array, roads: A
 			if half_wide > 0.0:
 				var from_middle: float = roads[0][i]
 				verge = smoothstep(half_wide - 0.5, half_wide + 0.3, from_middle) * (1.0 - smoothstep(half_wide + 1.2, half_wide + 3.0, from_middle))
-			var b := verge
+			var b := maxf(verge, trodden[i])
 			var at := _spot(column, row)
 			for camp: Rect2 in camps:
 				if camp.has_point(at):

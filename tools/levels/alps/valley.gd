@@ -148,6 +148,7 @@ func _farmland(dice: RandomNumberGenerator, barns: Array[Vector2]) -> void:
 			x += 12.0
 		if points.size() >= 2:
 			slant_fence(points)
+			_fence_lines.append(points)
 			for point: Vector2 in points:
 				keep_bare(point, 1.5)
 			fences += 1
