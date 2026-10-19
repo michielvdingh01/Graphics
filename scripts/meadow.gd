@@ -28,6 +28,10 @@ const LAYERS := [
 		"material": "res://materials/alps_grass.tres",
 		"sheet": "res://assets/foliage/alps_meadow.json",
 		"cells": ["mown0", "mown1", "mown2", "mown3", "top0", "top1", "top2", "top3", "long0", "long1", "long2", "long3", "wet0", "wet1", "wet2", "wet3", "far0", "far1", "far2", "far3"],
+		# Which pictures each kind is drawn with, up close and from afar, to
+		# make it the colour of the ground from afar (mown, long, wet).
+		"kinds": [[0, 1, 2, 3], [8, 9, 10, 11], [12, 13, 14, 15]],
+		"far_kinds": [[16], [17], [18]],
 		# Each ring: whether it shows the pictures for afar, how much wider
 		# and higher than its picture a tuft is, and how many of the tufts of
 		# each kind it keeps (mown, long, wet).
@@ -94,6 +98,8 @@ var _heights := PackedFloat32Array()
 var _height_size := Vector2i.ZERO
 var _land_rect := Vector4.ZERO
 var _land_cell := 2.0
+## The colours the grass is seen as from afar, if the level's ground says.
+var _seen := {}
 
 
 func _ready() -> void:
@@ -119,6 +125,17 @@ func _ready() -> void:
 			maps.land_c = load(beside)
 	if maps.land_c == null:
 		maps.land_c = _stand_in_lie(maps.land_a, maps.land_b)
+	# What the meadow is seen as from afar, as the level's ground has it.
+	if maps.land_a is Resource:
+		var ground := (maps.land_a as Resource).resource_path.replace("_land_a.", "_ground_look.")
+		if ResourceLoader.exists(ground):
+			var ground_look := load(ground) as ShaderMaterial
+			for seen: Array in [["green_seen", "mown_seen"], ["straw_seen", "long_seen"]]:
+				var colour: Variant = ground_look.get_shader_parameter(seen[0]) if ground_look else null
+				if colour is Vector3:
+					colour = Color(colour.x, colour.y, colour.z)
+				if colour is Color:
+					_seen[seen[1]] = colour
 	for layer: Dictionary in LAYERS:
 		if ResourceLoader.exists(layer.material) and FileAccess.file_exists(layer.sheet):
 			_layer(layer, maps)
@@ -165,6 +182,17 @@ func _layer(layer: Dictionary, maps: Dictionary) -> void:
 		var told: Dictionary = ring[3]
 		for parameter: String in told:
 			material.set_shader_parameter(parameter, told[parameter])
+		if layer.has("kinds"):
+			var means := PackedVector3Array()
+			for pictures: Array in (layer.far_kinds if told.get("far_cells", false) else layer.kinds):
+				var sum := Vector3.ZERO
+				for index: int in pictures:
+					var mean: Array = sheet.cells[layer.cells[index]].get("mean", [0.1, 0.1, 0.1])
+					sum += Vector3(mean[0], mean[1], mean[2])
+				means.append(sum / pictures.size())
+			material.set_shader_parameter("kind_mean", means)
+			for parameter: String in _seen:
+				material.set_shader_parameter(parameter, _seen[parameter])
 		var index := _rings.size()
 		_rings.append([spacing, per_tile, across])
 		for j in TILES:

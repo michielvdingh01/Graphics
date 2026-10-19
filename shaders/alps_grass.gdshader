@@ -59,10 +59,16 @@ uniform sampler2D blades_normal : hint_normal, filter_linear_mipmap, repeat_disa
 // from alps_meadow.json.
 uniform vec4 cells[20];
 uniform vec2 cell_size[20];
-// The colour of each kind is that of its picture times this.
-uniform vec3 mown_tint : source_color = vec3(0.86, 0.9, 0.86);
-uniform vec3 long_tint : source_color = vec3(1.0);
-uniform vec3 wet_tint : source_color = vec3(1.0);
+// The colour each grass is seen as from afar: that of the ground under it,
+// green_seen and straw_seen of shaders/alps_ground.gdshader, which meadow.gd
+// takes from the level's ground. Wet grass has no ground of its own.
+uniform vec3 mown_seen : source_color = vec3(0.35, 0.42, 0.19);
+uniform vec3 long_seen : source_color = vec3(0.62, 0.54, 0.32);
+uniform vec3 wet_seen : source_color = vec3(0.45, 0.4, 0.25);
+// What the pictures of each kind this ring shows are on average, linear
+// (meadow.gd reads it from the sheet): a tuft is the colour of its picture
+// times what it is seen as over this.
+uniform vec3 kind_mean[3];
 uniform vec3 straw_tint : source_color = vec3(0.86, 0.72, 0.42);
 uniform float cut_near : hint_range(0.0, 1.0) = 0.42;
 uniform float cut_far : hint_range(0.0, 1.0) = 0.2;
@@ -71,6 +77,7 @@ uniform float sway = 0.1;
 uniform float through : hint_range(0.0, 1.0) = 0.14;
 
 varying flat int kind;
+varying flat vec3 tint;
 // How high up its card a dot is, 0 at the foot and 1 at the top.
 varying float up_card;
 varying float straw;
@@ -144,10 +151,16 @@ void vertex() {
 		float wet_here = wet + (fbm(at * 0.22 + 31.0) - 0.47) * 0.75 + (hash(square + 91.7) - 0.5) * 0.25;
 		float long_here = long_grass + (fbm(at * 0.27 + 77.0) - 0.47) * 0.75 + (hash(square + 13.9) - 0.5) * 0.25;
 		kind = wet_here > 0.5 ? 2 : (long_here > 0.5 ? 1 : 0);
+		tint = (kind == 0 ? mown_seen : (kind == 1 ? long_seen : wet_seen)) / max(kind_mean[kind], vec3(0.005));
 		// Long grass thins out where the meadow ends: a tuft is a smaller share
 		// of a full one there.
 		float kept_share = kind == 0 ? keep.x : (kind == 1 ? keep.y : keep.z);
-		if (d4 * 0.9 + 0.05 <= meadow && hash(square + 33.3) <= kept_share * (1.0 - 0.75 * trodden)) {
+		// Where the ground shows bare earth (the verges, the camps, by the
+		// barns), as shaders/alps_ground.gdshader works it out, no grass.
+		float bare = smoothstep(0.25, 0.75, trodden + (fbm(at * 0.9) - 0.5) * 0.6);
+		// Strictly less: this far from the origin the dice come out at exactly
+		// nought now and then, and a share of nought should keep none.
+		if (d4 * 0.9 + 0.05 <= meadow && hash(square + 33.3) < kept_share * (1.0 - smoothstep(0.15, 0.45, bare))) {
 			// The cards of a tuft each show another of the four pictures of its
 			// kind; from afar one card shows the band of it. The card that lies
 			// in the grass shows the mown meadow from above, and is only there.
@@ -240,7 +253,7 @@ void vertex() {
 void fragment() {
 	vec4 blade = texture(blades_tex, UV);
 	float depth = -VERTEX.z;
-	vec3 colour = blade.rgb * (kind == 0 ? mown_tint : (kind == 1 ? long_tint : wet_tint));
+	vec3 colour = blade.rgb * tint;
 	if (kind == 0) {
 		colour = mix(colour, vec3(dot(blade.rgb, vec3(0.3, 0.6, 0.1))) * 2.0 * straw_tint, straw);
 		colour *= mix(1.0, mix(0.84, 1.12, mown), on_floor);

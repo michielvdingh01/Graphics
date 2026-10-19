@@ -1454,6 +1454,7 @@ def render_sheet(asset, out_dir, scratch):
     # What is half there is there: thin blades fall away where the card is
     # cut to its picture.
     colour[:, :, 3] = np.clip(colour[:, :, 3] * asset.get("solid", 1.25), 0.0, 1.0)
+    add_means(table, colour)
     facing[:, :, 3] = 1.0
     write_png(os.path.join(out_dir, asset["id"] + ".png"), colour)
     write_png(os.path.join(out_dir, asset["id"] + "_n.png"), facing, plain=True)
@@ -1467,6 +1468,31 @@ def render_sheet(asset, out_dir, scratch):
                 file.write(IMPORT % normal)
 
 
+def add_means(table, colour):
+    """The colour every cell is on average where it is not a hole, linear:
+    what the shader needs to know to make a plant seen from afar the colour
+    the ground has there (see shaders/alps_grass.gdshader)."""
+    for cell in table.values():
+        x, y, w, h = cell["rect"]
+        part = colour[y:y + h, x:x + w]
+        alpha = part[:, :, 3:4]
+        stored = part[:, :, :3]
+        linear = np.where(stored <= 0.04045, stored / 12.92, np.power((stored + 0.055) / 1.055, 2.4))
+        mean = (linear * alpha).sum(axis=(0, 1)) / max(float(alpha.sum()), 1e-6)
+        cell["mean"] = [round(float(v), 4) for v in mean]
+
+
+def means_only(asset, out_dir):
+    """add_means() for a sheet as it was rendered, without rendering it."""
+    path = os.path.join(out_dir, asset["id"] + ".json")
+    with open(path) as file:
+        sheet = json.load(file)
+    add_means(sheet["cells"], read_png(os.path.join(out_dir, asset["id"] + ".png")))
+    with open(path, "w") as file:
+        json.dump(sheet, file, indent="\t")
+        file.write("\n")
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     only = None
@@ -1477,10 +1503,11 @@ def main():
     os.makedirs(scratch, exist_ok=True)
     with open(MANIFEST) as file:
         manifest = json.load(file)
+    names = [arg for arg in args if not arg.startswith("--")]
     for asset in manifest["assets"]:
         if asset.get("source") != "rendered" or not asset.get("generator", "").endswith("gen_plants.py"):
             continue
-        if args and asset["id"] not in args:
+        if names and asset["id"] not in names:
             continue
         if only:
             asset = dict(asset, only=only)
@@ -1489,6 +1516,9 @@ def main():
             asset = dict(asset, samples=int(os.environ["PLANTS_SAMPLES"]))
         out_dir = os.environ.get("PLANTS_OUT", OUT_DIR)
         os.makedirs(out_dir, exist_ok=True)
+        if "--means" in args:
+            means_only(asset, out_dir)
+            continue
         render_sheet(asset, out_dir, scratch)
         print(asset["id"])
 

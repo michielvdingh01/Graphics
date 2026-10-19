@@ -68,7 +68,7 @@ float fbm(vec2 p) {
 // whether the one that lies flat is used (only by what has a picture from
 // above). `top` is the cell seen from above, or -1. `card` is which card of
 // the tuft it is.
-void pick(vec2 at, vec2 square, vec4 map, vec4 lie, float meadow, float steep, int card, out int cell, out int top) {
+void pick(vec2 at, vec2 square, vec4 map, vec4 lie, float meadow, float steep, float verge, int card, out int cell, out int top) {
 	cell = -1;
 	top = -1;
 	float r = hash(square + 51.3);
@@ -84,12 +84,15 @@ void pick(vec2 at, vec2 square, vec4 map, vec4 lie, float meadow, float steep, i
 		bool tall = !wet && long_here > 0.5;
 		float drift = smoothstep(0.52, 0.62, fbm(at * 0.045 + 5.0));
 		float clump = smoothstep(0.5, 0.6, fbm(at * 0.2 + 13.0));
-		float nettles = max(smoothstep(0.35, 0.7, lie.b), lie.a * 0.4) * clump;
+		// Nettles by the barns and in the camps, not on the verge of a road.
+		float nettles = max(smoothstep(0.35, 0.7, lie.b) * (1.0 - verge), lie.a * 0.4) * clump;
 		// The chances add up: each kind takes the next stretch of the dice.
 		float p1 = nettles * 0.7 * more;
+		// Bare earth, as the ground has it: only nettles stand at its rim.
+		float bare = smoothstep(0.25, 0.75, lie.b + (fbm(at * 0.9) - 0.5) * 0.6);
 		if (r < p1) {
 			cell = 12 + int(v * 4.0);
-		} else if (wet) {
+		} else if (wet || bare > 0.3) {
 			return;
 		} else if (tall) {
 			float p2 = p1 + 0.1 * more;
@@ -196,7 +199,8 @@ void vertex() {
 		float steep = length(slope);
 		int cell;
 		int top;
-		pick(at, square, map, lie, meadow * (1.0 - on_road), steep, int(UV2.x), cell, top);
+		float verge = half_wide > 0.0 ? 1.0 - smoothstep(half_wide + 2.5, half_wide + 5.0, from_middle) : 0.0;
+		pick(at, square, map, lie, meadow * (1.0 - on_road), steep, verge, int(UV2.x), cell, top);
 		bool lying = UV2.y > 0.5;
 		if (lying) {
 			cell = top;
