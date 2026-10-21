@@ -477,10 +477,13 @@ def _toned(colour: np.ndarray, tone: np.ndarray) -> np.ndarray:
     return np.stack([np.interp(tone, (0.0,) + TONES + (TONES[2] * 1.5,), steps[:, channel]) for channel in range(3)], axis=1)
 
 
-def uniform(canvas: Canvas, palette: dict) -> dict:
-    """Dyes what a soldier wears and carries in the colours of `palette`."""
+def parts(canvas: Canvas) -> dict:
+    """What every texel of a soldier is: skin (the face with its hair, brows
+    and lips, the eyes and the inside of the mouth, and bare hands and
+    forearms), glass (the lens of goggles), boots, and cloth, which is the
+    rest of what it wears and carries; each 0..1. Also how bright the grey of
+    a typical texel is, and the island every texel lies on."""
     c = canvas
-    note = unmark(c)
     top = c.colour.max(axis=1)
     least = np.maximum(top, 0.08)
     # How far a colour is from grey, and from blue towards red: not fooled by
@@ -490,10 +493,10 @@ def uniform(canvas: Canvas, palette: dict) -> dict:
     grey = c.colour @ GREY
     island = c.islands()
 
-    # What is not to be dyed. On the head that goes by island: the face comes
-    # with its hair, brows and lips, and so do the eyes and the inside of the
-    # mouth, and all of those are vivid where a helmet, a cap and goggles are
-    # grey. Hair is no colour of its own, so it cannot be told texel by texel.
+    # On the head it goes by island: the face comes with its hair, brows and
+    # lips, and so do the eyes and the inside of the mouth, and all of those
+    # are vivid where a helmet, a cap and goggles are grey. Hair is no colour
+    # of its own, so it cannot be told texel by texel.
     typical = float(np.median(grey[vivid < 0.2])) if (vivid < 0.2).sum() > 100 else 0.4
     person = np.zeros(len(c.members()), dtype=bool)
     glass = np.zeros(len(c.members()), dtype=bool)
@@ -513,9 +516,23 @@ def uniform(canvas: Canvas, palette: dict) -> dict:
     flesh = np.clip((vivid - 0.28) / 0.1, 0.0, 1.0) * (warm > 0.1)
     around = c.spread(flesh, 4)
     skin = np.maximum(flesh * (around > 0.25), np.clip((around - 0.5) / 0.15, 0.0, 1.0))
-    skin = np.where((person | glass)[island], 1.0, skin)
-    boots = boot[island] & ~person[island]
-    cloth = (1.0 - skin) * ~boots
+    skin = np.where(person[island], 1.0, skin)
+    lens = glass[island] & ~person[island]
+    skin = np.where(lens, 0.0, skin)
+    boots = (boot[island] & ~person[island]).astype(np.float64)
+    cloth = (1.0 - skin) * (1.0 - boots) * ~lens
+    return {"skin": skin, "glass": lens.astype(np.float64), "boots": boots, "cloth": cloth, "grey": grey, "typical": typical}
+
+
+def uniform(canvas: Canvas, palette: dict) -> dict:
+    """Dyes what a soldier wears and carries in the colours of `palette`.
+    What is not dyed is what parts() says is skin or glass."""
+    c = canvas
+    note = unmark(c)
+    found = parts(c)
+    grey, typical = found["grey"], found["typical"]
+    boots = found["boots"] > 0.5
+    cloth = (1.0 - np.maximum(found["skin"], found["glass"])) * ~boots
 
     # The pattern and the folds are in how bright the cloth was: every tone
     # of it becomes the new colour as much lighter or darker. The two colours
