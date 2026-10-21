@@ -4539,3 +4539,64 @@ Op 19 oktober 2026, na het spelen van de duinen, drie punten van Michiel. De mel
 |---|---|
 | Alleen de route en het sluipen langs een gevecht | `tools/selftest.sh --routes` |
 | Welke zones een checkpoint op wacht | `tools/selftest.sh --level=<level>` (regels `checkpoint ... waits for`) |
+
+## De voertuigen: banden, loopwielen, rupsen, ruiten en het zand
+
+Op 21 oktober 2026 gevraagd: "Verbeter de graphics van de voertuigen". Branch `voertuigbeeld`, vanaf de trunk `29b7d24`. Wat er verbeterd moest worden heb ik zelf gekozen, op de beelden van `tools/vehicle_sheet.py` (zie onder): de jeep, de vrachtwagen, de tank en de motorfiets in de duinen, elk van voren, van achteren, van dichtbij en vanaf de stoel of van achteren zoals je erachter rijdt.
+
+**Wat er mis was**
+
+- **De banden en loopwielen waren kalkwit**, en de koepel van de tank ook. De lak (`shaders/field_paint.gdshader`) legt het zand op naar hoe hoog een punt boven de grond ligt, en las dat af aan de Y van de mesh. Een wiel, een as, een loopwiel, de koepel en het kanon zijn onderdelen met een eigen draaipunt: voor een wiel is zijn eigen Y rond nul, dus de shader dacht dat het hele wiel op de grond lag en legde er het dikste zand op. De koepel (draaipunt op 1,62 m) kreeg het zand van een spatbord. Dat zat er sinds de voertuigen; het viel op als "het zand", niet als een fout.
+- **De banden** waren twaalfhoeken met acht noppen, zonder velg die je zag. De loopwielen van de tank waren tienhoekige ijzeren schijven, de rupsen platte plaatjes in roestbruin.
+- **De ruiten** waren melkwit: hetzelfde glas als de ramen van de fabriek, met een vuile film.
+- Lampen, het stuur, de kanonloop, uitlaten en de brandstoftank waren grof (8 tot 12 zijden). De motorfiets had dichte schijven als wielen.
+
+**Wat er staat** (`tools/models/vehicles.gd`)
+
+- **De hoogte zit in het model.** Elk hoekpunt van een voertuig krijgt zijn hoogte boven de grond mee in `CUSTOM0` (`_tri()`), duizend hoger zodat een mesh zonder die waarde (iets van een level dat dezelfde lak heeft) herkend wordt en het gaat zoals eerst. Nu ligt het zand op de onderste helft van de banden en velgen en op de spatborden, en is de koepel olijfgroen met stof op wat naar boven kijkt.
+- **Banden** (`_wheel()`, `_tyre()`): een karkas met bollende wangen, een rib en ronde schouders (24 tot 28 zijden), een visgraatprofiel van noppen om de vier tot vijf centimeter, in twee rijen die om en om schuin staan (28 per rij bij de jeep), op een geperste velg met een schotel, een naaf, een kap en vijf of acht moeren. De binnenste band van een dubbel paar is alleen het karkas. Rubber is donkerder en draagt minder zand (`materials/tyre.tres`).
+- **De motorfiets** heeft spaakwielen: een smalle velg, een trommel als naaf en 32 spaken die elkaar kruisen, ook het reservewiel op het zijspan.
+- **De tank**: loopwielen van twee geperste schijven met elk een massieve rubberband en de spleet ertussen waar de geleidetanden doorheen lopen, met een naaf en acht moeren (`_road_wheel()`). Het spanwiel en het aandrijfwiel zijn ronder en hebben twee velgen; het aandrijfwiel heeft twee kransen van dertien tanden. Elke schakel van de rups heeft nu een plaat, een richel die in de grond bijt en een geleidetand aan de binnenkant, en het ijzer is donker staal dat aan de randen blank slijt in plaats van bruin (`materials/track.tres`).
+- **Ruiten** van eigen glas (`materials/field_glass.tres`): bijna helder, licht getint, met stof in vlekken. **Koplampen** zijn een glas met een verzilverde kom erachter (`materials/field_lens.tres`), dat 's nachts niet brandt; eerst was het hetzelfde glas als de ruit.
+- **Rond is rond** (`_round_enough()`): in het model voor dichtbij krijgt alles wat rond is zijden naar zijn maat, 14 vanaf 5 cm straal, 20 vanaf 10 cm, 28 vanaf 25 cm. Lampen 20, het stuur 24.
+- Het model voor veraf (vanaf 34 m) laat alle noppen, moeren, spaken en tanden weg, zoals het al deed met wat klein is.
+
+**Driehoeken**
+
+| | Dichtbij, trunk / nu | Veraf (vanaf 34 m), trunk / nu |
+|---|---|---|
+| Jeep | 5.264 / 13.598 | 780 / 780 |
+| Vrachtwagen | 7.145 / 23.149 | 1.470 / 1.470 |
+| Tank | 8.678 / 25.780 | 2.292 / 2.484 |
+| Motorfiets | 4.972 / 12.836 | 284 / 252 |
+
+Het meeste zit in de banden (ongeveer 1.400 per wiel, waarvan de helft noppen), de loopwielen en de rupsen. Elk loopwiel van de tank heeft nu ook rubber, een derde verf, dus een tank kost 24 tekenopdrachten meer, plus die voor zijn schaduw. De modelbestanden zijn drie keer zo groot (0,1 tot 0,5 MB per voertuig).
+
+**Gemeten** op 21 oktober 2026 tussen 10:03 en 10:40, M1 Pro **op de accu** (96 naar 90%, geen lader, geen energiebesparing), load 2,7 tot 3,3, geen andere Godot. `tools/benchmark.sh --scene=res://scenes/dunes.tscn` op drie standpunten vol voertuigen, om en om uit een kopie van de trunk (`29b7d24`) en deze branch, vier rondes op 3456×2160 met MetalFX (kwaliteit 3, schaal vanzelf) en twee op 1920×1080, waar beide tegen de 120 fps aanlopen.
+
+| Standpunt (3456×2160, MetalFX) | Fps gemiddeld, trunk | nu | Driehoeken in beeld, trunk / nu | Tekenopdrachten, trunk / nu |
+|---|---|---|---|---|
+| Het wagenpark van voren, drie vrachtwagens en drie jeeps op 10 tot 20 m (186, 126) | 91,0 89,7 91,0 91,8 | 85,4 89,7 89,4 88,9 | 1,26 / 1,60 miljoen | 1029 / 1051 |
+| Het tankkamp, twee tanks op 11 m (101, 150) | 86,4 85,0 85,5 86,4 | 85,0 85,0 84,8 85,1 | 1,17 / 1,34 miljoen | 1035 / 1120 |
+| De rij bij het complex, jeeps, vrachtwagens en de tank (100, 28) | 96,6 94,3 95,7 90,8 | 93,5 93,9 92,9 93,6 | 1,07 / 1,38 miljoen | 802 / 871 |
+
+- In het wagenpark kost het 2,5 fps (90,9 tegen 88,4, ongeveer 0,3 ms), elders ongeveer 1 fps; dat laatste is even groot als het verschil tussen twee rondes van dezelfde stand. Het is gemeten op de accu: aan de lader kan het anders uitkomen, het verschil om en om zou ongeveer moeten kloppen.
+- **De eerste keer.** Vanaf het titelscherm geteld met een probe (de duinen laden, 11 s wachten, dan van 60 m en daarna 8 m naar een jeep, een vrachtwagen en een tank kijken): bij het naderen wordt er in de trunk en nu geen enkele pipeline tijdens het tekenen gemaakt. Bij het laden en infaden zijn het er nu 141, in de trunk 135: de nieuwe lens en het nieuwe glas, en de lak met de hoogte erbij.
+
+**Getest**: `tools/test_vehicles.sh`, 147 van 147 (rijden, slijten, overrijden, de 22 in de duinen, de poort, wedstrijden, de motorfiets). `tools/selftest.sh` slaagt (586 controles). In een nieuwe worktree faalt het deel van de Alpen eerst: `scenes/levels/alps_walk.res` en de rest van de 218 bestanden van de Alpen onder `scenes/levels/` zijn in de hoofdcheckout gebouwd en nooit gecommit. Ik heb ze voor de test uit de hoofdcheckout gekloond en niet meegecommit. Het level is niet herbouwd: het verwijst naar de modellen, en wat bij een voertuig in een level hoort (nummer en lading) is niet veranderd. De showroom en de Alpen krijgen de nieuwe modellen dus ook.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet.** De beelden zijn stilstaande voertuigen. Of de noppen van een band die draait flikkeren, of de spaken van de motorfiets op 10 m knipperen (ze zijn 6,4 mm dik), en hoe de overgang naar het model voor veraf op 34 m er nu uitziet, nu dichtbij en veraf meer verschillen, heb ik niet in beweging gezien.
+- **Het zand is mijn keuze.** Hoeveel er op de banden zit en hoe donker het rubber is, staat in `materials/tyre.tres`; een poging met rafelige zandspatten in plaats van een waas leek op wintercamouflage en is teruggedraaid.
+- **Wat ik niet heb aangepakt**: de vorm van de carrosserie (de jeep is nog hoekig, de spatborden zijn platen), rupsen die meedraaien, sporen in het zand, stof achter een rijdend voertuig, en het zicht van de bestuurder van de tank, die tegen de rookwerpers aan kijkt.
+- De Alpen heb ik niet bekeken: daar staan de jeeps, vrachtwagens, tanks en motorfietsen in ander licht en tussen gras.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| Het blad met voor en na | `tools/vehicle_sheet.py --before=<checkout van de trunk> --name=<naam>`; alleen deze checkout: `tools/vehicle_sheet.py`. Het blad komt in `benchmark/sheets/`, de beelden in `benchmark/results/vehicle_sheet/` |
+| De modellen opnieuw bouwen | `tools/build_model.sh vehicles` |
+| Het blad van deze branch | `benchmark/sheets/vehicles_before_after.jpg`: per voertuig een rij voor en een rij nu |
+

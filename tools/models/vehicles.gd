@@ -32,7 +32,9 @@ const ARMY := "army_green"
 const IRON := "track"
 const RUBBER := "tyre"
 const CANVAS := "canvas"
-const PANE := "glass"
+const PANE := "field_glass"
+## The glass of a headlamp: the silvered bowl shows through it, and it never burns.
+const LENS := "field_lens"
 const WOOD := "wood"
 const MARKS := "field_marks"
 ## A side view drawn as (towards the back, up) and pushed out across the
@@ -52,6 +54,10 @@ const TYRE_PRESSURE := Rect2(0, 0.75, 0.5, 0.125)
 const TOP_SPEED := Rect2(0.5, 0.75, 0.5, 0.125)
 const NO_STEP := Rect2(0, 0.875, 0.5, 0.125)
 const PETROL := Rect2(0.5, 0.875, 0.5, 0.125)
+
+## What is added to the height over the ground written into every corner:
+## see _tri().
+const HEIGHT_MARK := 1000.0
 
 ## From how far off a vehicle is drawn as its far model, and how far apart
 ## the two distances are at which it changes one way and the other, in metres.
@@ -194,7 +200,7 @@ func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
 		# Fewer paints, and so fewer things to draw: no glass, boards the
 		# colour of the steel, and bare iron only where it is most of what
 		# shows. What is left out goes into a surface that is never kept.
-		if mat == PANE or (mat == IRON and not _far_iron):
+		if mat == PANE or mat == LENS or (mat == IRON and not _far_iron):
 			return _tool_named("|left out")
 		if mat == WOOD:
 			mat = ARMY
@@ -237,7 +243,21 @@ func _bar(mat: String, from: Vector3, to: Vector3, radius: float, segments := 12
 		if radius < FAR_BAR or maxf(from.distance_to(to), radius * 2.0) < FAR_SHORT:
 			return
 		segments = mini(segments, FAR_SIDES)
+	else:
+		segments = maxi(segments, _round_enough(radius))
 	super(mat, from, to, radius, segments)
+
+
+## How many sides something round of `radius` needs close by for nobody to
+## count them: a gun, an exhaust, a tank of fuel.
+func _round_enough(radius: float) -> int:
+	if radius >= 0.25:
+		return 28
+	if radius >= 0.1:
+		return 20
+	if radius >= 0.05:
+		return 14
+	return 0
 
 
 ## In the far model something turned keeps its ends and where it is widest,
@@ -255,6 +275,11 @@ func _turned(mat: String, from: Vector3, axis: Vector3, profile: PackedVector2Ar
 				coarse.append(profile[i])
 		profile = coarse
 		segments = mini(segments, FAR_SIDES)
+	else:
+		var widest := 0.0
+		for spot in profile:
+			widest = maxf(widest, spot.x)
+		segments = maxi(segments, _round_enough(widest))
 	super(mat, from, axis, profile, segments, smooth)
 
 
@@ -263,9 +288,21 @@ func slab(mat: String, xf: Transform3D, outline: PackedVector2Array, thickness: 
 
 
 ## Canvas is not worn along its edges as steel is: its vertex colour says
-## what has happened to the cloth instead.
+## what has happened to the cloth instead. Every corner also says how high
+## over the ground it lies, in CUSTOM0: a wheel or a turret is a part of its
+## own, whose own Y is not that, and shaders/field_paint.gdshader lays the
+## sand on by it. It is put a thousand up, so that a mesh without it (one of
+## a level) is told apart.
 func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> void:
-	super(st, p, n, uv, [_dye, _dye, _dye] if _cloths.has(st) else edge)
+	if _cloths.has(st):
+		edge = [_dye, _dye, _dye]
+	st.set_custom_format(0, SurfaceTool.CUSTOM_R_FLOAT)
+	for i: int in [0, 2, 1]:
+		st.set_color(NO_EDGE if edge.is_empty() else edge[i])
+		st.set_normal(_to_part.basis * n[i])
+		st.set_uv(uv[i])
+		st.set_custom(0, Color(HEIGHT_MARK + (p[i] as Vector3).y, 0.0, 0.0, 0.0))
+		st.add_vertex(_to_part * p[i])
 
 
 # --- What they are put together from -------------------------------------------------
@@ -319,34 +356,80 @@ func _hoop(mat: String, center: Vector3, axis: Vector3, radius: float, thickness
 		return
 	_turned(mat, center, axis, PackedVector2Array([
 		Vector2(radius - thickness, 0), Vector2(radius, -thickness), Vector2(radius + thickness, 0), Vector2(radius, thickness), Vector2(radius - thickness, 0),
-	]), 10, true)
+	]), 24, true)
 
 
 ## A wheel with its middle at `at`, on an axle that leaves the vehicle along
-## `out`: a cross-country tyre with the bars of its tread, on a pressed rim
-## with its hub. `bars` is how many bars the tread has; with none it is the
-## tyre alone, for the inner one of a pair.
-func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 8) -> void:
+## `out`: a cross-country tyre on a pressed rim with its hub. `bars` is how
+## many bars of tread go round each shoulder of the tyre; with none it is
+## the tyre alone, for the inner one of a pair. `spoked` hangs it on wire
+## spokes instead, as a motorcycle's is.
+func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := -1, spoked := false) -> void:
 	var from := at - out * width * 0.5
+	if bars < 0:
+		# A bar of tread every hand's breadth or so round the tyre.
+		bars = maxi(roundi(TAU * radius / 0.085 * 0.5) * 2, 12)
+	_tyre(from, out, radius, width, spoked)
 	if bars == 0:
-		_turned(RUBBER, from, out, PackedVector2Array([Vector2(radius * 0.6, 0), Vector2(radius * 0.94, 0), Vector2(radius, width * 0.25), Vector2(radius, width * 0.75), Vector2(radius * 0.94, width), Vector2(radius * 0.6, width)]), 8, true)
 		return
-	_turned(RUBBER, from, out, PackedVector2Array([
-		Vector2(radius * 0.6, width * 0.04), Vector2(radius * 0.88, 0), Vector2(radius, width * 0.24),
-		Vector2(radius, width * 0.76), Vector2(radius * 0.88, width), Vector2(radius * 0.6, width * 0.96),
-	]), 12, true)
+	# The tread: bars from either shoulder towards the middle, the one row
+	# half a bar on from the other and slanted the other way, as a chevron.
 	var frame := _up_along(out)
-	for bar in (0 if _far else bars):
-		var turn := TAU * bar / bars
+	for bar in (0 if _far else bars * 2):
+		var shoulder := 1.0 if bar % 2 == 0 else -1.0
+		var turn := TAU * (bar / 2 + (0.25 if shoulder > 0.0 else 0.75)) / bars
 		var spoke := frame.x * cos(turn) + frame.z * sin(turn)
-		# The bars of the tread lie slanted, from either shoulder in turn.
-		var slant := Basis(spoke, 0.5 if bar % 2 == 0 else -0.5)
-		_box(RUBBER, _m * Transform3D(slant * Basis(out, spoke, out.cross(spoke)), at + spoke * (radius + 0.001) + out * width * (0.19 if bar % 2 == 0 else -0.19)), Vector3(width * 0.58, 0.018, radius * 0.2), _part)
+		var slant := Basis(spoke, 0.42 * shoulder)
+		var lug := Vector3(width * 0.4, 0.024 * radius / 0.4, minf(TAU * radius / bars * 0.38, 0.06))
+		_box(RUBBER, _m * Transform3D(slant * Basis(out, spoke, out.cross(spoke)), at + spoke * (radius + lug.y * 0.5 - 0.004) + out * width * 0.22 * shoulder), lug, _part)
+	if spoked:
+		# A narrow rim of steel, a drum for a hub, and two rows of spokes
+		# from either flange of the drum, crossing on their way out.
+		_turned(IRON, from, out, PackedVector2Array([
+			Vector2(radius * 0.7, width * 0.12), Vector2(radius * 0.76, width * 0.2), Vector2(radius * 0.74, width * 0.5), Vector2(radius * 0.76, width * 0.8), Vector2(radius * 0.7, width * 0.88),
+		]), 28)
+		_turned(IRON, from, out, PackedVector2Array([
+			Vector2(0, -width * 0.25), Vector2(radius * 0.32, -width * 0.25), Vector2(radius * 0.32, width * 0.4), Vector2(radius * 0.22, width * 0.45),
+			Vector2(radius * 0.22, width * 0.85), Vector2(radius * 0.26, width * 0.9), Vector2(radius * 0.26, width * 1.05), Vector2(radius * 0.1, width * 1.15), Vector2(0, width * 1.15),
+		]), 20)
+		if _far:
+			return
+		var spokes := 32
+		for i in spokes:
+			var row := 1.0 if i % 2 == 0 else -1.0
+			var turn := TAU * i / spokes
+			var hub := frame.x * cos(turn) + frame.z * sin(turn)
+			var rim_turn := turn + row * 0.5
+			var rim := frame.x * cos(rim_turn) + frame.z * sin(rim_turn)
+			_bar(IRON, at + out * width * (0.15 + 0.25 * row) + hub * radius * 0.24, at + out * width * 0.0 + rim * radius * 0.72, 0.0032, 3)
+		return
+	# The pressed rim: its flange inside the bead, the well, and the disc
+	# dished out to the boss with the nuts on it, and a cap over the hub.
 	_turned(ARMY, from, out, PackedVector2Array([
-		Vector2(radius * 0.61, width * 0.9), Vector2(radius * 0.56, width * 0.6), Vector2(radius * 0.3, width * 0.52), Vector2(radius * 0.22, width * 0.86), Vector2(0, width * 0.88),
-	]), 12)
+		Vector2(radius * 0.69, width * 0.86), Vector2(radius * 0.625, width * 0.74), Vector2(radius * 0.5, width * 0.6),
+		Vector2(radius * 0.32, width * 0.7), Vector2(radius * 0.26, width * 0.85), Vector2(radius * 0.15, width * 0.88),
+		Vector2(radius * 0.12, width * 0.99), Vector2(0, width * 1.0),
+	]), 24)
+	var nuts := 5 if radius < 0.42 else 8
+	for nut in (0 if _far else nuts):
+		var turn := TAU * (nut + 0.5) / nuts
+		var spot := at - out * width * 0.5 + (frame.x * cos(turn) + frame.z * sin(turn)) * radius * 0.22 + out * width * 0.85
+		_turned(IRON, spot, out, PackedVector2Array([Vector2(radius * 0.035, 0), Vector2(radius * 0.035, width * 0.13), Vector2(0, width * 0.15)]), 6)
 	# The drum behind it.
-	_turned(IRON, from, out, PackedVector2Array([Vector2(0, width * 0.2), Vector2(radius * 0.6, width * 0.2)]), 8)
+	_turned(IRON, from, out, PackedVector2Array([Vector2(0, width * 0.2), Vector2(radius * 0.6, width * 0.2)]), 12)
+
+
+## The tyre of a wheel, its inner face at `from`: sidewalls that bulge, a
+## rib round each, and shoulders rounded into a flat crown.
+func _tyre(from: Vector3, out: Vector3, radius: float, width: float, narrow := false) -> void:
+	var r := radius
+	var w := width
+	var bead := 0.7 if narrow else 0.64
+	_turned(RUBBER, from, out, PackedVector2Array([
+		Vector2(r * bead, w * 0.08), Vector2(r * (bead + 0.07), -w * 0.02), Vector2(r * 0.84, -w * 0.06), Vector2(r * 0.875, -w * 0.035),
+		Vector2(r * 0.95, w * 0.03), Vector2(r, w * 0.2), Vector2(r, w * 0.8), Vector2(r * 0.95, w * 0.97),
+		Vector2(r * 0.875, w * 1.035), Vector2(r * 0.84, w * 1.06), Vector2(r * (bead + 0.07), w * 1.02), Vector2(r * bead, w * 0.92),
+	]), 24 if radius < 0.42 else 28, true)
 
 
 ## A lamp that looks along `ahead` from `at`: a pressed bucket with a rim,
@@ -354,9 +437,9 @@ func _wheel(at: Vector3, radius: float, width: float, out: Vector3, bars := 8) -
 func _lamp(at: Vector3, ahead: Vector3, radius: float, lens := true) -> void:
 	if _far:
 		return
-	_turned(ARMY, at - ahead * radius * 1.3, ahead, PackedVector2Array([Vector2(0, 0), Vector2(radius * 0.85, radius * 0.4), Vector2(radius, radius * 1.3), Vector2(radius * 1.05, radius * 1.3), Vector2(radius * 1.05, radius * 1.45), Vector2(radius * 0.88, radius * 1.45), Vector2(radius * 0.86, radius * 1.2), Vector2(0, radius * 1.05)]), 8)
+	_turned(ARMY, at - ahead * radius * 1.3, ahead, PackedVector2Array([Vector2(0, 0), Vector2(radius * 0.85, radius * 0.4), Vector2(radius, radius * 1.3), Vector2(radius * 1.05, radius * 1.3), Vector2(radius * 1.05, radius * 1.45), Vector2(radius * 0.88, radius * 1.45), Vector2(radius * 0.86, radius * 1.2), Vector2(0, radius * 1.05)]), 20)
 	if lens:
-		_turned(PANE, at, ahead, PackedVector2Array([Vector2(radius * 0.88, 0.008), Vector2(0, 0.024)]), 8, true)
+		_turned(LENS, at, ahead, PackedVector2Array([Vector2(radius * 0.88, 0.008), Vector2(radius * 0.6, 0.02), Vector2(0, 0.026)]), 20, true)
 
 
 ## A jerrycan standing at `at`, turned `yaw_deg`: pressed in two halves,
@@ -559,13 +642,13 @@ func _motorcycle() -> void:
 	var side := Vector3(1.12, r, 0.5)
 	# The wheels: the front one steers, the back one and the sidecar's drive.
 	_on("WheelF", Transform3D(Basis(), front))
-	_wheel(front, r, 0.11, Vector3.RIGHT, 10)
+	_wheel(front, r, 0.11, Vector3.RIGHT, -1, true)
 	_touches("WheelF", front, r, true, false)
 	_on("WheelR", Transform3D(Basis(), back))
-	_wheel(back, r, 0.11, Vector3.RIGHT, 10)
+	_wheel(back, r, 0.11, Vector3.RIGHT, -1, true)
 	_touches("WheelR", back, r, false)
 	_on("WheelS", Transform3D(Basis(), side))
-	_wheel(side, r, 0.11, Vector3.RIGHT, 10)
+	_wheel(side, r, 0.11, Vector3.RIGHT, -1, true)
 	_touches("WheelS", side, r, false)
 	_on("Body")
 
@@ -662,7 +745,7 @@ func _motorcycle() -> void:
 		arc_side.append(Vector3(side.x, r + sin(a) * (r + 0.06), side.z - cos(a) * (r + 0.06)))
 	for i in arc_side.size() - 1:
 		_piece(ARMY, (arc_side[i] + arc_side[i + 1]) * 0.5 + Vector3(0.12, 0, 0), Vector3(0.15, 0.012, arc_side[i].distance_to(arc_side[i + 1]) + 0.01), Vector3(rad_to_deg(atan2(arc_side[i + 1].y - arc_side[i].y, -(arc_side[i + 1].z - arc_side[i].z))), 0, 0))
-	_wheel(tub + Vector3(0, 0.18, 0.74), r, 0.11, Vector3.BACK, 10)
+	_wheel(tub + Vector3(0, 0.18, 0.74), r, 0.11, Vector3.BACK, -1, true)
 	# The mount on its nose, a pin a gun is laid in, and a grip for whoever
 	# rides there.
 	_bar(IRON, tub + Vector3(0, 0.3, -0.42), tub + Vector3(0, 0.52, -0.46), 0.018, 6)
@@ -947,9 +1030,38 @@ func _track(x: float) -> void:
 			var at := run[i] + along * left
 			# A link lies along the track.
 			var frame := Transform3D(Basis(Vector3.RIGHT, Vector3(0, along.x, -along.y), Vector3(0, along.y, along.x)), Vector3(x, at.y, at.x))
-			_box(IRON, _m * frame, Vector3(0.56, 0.045, pitch - 0.02), _part)
+			_box(IRON, _m * frame, Vector3(0.56, 0.03, pitch - 0.018), _part)
+			# The cleat across it that bites the ground, and the horn in its
+			# middle that runs between the halves of the road wheels.
+			_box(IRON, _m * frame * Transform3D(Basis(), Vector3(0, -0.022, 0.02)), Vector3(0.53, 0.022, 0.032), _part)
+			_box(IRON, _m * frame * Transform3D(Basis(), Vector3(0, 0.045, 0)), Vector3(0.045, 0.065, 0.075), _part)
 			left += pitch
 		left -= length
+
+
+## A road wheel of the tank, its inner face at `from`, its outer side along
+## `out`: two discs of pressed steel, each with a tyre of solid rubber, with
+## the gap between them that the guide horns of the track run in, and the
+## hub with its nuts on the outer one.
+func _road_wheel(from: Vector3, out: Vector3) -> void:
+	if _far:
+		# From afar one band of rubber and the disc in it.
+		_turned(RUBBER, from, out, PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.345, 0.02), Vector2(0.345, 0.43), Vector2(0.27, 0.45)]), 8)
+		_turned(ARMY, from, out, PackedVector2Array([Vector2(0.28, 0.44), Vector2(0.12, 0.48), Vector2(0, 0.55)]), 8)
+		return
+	for half: float in [0.0, 0.25]:
+		_turned(RUBBER, from + out * half, out, PackedVector2Array([
+			Vector2(0.285, 0.0), Vector2(0.34, 0.01), Vector2(0.345, 0.1), Vector2(0.34, 0.19), Vector2(0.285, 0.2),
+		]), 20, true)
+	_turned(IRON, from, out, PackedVector2Array([Vector2(0.27, 0.2), Vector2(0.27, 0.25)]), 16)
+	_turned(ARMY, from, out, PackedVector2Array([
+		Vector2(0.29, 0.44), Vector2(0.24, 0.41), Vector2(0.15, 0.43), Vector2(0.12, 0.48),
+		Vector2(0.08, 0.53), Vector2(0, 0.55),
+	]), 20)
+	var frame := _up_along(out)
+	for nut in 8:
+		var turn := TAU * nut / 8.0
+		_turned(IRON, from + (frame.x * cos(turn) + frame.z * sin(turn)) * 0.105 + out * 0.48, out, PackedVector2Array([Vector2(0.013, 0), Vector2(0.013, 0.022), Vector2(0, 0.026)]), 5)
 
 
 ## A medium tank: a hull with a sloped front between its tracks, bins on
@@ -982,20 +1094,20 @@ func _tank(tank: String, traverse_deg: float) -> void:
 		for i in 6:
 			var z := -2.12 + i * 0.83
 			_on("Road%s%d" % [lr, i], Transform3D(Basis(), Vector3(x, 0.43, z)))
-			_turned(IRON, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.345, 0.02), Vector2(0.345, 0.45), Vector2(0.27, 0.47)]), 10)
-			_turned(ARMY, Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.28, 0.46), Vector2(0.25, 0.4), Vector2(0.14, 0.4), Vector2(0.11, 0.5), Vector2(0, 0.5)]), 10)
+			_road_wheel(Vector3(x - side * 0.2, 0.43, z), Vector3(side, 0, 0))
 			_touches("Road%s%d" % [lr, i], Vector3(x, 0.43, z), 0.41, false)
 		_on("Idler" + lr, Transform3D(Basis(), Vector3(x, 0.64, -2.82)))
 		# The idler and the sprocket hang clear of flat ground, but the face
 		# of a dune meets the track where it goes round them first.
 		_touches("Idler" + lr, Vector3(x, 0.64, -2.82), 0.31, false, false)
 		_touches("Sprocket" + lr, Vector3(x, 0.64, 2.74), 0.3, false, false)
-		_turned(ARMY, Vector3(x - side * 0.22, 0.64, -2.82), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.31, 0.0), Vector2(0.31, 0.46), Vector2(0.24, 0.4), Vector2(0.1, 0.44), Vector2(0, 0.44)]), 14)
+		_turned(ARMY, Vector3(x - side * 0.22, 0.64, -2.82), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.31, 0.03), Vector2(0.31, 0.18), Vector2(0.26, 0.21), Vector2(0.26, 0.25), Vector2(0.31, 0.28), Vector2(0.31, 0.43), Vector2(0.27, 0.46), Vector2(0.22, 0.4), Vector2(0.12, 0.42), Vector2(0.09, 0.5), Vector2(0, 0.5)]), 24)
 		_on("Sprocket" + lr, Transform3D(Basis(), Vector3(x, 0.64, 2.74)))
-		_turned(IRON, Vector3(x - side * 0.2, 0.64, 2.74), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.3, 0.0), Vector2(0.3, 0.42), Vector2(0.16, 0.42), Vector2(0.12, 0.5), Vector2(0, 0.5)]), 14)
-		for tooth in 12:
-			var turn := TAU * tooth / 12.0
-			_box(IRON, _m * Transform3D(Basis(Vector3.RIGHT, turn), Vector3(x + side * 0.21, 0.64, 2.74)) * Transform3D(Basis(), Vector3(0, 0.32, 0)), Vector3(0.03, 0.07, 0.06), _part)
+		_turned(IRON, Vector3(x - side * 0.2, 0.64, 2.74), Vector3(side, 0, 0), PackedVector2Array([Vector2(0.27, 0.0), Vector2(0.3, 0.03), Vector2(0.3, 0.12), Vector2(0.2, 0.15), Vector2(0.2, 0.3), Vector2(0.3, 0.33), Vector2(0.3, 0.42), Vector2(0.18, 0.42), Vector2(0.14, 0.5), Vector2(0.08, 0.52), Vector2(0, 0.52)]), 24)
+		for tooth in 13:
+			var turn := TAU * tooth / 13.0
+			for rim: float in [0.125, 0.335]:
+				_box(IRON, _m * Transform3D(Basis(Vector3.RIGHT, turn), Vector3(x - side * (0.2 - rim), 0.64, 2.74)) * Transform3D(Basis(), Vector3(0, 0.31, 0)), Vector3(0.05, 0.08, 0.07), _part)
 		_on("Body")
 		for z: float in [1.85, 0.75, -0.4, -1.55]:
 			_bar(IRON, Vector3(x - side * 0.15, 0.87, z), Vector3(x + side * 0.2, 0.87, z), 0.1, 10)

@@ -9,7 +9,7 @@
 
 [resource]
 shader = ExtResource("shader")
-shader_parameter/paint = Color(0.15, 0.125, 0.105, 1)
+shader_parameter/paint = Color(0.085, 0.078, 0.07, 1)
 shader_parameter/repaint = 1.0
 shader_parameter/scan_value = 0.066
 shader_parameter/paint_tex = ExtResource("diff")
@@ -19,9 +19,9 @@ shader_parameter/rust_normal = ExtResource("rust_nor")
 shader_parameter/wear_mask = ExtResource("mask")
 shader_parameter/uv_scale = 0.5
 shader_parameter/paint_roughness = 0.62
-shader_parameter/rust = 0.5
-shader_parameter/chipping = 0.9
-shader_parameter/sand = Color(0.7, 0.64, 0.52, 1)
+shader_parameter/rust = 0.32
+shader_parameter/chipping = 0.75
+shader_parameter/sand = Color(0.62, 0.57, 0.47, 1)
 shader_parameter/dust = 0.5
-shader_parameter/splash = 0.62
-shader_parameter/splash_to = 1.0
+shader_parameter/splash = 0.42
+shader_parameter/splash_to = 0.7
