@@ -149,7 +149,7 @@ func _dress() -> void:
 	var data: WeaponData = ARMORY.at(_weapon)
 	var rig := HUMANOID.new()
 	rig.name = "Model"
-	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "default"}
+	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "soldier"}
 	if _look.has("character"):
 		cast.merge(_look)
 	elif ResourceLoader.exists(path):

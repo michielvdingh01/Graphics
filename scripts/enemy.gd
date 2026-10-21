@@ -282,7 +282,8 @@ func _ready() -> void:
 		_rig.drop_shield()
 	_shield = shield if _rig.get("has_shield") == true else 0.0
 	_pack = pack if _rig.get("has_pack") == true else 0.0
-	_can_crouch = _rig.has_method("crouch")
+	# A person only ducks if its way of moving has it go down on one knee.
+	_can_crouch = _rig.has_method("crouch") and float(_rig.get("crouch_drop")) > 0.0
 	panics = panics and _rig.has_method("panic")
 	if _can_crouch:
 		_drop = _rig.crouch_drop

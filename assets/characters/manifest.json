@@ -9,7 +9,7 @@
 					"soldier_03"
 				],
 				"weapon": "rifle",
-				"moves": "default",
+				"moves": "soldier",
 				"tuning": {
 					"melee": false
 				}
@@ -19,7 +19,7 @@
 					"soldier_04"
 				],
 				"weapon": "smg",
-				"moves": "default",
+				"moves": "soldier",
 				"tuning": {
 					"melee": false,
 					"max_health": 60.0,
@@ -43,7 +43,7 @@
 					"soldier_05"
 				],
 				"weapon": "rifle",
-				"moves": "default",
+				"moves": "soldier",
 				"tuning": {
 					"melee": false,
 					"max_health": 320.0,
@@ -70,7 +70,7 @@
 					"soldier_03_desert"
 				],
 				"weapon": "rifle",
-				"moves": "default",
+				"moves": "soldier",
 				"tuning": {
 					"melee": false
 				}
@@ -80,7 +80,7 @@
 					"soldier_04_desert"
 				],
 				"weapon": "smg",
-				"moves": "default",
+				"moves": "soldier",
 				"tuning": {
 					"melee": false,
 					"max_health": 60.0,
@@ -104,7 +104,7 @@
 					"soldier_05_desert"
 				],
 				"weapon": "rifle",
-				"moves": "default",
+				"moves": "soldier",
 				"tuning": {
 					"melee": false,
 					"max_health": 320.0,
