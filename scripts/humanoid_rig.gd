@@ -122,6 +122,12 @@ const STEP_TURN := 0.38
 const STEP_TIME := 0.3
 const STEP_LIFT := 0.08
 const PAUSE := 0.08
+## A character whose textures carry occlusion of its own (tools/import_character.sh
+## --occlusion) is lit as cloth and skin are: that occlusion darkens direct
+## light by this share as well as the light from around, and it shines this
+## much where it faces the eye (0.5 is the most for anything not metal; cloth
+## and skin are nearer 0.3, and more of it gives a uniform a milky sheen).
+const OCCLUDED := {"in_light": 0.35, "shine": 0.25}
 ## Seconds a body lies there before it fades, and how long fading takes. The
 ## enemy that owns it is freed a little later, see LINGER in enemy.gd.
 const CORPSE_TIME := 4.9
@@ -168,6 +174,8 @@ static var _trees := {}
 ## Bones a skeleton lacks, as a string -> the moves without them.
 static var _libraries := {}
 static var _tinted := {}
+## A material of a character with occlusion -> the same lit as OCCLUDED says.
+static var _occluded := {}
 static var _glint_material: ShaderMaterial
 
 ## What enemy.gd plays and draws for this enemy.
@@ -373,8 +381,13 @@ func setup(cast: Dictionary) -> bool:
 		_meshes.append(mesh)
 		for surface in mesh.get_surface_override_material_count():
 			var material := mesh.get_active_material(surface)
-			if material is BaseMaterial3D and tint.has(material.resource_name):
-				mesh.set_surface_override_material(surface, _tint(material, Color(str(tint[material.resource_name]))))
+			if not material is BaseMaterial3D:
+				continue
+			var lit := _lit(material)
+			if tint.has(material.resource_name):
+				lit = _tint(lit, Color(str(tint[material.resource_name])))
+			if lit != material:
+				mesh.set_surface_override_material(surface, lit)
 
 	# A way of moving nobody has heard of is the usual one.
 	_set = _sets.get(cast.get("moves", "default"), _sets["default"])
@@ -1536,7 +1549,19 @@ func _within(node: Node3D, model: Node3D) -> Transform3D:
 	return at
 
 
-func _tint(material: BaseMaterial3D, color: Color) -> Material:
+## The material as OCCLUDED has it, for one with occlusion; else as it is.
+func _lit(material: BaseMaterial3D) -> BaseMaterial3D:
+	if not material.ao_enabled:
+		return material
+	if not _occluded.has(material):
+		var copy: BaseMaterial3D = material.duplicate()
+		copy.ao_light_affect = OCCLUDED.in_light
+		copy.metallic_specular = OCCLUDED.shine
+		_occluded[material] = copy
+	return _occluded[material]
+
+
+func _tint(material: BaseMaterial3D, color: Color) -> BaseMaterial3D:
 	var key := [material, color]
 	if not _tinted.has(key):
 		var copy: BaseMaterial3D = material.duplicate()

@@ -4698,6 +4698,8 @@ Wat niets oplevert: modellen die op Sketchfab als CC BY staan maar uit andere sp
 
 ### Mijn voorstel
 
+*Op 21 oktober 2026 gekozen: A1 tot en met A3 met één gedragen uniform overal, A5, en B8 niet. Gebouwd: zie "Soldaten: occlusie, minder glans, een gedragen uniform en drie erbij".*
+
 Eerst A1 tot en met A3, in deze volgorde, elk met een blad voor en na op 3, 10 en 30 m in de duinen, de hal en bij nacht, en om en om gemeten in het gevecht in de fabriek. Dat kost geen geld en niets op de GPU wat te meten is, en het pakt aan wat de proeven als oorzaak aanwijzen: plat licht, glans en te schoon. Daarna A5 (meer soldaten) en A6 (ademen, zwaaien, terugslag, kijken). A4 en A7 alleen als daarna nog iets ontbreekt.
 
 Een echte sprong in gezichten en uitrusting zit niet in Rocketbox: de gezichten en silhouetten zijn van een oudere generatie. Daarvoor is B8 de beste route, maar dat is een aankoop, een account en een schijf met 30 GB meer ruimte. Dat is aan Michiel; het kan ook na A.
@@ -4707,3 +4709,44 @@ Een echte sprong in gezichten en uitrusting zit niet in Rocketbox: de gezichten 
 - A1 tot en met A3 bouwen, en hoe vuil: overal een gedragen uniform, of per level (stoffig in de duinen, modderig in de Alpen, schoon in de fabriek)?
 - De drie andere soldaten van Rocketbox ophalen (ongeveer 80 MB, MIT)?
 - Of B8 iets voor later is (€45,99, een Unity ID, schijf opruimen).
+
+## Soldaten: occlusie, minder glans, een gedragen uniform en drie erbij
+
+Op 21 oktober 2026 gekozen uit "Soldaten die er echter uitzien (plan)": A1 tot en met A3, met "één gedragen uniform overal", en A5, de drie andere soldaten van Rocketbox; B8 (de gefotoscande soldaten) niet. Branch `soldaten`.
+
+**Wat er staat**
+
+- **Occlusie, gebakken in de route** (`--occlusion`, `tools/characters/atlas.py`: `bake_occlusion()`). Na het inpakken van de texturen rekent Cycles op de CPU uit hoeveel licht van rondom elke texel bereikt, binnen 22 cm (`OCCLUSION_REACH`: een plooi, de ruimte onder een zak of riem, de helm boven de oren; niet het lijf als geheel, dat doen het licht van het level en SSAO), 32 monsters, een halve minuut per soldaat met alles erbij. Het komt in het rood van de ORM-textuur en het materiaal krijgt het als glTF-occlusie, die Godot als `ao_texture` leest: één textuur voor de drie. Voor 30% gaat het ook in de kleur, in lineair licht, zodat een plooi ook in de zon leest (`OCCLUSION_IN_COLOUR` in `prepare.py`).
+- **Minder glans** (`scripts/humanoid_rig.gd`, `OCCLUDED`). Wie zijn eigen occlusie heeft, krijgt een kopie van zijn materiaal waarin die occlusie ook het directe licht voor 35% dempt (`ao_light_affect`) en dat nog maar 0,25 glans heeft in plaats van 0,5 (`metallic_specular`). Godot leest de glTF-uitbreiding voor glans niet, dus dit staat in de rig. Personages zonder occlusie (zombies, clowns, de poppen) blijven zoals ze waren.
+- **Een gedragen uniform** (`--look=worn`, `tools/characters/looks.py`: `worn()`, maten in `WORN`). Op alles wat volgens `parts()` geen huid of glas is: zand op de laarzen en tot 38% van de lengte omhoog (aan de voet het dikst), plekken op de knieën en ellebogen, stof op wat naar boven kijkt, modder in de dikste vlekken onderaan, vuil in plooien (waar de occlusie weinig licht laat en waar de normal map een vouw ziet) en lichtere randen waar de normal map een bolling ziet. Alles in vlekken van 7 en 2,5 cm. De indeling huid, glas, laarzen en stof is uit `uniform()` gehaald naar `parts()`; een woestijnuniform opnieuw geverfd is daarmee byte voor byte wat het was.
+- **Acht soldaten** (`tools/characters/build_cast.sh`): `soldier_06` is `Military_Female_02` (helm en vest), `soldier_07` en `soldier_08` zijn `Military_Male_05` en `_06` (veldpet, geen vest). Ze zijn grunts in `soldiers` en, als `soldier_06_desert` tot `_08_desert`, in `soldiers_desert`; medespelers trekken nu uit acht (`scripts/puppet.gd`). Alle acht hebben 2K, occlusie en het gedragen uniform; de woestijnuniformen zijn eroverheen geverfd. Een soldaat is 4,8 tot 7,4 MB.
+- De download van de drie was 286 MB, niet de 80 MB die ik vooraf noemde: ik had het niet uit de lijst opgeteld.
+
+**Het blad** `assets/characters/sheets/soldaten_gedragen.jpg`: de zware soldaat op 3,5 m in de duinen, een grunt op 10 m (het thema kiest er willekeurig een, dus voor en na een ander), in de hal en bij nacht, voor (2K zonder dit) en na. De proeven die eraan voorafgingen staan in `soldaten_proeven.jpg`; een eerste, voorzichtiger zand is daarna sterker gemaakt.
+
+**Gemeten** op 21 oktober 2026 tussen 22:08 en 22:16, M1 Pro op de accu (100%, de lader eraf), load 2 tot 4, geen andere Godot; de laatste ronde stopte voor de trunk omdat er even een Blender van een ander project draaide. Het gevecht in de fabriek zoals in "Soldaten: richten, stand, knielen en 2K":
+
+| Stand | Fps per ronde | 1% low |
+|---|---|---|
+| De trunk (`5f1509b`) | 66,4 en 67,0 | 60,9 en 61,7 |
+| Deze branch voor deze stap (2K) | 64,7, 65,0 en 65,8 | 49,3, 51,2 en 59,7 |
+| Nu | 66,4, 65,6 en 66,5 | 60,4, 58,5 en 59,5 |
+
+Binnen de spreiding is het gelijk aan de trunk. De lage 1% van de tweede stand in de eerste twee ronden (haperingen van 35 en 80 ms) kwam in de derde ronde niet terug.
+
+**Getest**: `tools/test_humanoid.sh` met `soldiers` en `soldiers_desert` (55 controles elk), `tools/nettest.sh` (host en join), `tools/test_match.sh` en `tools/selftest.sh` (586): geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe vuil** is mijn keuze, op de bladen in de duinen en de hal. In de Alpen, de grachten en de centrale heb ik ze niet bekeken.
+- **De twee met een veldpet en zonder vest** zijn grunts geworden; dat ze tussen gepantserde soldaten lopen is mijn keuze.
+- **De eerste keer.** Occlusie die ook direct licht dempt is een nieuwe variant van het materiaal. Soldaten op de route staan er vanaf het laden, maar een medespeler die later binnenkomt wordt pas getekend als hij er is; hoeveel pipelines dat dan maakt, is niet geteld.
+- **Bij nacht** is het verschil klein; of 30% occlusie in de kleur daar te donker is, is niet beoordeeld.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| De soldaten opnieuw, met 2K, occlusie en het gedragen uniform | `tools/characters/build_cast.sh soldier_01 ... soldier_08` (de opties staan in `SOLDIER`), dan `tools/characters/build_uniforms.sh desert` |
+| Een ander personage zo | `tools/import_character.sh <bestand> <id> --texture-size=2048 --occlusion --look=worn` |
+| Het blad | `assets/characters/sheets/soldaten_gedragen.jpg` |

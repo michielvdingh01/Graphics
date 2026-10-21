@@ -56,6 +56,9 @@ dressed soldier_02 Military_Male_04
 dressed soldier_03 Military_Female_01
 dressed soldier_04 Military_Male_02
 dressed soldier_05 Military_Male_03
+dressed soldier_06 Military_Female_02
+dressed soldier_07 Military_Male_05
+dressed soldier_08 Military_Male_06
 
 # The theme: the soldiers' own, with everybody in the new uniform.
 python3 - "$uniform" <<'EOF' || failed="$failed the theme"
