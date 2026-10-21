@@ -27,6 +27,8 @@ is passed on to prepare.py; the ones that matter:
     --keep-weapons      keep what looks like a weapon by its name
     --bones=map.json    profile bone -> source bone, when guessing fails
     --route=scan        treat it as a statue even though it has a skeleton
+    --texture-size=2048 one set of textures of 2K instead of 1K, for a character
+                        seen close up; the file may then be four times as large
     --route=repaint     the file is a character already: change its paint only
     --look=zombie       paint it up as a zombie or a clown, or dye its uniform:
                         desert, woodland, night (the lines of UNIFORMS in looks.py)

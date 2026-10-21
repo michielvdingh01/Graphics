@@ -8,7 +8,8 @@ extends SceneTree
 ## that profile's rest pose, no animations and nothing hung on a bone.
 
 const TRIANGLES := 20000
-## A character should stay around 5 MB.
+## A character should stay around 5 MB, with textures of 1K; four times as
+## much with textures of 2K.
 const BYTES := 5_500_000
 
 var _problems := PackedStringArray()
@@ -34,11 +35,17 @@ func _check(id: String) -> Dictionary:
 	if not ResourceLoader.exists(path):
 		_problems.append("there is no %s, or it has not been imported" % path)
 		return facts
+	var scene := (load(path) as PackedScene).instantiate()
+	var side := 1024
+	for mesh: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
+		var material := mesh.get_active_material(0) as BaseMaterial3D
+		if material and material.albedo_texture:
+			side = maxi(side, material.albedo_texture.get_width())
 	var bytes := FileAccess.get_file_as_bytes(path).size()
 	facts["bytes"] = bytes
-	if bytes > BYTES:
-		_problems.append("the file is %.1f MB; a character should stay around 5 MB" % (bytes / 1e6))
-	var scene := (load(path) as PackedScene).instantiate()
+	var most := BYTES * (side / 1024.0) ** 2
+	if bytes > most:
+		_problems.append("the file is %.1f MB; a character with textures of %d should stay around %.0f MB" % [bytes / 1e6, side, most / 1.1e6])
 
 	var skeletons := scene.find_children("*", "Skeleton3D", true, false)
 	if skeletons.size() != 1:

@@ -547,26 +547,27 @@
 			"license": "MIT",
 			"author": "Microsoft",
 			"file": "assets/characters/.source/rocketbox/Military_Male_01/Military_Male_01.fbx",
+			"options": "--texture-size=2048",
 			"route": "rigged",
 			"triangles": 14723,
 			"source_triangles": 15387,
 			"height": 1.844,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 2.4,
+			"megabytes": 7.13,
 			"textures": {
 				"roughness": "derived from the specular map",
 				"normal": "source",
 				"color": "source",
-				"texels_per_cm": 3.38,
+				"texels_per_cm": 6.79,
 				"source_textures": [
 					"2048x1024",
 					"2048x2048"
 				],
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-09",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_01_desert": {
@@ -584,15 +585,15 @@
 			"height": 1.844,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 2.42,
+			"megabytes": 7.17,
 			"textures": {
 				"color": "the source's, painted over",
 				"normal": "the source's",
 				"roughness": "the source's",
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-12",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_02": {
@@ -601,26 +602,27 @@
 			"license": "MIT",
 			"author": "Microsoft",
 			"file": "assets/characters/.source/rocketbox/Military_Male_04/Military_Male_04.fbx",
+			"options": "--texture-size=2048",
 			"route": "rigged",
 			"triangles": 14907,
 			"source_triangles": 14907,
 			"height": 1.848,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 2.13,
+			"megabytes": 6.05,
 			"textures": {
 				"roughness": "derived from the specular map",
 				"normal": "source",
 				"color": "source",
-				"texels_per_cm": 3.19,
+				"texels_per_cm": 6.41,
 				"source_textures": [
 					"2048x1024",
 					"2048x2048"
 				],
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-09",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_02_desert": {
@@ -638,15 +640,15 @@
 			"height": 1.848,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 2.14,
+			"megabytes": 6.1,
 			"textures": {
 				"color": "the source's, painted over",
 				"normal": "the source's",
 				"roughness": "the source's",
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-12",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_03": {
@@ -655,26 +657,27 @@
 			"license": "MIT",
 			"author": "Microsoft",
 			"file": "assets/characters/.source/rocketbox/Military_Female_01/Military_Female_01.fbx",
+			"options": "--texture-size=2048",
 			"route": "rigged",
 			"triangles": 13015,
 			"source_triangles": 13015,
 			"height": 1.777,
 			"eye_height": 1.64,
 			"head_start": 1.54,
-			"megabytes": 2.01,
+			"megabytes": 5.96,
 			"textures": {
 				"roughness": "derived from the specular map",
 				"normal": "source",
 				"color": "source",
-				"texels_per_cm": 3.34,
+				"texels_per_cm": 6.73,
 				"source_textures": [
 					"2048x1024",
 					"2048x2048"
 				],
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-09",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_03_desert": {
@@ -692,15 +695,15 @@
 			"height": 1.777,
 			"eye_height": 1.64,
 			"head_start": 1.54,
-			"megabytes": 2.03,
+			"megabytes": 5.99,
 			"textures": {
 				"color": "the source's, painted over",
 				"normal": "the source's",
 				"roughness": "the source's",
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-12",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_04": {
@@ -709,25 +712,26 @@
 			"license": "MIT",
 			"author": "Microsoft",
 			"file": "assets/characters/.source/rocketbox/Military_Male_02/Military_Male_02.fbx",
+			"options": "--texture-size=2048",
 			"route": "rigged",
 			"triangles": 8231,
 			"source_triangles": 8231,
 			"height": 1.811,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 1.59,
+			"megabytes": 4.98,
 			"textures": {
 				"roughness": "derived from the specular map",
 				"normal": "source",
 				"color": "source",
-				"texels_per_cm": 3.38,
+				"texels_per_cm": 6.8,
 				"source_textures": [
 					"2048x2048"
 				],
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-09",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_04_desert": {
@@ -745,15 +749,15 @@
 			"height": 1.811,
 			"eye_height": 1.71,
 			"head_start": 1.59,
-			"megabytes": 1.6,
+			"megabytes": 5.0,
 			"textures": {
 				"color": "the source's, painted over",
 				"normal": "the source's",
 				"roughness": "the source's",
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-12",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_05": {
@@ -762,27 +766,27 @@
 			"license": "MIT",
 			"author": "Microsoft",
 			"file": "assets/characters/.source/rocketbox/Military_Male_03/Military_Male_03.fbx",
-			"options": "--scale=1.08 --wide=1.08",
+			"options": "--texture-size=2048 --scale=1.08 --wide=1.08",
 			"route": "rigged",
 			"triangles": 14636,
 			"source_triangles": 15517,
 			"height": 1.998,
 			"eye_height": 1.85,
 			"head_start": 1.72,
-			"megabytes": 2.3,
+			"megabytes": 6.93,
 			"textures": {
 				"roughness": "derived from the specular map",
 				"normal": "source",
 				"color": "source",
-				"texels_per_cm": 3.06,
+				"texels_per_cm": 6.15,
 				"source_textures": [
 					"2048x1024",
 					"2048x2048"
 				],
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-09",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"soldier_05_desert": {
@@ -800,15 +804,15 @@
 			"height": 1.998,
 			"eye_height": 1.85,
 			"head_start": 1.72,
-			"megabytes": 2.33,
+			"megabytes": 6.99,
 			"textures": {
 				"color": "the source's, painted over",
 				"normal": "the source's",
 				"roughness": "the source's",
-				"size": 1024,
+				"size": 2048,
 				"cutout": false
 			},
-			"imported": "2026-10-12",
+			"imported": "2026-10-21",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"zombie_01": {

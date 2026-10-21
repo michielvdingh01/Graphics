@@ -122,13 +122,6 @@ const STEP_TURN := 0.38
 const STEP_TIME := 0.3
 const STEP_LIFT := 0.08
 const PAUSE := 0.08
-## How skin and cloth are lit, for a character that has the masks of
-## tools/characters/parts_masks.py next to it: how far the light under the
-## skin carries, how strong the sheen at the edges of the cloth is and how much
-## of the colour of the cloth it takes, and how much light anything throws back
-## where it faces the eye (0.5 is the most for what is not metal; skin and cloth
-## are nearer 0.35).
-const SURFACE := {"scatter": 0.4, "sheen": 0.32, "sheen_tint": 0.6, "specular": 0.38}
 ## Seconds a body lies there before it fades, and how long fading takes. The
 ## enemy that owns it is freed a little later, see LINGER in enemy.gd.
 const CORPSE_TIME := 4.9
@@ -175,8 +168,6 @@ static var _trees := {}
 ## Bones a skeleton lacks, as a string -> the moves without them.
 static var _libraries := {}
 static var _tinted := {}
-## A material of a character -> the same lit as skin and cloth, see SURFACE.
-static var _surfaced := {}
 static var _glint_material: ShaderMaterial
 
 ## What enemy.gd plays and draws for this enemy.
@@ -376,19 +367,14 @@ func setup(cast: Dictionary) -> bool:
 	for player: Node in _figure.find_children("*", "AnimationPlayer", true, false):
 		player.free()
 	var tint: Dictionary = cast.get("tint", {})
-	var masks := (cast.character as PackedScene).resource_path.get_basename()
 	for mesh: MeshInstance3D in _figure.find_children("*", "MeshInstance3D", true, false):
 		# Nothing that walks about has a lightmap; the probes light it.
 		mesh.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 		_meshes.append(mesh)
 		for surface in mesh.get_surface_override_material_count():
 			var material := mesh.get_active_material(surface)
-			if material is BaseMaterial3D:
-				var lit := _surface(material, masks)
-				if tint.has(material.resource_name):
-					lit = _tint(lit, Color(str(tint[material.resource_name])))
-				if lit != material:
-					mesh.set_surface_override_material(surface, lit)
+			if material is BaseMaterial3D and tint.has(material.resource_name):
+				mesh.set_surface_override_material(surface, _tint(material, Color(str(tint[material.resource_name]))))
 
 	# A way of moving nobody has heard of is the usual one.
 	_set = _sets.get(cast.get("moves", "default"), _sets["default"])
@@ -1550,39 +1536,7 @@ func _within(node: Node3D, model: Node3D) -> Transform3D:
 	return at
 
 
-## The material lit as skin where the mask `<masks>_skin.png` says so, which
-## light goes into and comes out of a little further on, and as cloth where
-## `<masks>_cloth.png` says so, which has a sheen at its edges; how rough it is
-## comes from the first of the two, which has the skin smoother. The material
-## as it is for a character without those masks.
-func _surface(material: BaseMaterial3D, masks: String) -> BaseMaterial3D:
-	if _surfaced.has(material):
-		return _surfaced[material]
-	var lit := material
-	if ResourceLoader.exists(masks + "_skin.png") and ResourceLoader.exists(masks + "_cloth.png"):
-		var skin: Texture2D = load(masks + "_skin.png")
-		lit = material.duplicate()
-		if SURFACE.scatter > 0.0:
-			lit.subsurf_scatter_enabled = true
-			lit.subsurf_scatter_skin_mode = true
-			lit.subsurf_scatter_strength = SURFACE.scatter
-			lit.subsurf_scatter_texture = skin
-		lit.roughness = 1.0
-		lit.roughness_texture = skin
-		lit.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
-		# None of it is metal; the metal of the vest is painted on.
-		lit.metallic = 0.0
-		lit.metallic_texture = null
-		lit.metallic_specular = SURFACE.specular
-		lit.rim_enabled = true
-		lit.rim = SURFACE.sheen
-		lit.rim_tint = SURFACE.sheen_tint
-		lit.rim_texture = load(masks + "_cloth.png")
-	_surfaced[material] = lit
-	return lit
-
-
-func _tint(material: BaseMaterial3D, color: Color) -> BaseMaterial3D:
+func _tint(material: BaseMaterial3D, color: Color) -> Material:
 	var key := [material, color]
 	if not _tinted.has(key):
 		var copy: BaseMaterial3D = material.duplicate()
