@@ -33,6 +33,13 @@ var _failures := 0
 ## What is being walked about by hand, and how fast.
 var _walker: CharacterBody3D
 var _stride := Vector3.ZERO
+## While the fight is on: the fastest any of them went backwards, as a share
+## of its own speed, and the fastest any went with its weapon up, in m/s.
+var _sampling := false
+var _backwards := 0.0
+var _aimed := 0.0
+## Enemy -> seconds it has had its weapon up: it slows down after raising it.
+var _aiming := {}
 
 
 func _ready() -> void:
@@ -47,6 +54,17 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_instance_valid(_walker):
 		_walker.global_position += _stride * delta
+	if _sampling:
+		for e: CharacterBody3D in get_tree().get_nodes_in_group("enemy"):
+			if not _is_character(e) or e.dead:
+				continue
+			var ahead := -e.global_basis.z
+			ahead = Vector3(ahead.x, 0.0, ahead.z).normalized()
+			var going := Vector3(e.velocity.x, 0.0, e.velocity.z)
+			_backwards = maxf(_backwards, -going.dot(ahead) / e.speed)
+			_aiming[e] = _aiming.get(e, 0.0) + delta if e._aims else 0.0
+			if _aiming[e] > 0.35:
+				_aimed = maxf(_aimed, going.length())
 
 
 func _run() -> void:
@@ -100,6 +118,7 @@ func _run() -> void:
 	for e in enemies:
 		start[e] = e.global_position.distance_to(player.global_position)
 	var approached := false
+	_sampling = true
 	for i in 50:
 		approached = approached or enemies.any(
 			func(e: Node3D) -> bool:
@@ -110,6 +129,12 @@ func _run() -> void:
 		await _wait(0.5)
 	_check("they find the player", approached)
 	_check("they hit the player", hits[0] > 0)
+	_sampling = false
+	# A person goes backwards at a walk, and once its weapon is up at a jog;
+	# it may not be quite down to either the moment it has turned.
+	var person: Node = enemies[0]
+	_check("backwards they go at most %.0f%% of their speed (%.0f%%), with the weapon up at most %.1f m/s (%.1f)" % [person.BACKWARDS * 100.0, _backwards * 100.0, person.AIMED_PACE, _aimed],
+		_backwards <= person.BACKWARDS + 0.1 and _aimed <= person.AIMED_PACE + 0.4)
 
 	# One of them is shot with the rifle from close range.
 	var enemy: CharacterBody3D = enemies[0]

@@ -4750,3 +4750,25 @@ Binnen de spreiding is het gelijk aan de trunk. De lage 1% van de tweede stand i
 | De soldaten opnieuw, met 2K, occlusie en het gedragen uniform | `tools/characters/build_cast.sh soldier_01 ... soldier_08` (de opties staan in `SOLDIER`), dan `tools/characters/build_uniforms.sh desert` |
 | Een ander personage zo | `tools/import_character.sh <bestand> <id> --texture-size=2048 --occlusion --look=worn` |
 | Het blad | `assets/characters/sheets/soldaten_gedragen.jpg` |
+
+## Soldaten: niet meer achteruit rennen
+
+Op 22 oktober 2026, na het spelen: "Het ziet er misschien 5% realistischer uit. Maar ze bewegen nog steeds wel erg snel. Ze rennen onrealistisch snel achteruit bijvoorbeeld. Dat zie je nooit in games dus dat moet beter." Branch `soldaten`.
+
+**Wat er mis was** (`scripts/enemy.gd`). Een vijand die de speler ziet, kijkt naar hem en gaat waar zijn beslissing hem heen stuurt, elke kant op even hard: naar dekking met 1,15 keer zijn snelheid (4,8 m/s voor een grunt), ook als die dekking achter hem ligt. Hij versnelde met 22 m/s², dus stond hij in 0,2 s op volle snelheid stil of liep hij de andere kant op. Voor een robot hoort dat zo; een mens rent achteruit niet en zwiept niet heen en weer.
+
+**Wat er staat**, alleen voor wie een mens is (een rig van `scripts/humanoid_rig.gd`); robots gaan zoals ze gingen:
+
+- **Hoe hard welke kant op** (`_paced()`): vooruit zijn volle snelheid, opzij 60% (`SIDEWAYS`), achteruit 38% (`BACKWARDS`, 1,6 m/s voor een grunt: wandelen), daartussen geleidelijk, gerekend vanaf waar zijn lijf naar kijkt.
+- **Met het wapen op** niet harder dan 3 m/s (`AIMED_PACE`): een draf, welke kant ook.
+- **Op gang komen en stoppen** met 7 m/s² (`PERSON_ACCEL`) in plaats van 22: van stil naar een draf in 0,4 s, en een stap opzij die omkeert duurt ruim een halve seconde.
+- **Omdraaien en rennen.** Ligt de dekking waar hij heen gaat meer dan 109 graden (`TURN_AND_RUN`) van de speler af, dan keert hij de speler de rug toe, laat zijn wapen zakken en rent erheen; pas als ze weer minder dan 86 graden uit elkaar liggen kijkt hij weer om, zodat hij niet heen en weer draait.
+
+**Getest.** `tools/test_humanoid.sh` meet nu in het gevecht van de eerste zone hoe hard de mensen achteruit gaan en hoe hard met het wapen op (als dat al een derde seconde op is; vlak na het heffen remt hij nog af): met soldaten hooguit 16% van hun snelheid achteruit en 3,0 m/s met het wapen op. `tools/test_humanoid.sh` (poppen, `soldiers`, `soldiers_desert`), `tools/test_match.sh`, `tools/nettest.sh` en `tools/selftest.sh` slagen; het deel van de Alpen faalde eerst op vier controles van de route omdat de laptop tijdens de test sliep (zoals op 20 oktober), en slaagde daarna wakker in 28 s.
+
+**Bekend.** De controle dat een voet op de trap op de vloer staat haalt met soldaten 5,9 of 7,0 cm tegen een grens van 6, naargelang welke soldaat de test trekt; zo was het in de trunk al (zie "Soldaten: richten, stand, knielen en 2K"). Een poging om de hoogte van de bal van de voet uit de rusthouding van het personage te nemen maakte het voor de poppen slechter (7,1 cm) en is teruggedraaid.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet.** Of 38% achteruit en 3 m/s met het wapen op niet te traag oogt, en of het omdraaien naar dekking niet te vaak gebeurt, moet in het spel blijken. De vijanden zijn er makkelijker te raken door: een sprong opzij is trager en ze rennen niet meer met het wapen op.
+- **Bots in een wedstrijd** (`scripts/bot.gd`) bewegen als een speler en zijn niet aangeraakt: die rennen achteruit even hard als een speler dat kan.
