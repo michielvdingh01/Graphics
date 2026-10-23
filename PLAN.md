@@ -4753,6 +4753,8 @@ Binnen de spreiding is het gelijk aan de trunk. De lage 1% van de tweede stand i
 
 ## Soldaten: niet meer achteruit rennen
 
+*Op 23 oktober 2026 op Michiels woord ("Het werkt nu veel realistischer dus merg de boel maar!") met de hele branch `soldaten` in de trunk gezet: ook "Soldaten: richten, stand, knielen en 2K" en "Soldaten: occlusie, minder glans, een gedragen uniform en drie erbij".*
+
 Op 22 oktober 2026, na het spelen: "Het ziet er misschien 5% realistischer uit. Maar ze bewegen nog steeds wel erg snel. Ze rennen onrealistisch snel achteruit bijvoorbeeld. Dat zie je nooit in games dus dat moet beter." Branch `soldaten`.
 
 **Wat er mis was** (`scripts/enemy.gd`). Een vijand die de speler ziet, kijkt naar hem en gaat waar zijn beslissing hem heen stuurt, elke kant op even hard: naar dekking met 1,15 keer zijn snelheid (4,8 m/s voor een grunt), ook als die dekking achter hem ligt. Hij versnelde met 22 m/s², dus stond hij in 0,2 s op volle snelheid stil of liep hij de andere kant op. Voor een robot hoort dat zo; een mens rent achteruit niet en zwiept niet heen en weer.
