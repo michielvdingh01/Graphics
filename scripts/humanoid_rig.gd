@@ -86,6 +86,48 @@ const STEP_UP := 0.4
 const STEP_DOWN := 0.4
 const SLACK := 0.015
 const LEVEL := Vector2(0.35, 0.5)
+## Where the eye it aims with lies from its head, in hip heights, as the
+## skeleton stands at rest: the right one, a little in front of the head and
+## above where the head turns on the neck. A weapon held to the shoulder is
+## brought up until its sights are there, as the player's own are at the eye.
+const EYE := Vector3(-0.035, 0.13, 0.1)
+## How far the head comes down onto the stock: its chin drops and it leans
+## its cheek against the stock, in radians.
+const WELD := Vector2(0.16, 0.2)
+## Where the feet stand of one that holds a weapon and stands still, from the
+## middle of its hips in hip heights: to either side, and the left foot ahead
+## of the right, so that it stands bladed to what it aims at. Its hips come
+## up or down until its legs reach out this much of their length, which gives
+## the knees a little, and the knees point over the toes, a little out.
+const STANCE_WIDTH := 0.18
+const STANCE_LEAD := 0.1
+const STANCE_REACH := 0.99
+const KNEES_OUT := 0.25
+## The most the hips come up for that, in hip heights: the clip it stands to
+## may stand with its feet further apart.
+const RISE := 0.1
+## Running flat out with its weapon down it carries it across its chest, in
+## the space of the chest: the muzzle up by the left shoulder, the top of the
+## weapon to the front, and the hand on its grip this far from between the
+## shoulders, in hip heights.
+const PORT := {"along": Vector3(0.6, 0.5, 0.6), "top": Vector3(0.0, 0.3, 1.0), "grip": Vector3(-0.1, -0.46, 0.27)}
+## Hip heights a second between which it goes over to that.
+const FLAT_OUT := Vector2(5.0, 5.8)
+## A foot that stands is set down anew when it is this many hip heights from
+## where it belongs, or turned this far from the way the hips face: in a step
+## of this many seconds, lifted this many hip heights at the most. One foot
+## at a time, and not twice within PAUSE seconds.
+const STEP_SLACK := 0.07
+const STEP_TURN := 0.38
+const STEP_TIME := 0.3
+const STEP_LIFT := 0.08
+const PAUSE := 0.08
+## A character whose textures carry occlusion of its own (tools/import_character.sh
+## --occlusion) is lit as cloth and skin are: that occlusion darkens direct
+## light by this share as well as the light from around, and it shines this
+## much where it faces the eye (0.5 is the most for anything not metal; cloth
+## and skin are nearer 0.3, and more of it gives a uniform a milky sheen).
+const OCCLUDED := {"in_light": 0.35, "shine": 0.25}
 ## Seconds a body lies there before it fades, and how long fading takes. The
 ## enemy that owns it is freed a little later, see LINGER in enemy.gd.
 const CORPSE_TIME := 4.9
@@ -108,6 +150,10 @@ const FLINCH := &"parameters/flinch/request"
 const FALL_CLIP := &"parameters/fall_clip/transition_request"
 const FALL := &"parameters/fall/blend_amount"
 const CARRY := &"parameters/carry/blend_amount"
+const KNEEL := &"parameters/kneel/blend_amount"
+## What of the body goes down on one knee: the legs and the small of the back,
+## which bends it over behind what it hides behind.
+const KNEELING: Array[String] = ["Hips", "Spine", "Chest", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "LeftToes", "RightUpperLeg", "RightLowerLeg", "RightFoot", "RightToes"]
 
 
 ## Two bones and what they end in: an arm with its hand, a leg with its foot.
@@ -128,6 +174,8 @@ static var _trees := {}
 ## Bones a skeleton lacks, as a string -> the moves without them.
 static var _libraries := {}
 static var _tinted := {}
+## A material of a character with occlusion -> the same lit as OCCLUDED says.
+static var _occluded := {}
 static var _glint_material: ShaderMaterial
 
 ## What enemy.gd plays and draws for this enemy.
@@ -139,6 +187,9 @@ var flash_size := 0.3
 ## Heights above its feet, in metres, once it stands in the level: the top of
 ## its head, its eyes and where its head begins.
 var fit := {"height": 1.8, "eyes": 1.6, "head": 1.5}
+## How far its eyes come down when it goes down on one knee, in metres; 0
+## for a way of moving that does not, see crouch().
+var crouch_drop := 0.0
 ## It strikes a pose every this many frames, for all the time since the last:
 ## whoever has it says so of a figure far off or out of sight, where nobody
 ## sees the difference and the frames it saves count when there are forty.
@@ -178,6 +229,8 @@ var _balls: Array[int] = []
 ## cross of the two) to the bone.
 var _hand_fix: Array[Basis] = [Basis(), Basis()]
 var _head_ahead := Vector3.BACK
+## The eye it aims with, in the space of its head, see EYE.
+var _eye := Vector3.ZERO
 var _hip_height := 1.0
 ## Where each bone is this frame, worked out as it is asked for.
 var _g := {}
@@ -190,6 +243,10 @@ var _muzzle: Node3D
 var _glint: MeshInstance3D
 var _grip: Array = [null, null]
 var _butt := Vector3.ZERO
+## Where the eye is behind the sights, in the space of the weapon, as the
+## weapon's data has it for the player; and whether it has sights at all.
+var _sight := Vector3.ZERO
+var _sights := false
 var _held := Transform3D()
 var _glow := Color(1.0, 0.15, 0.1)
 
@@ -219,6 +276,16 @@ var _planted: Array[bool] = [false, false]
 var _plant_at: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
 var _plant_yaw: Array[float] = [0.0, 0.0]
 var _slip: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+## A foot that is being set down anew while the body stands: how far it has
+## got, from 0 to 1, below nought while it is not; where it came from and
+## which way it faced there; and the seconds since a foot last came down.
+var _stepping: Array[float] = [-1.0, -1.0]
+var _step_from: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+var _step_yaw: Array[float] = [0.0, 0.0]
+var _stepped := 1.0
+## How far it stands as one that holds a weapon does, see STANCE_WIDTH: 1
+## standing, 0 walking.
+var _stance := 0.0
 ## How far the floor under each foot is above the floor under the body, in
 ## metres, and how that floor lies; `follow_floor` off leaves both feet at
 ## the height of the body, as tools/test_humanoid.sh does to compare.
@@ -242,6 +309,8 @@ var _measured: Array[bool] = [false, false]
 var _aiming := false
 var _target := Vector3.ZERO
 var _raised := 0.0
+## How far it carries its weapon across its chest, see PORT: 0 to 1.
+var _port := 0.0
 var _aim_yaw := 0.0
 var _aim_pitch := 0.0
 var _chest_yaw := 0.0
@@ -271,6 +340,10 @@ var _breath := 0.0
 var _load: Node3D
 var _load_bone := -1
 var _load_hold := Transform3D()
+
+# Down on one knee, and how far it has got there: 0 standing, 1 down.
+var _crouching := false
+var _kneel := 0.0
 
 # Dying.
 var _dead := false
@@ -308,8 +381,13 @@ func setup(cast: Dictionary) -> bool:
 		_meshes.append(mesh)
 		for surface in mesh.get_surface_override_material_count():
 			var material := mesh.get_active_material(surface)
-			if material is BaseMaterial3D and tint.has(material.resource_name):
-				mesh.set_surface_override_material(surface, _tint(material, Color(str(tint[material.resource_name]))))
+			if not material is BaseMaterial3D:
+				continue
+			var lit := _lit(material)
+			if tint.has(material.resource_name):
+				lit = _tint(lit, Color(str(tint[material.resource_name])))
+			if lit != material:
+				mesh.set_surface_override_material(surface, lit)
 
 	# A way of moving nobody has heard of is the usual one.
 	_set = _sets.get(cast.get("moves", "default"), _sets["default"])
@@ -389,8 +467,20 @@ func _ready() -> void:
 	for mesh in _meshes:
 		top = maxf(top, head + ((mesh.transform * mesh.get_aabb()).end.y - _rest_global(_head).origin.y))
 	fit = {"height": top * size, "eyes": lerpf(head, top, 0.35) * size, "head": (head - 0.02) * size}
-	# Whoever spawned it may still move it to where it belongs.
+	if _set.has("kneel"):
+		# How far down its head goes on one knee.
+		_tree.set(KNEEL, 1.0)
+		_tree.advance(0.0)
+		_g.clear()
+		crouch_drop = maxf(head - _global(_head).origin.y, 0.0) * size
+		_tree.set(KNEEL, 0.0)
+		_tree.advance(0.0)
+		_shape(0.0, 1.0)
+		_g.clear()
+	# Whoever spawned it may still move it to where it belongs, and it stands
+	# there as it would have come to a stand.
 	_planted = [false, false]
+	_stance = 1.0 if _hold != Hold.NONE else 0.0
 	_was_at = _body.global_position if _body else Vector3.ZERO
 
 
@@ -409,6 +499,12 @@ func aim(target: Vector3) -> void:
 
 func lower() -> void:
 	_aiming = false
+
+
+## Goes down on one knee behind something low, or stands up again. Only a way
+## of moving with a "kneel" does; crouch_drop says how far.
+func crouch(on: bool) -> void:
+	_crouching = on and crouch_drop > 0.0
 
 
 ## The moment before an attack. With a weapon it comes up onto the target and
@@ -654,6 +750,18 @@ func _pose(delta: float) -> void:
 		_wail(delta)
 	_thrown_up = lerpf(_thrown_up, 1.0 if _panicking else 0.0, 1.0 - exp(-9.0 * delta))
 	_raised = lerpf(_raised, 1.0 if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
+	# Across the chest when it runs flat out, for as long as it does not aim.
+	var flat_out := smoothstep(FLAT_OUT.x, FLAT_OUT.y, speed) if _hold == Hold.SHOULDER else 0.0
+	_port = lerpf(_port, flat_out * (1.0 - _raised), 1.0 - exp(-7.0 * delta))
+	if crouch_drop > 0.0:
+		_kneel = move_toward(_kneel, 1.0 if _crouching else 0.0, delta / 0.35)
+		_tree.set(KNEEL, smoothstep(0.0, 1.0, _kneel))
+	# Feet apart as it comes to a stand with a weapon; at once into the
+	# stride of the clip as it sets off.
+	var stands := _hold != Hold.NONE and _moving < 0.05 and _kneel == 0.0
+	_stance = lerpf(_stance, 1.0 if stands else 0.0, 1.0 - exp(-(8.0 if stands else 25.0) * delta))
+	if _stance < 0.002:
+		_stance = 0.0
 	if _strike >= 0.0:
 		_strike += delta
 		if _strike >= STRIKE_TIME:
@@ -709,13 +817,14 @@ func _shape(delta: float, hold_on: float) -> void:
 			stand = Basis(give.normalized(), 0.32 * give.length() * share * hold_on) * stand
 		_turn_to(bone, stand)
 
+	# The head first: a weapon at the shoulder is brought up to the eye.
+	_look(hold_on)
 	if _hold != Hold.NONE and hold_on > 0.0:
 		_carry(delta, chest, hold_on)
 	if _thrown_up * hold_on > 0.01:
 		_flail(chest, _thrown_up * hold_on)
 	if _aiming and _hold == Hold.NONE:
 		_aim_yaw = lerpf(_aim_yaw, _bearing(_global(_head).origin).x, 1.0 - exp(-12.0 * delta))
-	_look(hold_on)
 	if _wielding and _weapon:
 		# It goes where the hand goes: the wrist has -Z along the fingers and
 		# +Y out of the back of the hand, as the marker on the model has.
@@ -734,7 +843,9 @@ func _place_load() -> void:
 
 
 ## Holds the weapon, or points: where it goes follows from what it is aimed
-## at, and the arms follow the weapon.
+## at, and the arms follow the weapon. A weapon with sights comes up to the
+## eye, which the head has already lowered onto it, see _look(); short of
+## the target, it dips about the butt in the shoulder.
 func _carry(delta: float, chest: Basis, hold_on: float) -> void:
 	var right: Limb = _arms[1]
 	var shoulder := _global(right.upper).origin
@@ -746,12 +857,14 @@ func _carry(delta: float, chest: Basis, hold_on: float) -> void:
 		# The butt sits in the pocket of the shoulder, lower when it hangs.
 		from = shoulder + chest * Vector3(0.04, lerpf(-0.09, 0.02, _raised), 0.06) * _hip_height
 		low = chest * Vector3(0.38, -0.62, 0.68).normalized()
-	var bearing := _bearing(from)
+	var eye := _global(_head) * _eye
+	var bearing := _bearing(eye if _sights else from)
 	if _aiming:
 		_aim_yaw = lerpf(_aim_yaw, bearing.x, 1.0 - exp(-12.0 * delta))
 		_aim_pitch = lerpf(_aim_pitch, bearing.y, 1.0 - exp(-12.0 * delta))
 	# Up on the target as it is about to fire, a little below it otherwise.
-	var pitch := _aim_pitch - 0.14 * (1.0 - _charge) + 0.05 * _recoil
+	var dip := -0.14 * (1.0 - _charge) + 0.05 * _recoil
+	var pitch := _aim_pitch + (0.0 if _sights else dip)
 	var on := Vector3(sin(_aim_yaw) * cos(pitch), sin(pitch), cos(_aim_yaw) * cos(pitch))
 	var along := low.slerp(on, _raised).normalized()
 	var hold := Basis.looking_at(along, Vector3.UP)
@@ -762,6 +875,21 @@ func _carry(delta: float, chest: Basis, hold_on: float) -> void:
 		# At arm's length under the eyes, or drawn in against the chest.
 		origin = rest.lerp(from + (along * 0.56 + Vector3.DOWN * 0.02) * _hip_height, _raised) - along * 0.03 * _recoil * _hip_height
 	_held = Transform3D(hold, origin)
+	if _sights:
+		# Sights at the eye, then dipped about the butt and pushed back by
+		# the shot; it comes there from hanging at the shoulder.
+		var sighted := Basis.looking_at(on, Vector3.UP)
+		var butt := eye - sighted * _sight + sighted * _butt
+		sighted = Basis(sighted.x, dip) * sighted
+		var aimed := Transform3D(sighted, butt - sighted * _butt - on * 0.03 * _recoil * _hip_height)
+		var hanging := Transform3D(Basis.looking_at(low, Vector3.UP), from - Basis.looking_at(low, Vector3.UP) * _butt)
+		if _port > 0.01:
+			var across := Basis.looking_at(chest * (PORT.along as Vector3).normalized(), chest * (PORT.top as Vector3).normalized())
+			var middle := (_global(_arms[0].upper).origin + shoulder) * 0.5 + chest * (PORT.grip as Vector3) * _hip_height
+			hanging = hanging.interpolate_with(Transform3D(across, middle - across * (_grip[1] as Transform3D).origin), _port)
+		_held = hanging.interpolate_with(aimed, _raised)
+		origin = _held.origin
+		along = -_held.basis.z
 	var blow := _strike_shares()
 	if blow != Vector2.ZERO and _weapon:
 		# The blow takes the weapon from where it is held, back and then
@@ -854,8 +982,10 @@ func _look(hold_on: float) -> void:
 	var angle := minf(ahead.angle_to(to), 1.0) * 0.85 * amount
 	var stand := Basis(axis.normalized(), angle) * head.basis
 	if _hold == Hold.SHOULDER:
-		# Cheek to the stock.
-		stand = Basis(ahead, 0.22 * amount) * stand
+		# Chin down and cheek to the stock.
+		var looking := (stand * _head_ahead).normalized()
+		var weld := WELD if _sights else Vector2(0.0, 0.22)
+		stand = Basis(looking, weld.y * amount) * Basis(Vector3.UP.cross(looking).normalized(), weld.x * amount) * stand
 	_turn_to(_head, stand)
 
 
@@ -863,6 +993,9 @@ func _look(hold_on: float) -> void:
 ## foot that is down stays where it came down, each foot is as high as the
 ## floor is under it, and the hips come down as far as it takes for both legs
 ## to reach. The ankles go where that puts them and the legs bend to fit.
+## One that holds a weapon stands with its feet apart, see STANCE_WIDTH; a
+## foot that stands out of place while the body stands is set down anew, one
+## foot after the other, instead of sliding over the floor.
 ## Called when only the hips have been placed.
 func _walk(delta: float) -> void:
 	var to_world := _skeleton.global_transform
@@ -872,10 +1005,22 @@ func _walk(delta: float) -> void:
 		space = get_world_3d().direct_space_state
 	var heading := atan2(to_world.basis.z.x, to_world.basis.z.z) + _yaw
 	var phase := fposmod(_cycles, 1.0)
-	var reach := FOOT_REACH * _hip_height * _figure.scale.y
+	var size := _figure.scale.y
+	var reach := FOOT_REACH * _hip_height * size
 	var middle := _global(_hips).origin
-	var travel := Basis(Vector3.UP, _yaw) * Vector3.BACK
-	var deepest := 0.0
+	var hips_turn := Basis(Vector3.UP, _yaw)
+	var travel := hips_turn * Vector3.BACK
+	# Down on one knee the clip has the legs, and no foot is held anywhere.
+	var lock := lock_feet and _kneel == 0.0
+	var standing := _moving < 0.05 and lock and not _on_the_spot
+	_stepped += delta
+	# Knees bent as it walks or trots with a weapon.
+	var creep: float = _set.get("creep", 0.0) if _hold != Hold.NONE else 0.0
+	creep *= _moving * (1.0 - smoothstep(_speeds[mini(1, _speeds.size() - 1)], _speeds[mini(2, _speeds.size() - 1)], _gait_at))
+	# How far the hips have to come down for both legs to reach, and how far
+	# for them to stand as a stance has them, which may be up.
+	var deepest := -RISE * _hip_height
+	var upright := -RISE * _hip_height
 	for side in 2:
 		var leg := _legs[side]
 		# Where the clip has the foot, were the hips not sunk; then further
@@ -885,27 +1030,64 @@ func _walk(delta: float) -> void:
 		var further := travel * (ankle - middle).dot(travel) * (_stretch - 1.0)
 		ankle += further
 		var ball := to_world * (_global(_balls[side]).origin + Vector3.UP * _sink + further)
+		if _stance > 0.0:
+			# Where it puts this foot when it stands with a weapon.
+			var out := 1.0 if side == 0 else -1.0
+			var spot := middle + hips_turn * Vector3(out * STANCE_WIDTH, 0.0, out * STANCE_LEAD) * _hip_height
+			var move := Vector3(spot.x - ankle.x, 0.0, spot.z - ankle.z) * _stance
+			ankle += move
+			ball += to_world.basis * move
 		var down := _moving < 0.05
 		if not down:
 			var from: Array = _downs[_gait][side]
 			down = fposmod(phase - from[0], 1.0) < from[1] - from[0]
 		var shift := _slip[side]
-		if down and lock_feet and not _on_the_spot and not _planted[side]:
+		var lift := 0.0
+		if _stepping[side] >= 0.0 and not standing:
+			_stepping[side] = -1.0
+		if not lock:
+			_planted[side] = false
+		if down and lock and not _on_the_spot and not _planted[side] and _stepping[side] < 0.0:
 			_planted[side] = true
 			_plant_at[side] = ball + shift
 			_plant_yaw[side] = heading
-		if _planted[side]:
+		if _stepping[side] >= 0.0:
+			# On its way from where it stood to where it belongs.
+			_stepping[side] = minf(_stepping[side] + delta / STEP_TIME, 1.0)
+			var along := smoothstep(0.0, 1.0, _stepping[side])
+			shift = _step_from[side].lerp(ball, along) - ball
+			shift.y = 0.0
+			lift = sin(PI * _stepping[side]) * STEP_LIFT * _hip_height
+			_plant_yaw[side] = lerp_angle(_step_yaw[side], heading, along)
+			if _stepping[side] >= 1.0:
+				_stepping[side] = -1.0
+				_planted[side] = true
+				_plant_at[side] = ball
+				_plant_yaw[side] = heading
+				_stepped = 0.0
+				shift = Vector3.ZERO
+		elif _planted[side]:
 			shift = _plant_at[side] - ball
 			shift.y = 0.0
-			if not down or _on_the_spot or shift.length() > reach or absf(angle_difference(heading, _plant_yaw[side])) > FOOT_TURN:
+			var turned := absf(angle_difference(heading, _plant_yaw[side]))
+			var astray := shift.length() > STEP_SLACK * _hip_height * size or turned > STEP_TURN
+			if standing and astray and turned < FOOT_TURN * 1.6 and shift.length() < reach * 1.5:
+				# Out of place while it stands: it steps there, and the other
+				# foot only once this one is down again.
+				if _stepping[1 - side] < 0.0 and _stepped > PAUSE:
+					_stepping[side] = 0.0
+					_step_from[side] = _plant_at[side]
+					_step_yaw[side] = _plant_yaw[side]
+					_planted[side] = false
+			elif not down or _on_the_spot or shift.length() > reach or turned > FOOT_TURN:
 				_planted[side] = false
 			# Put down somewhere else altogether: there is no stepping back from that.
 			if shift.length() > reach * 4.0:
 				shift = Vector3.ZERO
-		if not _planted[side]:
+		if not _planted[side] and _stepping[side] < 0.0:
 			shift *= exp(-18.0 * delta)
 		_slip[side] = shift
-		_was_down[side] = down
+		_was_down[side] = down and _stepping[side] < 0.0
 		ankle += to_model * shift
 		# The floor under this foot, next to the floor the body stands on.
 		var under := _floor(space, ball + shift, to_world.origin.y)
@@ -914,19 +1096,20 @@ func _walk(delta: float) -> void:
 		_lie[side] = _lie[side].lerp(under[1], settle).normalized()
 		if under[0] == 0.0 and absf(_rise[side]) < 0.0005:
 			_rise[side] = 0.0
-		ankle += to_model * Vector3(0.0, _rise[side], 0.0)
+		ankle += to_model * Vector3(0.0, _rise[side], 0.0) + Vector3.UP * lift
 		_ankle[side] = ankle
-		_bent[side] = _stretch != 1.0 or _sink > 0.0005 or shift.length_squared() > 0.000001 or _rise[side] != 0.0
+		_bent[side] = _stretch != 1.0 or absf(_sink) > 0.0005 or shift.length_squared() > 0.000001 or _rise[side] != 0.0 or lift > 0.0 or _stance > 0.0
 
-		# How far the hips have to come down for this leg to reach that far.
 		var hip := _global(leg.upper).origin + Vector3.UP * _sink
 		var flat := Vector2(ankle.x - hip.x, ankle.z - hip.z).length_squared()
-		var longest := (leg.upper_length + leg.lower_length) * 0.985
-		deepest = maxf(deepest, hip.y - ankle.y - sqrt(maxf(longest * longest - flat, 0.0)))
+		var length := leg.upper_length + leg.lower_length
+		deepest = maxf(deepest, hip.y - ankle.y - sqrt(maxf(pow(length * 0.985, 2.0) - flat, 0.0)))
+		upright = maxf(upright, hip.y - ankle.y - sqrt(maxf(pow(length * STANCE_REACH, 2.0) - flat, 0.0)))
 
 	# Down at once, up again at leisure. A foot that stands lower than the
 	# body may take the hips that much further down.
-	deepest = minf(deepest, 0.2 * _hip_height + maxf(-minf(_rise[0], _rise[1]), 0.0) / _figure.scale.y)
+	deepest = lerpf(maxf(deepest, creep * _hip_height), maxf(deepest, upright), _stance)
+	deepest = minf(deepest, 0.2 * _hip_height + maxf(-minf(_rise[0], _rise[1]), 0.0) / size)
 	var sink := lerpf(_sink, deepest, 1.0 - exp(-(45.0 if deepest > _sink else 10.0) * delta))
 	var drop := Vector3.DOWN * (sink - _sink)
 	_sink = sink
@@ -945,18 +1128,23 @@ func _walk(delta: float) -> void:
 		if _bent[side] or drop.y != 0.0:
 			var hip := _global(leg.upper).origin + drop
 			var knee := _global(leg.lower).origin + drop
-			_solve(leg, hip, _ankle[side], knee - hip)
-			_turn_to(leg.upper, _upper)
-			_turn_to(leg.lower, _lower)
+			var pole := (knee - hip).normalized()
+			if _stance > 0.0:
+				# Knees over the toes, a little out.
+				var out := 1.0 if side == 0 else -1.0
+				pole = pole.lerp((hips_turn * Vector3(out * KNEES_OUT, 0.0, 1.0)).normalized(), _stance)
+			_solve(leg, hip, _ankle[side], pole)
+			_turn_to(leg.upper, _upper, 1.0 - _kneel)
+			_turn_to(leg.lower, _lower, 1.0 - _kneel)
 			var keep := foot.basis
-			if _planted[side]:
+			if _planted[side] or _stepping[side] >= 0.0:
 				keep = Basis(Vector3.UP, angle_difference(heading, _plant_yaw[side])) * keep
 			# Flat on a floor that slopes; level on a stair.
 			var lie := (to_model * _lie[side]).normalized()
 			var slope := Vector3.UP.angle_to(lie)
 			if slope > 0.01 and slope < LEVEL.y:
 				keep = Basis(Vector3.UP.cross(lie).normalized(), slope * (1.0 - smoothstep(LEVEL.x, LEVEL.y, slope))) * keep
-			_turn_to(leg.end, keep)
+			_turn_to(leg.end, keep, 1.0 - _kneel)
 		if measure:
 			# How far the foot really moved while the clip had it on the ground.
 			var now := to_world * (_global(leg.end) * (foot.affine_inverse() * ball_at))
@@ -996,7 +1184,7 @@ func _fall(delta: float) -> void:
 	_sink = lerpf(_sink, 0.0, 1.0 - exp(-10.0 * delta))
 	_flinch = _flinch.lerp(Vector3.ZERO, 1.0 - exp(-8.0 * delta))
 	var hold_on := 1.0 - smoothstep(0.0, 0.2, _fallen)
-	if hold_on > 0.0 or absf(_yaw) > 0.002 or _sink > 0.002:
+	if hold_on > 0.0 or absf(_yaw) > 0.002 or absf(_sink) > 0.002:
 		_shape(delta, hold_on)
 	elif _load:
 		# Whatever nobody took off its back goes down with it.
@@ -1170,6 +1358,8 @@ func _find_bones() -> bool:
 				return false
 	_hip_height = _rest_global(_hips).origin.y
 	_head_ahead = _rest_global(_head).basis.transposed() * Vector3.BACK
+	var head_rest := _rest_global(_head)
+	_eye = head_rest.affine_inverse() * (head_rest.origin + EYE * _hip_height)
 	for i in 2:
 		var side := SIDES[i]
 		# In the T-pose an elbow bends about the upright and a knee about the
@@ -1309,6 +1499,10 @@ func _arm(weapon: String) -> void:
 		flash_prongs = data.flash_prongs
 		if Sfx.has(data.shot_sound):
 			sounds[&"shot"] = data.shot_sound
+		# Aimed, the player's weapon sits this far from the eye; the one
+		# carried here is the same model.
+		_sight = -data.ads_offset
+		_sights = _hold == Hold.SHOULDER
 
 
 ## Puts something to strike with in its right hand: a model that says of
@@ -1355,7 +1549,19 @@ func _within(node: Node3D, model: Node3D) -> Transform3D:
 	return at
 
 
-func _tint(material: BaseMaterial3D, color: Color) -> Material:
+## The material as OCCLUDED has it, for one with occlusion; else as it is.
+func _lit(material: BaseMaterial3D) -> BaseMaterial3D:
+	if not material.ao_enabled:
+		return material
+	if not _occluded.has(material):
+		var copy: BaseMaterial3D = material.duplicate()
+		copy.ao_light_affect = OCCLUDED.in_light
+		copy.metallic_specular = OCCLUDED.shine
+		_occluded[material] = copy
+	return _occluded[material]
+
+
+func _tint(material: BaseMaterial3D, color: Color) -> BaseMaterial3D:
 	var key := [material, color]
 	if not _tinted.has(key):
 		var copy: BaseMaterial3D = material.duplicate()
@@ -1401,7 +1607,7 @@ func _library() -> AnimationLibrary:
 ## a blow over that from the waist up, a flinch over that, and the fall
 ## over everything.
 func _blend_tree() -> AnimationNodeBlendTree:
-	var key: String = _set.idle + ("+" + _set.carry if _wielding else "")
+	var key: String = _set.idle + ("+" + _set.carry if _wielding else "") + ("+" + _set.kneel if _set.has("kneel") else "")
 	if _trees.has(key):
 		return _trees[key]
 	var tree := AnimationNodeBlendTree.new()
@@ -1426,6 +1632,18 @@ func _blend_tree() -> AnimationNodeBlendTree:
 		for part in ARM:
 			upper_body.append(side + part)
 	var below := &"move"
+	if _set.has("kneel"):
+		# Down on one knee, whatever its legs were doing; its arms are its
+		# weapon's.
+		var kneel := AnimationNodeBlend2.new()
+		kneel.set_filter_enabled(true)
+		for bone in KNEELING:
+			kneel.set_filter_path(NodePath(".:" + bone), true)
+		tree.add_node(&"kneel", kneel)
+		tree.add_node(&"kneel_clip", _clip(_set.kneel))
+		tree.connect_node(&"kneel", 0, below)
+		tree.connect_node(&"kneel", 1, &"kneel_clip")
+		below = &"kneel"
 	if _wielding:
 		# What it strikes with it carries at the ready, whatever its legs do.
 		var carry := AnimationNodeBlend2.new()
@@ -1434,7 +1652,7 @@ func _blend_tree() -> AnimationNodeBlendTree:
 			carry.set_filter_path(NodePath(".:Right" + part), true)
 		tree.add_node(&"carry", carry)
 		tree.add_node(&"carry_clip", _clip(_set.carry))
-		tree.connect_node(&"carry", 0, &"move")
+		tree.connect_node(&"carry", 0, below)
 		tree.connect_node(&"carry", 1, &"carry_clip")
 		below = &"carry"
 	_choice(tree, &"act_clip", _blows())

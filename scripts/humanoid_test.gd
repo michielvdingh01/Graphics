@@ -33,6 +33,13 @@ var _failures := 0
 ## What is being walked about by hand, and how fast.
 var _walker: CharacterBody3D
 var _stride := Vector3.ZERO
+## While the fight is on: the fastest any of them went backwards, as a share
+## of its own speed, and the fastest any went with its weapon up, in m/s.
+var _sampling := false
+var _backwards := 0.0
+var _aimed := 0.0
+## Enemy -> seconds it has had its weapon up: it slows down after raising it.
+var _aiming := {}
 
 
 func _ready() -> void:
@@ -47,6 +54,17 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_instance_valid(_walker):
 		_walker.global_position += _stride * delta
+	if _sampling:
+		for e: CharacterBody3D in get_tree().get_nodes_in_group("enemy"):
+			if not _is_character(e) or e.dead:
+				continue
+			var ahead := -e.global_basis.z
+			ahead = Vector3(ahead.x, 0.0, ahead.z).normalized()
+			var going := Vector3(e.velocity.x, 0.0, e.velocity.z)
+			_backwards = maxf(_backwards, -going.dot(ahead) / e.speed)
+			_aiming[e] = _aiming.get(e, 0.0) + delta if e._aims else 0.0
+			if _aiming[e] > 0.35:
+				_aimed = maxf(_aimed, going.length())
 
 
 func _run() -> void:
@@ -87,7 +105,11 @@ func _run() -> void:
 		and enemies.all(func(e: Node) -> bool: return not e.can_process()))
 	_check("with characters", enemies.all(_is_character))
 	_check("who sound like flesh where a shot lands", Sfx.has(&"impact_flesh") and enemies.all(func(e: Node) -> bool: return e.get_node("CollisionShape3D").get_meta(&"surface") == "flesh"))
-	_check("who carry no plate and no pack, and do not duck", enemies.all(func(e: Node) -> bool: return e._shield == 0.0 and e._pack == 0.0 and e._drop == 0.0))
+	_check("who carry no plate and no pack, and duck only if they go down on one knee", enemies.all(func(e: Node) -> bool: return e._shield == 0.0 and e._pack == 0.0 and e._drop == float(e._rig.crouch_drop)))
+	var kneels := enemies.filter(func(e: Node) -> bool: return e._drop > 0.0)
+	if not kneels.is_empty():
+		var drop: float = kneels[0]._drop
+		_check("who duck behind something low on one knee (eyes %.2f m down)" % drop, drop > 0.4 and drop < 0.95)
 	game._start(first)
 
 	# They come looking for the player and deal damage, wherever they stood.
@@ -96,6 +118,7 @@ func _run() -> void:
 	for e in enemies:
 		start[e] = e.global_position.distance_to(player.global_position)
 	var approached := false
+	_sampling = true
 	for i in 50:
 		approached = approached or enemies.any(
 			func(e: Node3D) -> bool:
@@ -106,6 +129,12 @@ func _run() -> void:
 		await _wait(0.5)
 	_check("they find the player", approached)
 	_check("they hit the player", hits[0] > 0)
+	_sampling = false
+	# A person goes backwards at a walk, and once its weapon is up at a jog;
+	# it may not be quite down to either the moment it has turned.
+	var person: Node = enemies[0]
+	_check("backwards they go at most %.0f%% of their speed (%.0f%%), with the weapon up at most %.1f m/s (%.1f)" % [person.BACKWARDS * 100.0, _backwards * 100.0, person.AIMED_PACE, _aimed],
+		_backwards <= person.BACKWARDS + 0.1 and _aimed <= person.AIMED_PACE + 0.4)
 
 	# One of them is shot with the rifle from close range.
 	var enemy: CharacterBody3D = enemies[0]
@@ -374,6 +403,37 @@ func _run() -> void:
 		_check("the stairs rise (%.1f m over %.1f m)" % [head_of.y - foot_of.y, foot_of.x - head_of.x], head_of.y - foot_of.y > 2.0)
 		print("    on the stairs a foot that is down is at most %.3f m off the floor under it; left at the height of the body, %.3f m" % [off[1][0], off[0][0]])
 		_check("feet follow the stairs, one above the other (up to %.2f m)" % off[1][1], off[1][0] < OFF_FLOOR and off[0][0] > OFF_FLOOR * 2.0 and off[1][1] > 0.15)
+
+		# With a weapon it stands with its feet apart, and swung round where it
+		# stands it steps until they are under it again, one foot at a time and
+		# without a foot sliding over the floor.
+		if legs.get(&"_hold") != 0:
+			legs.follow_floor = true
+			_walker.global_position = RANGE_TARGET
+			_walker.rotation = Vector3.ZERO
+			_walker.velocity = Vector3.ZERO
+			legs.aim(_walker.global_position + Vector3(0, 1.4, -30))
+			await _wait(1.2)
+			var gap := _feet_apart(legs)
+			_check("standing with a weapon its feet are apart (%.2f m)" % gap, gap > 0.25 and gap < 0.55)
+			legs.slid = 0.0
+			legs.stood = 0.0
+			_walker.rotation.y = deg_to_rad(-70.0)
+			legs.aim(_walker.global_position + _walker.global_basis * Vector3(0, 1.4, -30))
+			var steps := 0
+			var both := false
+			var was := [false, false]
+			for i in 40:
+				await _wait(0.03)
+				var now := [legs._stepping[0] >= 0.0, legs._stepping[1] >= 0.0]
+				both = both or (now[0] and now[1])
+				for side in 2:
+					if now[side] and not was[side]:
+						steps += 1
+				was = now
+			var settled: bool = legs._planted[0] and legs._planted[1] and not was[0] and not was[1]
+			var slide: float = legs.slid / maxf(legs.stood, 0.01)
+			_check("swung round 70 degrees where it stands it steps until its feet are under it (%d steps, %.3f m/s while down)" % [steps, slide], steps >= 2 and not both and settled and slide < SLIDE)
 		_walker.global_position = RANGE_TARGET
 		_walker.rotation = Vector3.ZERO
 		# What a frame of all that costs in script and animation, for the record:
@@ -440,6 +500,15 @@ func _run() -> void:
 
 	print("HUMANOID TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)
+
+
+## How far apart its feet are on the floor, in metres.
+func _feet_apart(legs: Node3D) -> float:
+	legs._g.clear()
+	var feet := []
+	for side in 2:
+		feet.append(legs._skeleton.global_transform * legs._global(legs._legs[side].end).origin)
+	return Vector2(feet[0].x - feet[1].x, feet[0].z - feet[1].z).length()
 
 
 func _is_character(enemy: Node) -> bool:

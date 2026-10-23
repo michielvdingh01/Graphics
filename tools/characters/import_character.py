@@ -27,9 +27,14 @@ is passed on to prepare.py; the ones that matter:
     --keep-weapons      keep what looks like a weapon by its name
     --bones=map.json    profile bone -> source bone, when guessing fails
     --route=scan        treat it as a statue even though it has a skeleton
+    --texture-size=2048 one set of textures of 2K instead of 1K, for a character
+                        seen close up; the file may then be four times as large
+    --occlusion         bake how much light from around reaches each texel (on
+                        the CPU, half a minute): folds and pouches get a shadow
     --route=repaint     the file is a character already: change its paint only
-    --look=zombie       paint it up as a zombie or a clown, or dye its uniform:
-                        desert, woodland, night (the lines of UNIFORMS in looks.py)
+    --look=zombie       paint it up as a zombie or a clown, wear its uniform in
+                        (worn), or dye it: desert, woodland, night (the lines
+                        of UNIFORMS in looks.py)
     --no-delight        scan: leave the light that is baked into the texture
     --baggy             scan: the legs are in one garment down to the knees
     --keep=DIR          leave the Blender scene and the textures there

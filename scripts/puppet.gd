@@ -20,7 +20,7 @@ const ARMORY := preload("res://scripts/armory.gd")
 const GRENADE := preload("res://scenes/grenade.tscn")
 ## Who it can be: soldier_01 and up, one for every player by its id.
 const CHARACTER := "res://assets/characters/soldier_%02d/soldier_%02d.glb"
-const CHARACTERS := 5
+const CHARACTERS := 8
 ## The same soldiers in the uniform of the second side of a match, where
 ## there is one.
 const SECOND := "res://assets/characters/soldier_%02d_desert/soldier_%02d_desert.glb"
@@ -149,7 +149,7 @@ func _dress() -> void:
 	var data: WeaponData = ARMORY.at(_weapon)
 	var rig := HUMANOID.new()
 	rig.name = "Model"
-	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "default"}
+	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "soldier"}
 	if _look.has("character"):
 		cast.merge(_look)
 	elif ResourceLoader.exists(path):

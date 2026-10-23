@@ -14,7 +14,9 @@ extends Node3D
 ## --walk=right,ahead is the way it goes, as a share of its speed (0,1 runs
 ## forwards, 0.5,0 steps to its right), and the poses are --step= seconds
 ## apart. --then=die, blast, hit, charge or swing makes that happen first, so
-## that the row shows what follows; --then=back kills it with a shot from
+## that the row shows what follows; --then=crouch has it duck behind
+## something low and --then=turn swings it round 70 degrees to its right
+## where it stands; --then=back kills it with a shot from
 ## behind and --then=thrown with a blast from behind, --then=off switches a
 ## robot off and --then=wake switches it on again after that. --lower leaves
 ## its weapon down.
@@ -202,6 +204,14 @@ func _enemy(options: Dictionary, place: Vector3, time: float) -> Vector3:
 				enemy.take_damage(1.0, enemy.global_position + Vector3.UP * 1.2, enemy.global_basis.z)
 			"charge":
 				rig.charge(true)
+			"crouch":
+				if rig.has_method("crouch"):
+					rig.crouch(true)
+			"turn":
+				# The body swings round to its right, its feet still where they were.
+				enemy.rotation_degrees.y -= 70.0
+				if options.lower == "":
+					rig.aim(enemy.global_position + enemy.global_basis * Vector3(0, enemy.eye_height, -400))
 			"off":
 				rig.power(false)
 			"wake":

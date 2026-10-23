@@ -1,5 +1,6 @@
-"""Paints a character up as a zombie or as a clown, or gives a soldier another
-uniform: --look=zombie, --look=clown, --look=desert.
+"""Paints a character up as a zombie or as a clown, gives a soldier another
+uniform, or wears his uniform in: --look=zombie, --look=clown, --look=desert,
+--look=worn.
 
 Nobody gives away a realistic zombie or clown under a licence a game can use.
 Until a generation service makes real ones, this turns any person the import
@@ -16,6 +17,11 @@ UNIFORMS is one, and its name is the look. It dyes what a soldier wears and
 carries, keeps the pattern and the folds of the cloth as light and dark,
 leaves skin, hair, eyes and the glass of goggles as they are, and takes the
 flag and the badges off the sleeves.
+
+Worn is how a soldier looks after a while in the field: sand and mud on the
+boots and up the shins, patches on the knees and elbows, dust on whatever
+faces up, grime in the folds and the edges rubbed lighter. It is the same
+everywhere, and the uniforms are dyed over it.
 """
 
 import bmesh
@@ -39,6 +45,10 @@ UNIFORMS = {
     "woodland": {"cloth": ((0.20, 0.215, 0.13), (0.235, 0.185, 0.125)), "boots": (0.11, 0.085, 0.065)},
     "night": {"cloth": ((0.109, 0.105, 0.100), (0.174, 0.168, 0.160)), "boots": (0.062, 0.06, 0.058)},
 }
+# A uniform worn in the field: how far up the leg the dirt reaches, as a share
+# of the height; the sand and the mud it is; how much of the colour it takes
+# at most; and how strongly folds are grimed and edges rubbed lighter.
+WORN = {"reach": 0.38, "sand": (0.62, 0.54, 0.42), "mud": (0.33, 0.27, 0.20), "most": 0.85, "grime": 0.25, "rubbed": 0.22}
 # How bright the three tones of a printed pattern lie against the middle of
 # the cloth: what is darker than the first is a fold, what is lighter than
 # the last a highlight.
@@ -477,10 +487,13 @@ def _toned(colour: np.ndarray, tone: np.ndarray) -> np.ndarray:
     return np.stack([np.interp(tone, (0.0,) + TONES + (TONES[2] * 1.5,), steps[:, channel]) for channel in range(3)], axis=1)
 
 
-def uniform(canvas: Canvas, palette: dict) -> dict:
-    """Dyes what a soldier wears and carries in the colours of `palette`."""
+def parts(canvas: Canvas) -> dict:
+    """What every texel of a soldier is: skin (the face with its hair, brows
+    and lips, the eyes and the inside of the mouth, and bare hands and
+    forearms), glass (the lens of goggles), boots, and cloth, which is the
+    rest of what it wears and carries; each 0..1. Also how bright the grey of
+    a typical texel is, and the island every texel lies on."""
     c = canvas
-    note = unmark(c)
     top = c.colour.max(axis=1)
     least = np.maximum(top, 0.08)
     # How far a colour is from grey, and from blue towards red: not fooled by
@@ -490,10 +503,10 @@ def uniform(canvas: Canvas, palette: dict) -> dict:
     grey = c.colour @ GREY
     island = c.islands()
 
-    # What is not to be dyed. On the head that goes by island: the face comes
-    # with its hair, brows and lips, and so do the eyes and the inside of the
-    # mouth, and all of those are vivid where a helmet, a cap and goggles are
-    # grey. Hair is no colour of its own, so it cannot be told texel by texel.
+    # On the head it goes by island: the face comes with its hair, brows and
+    # lips, and so do the eyes and the inside of the mouth, and all of those
+    # are vivid where a helmet, a cap and goggles are grey. Hair is no colour
+    # of its own, so it cannot be told texel by texel.
     typical = float(np.median(grey[vivid < 0.2])) if (vivid < 0.2).sum() > 100 else 0.4
     person = np.zeros(len(c.members()), dtype=bool)
     glass = np.zeros(len(c.members()), dtype=bool)
@@ -513,9 +526,23 @@ def uniform(canvas: Canvas, palette: dict) -> dict:
     flesh = np.clip((vivid - 0.28) / 0.1, 0.0, 1.0) * (warm > 0.1)
     around = c.spread(flesh, 4)
     skin = np.maximum(flesh * (around > 0.25), np.clip((around - 0.5) / 0.15, 0.0, 1.0))
-    skin = np.where((person | glass)[island], 1.0, skin)
-    boots = boot[island] & ~person[island]
-    cloth = (1.0 - skin) * ~boots
+    skin = np.where(person[island], 1.0, skin)
+    lens = glass[island] & ~person[island]
+    skin = np.where(lens, 0.0, skin)
+    boots = (boot[island] & ~person[island]).astype(np.float64)
+    cloth = (1.0 - skin) * (1.0 - boots) * ~lens
+    return {"skin": skin, "glass": lens.astype(np.float64), "boots": boots, "cloth": cloth, "grey": grey, "typical": typical}
+
+
+def uniform(canvas: Canvas, palette: dict) -> dict:
+    """Dyes what a soldier wears and carries in the colours of `palette`.
+    What is not dyed is what parts() says is skin or glass."""
+    c = canvas
+    note = unmark(c)
+    found = parts(c)
+    grey, typical = found["grey"], found["typical"]
+    boots = found["boots"] > 0.5
+    cloth = (1.0 - np.maximum(found["skin"], found["glass"])) * ~boots
 
     # The pattern and the folds are in how bright the cloth was: every tone
     # of it becomes the new colour as much lighter or darker. The two colours
@@ -534,6 +561,59 @@ def uniform(canvas: Canvas, palette: dict) -> dict:
     return note
 
 
+def worn(canvas: Canvas) -> dict:
+    """Dirt and wear by place, see WORN, on whatever parts() says is not skin
+    or glass. Grime goes where the occlusion of --occlusion says the light
+    does not reach, and wear where the normal map says the surface bulges."""
+    c, s = canvas, canvas.scale
+    found = parts(c)
+    cloth = (1.0 - np.maximum(found["skin"], found["glass"]))
+    h = c.at[:, 2] / c.height
+    if c.atlas.occlusion is not None:
+        shaded = 1.0 - c.atlas.occlusion[c.rows, c.columns].astype(np.float64)
+    else:
+        shaded = np.zeros(len(h))
+    # How the surface bends, from the normal map: apart is a bulge, together
+    # a fold, a little blurred so that it is the shape and not the weave.
+    normal = c.atlas.normal.astype(np.float64) * 2.0 - 1.0
+    bend = np.gradient(normal[:, :, 0], axis=1) + np.gradient(normal[:, :, 1], axis=0)
+    bend = _box(bend, 2) / 25.0
+    bulge = np.clip(bend[c.rows, c.columns] * 8.0, 0.0, 1.0)
+    fold = np.clip(-bend[c.rows, c.columns] * 8.0, 0.0, 1.0)
+
+    blots = clouds(c.at, 0.07 * s, c.seed + 11)
+    grain = clouds(c.at, 0.025 * s, c.seed + 12)
+    # From the ground up: thick on the boots, thinning out up the shin.
+    low = np.clip(1.0 - (h - 0.04) / WORN["reach"], 0.0, 1.0)
+    # Knees from kneeling, elbows from lying down; the front is -Y.
+    bones = c.armature.data.bones
+    patches = np.zeros(len(h))
+    for side in ("Left", "Right"):
+        knee = np.array(bones[side + "LowerLeg"].head_local) + np.array([0.0, -0.05 * s, 0.0])
+        elbow = np.array(bones[side + "LowerArm"].head_local) + np.array([0.0, 0.03 * s, 0.0])
+        patches = np.maximum(patches, np.maximum(c.near(knee, 0.08), 0.7 * c.near(elbow, 0.06)))
+    up = np.clip(c.facing[:, 2], 0.0, 1.0) ** 2
+    sand = (1.1 * low + 0.9 * patches + 0.3 * up + 0.2 * fold) * np.clip(0.45 + 1.0 * blots, 0.0, 1.2)
+    # Boots are dusty all over.
+    sand = np.maximum(sand, 0.55 * found["boots"] * np.clip(0.6 + blots, 0.0, 1.0))
+    sand = np.clip(sand, 0.0, WORN["most"]) * cloth
+    mud = np.clip((low ** 2 * np.clip((blots - 0.5) * 3.0, 0.0, 1.0) + 0.5 * patches * np.clip((grain - 0.5) * 2.5, 0.0, 1.0)), 0.0, WORN["most"]) * cloth
+
+    # Grime in the folds and where little light gets, then the dirt over it
+    # as a film the pattern shows through, then the edges rubbed paler.
+    c.colour = c.colour * (1.0 - WORN["grime"] * np.clip(shaded * 1.5 + fold * 0.5, 0.0, 1.0) * cloth)[:, None]
+    c.colour = blend(c.colour, c.colour * 0.25 + np.array(WORN["sand"]) * 0.75, sand)
+    c.colour = blend(c.colour, c.colour * 0.3 + np.array(WORN["mud"]) * 0.7, mud)
+    grey = (c.colour @ GREY)[:, None]
+    c.colour = blend(c.colour, grey * 1.3 + 0.03, WORN["rubbed"] * bulge * (1.0 - shaded) * cloth)
+    c.rough = np.clip(c.rough + 0.05 * sand + 0.04 * mud, 0.0, 1.0)
+    return {
+        "sand": round(float((sand > 0.25).mean()), 3),
+        "mud": round(float((mud > 0.25).mean()), 3),
+        "rubbed": round(float((bulge > 0.5).mean()), 3),
+    }
+
+
 def apply(name: str, body: bpy.types.Object, armature: bpy.types.Object, atlas, seed: int) -> dict:
     canvas = Canvas(body, armature, atlas, seed)
     note = {"name": name, "seed": seed}
@@ -545,9 +625,12 @@ def apply(name: str, body: bpy.types.Object, armature: bpy.types.Object, atlas, 
         canvas.finish()
         ball(canvas)
         note["pattern"] = suit["pattern"]
+    elif name == "worn":
+        note.update(worn(canvas))
+        canvas.finish()
     elif name in UNIFORMS:
         note.update(uniform(canvas, UNIFORMS[name]))
         canvas.finish()
     else:
-        raise SystemExit("import_character: no look called %s; there is zombie, clown and the uniforms %s" % (name, ", ".join(UNIFORMS)))
+        raise SystemExit("import_character: no look called %s; there is zombie, clown, worn and the uniforms %s" % (name, ", ".join(UNIFORMS)))
     return note

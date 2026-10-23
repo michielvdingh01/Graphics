@@ -622,7 +622,7 @@ Acht poppen kosten dus 0,2 ms meer dan acht robots, bevroren en in beweging. Bev
 
 - De geluiden zijn niet beluisterd: de runs draaien zonder geluid en ik kan niet horen. Ze zijn afgeleid van de bestaande en bescheiden afgesteld.
 - Er is maar op twee poppen met hetzelfde skelet getest, een man en een vrouw. Een personage met andere verhoudingen, kleding die doorbuigt of een skelet zonder tenen of vingers is nog niet voorbijgekomen; de rig houdt er rekening mee, maar gezien is het niet.
-- Bij snel omdraaien schuiven staande voeten in één keer mee zodra het lijf meer dan 35 graden gedraaid is.
+- ~~Bij snel omdraaien schuiven staande voeten in één keer mee zodra het lijf meer dan 35 graden gedraaid is.~~ Wie stilstaat zet nu een stap, zie "Soldaten: richten, stand, knielen en 2K".
 - De val voorover, de draf, het slaan met iets in de hand en de voeten op een trap stonden hier open; ze zijn gebouwd, zie "Houding en beweging".
 - De vingers bewegen niet; ze hebben een greep, een vuist, een klauw of een losse hand.
 - `tools/benchmark.sh --shoot` laat op een personage vonken zien in plaats van bloed, omdat de benchmark het effect zelf kiest en `Fx.robot_hit` aanroept; in het spel gaat een treffer via de vijand en klopt het.
@@ -1731,7 +1731,7 @@ De branch `gevecht` voegt eerst `looproute` (de route) en `speelbaar` (de person
 - **De plaat van de grunt.** De robotgrunt droeg een plaatje op zijn linkerarm dat niets deed. Het is nu een plaat van 50 bij 57 cm (onderdeel `Shield` in `tools/models/enemies.gd`) die hij voor zijn romp houdt zodra hij van de speler weet, en die van voren elk schot tussen heup en hals tegenhoudt (0,8 tot 1,37 m). Hoofd en benen steken erbuiten, van opzij en van achteren is hij open, en een explosie gaat er dwars doorheen. Het eerste schot op een grunt die nog niets weet, komt aan. Een tegengehouden schot geeft geen hitmarker, wel vonken, een eigen klank en een oplichtende plaat. Na 80 schade vliegt de plaat van zijn arm en staat hij 0,9 s te wankelen. Op Normal draagt de helft van de grunts er een; dat is te zien voordat het gevecht begint.
 - **Het pack van de heavy.** De munitie op zijn rug is een gele trommel met lampen geworden (onderdeel `Pack`). Een schot erin van achteren telt anderhalf keer. Na 70 schade spuit er een vlam uit, en 1,3 seconde later ontploft het: 140 schade in het hart, niets meer op 5 m, ook voor de robots ernaast. De heavy draait daarvoor traag (2,4 rad/s tegen 8), schiet alleen op wat binnen 45 graden voor hem staat en houdt midden in een salvo op als de speler verder om hem heen is.
 - **Wat je hoort.** Vóór een salvo een oplopende toon, voor grunt, rusher en heavy een eigen; een roep van wie omtrekt; een alarm van wie wegrent. Gesynthetiseerd, zoals de rest in deze branch.
-- **Personages** (soldaten, zombies, clowns) hebben hetzelfde brein: wie schiet neemt staand dekking, wacht zijn beurt af en vlucht. Ze duiken niet weg, dragen geen plaat en geen pack, en zeggen niets van het nieuwe.
+- **Personages** (soldaten, zombies, clowns) hebben hetzelfde brein: wie schiet neemt staand dekking, wacht zijn beurt af en vlucht. Ze duiken niet weg, dragen geen plaat en geen pack, en zeggen niets van het nieuwe. Sinds "Soldaten: richten, stand, knielen en 2K" duiken soldaten wel, op één knie.
 - **Paniek** (`panics`, alleen in het thema `panic_clowns`, in het menu Panic Clowns). Wie nog 40% van zijn gezondheid heeft of een ander binnen 8 m ziet sterven, slaat door en komt daar niet van terug. Hij laat zijn wapen vallen, geeft zijn dekking en zijn beurt op en rent 1,35 keer zo snel van het ene willekeurige punt naar het andere, elke 0,8 tot 2,2 s een nieuw. Aanvallen doet hij niet meer en voor een granaat loopt hij niet meer weg; om een brand loopt hij nog wel heen. De armen boven het hoofd en het hoofd in de nek zet `humanoid_rig.gd` in code (`_flail`): er is geen clip voor. Hij schreeuwt met `human_panic`, acht opnames uit het stemmenpakket dat er al was (de lange kreten die voor een stervende soldaat te heftig waren), met 0,25 tot 0,9 s adem ertussen; de schreeuw loopt met hem mee (`Sfx.play_on`) en breekt af als hij valt. In een gedeeld spel reist het mee met waar hij is (richt-id -1), dus ook wie later binnenkomt ziet het. Bij `clown_05` trekt de mouw onder de oksel wat mee, wat als een wijde mouw leest. Huilen doet hij niet: daar is geen opname voor. De acht schreeuwen zijn door Michiel op het oor goedgekeurd, los beluisterd; gespeeld heeft hij het nog niet.
 
 **Wat er te halen valt**
@@ -4600,3 +4600,177 @@ Het meeste zit in de banden (ongeveer 1.400 per wiel, waarvan de helft noppen), 
 | De modellen opnieuw bouwen | `tools/build_model.sh vehicles` |
 | Het blad van deze branch | `benchmark/sheets/vehicles_before_after.jpg`: per voertuig een rij voor en een rij nu |
 
+
+## Soldaten: richten, stand, knielen en 2K
+
+Op 21 oktober 2026 gevraagd: "Verbeter hoe de Soldiers eruit zien en hoe realistisch ze bewegen." Branch `soldaten`, vanaf de trunk `5f1509b`. Wat er verbeterd moest worden heb ik zelf gekozen, op rijen momenten van het bewegingenblad (`tools/moves_sheet.gd`) en op beelden in de hal van de fabriek. Wat hier staat geldt voor de rollen van de thema's `soldiers` en `soldiers_desert`, en voor medespelers (`scripts/puppet.gd`), die ook soldaten zijn. Het richten vanaf het oog, de stand en het stappen gelden voor iedere mens met een wapen, ook voor de poppen.
+
+**Wat er mis was**
+
+- **Richten.** Het geweer werd met de kolf aan de schouder gezet en het hoofd keek eroverheen naar het doel: het vizier zat een hand onder het oog, de kin omhoog. Van voren leek het of ze het geweer voor de borst hielden.
+- **Stilstaan.** De rusthouding van de set is een slungelige: knieën naar buiten, schouders hangend, de voeten 40 cm uit elkaar. Bij het richten draaien de heupen 20 graden weg van het doel en bleven de voeten staan, dus de knieën knikten naar binnen of kruisten.
+- **Draaien.** Een staande voet bleef staan tot het lijf meer dan 35 graden gedraaid was en schoof dan in één keer mee.
+- **Dekking.** Personages namen alleen staand dekking; achter iets lags bleven ze rechtop staan.
+- **Rennen.** Een rusher die sprint hield zijn pistoolmitrailleur laag voor zijn buik.
+- **De texturen** waren 1K voor het hele lijf; het gezicht kreeg daar een vlak van 230 bij 150 texels van.
+
+**Wat er staat** (`scripts/humanoid_rig.gd`, tenzij anders genoemd)
+
+- **Het vizier aan het oog.** Elk wapen weet waar het oog van de speler zit als die door het vizier kijkt (`ads_offset` in `weapons/<wapen>.tres`), en het model in de handen van een soldaat is hetzelfde model. Het hoofd kijkt eerst naar het doel, laat de kin zakken (0,16 rad) en legt de wang tegen de kolf (0,2 rad); dan komt het wapen zo dat het vizier voor het rechteroog zit (`EYE`, gemeten aan de vijf soldaten: 12 cm boven waar het hoofd op de nek draait). Wie nog niet vuurt, laat de loop 8 graden zakken om de kolf in de schouder, zodat hij over het vizier kijkt. Wapens zonder kolf (pistool, pistoolmitrailleur zonder kolf) houdt hij als voorheen op armlengte.
+- **Een stand.** Wie met een wapen stilstaat, zet zijn voeten elk 0,18 heuphoogte naast het midden (bij een soldaat 16 cm; 38 tot 40 cm tussen de enkels), de linkervoet 9 cm voor en de rechter 9 cm achter, met de knieën boven de tenen. De heupen komen op en neer tot de benen 99% van hun lengte reiken: de knieën geven een beetje. Een soldaat verschijnt meteen in die stand.
+- **Een stap in plaats van schuiven.** Staat een voet meer dan 0,07 heuphoogte (6 cm) van waar hij hoort, of 22 graden verdraaid, dan wordt hij opgetild (hooguit 7 cm) en in 0,3 s neergezet waar hij hoort; de andere pas als die staat. Een soldaat die 70 graden draait staat in twee stappen binnen een halve seconde weer goed. Na het lopen schuift hij zo ook zijn voeten in de stand.
+- **Een eigen set: `soldier`** (`assets/animations/manifest.json`). De rusthouding is die van iemand die een pistool klaarhoudt (`Pistol_Idle`): rechtop en alert, waar de armen toch van het wapen zijn. Bij lopen en draven met een wapen komen de heupen 0,07 heuphoogte (6 cm) lager (`creep`), dus lopen ze met meer gebogen knieën op dezelfde passen. Een gemengde hurkloop (`Walk` met 30% `Crouch_Fwd`) heb ik geprobeerd en weggegooid: de bouwer mat daar een voet die maar 27% van de cyclus stond, dus de voeten zouden glijden.
+- **Knielen achter dekking.** Een set met `kneel` gaat op één knie: de rechterknie op de grond, de linkervoet voor, uit de clip van iemand die knielt om iets te repareren (`Fixing_Kneeling` op 1,8 s, de benen, de heupen en de onderrug), in 0,35 s. Het hoofd gaat 0,57 m omlaag (`crouch_drop`, gemeten aan de houding). `scripts/enemy.gd` laat een mens nu duiken als zijn rig dat kan, zoals de robots al deden; wie geen `kneel` heeft (zombies, clowns, de poppen) blijft staan. Wie knielt en richt, richt geknield; om te schieten staat hij nog steeds op, want zo werkt de dekking (`squad.gd`).
+- **Port arms.** Wie harder rent dan 5 tot 5,8 heuphoogtes per seconde (4,5 tot 5,2 m/s; een rusher rent 6 m/s, een grunt 4,2) en niet richt, draagt een wapen met kolf schuin voor de borst, de loop omhoog bij de linkerschouder.
+- **Texturen van 2K.** De vijf soldaten zijn opnieuw door de route gegaan met `--texture-size=2048` (nieuw in `tools/characters/prepare.py`; `build_cast.sh` geeft het de soldaten mee): 6,4 tot 6,8 texels per cm in plaats van 3,2 tot 3,4, dezelfde driehoeken, botten en maten. Een soldaat is nu 5,0 tot 7,1 MB (was 1,6 tot 2,4); `check.gd` laat een personage met texturen van 2K vier keer zo groot zijn. De soldaten in woestijnkleuren zijn daarna opnieuw geverfd (`build_uniforms.sh desert`). De bronnen van Rocketbox (627 MB, MIT) staan in `assets/characters/.source/rocketbox/` van deze worktree, niet in git.
+
+**Geprobeerd en weer weggehaald: huid en stof apart belicht.** Naast elke soldaat twee maskers (huid en stof, uit de indeling die een uniform gebruikt om niet te verven wat huid en glas is), en daarmee een kopie van het materiaal met lichtverstrooiing onder de huid, een gladdere huid (ruwheid 0,6 in plaats van 0,92), een zachte rand van licht op de stof en minder glans. Om en om gemeten (hieronder) kostte de verstrooiing 6 fps en was ze op het beeld van de zware soldaat van dichtbij nauwelijks te zien; de rand maakte de camouflage melkachtig bleek; zonder die twee bleef alleen de gladdere huid over, en die was op ware grootte niet van 2K alleen te onderscheiden. Dus weg: de code, de maskers en hun gereedschap.
+
+**Gemeten** op 21 oktober 2026 tussen 20:44 en 20:48, M1 Pro aan een lader van 96 W (accu 70 tot 74%, ladend), load 3, geen andere Godot en geen Blender. Een gevecht in de fabriek met alle soldaten van de route aan en op de speler af: `tools/benchmark.sh --res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --enemies=soldiers --awake=12,0,4 --warmup=400 --at="15,1.6,8,68,0"`, vijf standen om en om, twee ronden:
+
+| Stand | Fps, ronde 1 en 2 | 1% low |
+|---|---|---|
+| De trunk (`5f1509b`) | 66,4 en 66,2 | 60,8 en 60,0 |
+| Deze branch: richten, stand, stappen, knielen | 66,7 en 66,5 | 60,0 en 60,9 |
+| Plus huid en stof met verstrooiing | 60,5 en 60,0 | 56,1 en 52,7 |
+| Plus huid en stof zonder verstrooiing | 66,5 en 65,8 | 61,2 en 59,6 |
+| 2K, met huid en stof en verstrooiing | 60,3 en 59,9 | 56,0 en 55,1 |
+
+Het nieuwe bewegen en de texturen van 2K kosten niets wat te meten is; de verstrooiing 6 fps (1,5 ms). Het poseren van een lopende soldaat kost 58 microseconden per frame, was 52 tot 58.
+
+**Waar het haperen vandaan kwam.** Michiel speelde de branch om 19:49 en vond het "opeens heel erg laggy". Om dezelfde tijd (19:48:30) startte een Blender van een ander project (`~/dev/Interior Faas Elias`, `interieur kleur`) die de GPU vol gebruikte: 98 tot 99% bezet zonder dat er een Godot draaide, en de groei van `accumulatedGPUTime` per proces (`ioreg -l -w0 -r -c AGXDeviceUserClient`, twee keer met een paar seconden ertussen) wees die Blender aan. In die tijd haalde de trunk zelf 14 tot 20 fps in het gevecht hierboven, met `timeout waiting for fence` in runs van elke stand. Daar is niets aan gedaan; de metingen hierboven zijn van toen die Blender klaar was. Eén `timeout waiting for fence` kwam al om 19:36, in een korte run met de verstrooiing; of daar toen ook iets anders de GPU had, weet ik niet.
+
+**Getest**
+
+- `tools/test_humanoid.sh` met de poppen, met `soldiers` en met `soldiers_desert`: geslaagd. Nieuw: wie met een wapen stilstaat heeft zijn voeten 0,38 tot 0,40 m uit elkaar; 70 graden gedraaid zet hij twee stappen, nooit beide voeten tegelijk, en een voet die staat schuift daarbij 0,03 m/s (de hiel draait om de bal); een soldaat duikt 0,57 m. Het poseren kost 58 microseconden per frame, was 52 tot 58.
+- De controle dat een voet op de trap van de hal op de vloer staat (hooguit 6 cm erboven) is voor de soldaten krap: 5,9 cm, en in één van vier runs net erover. In de trunk faalt hij voor de soldaten ook (7,0 cm); met de poppen is het 4,4 cm.
+- `tools/nettest.sh` (host en join) en `tools/test_match.sh`: geslaagd. Medespelers gebruiken de nieuwe set, en bots die uit een thema van de soldaten komen ook; of bots in een wedstrijd nu knielen, heb ik niet gezien.
+- Op de soldaten van 2K: `tools/test_humanoid.sh` met `soldiers` en `soldiers_desert`, en `tools/selftest.sh`: geslaagd (55, 55 en 586 controles). Het deel van de Alpen faalt in een nieuwe worktree eerst, omdat de 368 bestanden onder `scenes/levels/` die alleen in de hoofdcheckout staan er niet zijn; gekloond uit de hoofdcheckout en niet meegecommit.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld heb ik het niet**, en in beweging heb ik het alleen als rijen momenten gezien. Of het stappen bij het draaien er in het spel natuurlijk uitziet of te druk, en of de overgang van knielen naar opstaan voor een salvo niet te traag is (0,35 s), moet blijken. Michiel speelde de branch één keer, toen de andere Blender de GPU had.
+- **De eerste keer.** Er is geen nieuw materiaal of shader bij gekomen, alleen grotere texturen, dus nieuwe pipelines verwacht ik niet; geteld is het niet. Of het laden van een level met soldaten langer duurt door de texturen van 2K, ook niet.
+- **Of bots in een wedstrijd nu knielen** heb ik niet gezien.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| Een soldaat die knielt, of 70 graden draait waar hij staat | `tools/benchmark.sh --quick --scene=res://scenes/moves_sheet.tscn --enemies=soldiers --enemy=res://scenes/enemy.tscn --walk=0,0 --then=crouch --step=0.08 --count=6 --turn=60 --at="0,1.0,4.6,0,-6"` (`--then=turn --step=0.1 --count=8` voor het draaien) |
+| Een soldaat opnieuw in 2K, daarna zijn uniformen | `tools/characters/build_cast.sh soldier_01` (haalt de bron op als die er niet is), dan `tools/characters/build_uniforms.sh desert soldier_01` |
+| De bladen van deze branch | `assets/animations/sheets/soldaten.jpg` (voor en na: richten van opzij en van voren, stilstaan, lopen met het geweer op en omlaag, opzij stappen, sprinten) en `soldaten_nieuw.jpg` (knielen, geknield richten, draaien waar hij staat). Gemaakt op het bewegingenblad, 1920×1080, met de texturen van 1K |
+
+## Soldaten die er echter uitzien (plan)
+
+Op 21 oktober 2026 gevraagd, na het spelen van de branch `soldaten`: "mooie verbeteringen, maar het kan nog beter. Probeer nog wat meer onderzoek te doen naar een goede strategie om de looks van de Soldiers te verbeteren." Dit is die strategie. Ze rust op drie dingen: proeven in het spel op de zware soldaat (die altijd `soldier_05` is, dus voor en na dezelfde), een onderzoek naar technieken (wat AAA-shooters doen en wat Godot 4.7 daarvan kan) en een onderzoek naar betere modellen, makers van personages en generators. Beide onderzoeken zijn door een agent op het web gedaan, zonder iets te downloaden; de bronnen staan hieronder bij wat ze zeggen. Er is niets gekocht en geen account gemaakt.
+
+**Wat er op het scherm te zien is.** De camera is 80 graden hoog en tekent op de automatische schaal rond 1728×1080. Een soldaat van 1,8 m is dan 386 pixels hoog op 3 m, 116 op 10 m en 39 op 30 m; zijn hoofd 49, 15 en 5 pixels. De textuur van 2K landt op 3 m op mip 1,6, op 10 m op mip 3,4 en op 30 m op mip 5: daar is het hele lijf een textuur van 64 bij 64. Alles onder een centimeter of twee (de weving van stof, poriën, ogen) is voorbij 5 m weg. Wat telt is de verdeling van licht en donker op een schaal van 5 tot 50 cm, hoe het licht over het lijf verloopt, hoe glanzend het geheel is, het silhouet en hoe hij beweegt.
+
+**Waarom ze plat en een beetje plastic ogen** (`assets/characters/sheets/soldaten_proeven.jpg`):
+
+- **Eén lichtmeting voor het hele lijf.** Wat beweegt heeft geen lightmap en krijgt zijn omgevingslicht uit de probes van de lightmap: in Godot één monster van negen getallen, genomen in het midden van zijn kader (`_update_instance_lightmap_captures` in `renderer_scene_cull.cpp`). Laarzen en helm krijgen dus hetzelfde licht, en niets maakt het donkerder onder een zak of een riem. De soldaten hebben geen textuur met occlusie, en SSAO werkt op halve resolutie en geblurd: op 10 m ziet het geen plooien.
+- **Glans.** De stof heeft een ruwheid van 0,88, maar weerkaatst bij een lichte lucht toch genoeg om de camouflage een melkachtige waas te geven. Met de glans op nul (proef, `metallic_specular` 0) is de soldaat van dichtbij duidelijk dieper van kleur en minder plastic. Glans die op afstand opvalt is een bekende verrader: er is voor Arma Reforger een mod die alleen de uitrusting dof maakt ("the gear has a shine on them that is extremely visible at distance", [workshop](https://reforger.armaplatform.com/workshop/64F4CC6D75B615EB-HCA_G_Gear)).
+- **Te schoon.** De uniformen zijn nieuw: geen zand op de laarzen, geen vuil op de knieën, geen sleet aan randen. Voor Modern Warfare (2019) liepen de makers schoenen stuk, lieten ze weken en bewerkten ze met een Dremel voor ze gescand werden ([Activision](https://blog.activision.com/call-of-duty/2019-06/Initial-Intel-How-Photogrammetry-is-Helping-to-Shape-Call-of-Duty-Modern-Warfare-into-a-new-high-watermark-for-graphics-in-gaming)).
+- **De kleur is niet te licht.** De camouflage heeft in lineair licht 13% weerkaatsing, als echte stof. Het bleke op 10 m komt van de glans en de nevel, niet van de kleur.
+
+**Wat al geprobeerd is en niet loont** (zie "Soldaten: richten, stand, knielen en 2K"): verstrooiing onder de huid (6 fps, niet te zien), een lichtrand als glans van stof (maakt de camouflage bleek), een gladdere huid (niet te zien), en de texturen zonder verlies in plaats van als Basis Universal in de `.glb` (gemeten op het beeld: 1% verschil per pixel, met het oog niet te onderscheiden). Ook volgens het onderzoek zijn huidverstrooiing, rimpelkaarten, een oogshader, doeksimulatie en VoxelGI of SDFGI voor personages hier niet de moeite: dat is voor gezichten van 200 pixels en meer.
+
+### De opties, van goedkoop naar duur
+
+**A. Wat er is beter belichten en verouderen** (Rocketbox houden; geen geld, geen account, geen kosten op de GPU van betekenis)
+
+1. **Gebakken occlusie en holtes.** Per soldaat met Cycles op de CPU in Blender, in de indeling van zijn textuur, met een bereik van 20 tot 25 cm: 13 seconden per soldaat. Gebruikt als `ao_texture` (in het rood van de ruwheidstextuur, zoals glTF dat doet), met `ao_light_affect` op 0,3 tot 0,5, en voor een kwart in de kleur gerekend zodat plooien ook in de zon lezen; holtes uit de normal map maken plooien en naden scherper. Sinds 4.5 haalt Godot met de occlusie ook de weerkaatsing uit wat donker is (specular occlusion), dus dit helpt ook tegen de glans. Proef: zichtbaar meer diepte in vest, zakken en riemen, vooral in de duinen. Zo deed Call of Duty: WWII het voor elk oppervlak met een normal map ([Chan 2018](https://research.activision.com/publications/archives/material-advances-in-call-of-dutywwii)). Een tot twee dagen.
+2. **Minder glans op de stof.** De glans van het materiaal (`metallic_specular`) van 0,5 naar rond 0,25, ruwheid van de stof op 0,85 of meer. Met de occlusie uit 1 gaat de glans in plooien en onder riemen nog verder omlaag. Proef met nul: duidelijk minder plastic. Een halve dag, plus een blad op 3, 10 en 30 m om de maat te kiezen.
+3. **Vuil en sleet, in de textuur geschilderd naar plek en richting.** De schilderroute van de uniformen weet van elke texel waar op het lijf hij ligt; daarmee zand of modder op laarzen en schenen tot halverwege het onderbeen, plekken op knieën en ellebogen, stof op wat naar boven kijkt (schouders, de bovenkant van helm en zakken), en lichtere randen waar het oppervlak bolt. Elke soldaat een eigen zaad; de soldaten in woestijnkleuren stoffiger. Proef (`soldaten_proeven.jpg`, onderste rij): zand op knieën en laarzen leest, maar de proef was te voorzichtig. Een tot twee dagen.
+4. **Verankeren.** Een kleine eigen shader die de occlusie naar de voeten toe laat toenemen (laarzen en schenen donkerder in schaduw; een geknielde knie gaat vanzelf mee), en een vage schaduwvlek onder elke soldaat als decal tot 40 m, voor wie in de schaduw staat. 0,05 tot 0,2 ms volgens schatting; een dag.
+5. **Meer soldaten.** Rocketbox heeft er acht, we gebruiken er vijf. `Military_Female_02` heeft helm en vest, dus een zesde grunt. `Military_Male_05` en `_06` dragen een veldpet en geen vest: wachtposten in een kamp, of officieren. Samen ongeveer 80 MB te downloaden (MIT).
+6. **Bewegen dat op afstand leest.** Ademen bovenop elke houding, met een eigen fase per soldaat zodat een groep niet tegelijk ademt; zwaaien van het wapen bij het richten, meer onder het lopen; bij elk schot een terugslag in schouder en loop (2 tot 4 graden); het hoofd draait naar een dreiging (Godot heeft sinds 4.4 `LookAtModifier3D`). Binnen 10 m: knipperen, met de botten van de oogleden die de route nu in het hoofd laat opgaan. 5 tot 15 microseconden per soldaat; een tot twee dagen.
+7. **De texturen op de maat van de bron.** Romp, hoofd, helm en uitrusting zijn in de bron elk 2K (de uitrusting 2K bij 1K) en gaan nu samen in één 2K: ongeveer een kwart van de texels blijft over. Twee sets van 2K (lijf met uitrusting, hoofd met helm) of één van 4K halen dat terug. Het is te zien binnen een meter of vijf, daarbuiten niet; één tekenopdracht per soldaat meer, of vier keer het geheugen. Pas na 1 tot 6.
+
+**B. Nieuwe soldaten** (geld, een account, schijfruimte)
+
+8. **Gefotoscande soldaten kopen.** *Modular Soldiers (Photoscanned)* van The Tales Factory ([Unity Asset Store](https://assetstore.unity.com/packages/3d/characters/humanoids/humans/modular-soldiers-photoscanned-207377), €45,99 plus btw): gezichten en handen in 4K, kleding, vesten en helmen in 2K, 15 tot 43 duizend driehoeken met vijf LOD's tot 1,5 duizend, twaalf kleuren en camouflages, blendshapes in het gezicht, geen animaties. Het enige wat ik vond dat zoals het geleverd wordt fotorealistisch is en binnen het budget past; vijf sterren van zeven beoordelingen, laatst bijgewerkt in augustus 2022. Nodig: een Unity ID, de aankoop, en de Unity Editor om het pakket van 4,3 GB op te halen (ongeveer 8,5 GB geïnstalleerd, 26 GB vrij tijdens het installeren). De schijf heeft nu 35 GB vrij: dat moet eerst opgeruimd. Daarna gaat het door de gewone route (FBX naar Blender naar Godot), met smoothness naar ruwheid en het skelet op het profiel. Een kanttekening bij de licentie: de EULA van Unity verbiedt een asset zo te verspreiden dat anderen het eruit kunnen halen, en een `.pck` van Godot is makkelijk uit te pakken; voor een build voor vrienden dus de `.pck` versleutelen.
+9. **MetaHuman met uitrusting van Fab.** De beste gezichten en huid, en sinds kort mogen MetaHumans in elke engine ([FAQ](https://www.metahuman.com/faq)); een pakket met soldatenuitrusting kost €32,58. Maar het vraagt Unreal Engine 5.7 (40 GB of meer), een account bij Epic, en veel werk: de LOD2 exporteren (rond 20 duizend driehoeken voor kleren), het gezicht terugbrengen en huid en haar in Godot opnieuw maken. Niet met deze schijf.
+10. **Gegenereerd met Tripo of Meshy.** Een maand Pro (€19 tot $20) geeft 20 tot 50 soldaten uit plaatjes, met automatisch skelet. Elke generator maakt van lijf, uniform en uitrusting één huls met het licht in de kleur gebakken; vingers, riemen en gezichten komen er het slechtst uit. Goed voor variatie op afstand, niet voor wie je van dichtbij ziet. Hunyuan3D mag in de EU niet gebruikt worden ([licentie](https://huggingface.co/tencent/Hunyuan3D-2/blob/main/LICENSE)); TRELLIS.2 draait niet op 16 GB.
+
+Wat niets oplevert: modellen die op Sketchfab als CC BY staan maar uit andere spellen gehaald zijn (42manako zegt er zelf bij dat ze uit *Call to Arms* en *Squad* komen), MPFB2 (CC0, maar geen militaire kleding en de huid ziet er plastic uit), Character Creator (alleen Windows), Daz (licentie per product), Mixamo (personages uit de tijd van Fuse; de animaties wel), en het opschalen van de texturen met AI (scherpere randen in de camouflage, geen nieuwe stof).
+
+### Mijn voorstel
+
+*Op 21 oktober 2026 gekozen: A1 tot en met A3 met één gedragen uniform overal, A5, en B8 niet. Gebouwd: zie "Soldaten: occlusie, minder glans, een gedragen uniform en drie erbij".*
+
+Eerst A1 tot en met A3, in deze volgorde, elk met een blad voor en na op 3, 10 en 30 m in de duinen, de hal en bij nacht, en om en om gemeten in het gevecht in de fabriek. Dat kost geen geld en niets op de GPU wat te meten is, en het pakt aan wat de proeven als oorzaak aanwijzen: plat licht, glans en te schoon. Daarna A5 (meer soldaten) en A6 (ademen, zwaaien, terugslag, kijken). A4 en A7 alleen als daarna nog iets ontbreekt.
+
+Een echte sprong in gezichten en uitrusting zit niet in Rocketbox: de gezichten en silhouetten zijn van een oudere generatie. Daarvoor is B8 de beste route, maar dat is een aankoop, een account en een schijf met 30 GB meer ruimte. Dat is aan Michiel; het kan ook na A.
+
+**Wat Michiel beslist**
+
+- A1 tot en met A3 bouwen, en hoe vuil: overal een gedragen uniform, of per level (stoffig in de duinen, modderig in de Alpen, schoon in de fabriek)?
+- De drie andere soldaten van Rocketbox ophalen (ongeveer 80 MB, MIT)?
+- Of B8 iets voor later is (€45,99, een Unity ID, schijf opruimen).
+
+## Soldaten: occlusie, minder glans, een gedragen uniform en drie erbij
+
+Op 21 oktober 2026 gekozen uit "Soldaten die er echter uitzien (plan)": A1 tot en met A3, met "één gedragen uniform overal", en A5, de drie andere soldaten van Rocketbox; B8 (de gefotoscande soldaten) niet. Branch `soldaten`.
+
+**Wat er staat**
+
+- **Occlusie, gebakken in de route** (`--occlusion`, `tools/characters/atlas.py`: `bake_occlusion()`). Na het inpakken van de texturen rekent Cycles op de CPU uit hoeveel licht van rondom elke texel bereikt, binnen 22 cm (`OCCLUSION_REACH`: een plooi, de ruimte onder een zak of riem, de helm boven de oren; niet het lijf als geheel, dat doen het licht van het level en SSAO), 32 monsters, een halve minuut per soldaat met alles erbij. Het komt in het rood van de ORM-textuur en het materiaal krijgt het als glTF-occlusie, die Godot als `ao_texture` leest: één textuur voor de drie. Voor 30% gaat het ook in de kleur, in lineair licht, zodat een plooi ook in de zon leest (`OCCLUSION_IN_COLOUR` in `prepare.py`).
+- **Minder glans** (`scripts/humanoid_rig.gd`, `OCCLUDED`). Wie zijn eigen occlusie heeft, krijgt een kopie van zijn materiaal waarin die occlusie ook het directe licht voor 35% dempt (`ao_light_affect`) en dat nog maar 0,25 glans heeft in plaats van 0,5 (`metallic_specular`). Godot leest de glTF-uitbreiding voor glans niet, dus dit staat in de rig. Personages zonder occlusie (zombies, clowns, de poppen) blijven zoals ze waren.
+- **Een gedragen uniform** (`--look=worn`, `tools/characters/looks.py`: `worn()`, maten in `WORN`). Op alles wat volgens `parts()` geen huid of glas is: zand op de laarzen en tot 38% van de lengte omhoog (aan de voet het dikst), plekken op de knieën en ellebogen, stof op wat naar boven kijkt, modder in de dikste vlekken onderaan, vuil in plooien (waar de occlusie weinig licht laat en waar de normal map een vouw ziet) en lichtere randen waar de normal map een bolling ziet. Alles in vlekken van 7 en 2,5 cm. De indeling huid, glas, laarzen en stof is uit `uniform()` gehaald naar `parts()`; een woestijnuniform opnieuw geverfd is daarmee byte voor byte wat het was.
+- **Acht soldaten** (`tools/characters/build_cast.sh`): `soldier_06` is `Military_Female_02` (helm en vest), `soldier_07` en `soldier_08` zijn `Military_Male_05` en `_06` (veldpet, geen vest). Ze zijn grunts in `soldiers` en, als `soldier_06_desert` tot `_08_desert`, in `soldiers_desert`; medespelers trekken nu uit acht (`scripts/puppet.gd`). Alle acht hebben 2K, occlusie en het gedragen uniform; de woestijnuniformen zijn eroverheen geverfd. Een soldaat is 4,8 tot 7,4 MB.
+- De download van de drie was 286 MB, niet de 80 MB die ik vooraf noemde: ik had het niet uit de lijst opgeteld.
+
+**Het blad** `assets/characters/sheets/soldaten_gedragen.jpg`: de zware soldaat op 3,5 m in de duinen, een grunt op 10 m (het thema kiest er willekeurig een, dus voor en na een ander), in de hal en bij nacht, voor (2K zonder dit) en na. De proeven die eraan voorafgingen staan in `soldaten_proeven.jpg`; een eerste, voorzichtiger zand is daarna sterker gemaakt.
+
+**Gemeten** op 21 oktober 2026 tussen 22:08 en 22:16, M1 Pro op de accu (100%, de lader eraf), load 2 tot 4, geen andere Godot; de laatste ronde stopte voor de trunk omdat er even een Blender van een ander project draaide. Het gevecht in de fabriek zoals in "Soldaten: richten, stand, knielen en 2K":
+
+| Stand | Fps per ronde | 1% low |
+|---|---|---|
+| De trunk (`5f1509b`) | 66,4 en 67,0 | 60,9 en 61,7 |
+| Deze branch voor deze stap (2K) | 64,7, 65,0 en 65,8 | 49,3, 51,2 en 59,7 |
+| Nu | 66,4, 65,6 en 66,5 | 60,4, 58,5 en 59,5 |
+
+Binnen de spreiding is het gelijk aan de trunk. De lage 1% van de tweede stand in de eerste twee ronden (haperingen van 35 en 80 ms) kwam in de derde ronde niet terug.
+
+**Getest**: `tools/test_humanoid.sh` met `soldiers` en `soldiers_desert` (55 controles elk), `tools/nettest.sh` (host en join), `tools/test_match.sh` en `tools/selftest.sh` (586): geslaagd.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe vuil** is mijn keuze, op de bladen in de duinen en de hal. In de Alpen, de grachten en de centrale heb ik ze niet bekeken.
+- **De twee met een veldpet en zonder vest** zijn grunts geworden; dat ze tussen gepantserde soldaten lopen is mijn keuze.
+- **De eerste keer.** Occlusie die ook direct licht dempt is een nieuwe variant van het materiaal. Soldaten op de route staan er vanaf het laden, maar een medespeler die later binnenkomt wordt pas getekend als hij er is; hoeveel pipelines dat dan maakt, is niet geteld.
+- **Bij nacht** is het verschil klein; of 30% occlusie in de kleur daar te donker is, is niet beoordeeld.
+
+**Werkwijze**
+
+| Wat | Hoe |
+|---|---|
+| De soldaten opnieuw, met 2K, occlusie en het gedragen uniform | `tools/characters/build_cast.sh soldier_01 ... soldier_08` (de opties staan in `SOLDIER`), dan `tools/characters/build_uniforms.sh desert` |
+| Een ander personage zo | `tools/import_character.sh <bestand> <id> --texture-size=2048 --occlusion --look=worn` |
+| Het blad | `assets/characters/sheets/soldaten_gedragen.jpg` |
+
+## Soldaten: niet meer achteruit rennen
+
+*Op 23 oktober 2026 op Michiels woord ("Het werkt nu veel realistischer dus merg de boel maar!") met de hele branch `soldaten` in de trunk gezet: ook "Soldaten: richten, stand, knielen en 2K" en "Soldaten: occlusie, minder glans, een gedragen uniform en drie erbij".*
+
+Op 22 oktober 2026, na het spelen: "Het ziet er misschien 5% realistischer uit. Maar ze bewegen nog steeds wel erg snel. Ze rennen onrealistisch snel achteruit bijvoorbeeld. Dat zie je nooit in games dus dat moet beter." Branch `soldaten`.
+
+**Wat er mis was** (`scripts/enemy.gd`). Een vijand die de speler ziet, kijkt naar hem en gaat waar zijn beslissing hem heen stuurt, elke kant op even hard: naar dekking met 1,15 keer zijn snelheid (4,8 m/s voor een grunt), ook als die dekking achter hem ligt. Hij versnelde met 22 m/s², dus stond hij in 0,2 s op volle snelheid stil of liep hij de andere kant op. Voor een robot hoort dat zo; een mens rent achteruit niet en zwiept niet heen en weer.
+
+**Wat er staat**, alleen voor wie een mens is (een rig van `scripts/humanoid_rig.gd`); robots gaan zoals ze gingen:
+
+- **Hoe hard welke kant op** (`_paced()`): vooruit zijn volle snelheid, opzij 60% (`SIDEWAYS`), achteruit 38% (`BACKWARDS`, 1,6 m/s voor een grunt: wandelen), daartussen geleidelijk, gerekend vanaf waar zijn lijf naar kijkt.
+- **Met het wapen op** niet harder dan 3 m/s (`AIMED_PACE`): een draf, welke kant ook.
+- **Op gang komen en stoppen** met 7 m/s² (`PERSON_ACCEL`) in plaats van 22: van stil naar een draf in 0,4 s, en een stap opzij die omkeert duurt ruim een halve seconde.
+- **Omdraaien en rennen.** Ligt de dekking waar hij heen gaat meer dan 109 graden (`TURN_AND_RUN`) van de speler af, dan keert hij de speler de rug toe, laat zijn wapen zakken en rent erheen; pas als ze weer minder dan 86 graden uit elkaar liggen kijkt hij weer om, zodat hij niet heen en weer draait.
+
+**Getest.** `tools/test_humanoid.sh` meet nu in het gevecht van de eerste zone hoe hard de mensen achteruit gaan en hoe hard met het wapen op (als dat al een derde seconde op is; vlak na het heffen remt hij nog af): met soldaten hooguit 16% van hun snelheid achteruit en 3,0 m/s met het wapen op. `tools/test_humanoid.sh` (poppen, `soldiers`, `soldiers_desert`), `tools/test_match.sh`, `tools/nettest.sh` en `tools/selftest.sh` slagen; het deel van de Alpen faalde eerst op vier controles van de route omdat de laptop tijdens de test sliep (zoals op 20 oktober), en slaagde daarna wakker in 28 s.
+
+**Bekend.** De controle dat een voet op de trap op de vloer staat haalt met soldaten 5,9 of 7,0 cm tegen een grens van 6, naargelang welke soldaat de test trekt; zo was het in de trunk al (zie "Soldaten: richten, stand, knielen en 2K"). Een poging om de hoogte van de bal van de voet uit de rusthouding van het personage te nemen maakte het voor de poppen slechter (7,1 cm) en is teruggedraaid.
+
+**Wat ik niet kon beoordelen**
+
+- **Gespeeld is het niet.** Of 38% achteruit en 3 m/s met het wapen op niet te traag oogt, en of het omdraaien naar dekking niet te vaak gebeurt, moet in het spel blijken. De vijanden zijn er makkelijker te raken door: een sprong opzij is trager en ze rennen niet meer met het wapen op.
+- **Bots in een wedstrijd** (`scripts/bot.gd`) bewegen als een speler en zijn niet aangeraakt: die rennen achteruit even hard als een speler dat kan.

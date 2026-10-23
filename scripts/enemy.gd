@@ -60,6 +60,17 @@ const LOYALTY := 0.75
 ## How much faster than its walk it runs for cover, and from danger.
 const COVER_PACE := 1.15
 const FLEE_PACE := 1.3
+## A person cannot go every way alike, as a robot can. Sideways it goes this
+## share of how fast it goes ahead and backwards this share, with its weapon
+## up no faster than AIMED_PACE m/s whichever way, and it gets going and
+## stops again at PERSON_ACCEL m/s². Cover that lies further round than
+## TURN_AND_RUN radians from where it faces it does not back into: it turns
+## its back on the player and runs there.
+const SIDEWAYS := 0.6
+const BACKWARDS := 0.38
+const AIMED_PACE := 3.0
+const PERSON_ACCEL := 7.0
+const TURN_AND_RUN := 1.9
 ## Seconds between two looks for cover while it has none.
 const COVER_RETRY := 0.8
 ## With the player this close, cover is no use any more.
@@ -233,6 +244,10 @@ var _pack_flame: Node3D
 var _choose_timer := 0.0
 ## True while it has its weapon on the one it is after.
 var _aims := false
+## True for one that is a person, see SIDEWAYS; and while it has turned its
+## back to run for cover, see TURN_AND_RUN.
+var _person := false
+var _turned := false
 ## On watch, see watch(): the spots of its round and whether it goes round
 ## and round or there and back, the spot it is making for and which way
 ## along the round, how long it still waits, the way it faces when it stands
@@ -270,7 +285,8 @@ func _ready() -> void:
 		_rig.set_script(RIG)
 		add_child(_rig)
 	# What a shot sounds like on it: a person is not the steel a robot is.
-	$CollisionShape3D.set_meta(&"surface", "flesh" if _rig is HUMANOID else "metal")
+	_person = _rig is HUMANOID
+	$CollisionShape3D.set_meta(&"surface", "flesh" if _person else "metal")
 	_rig.set_glow(visor_color)
 	_los_timer = randf() * 0.15
 	_danger_timer = randf() * 0.2
@@ -282,7 +298,8 @@ func _ready() -> void:
 		_rig.drop_shield()
 	_shield = shield if _rig.get("has_shield") == true else 0.0
 	_pack = pack if _rig.get("has_pack") == true else 0.0
-	_can_crouch = _rig.has_method("crouch")
+	# A person only ducks if its way of moving has it go down on one knee.
+	_can_crouch = _rig.has_method("crouch") and float(_rig.get("crouch_drop")) > 0.0
 	panics = panics and _rig.has_method("panic")
 	if _can_crouch:
 		_drop = _rig.crouch_drop
@@ -633,7 +650,9 @@ func _physics_process(delta: float) -> void:
 		if _alerted:
 			_stun = maxf(_stun - delta, 0.0)
 			_face = target - eye
-			desired = _decide(delta, distance)
+			var turned := _turned
+			_turned = false
+			desired = _decide(delta, distance, turned)
 			if heeds_danger:
 				desired = _mind_fire(desired)
 			if _stun > 0.0:
@@ -641,20 +660,44 @@ func _physics_process(delta: float) -> void:
 			_turn_towards(_face, delta)
 			_update_attack(delta, eye, target, distance)
 			# The weapon is on the player for as long as there is a shot.
-			if _has_los and distance < attack_range * 1.5 and _fights() and _stun <= 0.0:
+			if _has_los and distance < attack_range * 1.5 and _fights() and _stun <= 0.0 and not _turned:
 				_aims = true
 				_rig.aim(target)
 			else:
 				_rig.lower()
 
-	velocity.x = move_toward(velocity.x, desired.x, ACCEL * delta)
-	velocity.z = move_toward(velocity.z, desired.z, ACCEL * delta)
+	var accel := ACCEL
+	if _person and not dead:
+		desired = _paced(desired)
+		accel = PERSON_ACCEL
+	velocity.x = move_toward(velocity.x, desired.x, accel * delta)
+	velocity.z = move_toward(velocity.z, desired.z, accel * delta)
 	move_and_slide()
+
+
+## How fast a person can go that way, see SIDEWAYS: `desired`, or slower
+## the further round it is from where the person faces.
+func _paced(desired: Vector3) -> Vector3:
+	var flat := Vector3(desired.x, 0.0, desired.z)
+	var wanted := flat.length()
+	if wanted < 0.01:
+		return desired
+	var ahead := -global_basis.z
+	ahead = Vector3(ahead.x, 0.0, ahead.z).normalized()
+	var along := flat / wanted
+	var facing := ahead.dot(along)
+	var share := lerpf(SIDEWAYS, 1.0, facing) if facing >= 0.0 else lerpf(SIDEWAYS, BACKWARDS, -facing)
+	var most := speed * share
+	if _aims:
+		most = minf(most, AIMED_PACE)
+	if wanted <= most:
+		return desired
+	return Vector3(along.x * most, desired.y, along.z * most)
 
 
 ## Works out what to do and returns the velocity that goes with it; `_face`
 ## is left pointing where it should look meanwhile.
-func _decide(delta: float, distance: float) -> Vector3:
+func _decide(delta: float, distance: float, turned := false) -> Vector3:
 	if heeds_danger and _fights():
 		_danger_timer -= delta
 		if _danger_timer <= 0.0:
@@ -671,7 +714,7 @@ func _decide(delta: float, distance: float) -> Vector3:
 		Mode.FLEE:
 			return _get_away(delta)
 		Mode.TO_COVER:
-			return _run_for_cover(delta)
+			return _run_for_cover(delta, turned)
 		Mode.COVER:
 			return _hold_cover(delta, distance)
 		Mode.PEEK:
@@ -734,7 +777,10 @@ func _seek_cover(tired_of := -1) -> bool:
 	return true
 
 
-func _run_for_cover(delta: float) -> Vector3:
+## Makes for its cover. `turned` is whether it ran there with its back to
+## the player a moment ago: it keeps doing so until the cover is a good deal
+## less far round, so that it does not keep turning to and fro.
+func _run_for_cover(delta: float, turned := false) -> Vector3:
 	_run += delta
 	var step := _go_to(_cover.at, speed * COVER_PACE)
 	if _flat(_cover.at) < 0.3:
@@ -742,9 +788,21 @@ func _run_for_cover(delta: float) -> Vector3:
 		_in_cover = 0.0
 	elif _run > RUN_TIME:
 		_leave_cover()
-	elif not _has_los and step.length_squared() > 0.01:
+	elif step.length_squared() > 0.01 and (not _has_los or (_person and _flat_angle(_face, step) > TURN_AND_RUN - (0.4 if turned else 0.0))):
+		# Out of sight, or a person with its cover behind it: it looks where
+		# it runs.
 		_face = step
+		_turned = _has_los
 	return step
+
+
+## The angle between two directions seen from above, in radians.
+func _flat_angle(a: Vector3, b: Vector3) -> float:
+	var flat_a := Vector2(a.x, a.z)
+	var flat_b := Vector2(b.x, b.z)
+	if flat_a.length_squared() < 0.0001 or flat_b.length_squared() < 0.0001:
+		return 0.0
+	return absf(flat_a.angle_to(flat_b))
 
 
 ## Stays where it cannot be seen until it is its turn to shoot, and moves on

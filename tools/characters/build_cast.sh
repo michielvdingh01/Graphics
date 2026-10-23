@@ -79,11 +79,23 @@ CLOWN="a civilian painted up by --look=clown: the costume is paint on everyday c
 BLOCKY="a cartoon figure of six boxes: there to compare a stylised cast with a realistic one, not to stay"
 
 # Soldiers: as they come, no placeholders.
-person soldier_01 Military_Male_01
-person soldier_02 Military_Male_04
-person soldier_03 Military_Female_01
-person soldier_04 Military_Male_02
-person soldier_05 Military_Male_03 --scale=1.08 --wide=1.08
+# The soldiers are met close up, in the face, with textures of 2K: the
+# sources have them, and at 1K a face is 230 by 150 texels. They have their
+# folds and pouches shaded by occlusion and a uniform that has been worn in
+# the field. 06 to 08 are the other three soldiers Rocketbox has: a woman
+# with helmet and vest, and two men in a patrol cap without a vest.
+SOLDIER="--texture-size=2048 --occlusion --look=worn"
+# shellcheck disable=SC2086
+{
+person soldier_01 Military_Male_01 $SOLDIER
+person soldier_02 Military_Male_04 $SOLDIER
+person soldier_03 Military_Female_01 $SOLDIER
+person soldier_04 Military_Male_02 $SOLDIER
+person soldier_05 Military_Male_03 --scale=1.08 --wide=1.08 $SOLDIER
+person soldier_06 Military_Female_02 $SOLDIER
+person soldier_07 Military_Male_05 $SOLDIER
+person soldier_08 Military_Male_06 $SOLDIER
+}
 
 person zombie_01 Male_Adult_06 --look=zombie --seed=1 --placeholder="$ZOMBIE" \
 	--wanted="photorealistic zombie, a man in his thirties in a torn red henley and jeans, grey mottled skin, sunken eyes, dried blood around the mouth, A-pose, game character, 20k triangles, PBR textures"
