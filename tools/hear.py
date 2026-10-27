@@ -21,6 +21,11 @@ plays a footstep or an enemy's shot, unless --at says from how far.
                                           each step at the moment the game plays it
     tools/hear.py casings rifle           a burst, with the cases landing after it
     tools/hear.py grenade                 the pin, the throw, three bounces and the bang
+    tools/hear.py grenade b               the same with variant b of the bang (or c)
+    tools/hear.py fence                   a vehicle running into a fence of wire three times, at 15,
+                                          25 and 40 km/h; `fence b` with variant b, `fence wood` one
+                                          of wood, `fence wire` over a coil of wire, `fence barrier`
+                                          through a barrier
     tools/hear.py minigun                 the motor coming up to speed, fire until it overheats,
                                           the tail, the steam and the motor running down;
     tools/hear.py minigun b b             the same with variant b of the roar and of the motor
@@ -226,13 +231,33 @@ def casings(weapon: str) -> list:
     return events
 
 
-def grenade() -> list:
+def grenade(bang: str = "explosion") -> list:
     """A grenade from the pin to the bang: the levels of scripts/weapons.gd,
-    and bounces that get quieter as scripts/grenade.gd has them."""
+    and bounces that get quieter as scripts/grenade.gd has them. The bang at
+    the level scripts/blast.gd plays it at."""
     events = played("pin", [START], -4.0) + played("throw", [START + 0.22], -6.0)
     for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
         events += played("bounce", [START + after], db)
-    return events + played("explosion", [START + 0.22 + 2.2])
+    return events + played(bang, [START + 0.22 + 2.2], 6.0)
+
+
+def fence(kind: str) -> list:
+    """A vehicle running into a fence three times, at 15, 25 and 40 km/h, as
+    scripts/vehicle.gd plays it (_crashes()): the fence never softer than
+    FENCE_LEAST and the crash of the vehicle 6 dB under it. `wire` is a coil
+    of barbed wire flattened (scripts/wire.gd) and `barrier` a barrier
+    snapped (scripts/barrier.gd), each three times."""
+    if kind == "wire":
+        return [e for i in range(3) for e in played("wire_crush", [START + 2.0 * i], 4.0)]
+    if kind == "barrier":
+        return [e for i in range(3) for e in played("crate_break", [START + 2.5 * i], 2.0) + played("fence_crash_wood", [START + 2.5 * i], 0.0)]
+    sound = {"a": "fence_crash", "b": "fence_crash_b", "wood": "fence_crash_wood"}[kind]
+    least = constant("FENCE_LEAST", (ROOT / "scripts/vehicle.gd").read_text())
+    events = []
+    for i, kmh in enumerate((15, 25, 40)):
+        db = min(max(-14.0 + kmh / 3.6 * 1.6, -14.0), 6.0)
+        events += played(sound, [START + 2.5 * i], max(db, least) + 2.0) + played("vehicle_crash", [START + 2.5 * i], db - 6.0)
+    return events
 
 
 def minigun(fire: str, spin: str) -> list:
@@ -494,7 +519,13 @@ def main() -> None:
     elif args[0] == "casings" and len(args) > 1:
         name, events = f"casings_{args[1]}", casings(args[1])
     elif args[0] == "grenade":
-        name, events = "grenade", grenade()
+        variant = args[1] if len(args) > 1 and args[1] != "a" else ""
+        name, events = "grenade" + (f"_{variant}" if variant else ""), grenade("explosion" + (f"_{variant}" if variant else ""))
+        # The bang rolls on for longer than the tail that is rendered after it.
+        length = events[-1]["t"] + 6.0
+    elif args[0] == "fence":
+        kind = args[1] if len(args) > 1 else "a"
+        name, events = f"fence_{kind}", fence(kind)
     elif args[0] == "rocket":
         name, events = "rocket", rocket()
     elif args[0] == "minigun":

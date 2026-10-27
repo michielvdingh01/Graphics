@@ -104,8 +104,8 @@ func fell(who: RefCounted) -> void:
 		host.show_mode(&"_show_prize", [side, "drop", who.id])
 
 
-func come_back(who: RefCounted, foes: PackedVector3Array, friends: PackedVector3Array) -> Transform3D:
-	return host.arena.pick(foes, friends, _spots[who.team])
+func come_back(who: RefCounted, foes: PackedVector3Array, friends: PackedVector3Array, watchers: PackedVector3Array) -> Transform3D:
+	return host.arena.pick(foes, friends, _spots[who.team], watchers)
 
 
 ## The side whose prize `who` carries, -1 for none.

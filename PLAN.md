@@ -4862,3 +4862,85 @@ In de eerste ronde van de trunk stond het spel na het begin van de wedstrijd nog
 - **Samen spelen** heb ik alleen met `tools/nettest.sh` op één machine getest; een gast die bij een wedstrijd van een ander laadt, wacht niet op het begin van die wedstrijd (dat zegt de host) en ziet het scherm dus eerder gaan.
 - **De eerste keer na een update van macOS** worden de shaders opnieuw gecompileerd (zie "Soldaten: vlugger naarmate het moeilijker is"): dat gebeurt nu deels op de threads van de loader en voor de rest onder het laadscherm, maar ik heb het niet kunnen meten zonder de cache van macOS weg te gooien.
 - **Andere levels** heb ik alleen in de selftest geladen, niet op de GPU gemeten; de fabriek tot en met de Alpen gaan langs dezelfde weg.
+
+## Speelpunten: headshots, spawns, bots die dekking zoeken, een hek en een granaat
+
+Op 27 oktober 2026 gevraagd: een jeep tegen een hek geeft "een flauw bliepje" in plaats van een crash; een handgranaat klinkt overstuurd, en er zijn betere geluiden in open bibliotheken; in de duinen lijken headshots niet te werken ("zelfs met de sniper twee keer op het hoofd"), kijk of dat in andere maps ook zo is; bots komen van ver in een rechte lijn, vaak naast elkaar, op je af; in wedstrijden met veel bots komen ze steeds op dezelfde plek terug; en minstens vijf wapens per wapenset, die bij het thema passen. Branch `speelpunten`; de wapensets zijn gebouwd op branch `wapensets` (zie verderop).
+
+### Headshots
+
+**Wat er mis was.** Of een schot op het hoofd is, hing af van een vaste hoogte boven de voeten: 1,36 m voor een soldaat in een wedstrijd (`SOLDIER` in `scripts/puppet.gd`), en voor een soldaat op de route de hoogte van zijn hoofd zoals hij stil staat (`fit.head` in `scripts/humanoid_rig.gd`, in de duinen 1,49 m). Maar een soldaat die richt, buigt zijn hoofd naar zijn vizier, en een die rent buigt voorover: dan zakt zijn hoofd tot 15 cm onder die grens, en een schot midden op zijn hoofd telde als een schot in het lijf. Met de Marksman (70, ×2,5 op het hoofd) is dat het verschil tussen één en twee schoten.
+
+**Gemeten** zonder GPU, met een probe die tijdens het vechten van 15 m stralen op het midden van elk hoofd en op elke borst schoot (soldaten, normaal, 30 s):
+
+| Treffers op het midden van het hoofd die als lijf telden | Duinen | Fabriek |
+|---|---|---|
+| Wedstrijd | 107 van 641 (17%) | 20 van 143 (14%) |
+| Route, soldaat die je gezien heeft en richt | 121 van 295 (41%) | – (in de fabriek zag geen van hen de speler) |
+| Route, soldaat die je niet gezien heeft | 2 van 464 | 0 van 132 |
+
+Het zit dus niet in de duinen maar in de soldaten, en in elke map; in de duinen schiet je meer op soldaten die richten. Robots hebben het niet: hun hoofd zit ruim boven hun grens.
+
+**Nu** vraagt de figuur waar zijn hoofd op dit moment begint (`HumanoidRig.head_start()`: het bot van het hoofd, 2 cm lager), en daar kijken `is_headshot()` van `scripts/enemy.gd` en `scripts/puppet.gd` naar; robots houden hun vaste grens. In dezelfde meting telt nu elke treffer op het midden van het hoofd als headshot, en geen enkele op de borst. Een figuur die verder dan 30 m staat, zet zijn houding maar om het tweede of derde beeld (`POSED`): het hoofd loopt dan een beeld achter.
+
+**Wat er overblijft**: in een wedstrijd ging 6% van de stralen op het midden van het hoofd langs de capsule, als het hoofd bij het rennen voorbij zijn lijf hangt. Een eigen bol voor het hoofd zou dat oplossen; niet gedaan.
+
+### Waar wie valt terugkomt
+
+**Wat er mis was.** `Arena.pick()` koos telkens uit dezelfde drie beste plekken, en in de duinen liggen de plekken 7 m uit elkaar: wie terugkwam, stond op precies hetzelfde punt als de vorige. In een wedstrijd van twintig tegen twintig met de speler erin (150 s, de speler staat stil) kwam de andere kant 169 keer terug, op 8 plekken van 30 m, 62% op één ervan: (239, 169) 35 keer en (232, 176) 30 keer.
+
+**Nu** (`scripts/arena.gd`):
+
+- Wie terugkomt maakt de grond binnen 30 m waar hij terugkwam minder waard voor de volgende twaalf (25 m, gerekend als afstand tot het front).
+- Er wordt uit de beste zes getrokken in plaats van drie, en wie terugkomt staat ergens op de grond van die plek, tot halverwege de volgende, waar plaats is, niemand staat en geen vijand het ziet.
+- Een mens ziet een plek tot 300 m (`WATCHED_FROM`), een bot tot 80 m zoals eerst: wie door een kijker ligt te loeren, ziet niemand meer terugkomen. Daarvoor gaat er een lijst `watchers` mee door `come_back()` van de soorten wedstrijd.
+
+In dezelfde proef: 158 keer terug op 28 plekken, de drukste 13%; 80% op 11 plekken (eerst 3). De wedstrijdtest blijft slagen: wie terugkomt staat bij het gevecht en bij een maat (vijand minstens 40 m, in het midden 55 m; maat in het midden 22 m).
+
+### Bots die van dekking naar dekking gaan
+
+**Wat er mis was.** Ziet één bot je, dan weet zijn hele kant waar je bent (`Match.seen()`), en elke bot die niemand ziet sprintte over het navmesh naar die plek: over open zand dezelfde weg, naast en achter elkaar. Een bot die je zag maar te ver weg was voor zijn wapen, liep recht op je af.
+
+**Nu** (`_advance()` en `_next_bound()` in `scripts/bot.gd`): verder dan 25 m (`CLOSES_IN`) gaat een bot niet recht op zijn doel af maar in sprongen van 8 tot 24 m naar een plek van de arena die vanaf het doel niet te zien is (achter een boom, een duinrug, een muur; van de 24 plekken die hem het verst brengen de eerste die dekking geeft, met een straal elk). Elke bot heeft een eigen baan, tot 30 m opzij van de rechte weg, die smaller wordt naarmate hij dichterbij komt; een plek waar een maat staat of heen gaat telt minder. Achter elke dekking wacht hij 0,8 tot 2 s, op één knie als hij een soldaat is (een `CROUCHED` die de pop van een bot nu ook laat zien en waarmee zijn capsule lager wordt; een mens die bukt laat zijn pop staan zoals eerst, want een figuur op één knie kan niet lopen). Wie hem ziet en in bereik is, vecht zoals eerst.
+
+**Gemeten** zonder GPU, drie keer om en om twintig tegen twintig in de duinen (120 s per keer, makkelijk), de speler onkwetsbaar in het midden en elke 3 s te horen voor de hele andere kant; geteld zijn de bots van die kant tussen 40 en 200 m die dichterbij komen of knielen, om de halve seconde:
+
+| | Trunk | Deze branch |
+|---|---|---|
+| ... die de speler vrij ziet | 42 / 50 / 35% | 38 / 32 / 39% |
+| ... met een tweede binnen 4 m | 41 / 36 / 36% | 14 / 14 / 20% |
+| ... die stilstaat of knielt | 6 / 2 / 5% | 31 / 28 / 29% |
+| Keer dat een bot vastliep | 524 / 318 / 416 | 390 / 220 / 416 |
+
+Ze komen dus verspreid, en een derde van de tijd achter iets; ze doen er ook langer over (twee keer zoveel tellingen tussen 40 en 200 m), dus de speler ziet ze vaker in totaal maar minder per keer. Van de knielende zag de speler er nog een derde: in open zand is er niet altijd dekking binnen 24 m, en dan gaat hij naar de plek die hem het verst brengt. Daarna is het aantal plekken dat hij bekijkt van 10 naar 24 gegaan en het wachten van 1–3 naar 0,8–2 s; twee keer om en om daarmee: vrij gezien 39 / 46% tegen 41 / 35%, een tweede binnen 4 m 43 / 42% tegen 17 / 16%, van de knielende nog steeds een derde tot twee vijfde gezien.
+
+**Een fout uit de trunk onderweg**: het navmesh van de duinen ligt tot 0,6 m boven het zand, en een bot telde een hoek van zijn weg pas als bereikt binnen 0,6 m, in drie dimensies: een hoek die zo hoog lag bereikte hij nooit, en hij draaide er rondjes om (zichtbaar als bots die op de plek trappelen). Nu telt een hoek 0,35 m lager en binnen 0,8 m (`path_height_offset`, `path_desired_distance`). Wat nog vastloopt staat tegen een helling die steiler is dan een bot kan lopen terwijl het navmesh zegt dat het kan; ook dat zit in de trunk.
+
+### Een hek, prikkeldraad, een slagboom
+
+**Wat er klonk.** Een voertuig dat ergens tegenaan rijdt, speelt `vehicle_crash`, waarvan 77 tot 98% van wat er klinkt onder de 200 Hz zit: op de luidsprekers van een laptop blijft daar weinig van over. Een rol prikkeldraad die platgereden wordt speelde `clang` (een dreun van 80 Hz) en `impact_metal`: een toon van 0,26 s op 2.655 Hz, het bliepje. Een slagboom die knapt `crate_break` en `clang`.
+
+**Nu**: een voertuig onthoudt welk hek het raakt (`_touch_fences()` in `scripts/vehicle.gd`: een dun blok van metaal of hout, zoals de bouwdoos een hek, een poortvleugel of een railing maakt, dunner dan 25 cm) en laat bij een botsing het hek horen, nooit zachter dan −6 dB, met de klap van het voertuig 6 dB eronder. Opnamen van Freesound (CC0, 14 previews, 3,3 MB, met naam in `credits` van de packs `freesound_explosions` en `freesound_fences` in `assets/manifest.json`):
+
+- `fence_crash`: een metalen hek dat hard geraakt wordt, met het rammelen van gaas erover. Variant `fence_crash_b`: een dieseltruckje dat door een hek rijdt.
+- `fence_crash_wood`: een oude auto die door een houten hek gaat, met hout dat breekt; voor de hekken van de Alpen en de slagboom.
+- `wire_crush`: gaas dat geschud en gesleept wordt over een paal die geraakt wordt, voor de rol prikkeldraad.
+
+`tools/test_vehicles.sh` heeft een deel `fence`: een jeep die tegen een hek van gaas rijdt hoort het als hek, en een muur niet.
+
+### De granaat
+
+**Wat er mis was.** De takes van `explosion` (Kenney's sci-fi "explosionCrunch" met punch 3, drive 2 en een glue erover) hadden een crestfactor van 2 dB: een blok ruis. In het spel klinkt de knal op +6 dB (`scripts/blast.gd`) door de clipper van de World-bus, zodat het geheel 1,7 s op −6 tot −9 dB stond en dan wegviel.
+
+**Nu**: opnamen van echte explosies, waaronder een handgranaat (unfa, "medium-sized, meaty, realistic"), zoals ze zijn, met een klop voor het gewicht en een rommel die drie seconden naloopt. Van de acht gedownloade opnamen waren er vier zelf al geclipt of platgedrukt (crestfactor 1,3 tot 3 dB, platte toppen); die zitten er niet in of alleen als laag. Drie varianten om op het oor te kiezen: `explosion` (a, natuurlijk), `explosion_b` (zwaarder en langer, met een schokgolf eronder; zo luid als de oude en dus dieper in de clipper) en `explosion_c` (korter en scherper, met scherven die na een kwart seconde neerkomen). Het spel speelt `explosion`; `tools/hear.py grenade b` speelt de granaat met variant b, en `tools/hear.py grenade` laat de knal nu op het niveau horen waarop het spel hem speelt, met de hele staart.
+
+### Getest
+
+`tools/selftest.sh` (op het deel van de Alpen na, dat de levelbestanden mist die niet in git staan; met die bestanden uit de hoofdcheckout slaagt `--level=alps`), `tools/test_match.sh`, `tools/test_humanoid.sh` en `tools/test_vehicles.sh` slagen. Alles zonder GPU; laptop met load 2 tot 8, met een tweede sessie die wapens bouwde.
+
+### Wat ik niet kon beoordelen
+
+- **Hoe het klinkt.** De hekken en de granaat heb ik alleen gemeten: crestfactor, spectrum, waar het tegen de clipper zit. Welke variant, en of een hek nu als hek klinkt, is aan zijn oor.
+- **Of de bots nu beter voelen.** Het getal "naast elkaar" is gehalveerd; of ze daardoor moeilijker te raken zijn, en of ze niet te traag komen, merk je alleen door te spelen. De getallen (25 m, 8–24 m, 30 m baan, 0,8–2 s) zijn van mij.
+- **Waar ze terugkomen.** 300 m voor een mens is een gok; over de kaart van de duinen zie je nu minder vaak iemand verschijnen, maar het blijft een kans.
+- **Een hek** in de duinen: ik weet niet zeker welk "hek" hij bedoelde. De poortvleugels van het complex zijn dunne metalen platen en vallen eronder, de rollen prikkeldraad en de slagboom hebben elk een eigen geluid gekregen.

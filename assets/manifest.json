@@ -232,6 +232,72 @@
 				"843251: \"Explosion 5 (Burning Car rec by Ñado)\" by qubodup, https://freesound.org/people/qubodup/sounds/843251/",
 				"563765: \"Fire Auto - car on fire\" by florianreichelt, https://freesound.org/people/florianreichelt/sounds/563765/"
 			]
+		},
+		"freesound_explosions": {
+			"title": "Explosion recordings from Freesound, as the previews it serves (128 kbps MP3)",
+			"author": "the Freesound users named in credits",
+			"license": "CC0",
+			"page": "https://freesound.org",
+			"url": [
+				"https://cdn.freesound.org/previews/609/609587_1038806-hq.mp3",
+				"https://cdn.freesound.org/previews/516/516914_2247456-hq.mp3",
+				"https://cdn.freesound.org/previews/563/563010_6253486-hq.mp3",
+				"https://cdn.freesound.org/previews/232/232398_3270296-hq.mp3",
+				"https://cdn.freesound.org/previews/165/165910_1445941-hq.mp3",
+				"https://cdn.freesound.org/previews/500/500795_9995328-hq.mp3",
+				"https://cdn.freesound.org/previews/482/482993_8836484-hq.mp3",
+				"https://cdn.freesound.org/previews/855/855247_71257-hq.mp3"
+			],
+			"sha256": [
+				"e2968702f0d97e09f0725a5fe418bccec2525b7f71da7e0384a3dfffba5bb9c2",
+				"da9731967a5c6c02766f0a7f6497ed29e090181af02679d2f6a6b2ad3bcae5fa",
+				"09aee33c765e0de616154fc09853ad69163eb71c7f4852bddddbdfaf7388f123",
+				"2e6e3cb07d3a6d84e9046e2d8969e91b67ba23ae907e2845e688b821641e4d04",
+				"c5d7cc0255d31fd491eda6cf91af49b6406514cee6d560736a33becfc2ecf1b8",
+				"1cbe981032b9876e316412df418222756651929024ada4d6069b691fb14e6967",
+				"e13bfd4f8def9e4365c44e84aa49aeb5fe7134d2b2afa6cd997d6af3f668df9a",
+				"7e8cd90a76978a776d1a321689707c1d0d7c2ce9808737a01160fa2a46e87345"
+			],
+			"credits": [
+				"609587: \"Grenade Explosion SFX (medium-sized, meaty, realistic)\" by unfa, https://freesound.org/people/unfa/sounds/609587/",
+				"516914: \"Explosion, Medium Blast\" by Kinoton, https://freesound.org/people/Kinoton/sounds/516914/",
+				"563010: \"Explosion.mp3\" by florianreichelt, https://freesound.org/people/florianreichelt/sounds/563010/",
+				"232398: \"Explosion.wav\" by cejordi84, https://freesound.org/people/cejordi84/sounds/232398/",
+				"165910: \"Explosion 2.wav\" by Deganoth, https://freesound.org/people/Deganoth/sounds/165910/",
+				"500795: \"Big Explosion\" by Bratish, https://freesound.org/people/Bratish/sounds/500795/",
+				"482993: \"large explosion 1\" by V-ktor, https://freesound.org/people/V-ktor/sounds/482993/",
+				"855247: \"Explosion and Shockwave 2\" by qubodup, https://freesound.org/people/qubodup/sounds/855247/"
+			]
+		},
+		"freesound_fences": {
+			"title": "Fence recordings from Freesound, as the previews it serves (128 kbps MP3): a fence run into, hit and rattled",
+			"author": "the Freesound users named in credits",
+			"license": "CC0",
+			"page": "https://freesound.org",
+			"url": [
+				"https://cdn.freesound.org/previews/675/675463_2524442-hq.mp3",
+				"https://cdn.freesound.org/previews/675/675847_2524442-hq.mp3",
+				"https://cdn.freesound.org/previews/575/575388_12956274-hq.mp3",
+				"https://cdn.freesound.org/previews/724/724195_12846320-hq.mp3",
+				"https://cdn.freesound.org/previews/10/10359_186-hq.mp3",
+				"https://cdn.freesound.org/previews/336/336000_1772601-hq.mp3"
+			],
+			"sha256": [
+				"83cd917a0930335a2f37ffccee1eb0468c9c80f5abc47f3fd9900c0280d01631",
+				"52b4334e272299e1a76665581e993d193733df76277e4672d6b998ab7374cfc4",
+				"2f27d619427df6c381ac332f8ea5a95c531fda5091e6f42e932e7329698481ea",
+				"ed1fb7fe36654fc2fda28ac4ca5facdaca642b5a9302dd11c50d3a4866714efe",
+				"38b46d4f8d6e8332ad0392abb8bc4b805845c1828af61e0ab5202d79d2d880da",
+				"a58b68374f823b002d5984013ca679e8e12dbb7f733c2e5d2e99a85de77d4859"
+			],
+			"credits": [
+				"675463: \"S34-25 Loud diesel small truck enters and crashes through fence.wav\" by craigsmith, https://freesound.org/people/craigsmith/sounds/675463/",
+				"675847: \"S36-10 Old rattling car crashes through wooden fence.wav\" by craigsmith, https://freesound.org/people/craigsmith/sounds/675847/",
+				"575388: \"Chain Link Fence - Impacts.wav\" by MWsfx, https://freesound.org/people/MWsfx/sounds/575388/",
+				"724195: \"METLImpt_Impact On A Metal Fence 04 Mono_KVV AUDIO_FREE\" by KVV_Audio, https://freesound.org/people/KVV_Audio/sounds/724195/",
+				"10359: \"chain link fence abuse.aif\" by batchku, https://freesound.org/people/batchku/sounds/10359/",
+				"336000: \"Metal Pole Hit\" by Ev-Dawg, https://freesound.org/people/Ev-Dawg/sounds/336000/"
+			]
 		}
 	},
 	"maps": [
@@ -576,7 +642,9 @@
 		{"id": "impact_flesh", "type": "sound", "source": "synthesised", "generator": "tools/build_sounds.py", "license": "made here", "burst": [0.35, 16000, 200, 0.04], "drive": 1.5, "eq": [["low", 150, 3.0]], "use": "a shot landing in somebody: a burst of noise that is white for an instant and brown before it has died away. Chosen by ear over a punch with a crunch of snow under it, which sounded like neither"},
 		{"id": "clang", "type": "sound", "source": "kenney_impact", "license": "CC0", "files": "Audio/impactPlate_heavy_*.ogg", "drive": 2.5, "use": "the wreck of a barrel coming down"},
 		{"id": "bounce", "type": "sound", "source": "breaking_falling", "license": "CC0", "files": ["bfh1_metal_hit_02.ogg", "bfh1_metal_hit_04.ogg", "bfh1_metal_hit_05.ogg", "bfh1_metal_hit_06.ogg"], "drive": 1.5, "use": "a grenade bouncing: heavy metal coming down on something hard"},
-		{"id": "explosion", "type": "sound", "source": "kenney_scifi", "license": "CC0", "files": "Audio/explosionCrunch_*.ogg", "punch": 3.0, "drive": 2.0, "layers": [{"source": "firearms", "files": "Prepared SFX Library/Nova/O_21P.wav", "split": true, "tight": true, "length": 0.06}], "glue": [2.0, 2.0], "use": "barrels, gas bottles, jerrycans and grenades going off: a rumble with the bang of a shotgun at its front"},
+		{"id": "explosion", "type": "sound", "source": "freesound_explosions", "license": "CC0", "files": ["609587_*.mp3", "165910_*.mp3", "516914_*.mp3", "500795_*.mp3"], "tight": true, "takes": 6, "length": 4.5, "layers": [{"sweep": [75, 38, 0.45], "gain": -9}, {"rumble": [3.5, 1200, 60], "highpass": 40, "gain": -15, "delay": 40}], "use": "barrels, gas bottles, jerrycans and grenades going off: recordings of real explosions, a grenade among them, as they are and not clipped, with a knock for the weight under them and a rumble that rolls on for three seconds"},
+		{"id": "explosion_b", "type": "sound", "source": "freesound_explosions", "license": "CC0", "files": ["609587_*.mp3", "165910_*.mp3", "516914_*.mp3", "500795_*.mp3"], "tight": true, "takes": 6, "length": 6.0, "layers": [{"sweep": [70, 32, 0.7], "gain": -5}, {"rumble": [5.0, 1500, 50], "highpass": 35, "gain": -10, "delay": 40}, {"source": "freesound_explosions", "files": "855247_*.mp3", "gain": -8, "delay": 30}], "eq": [["low", 150, 2]], "glue": [1.2, 1.2], "use": "variant b of an explosion: the same recordings, heavier and longer, with a shockwave under them, more of the knock and a rumble of five seconds"},
+		{"id": "explosion_c", "type": "sound", "source": "freesound_explosions", "license": "CC0", "files": ["609587_*.mp3", "165910_*.mp3", "516914_*.mp3", "500795_*.mp3"], "tight": true, "takes": 6, "length": 3.0, "punch": 1.4, "layers": [{"sweep": [85, 40, 0.25], "gain": -10}, {"source": "breaking_falling", "files": ["bfh1_metal_falling_01.ogg", "bfh1_metal_falling_02.ogg", "bfh1_glass_falling_01.ogg"], "highpass": 400, "gain": -14, "delay": 250}], "eq": [["high", 3000, 3]], "use": "variant c of an explosion: the same recordings, shorter and sharper at the front, with shrapnel and bits coming down a quarter of a second on"},
 		{"id": "enemy_death", "type": "sound", "source": "kenney_scifi", "license": "CC0", "files": "Audio/lowFrequency_explosion_*.ogg", "takes": 4, "drive": 1.5, "layers": [{"source": "kenney_impact", "files": "Audio/impactPlate_heavy_*.ogg", "gain": -3}, {"source": "kenney_impact", "files": "Audio/impactMetal_heavy_*.ogg", "gain": -6, "delay": 60}], "glue": [1.5, 2.0], "use": "a robot blowing apart: a low boom with steel plate and metal coming down in it"},
 		{"id": "vent", "type": "sound", "source": "kenney_scifi", "license": "CC0", "files": "Audio/thrusterFire_*.ogg", "length": 2.0, "drive": 1.5, "use": "the flame out of a holed barrel or gas bottle"},
 		{"id": "robot_step", "type": "sound", "source": "metal_steps", "license": "CC0", "files": "metal_steps_*.wav", "takes": 8, "drive": 3.0, "use": "a robot's steps"},
@@ -672,6 +740,10 @@
 		{"id": "tank_hatch", "type": "sound", "source": "metal_wood", "license": "CC0", "files": ["metal_hit_01.ogg", "metal_hit_03.ogg"], "pitch": 0.55, "drive": 2.0, "length": 1.2, "layers": [{"source": "mechanical", "files": "clank1.wav", "lowpass": 1200, "pitch": 0.6, "gain": -3}, {"sweep": [80, 40, 0.25], "gain": -8}], "use": "the hatch of the tank, opened or slammed shut: a blow on metal slowed down to something heavy, a clank and a thump"},
 		{"id": "vehicle_crash", "type": "sound", "source": "freesound_vehicles", "license": "CC0", "files": ["332058_*.mp3", "592388_*.mp3", "471190_*.mp3", "471192_*.mp3", "329516_*.mp3"], "drive": 2.0, "punch": 2.0, "length": 1.6, "layers": [{"sweep": [70, 30, 0.35], "gain": -4}, {"rumble": [1.2, 1500, 120], "highpass": 50, "gain": -10, "delay": 20}], "glue": [2.0, 2.0], "use": "a vehicle running into something: a car crash, a crash with glass, two of metal and a bonnet hit, each over a deep thump and a rumble"},
 		{"id": "vehicle_crash_b", "type": "sound", "source": "freesound_vehicles", "license": "CC0", "files": ["587443_*.mp3"], "split": true, "pick": [1, 2, 3], "drive": 2.0, "length": 1.4, "layers": [{"sweep": [60, 28, 0.4], "gain": -2}], "use": "variant b of a crash: scrap metal dropped and crashing, over a heavier thump"},
+		{"id": "fence_crash", "type": "sound", "source": "freesound_fences", "license": "CC0", "files": "724195_*.mp3", "trim": [[0.0, 2.2], [6.3, 8.5], [12.7, 14.9], [19.4, 21.6], [25.9, 28.1]], "tight": true, "length": 2.2, "layers": [{"source": "freesound_fences", "files": "575388_*.mp3", "trim": [[0.0, 2.5], [3.5, 6.0], [15.1, 17.6], [20.7, 23.2], [26.2, 28.7]], "tight": true, "gain": -2, "delay": 15}, {"sweep": [110, 55, 0.2], "gain": -12}], "use": "a vehicle running into a fence of wire: a metal fence hit hard, with the rattle of a chain-link fence over it and a knock for the weight of what hit it"},
+		{"id": "fence_crash_b", "type": "sound", "source": "freesound_fences", "license": "CC0", "files": "675463_*.mp3", "trim": [23.4, 25.0], "tight": true, "takes": 4, "layers": [{"source": "freesound_fences", "files": "575388_*.mp3", "trim": [[0.0, 2.5], [3.5, 6.0], [15.1, 17.6], [20.7, 23.2]], "tight": true, "gain": -4, "delay": 10}, {"source": "freesound_fences", "files": "336000_*.mp3", "pitch": 0.8, "gain": -6}], "glue": [1.3, 1.3], "use": "variant b of a fence run into: a small diesel truck crashing through a fence, with a chain-link fence rattling and a metal post struck under it"},
+		{"id": "fence_crash_wood", "type": "sound", "source": "freesound_fences", "license": "CC0", "files": "675847_*.mp3", "trim": [[2.7, 6.6], [3.6, 6.6], [4.2, 6.8]], "tight": true, "length": 3.0, "layers": [{"source": "metal_wood", "files": ["wood_breaking_01.ogg", "wood_breaking_02.ogg", "wood_cracking_02.ogg"], "tight": true, "pitch": 0.85, "gain": -4}, {"sweep": [80, 35, 0.25], "gain": -10}], "glue": [1.3, 1.3], "use": "a vehicle running into a fence or a barrier of wood: an old car crashing through a wooden fence, with wood breaking at the front of it"},
+		{"id": "wire_crush", "type": "sound", "source": "freesound_fences", "license": "CC0", "files": "10359_*.mp3", "trim": [[0.2, 1.4], [2.0, 3.2], [4.0, 5.2], [5.5, 6.7]], "length": 1.2, "layers": [{"source": "freesound_fences", "files": "336000_*.mp3", "pitch": 0.7, "gain": -6}], "use": "a coil of barbed wire flattened under a wheel: wire mesh shaken and dragged, over a metal post struck"},
 		{"id": "engine_damaged", "type": "sound", "source": "freesound_vehicles", "license": "CC0", "files": "438085_*.mp3", "trim": [10.5, 16.0], "bed": 3.0, "rate": 22050, "rms": -18.0, "layers": [{"source": "freesound_vehicles", "files": "675725_*.mp3", "trim": [0.0, 3.0], "gain": -6}], "use": "an engine that is hit, going round with it: an old truck sputtering, and a bearing knocking"},
 		{"id": "engine_backfire", "type": "sound", "source": "freesound_vehicles", "license": "CC0", "files": "105351_*.mp3", "split": true, "drive": 2.0, "punch": 3.0, "layers": [{"sweep": [90, 40, 0.15], "gain": -6}], "use": "the bang of an engine that misfires"},
 		{"id": "vehicle_explode", "type": "sound", "source": "freesound_vehicles", "license": "CC0", "files": ["843247_*.mp3", "843248_*.mp3", "843249_*.mp3", "843250_*.mp3", "843251_*.mp3"], "stereo": true, "punch": 3.0, "drive": 2.0, "length": 4.0, "layers": [{"source": "kenney_scifi", "files": "Audio/explosionCrunch_00*.ogg", "gain": -3}, {"sweep": [65, 22, 0.9], "gain": 0}, {"rumble": [4.0, 1800, 60], "highpass": 30, "gain": -4, "delay": 30}, {"source": "metal_wood", "files": "metal_hit_02.ogg", "pitch": 0.6, "gain": -10, "delay": 350}], "eq": [["bell", 70, 4.0]], "glue": [3.0, 2.5], "use": "a vehicle going up: a burning car exploding, over the crunch of the game's explosion, a deep thump, a rumble of four seconds and a piece of it coming down"},

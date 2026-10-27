@@ -64,4 +64,4 @@ func _snap(push: Vector3) -> void:
 	piece.angular_velocity = Vector3(randf_range(-4, 4), randf_range(-6, 6), randf_range(-4, 4))
 	Fx.smash(middle, push, "wood", 0.5)
 	Sfx.play_at(&"crate_break", middle, 2.0)
-	Sfx.play_at(&"clang", middle, -2.0)
+	Sfx.play_at(&"fence_crash_wood", middle, 0.0)

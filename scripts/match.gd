@@ -602,14 +602,18 @@ func _show_fall(by: int, fallen: int, weapon: int, head: bool, push: Vector3) ->
 func _bring_back(who: Entrant) -> void:
 	var foes := PackedVector3Array()
 	var friends := PackedVector3Array()
+	# Enemies who are people see further: see Arena.WATCHED_FROM.
+	var watchers := PackedVector3Array()
 	for other: Entrant in entrants.values():
 		if other == who or other.out > 0.0:
 			continue
 		if mode.hostile(who, other):
 			foes.append(other.body.global_position)
+			if not other.bot:
+				watchers.append(other.body.global_position)
 		else:
 			friends.append(other.body.global_position)
-	Net.show(self, &"_show_back", [who.id, mode.come_back(who, foes, friends)])
+	Net.show(self, &"_show_back", [who.id, mode.come_back(who, foes, friends, watchers)])
 
 
 func _show_back(id: int, pose: Transform3D) -> void:
