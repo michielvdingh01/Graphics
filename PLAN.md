@@ -4802,6 +4802,8 @@ Met het wapen op is nu een deel van zijn eigen snelheid in plaats van 3 m/s voor
 
 ## Een laadscherm
 
+*Op 27 oktober 2026 op Michiels woord ("Ja, merge maar in de trunk. Goed werk") in de trunk gezet; gezien of gespeeld had hij het toen nog niet.*
+
 Op 27 oktober 2026 gevraagd, na de soldaten: "het Dunes level start nog wel erg traag op. Ik snap dat dat level best wel groot is om in te laden, dus misschien moeten we dan een soort "loading" menu maken zodat spelers niet bang hoeven te zijn dat de game crasht als ze een nieuw level openen." Branch `laadscherm`.
 
 **Hoe een level laadde.** Alles wat een level begint (het titelscherm en de levelkeuze, doorgaan, opnieuw vanaf een checkpoint, een dood, de uitgang naar het volgende level, terug naar het titelscherm, een wedstrijd, samen spelen, de sandbox) deed dat met `change_scene_to_file()` of `reload_current_scene()`: de bestanden lezen, de scène maken en wisselen, alles in één beeld. Gemeten op de GPU vanaf het titelscherm zoals Michiel speelt (3456×2160, MetalFX, Ultra, schaal vanzelf, soldaten): na de klik op Dunes stond het titelscherm met de ingedrukte knop 5,5 tot 6,5 s stil, en dan kwam het level in 0,6 s uit het zwart op. Waar die tijd heen ging (zonder GPU, tussen haakjes op de GPU):
