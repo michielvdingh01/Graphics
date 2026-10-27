@@ -2232,6 +2232,8 @@ func _play_through(level: Dictionary, next: String) -> void:
 		await tree.scene_changed
 		_check("%s: and the next one starts from its beginning" % title, tree.current_scene.scene_file_path == next
 			and Save.resume_point(next).get("at", "?") == "")
+		var behind: bool = await _behind_the_loading_screen()
+		_check("%s: it comes in behind the loading screen, which goes once it can be played" % title, behind)
 	else:
 		_check("%s: and that is the end of the game" % title, Save.checkpoint.is_empty())
 	_finished.append(title)
@@ -2290,10 +2292,14 @@ func _slip_past() -> void:
 		else:
 			Save.reload()
 			tree.change_scene_to_file(level.scene)
+		var loading := false
 		for i in 80:
 			await _wait(0.1)
+			loading = loading or Loading.busy()
 			if tree.current_scene != null and tree.current_scene != old:
 				break
+		if how == "a death":
+			_check("after a death the level comes again behind the loading screen", loading)
 		game = tree.current_scene
 		await _wait(0.5)
 		player = game.player
@@ -2623,6 +2629,19 @@ func _wait(seconds: float) -> void:
 ## Waits for the level that has loaded to have baked its navmesh, which it
 ## does on a thread of its own, and for the server that finds the ways over
 ## it to have it: at most ten seconds.
+## Whether the level that has just come in did so behind the loading screen
+## (scripts/loading.gd), and whether that went once the level was baked.
+func _behind_the_loading_screen() -> bool:
+	var game := get_tree().current_scene
+	if not Loading.busy():
+		return false
+	var waited := 0.0
+	while Loading.busy() and waited < 10.0:
+		await _wait(0.1)
+		waited += 0.1
+	return not Loading.busy() and game.get(&"is_baked")
+
+
 func _baked() -> void:
 	var game := get_tree().current_scene
 	var waited := 0.0

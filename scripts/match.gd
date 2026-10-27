@@ -288,7 +288,7 @@ func open(what: Dictionary) -> bool:
 	# sends the player on if it is the wrong one, see arrive().
 	var scene_now := get_tree().current_scene
 	if scene_now and scene_now.is_node_ready():
-		get_tree().change_scene_to_file(scene)
+		Loading.go(scene)
 	return true
 
 
@@ -309,14 +309,14 @@ func again() -> void:
 	if active and _game:
 		state = State.LOADING
 		_forget()
-		get_tree().reload_current_scene()
+		Loading.again()
 
 
 ## A level has loaded while a match is open: it becomes the arena, or the
 ## player is sent on to the level that is.
 func arrive(game: Node3D) -> void:
 	if game.scene_file_path != setup.scene:
-		get_tree().change_scene_to_file.call_deferred(setup.scene)
+		Loading.go.call_deferred(setup.scene)
 		return
 	_forget()
 	_game = game

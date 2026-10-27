@@ -29,6 +29,8 @@ extends RefCounted
 const ROBOTS := "robots"
 const TABLES: Array[String] = ["res://assets/animations/themes.json", "res://assets/characters/manifest.json"]
 const CHARACTERS := "res://assets/characters/%s/%s.glb"
+## Where what an enemy carries is, see humanoid_rig.gd.
+const MODELS := "res://scenes/models/"
 
 static var _themes := {}
 static var _read := false
@@ -60,15 +62,7 @@ static func cast(theme: String, role: String, pick := -1) -> Dictionary:
 	var part: Variant = (_all().get(theme, {}) as Dictionary).get(role)
 	if not part is Dictionary:
 		return {}
-	var scenes: Array[String] = []
-	var listed: Variant = part.get("characters")
-	if listed is Array:
-		for character: Variant in listed:
-			var path := str(character)
-			if not path.begins_with("res://"):
-				path = CHARACTERS % [path, path]
-			if ResourceLoader.exists(path, "PackedScene"):
-				scenes.append(path)
+	var scenes := _characters(part)
 	if scenes.is_empty():
 		return {}
 	var tuning: Variant = part.get("tuning")
@@ -81,6 +75,40 @@ static func cast(theme: String, role: String, pick := -1) -> Dictionary:
 		"tuning": tuning if tuning is Dictionary else {},
 		"tint": tint if tint is Dictionary else {},
 	}
+
+
+## Every scene an enemy of `theme` can be made of: the characters of each
+## of its roles and the models of what they carry, as humanoid_rig.gd looks
+## them up. Empty for the robots. For loading them before the first enemy
+## asks for one, see scripts/loading.gd.
+static func scenes(theme: String) -> Array[String]:
+	var found: Array[String] = []
+	for part: Variant in (_all().get(theme, {}) as Dictionary).values():
+		if not part is Dictionary:
+			continue
+		found.append_array(_characters(part))
+		var weapon := str(part.get("weapon", ""))
+		if weapon == "":
+			continue
+		for path in [MODELS + weapon + "_held.scn", MODELS + weapon + ".scn"]:
+			if ResourceLoader.exists(path):
+				found.append(path)
+				break
+	return found
+
+
+## The scenes of the characters a role is picked from, of those that are there.
+static func _characters(part: Dictionary) -> Array[String]:
+	var scenes: Array[String] = []
+	var listed: Variant = part.get("characters")
+	if listed is Array:
+		for character: Variant in listed:
+			var path := str(character)
+			if not path.begins_with("res://"):
+				path = CHARACTERS % [path, path]
+			if ResourceLoader.exists(path, "PackedScene"):
+				scenes.append(path)
+	return scenes
 
 
 static func _all() -> Dictionary:

@@ -4799,3 +4799,66 @@ Met het wapen op is nu een deel van zijn eigen snelheid in plaats van 3 m/s voor
 **Wat ik niet kon beoordelen.** Hoe moeilijk het nu is, is in een test niet te zien: dat moet Michiel spelen. De getallen per moeilijkheid zijn mijn keuze.
 
 **Het trage opstarten** dat Michiel die dag zag, kwam niet hiervan. macOS 27.0.1 was op 23 oktober om 23:55 geïnstalleerd, en daarmee waren de shaders die macOS voor Godot gecompileerd bewaart (onder `getconf DARWIN_USER_CACHE_DIR`/org.godotengine.godot/com.apple.metal) niet meer geldig: Godot moest ze bij het eerste gebruik opnieuw laten compileren, en een spel dat dat doet tijdens het laden reageert tientallen seconden niet. Na de herstart die middag schreef macOS er ongeveer 750 MB opnieuw; de duinen met soldaten op zijn instelling duurden de eerste keer 42 s en daarna 14, de trunk van voor de soldaten (`5f1509b`) de eerste keer 42 s en daarna 9,5 tegen 10,5 tot 11,3 voor de trunk met de soldaten. Daarna startte het bij hem weer goed. Dat de duinen dan nog traag openen is een eigen opdracht geworden: een laadscherm.
+
+## Een laadscherm
+
+*Op 27 oktober 2026 op Michiels woord ("Ja, merge maar in de trunk. Goed werk") in de trunk gezet; gezien of gespeeld had hij het toen nog niet.*
+
+Op 27 oktober 2026 gevraagd, na de soldaten: "het Dunes level start nog wel erg traag op. Ik snap dat dat level best wel groot is om in te laden, dus misschien moeten we dan een soort "loading" menu maken zodat spelers niet bang hoeven te zijn dat de game crasht als ze een nieuw level openen." Branch `laadscherm`.
+
+**Hoe een level laadde.** Alles wat een level begint (het titelscherm en de levelkeuze, doorgaan, opnieuw vanaf een checkpoint, een dood, de uitgang naar het volgende level, terug naar het titelscherm, een wedstrijd, samen spelen, de sandbox) deed dat met `change_scene_to_file()` of `reload_current_scene()`: de bestanden lezen, de scène maken en wisselen, alles in één beeld. Gemeten op de GPU vanaf het titelscherm zoals Michiel speelt (3456×2160, MetalFX, Ultra, schaal vanzelf, soldaten): na de klik op Dunes stond het titelscherm met de ingedrukte knop 5,5 tot 6,5 s stil, en dan kwam het level in 0,6 s uit het zwart op. Waar die tijd heen ging (zonder GPU, tussen haakjes op de GPU):
+
+- **De bestanden lezen**: 2,2 tot 2,4 s (3,3 tot 3,5 s). Het meeste is `scenes/levels/dunes_level.tscn`: 9,5 MB tekst met 587 bestanden eraan.
+- **Het level opbouwen**: 2,0 s (2,5 s). Daarvan 1,4 s voor de soldaten die op hun post gezet worden: elk van de zeven verschillende laadt de eerste keer zijn model en texturen, zo'n 0,18 s per stuk. Nog eens 0,4 s voor de eerste vrachtwagen: die laadt de twee soldaten die in een voertuig zitten, om ze aan `Fx.rehearse()` te geven. De scène maken zelf kost 11 ms (5.617 nodes); de rest van het opbouwen 0,3 s.
+- **Het eerste beeld**: 80 tot 90 ms, waarin 84 pipelines gemaakt worden; het tweede beeld maakt er nog 32. Dat is bij elke start zo, ook met een warme cache van macOS.
+- **Het navmesh**: `_overlook()` 0,14 s en het bakken 0,34 s, samen in één beeld na het eerste.
+- **De dekkingskaart** van `scripts/squad.gd` wordt sinds "Verbeterpunten" in stukjes van 4 ms gemaakt en telt niet mee in het laden.
+- **Een wedstrijd** in de duinen (team tegen team, 8) stond na het navmesh nog eens 3,1 s stil (zonder GPU): 1,0 s om de arena uit het navmesh te lezen, 2,15 s om de bots neer te zetten, bijna helemaal het laden van hun soldaten en wapens. Dat gebeurde precies terwijl het beeld uit het zwart opkwam.
+
+**Wat er nu is** (`scripts/loading.gd`, autoload `Loading`):
+
+- Wat een level begint, roept `Loading.go(scene)` of `Loading.again()` aan: `scripts/menu.gd`, `scripts/game.gd` (een dood, de uitgang), `scripts/match.gd`, `scripts/net.gd` en `scripts/sandbox.gd`. De benchmark en de tests wisselen zelf van scène waar ze dat deden.
+- **Het scherm**: zwart, linksonder de naam van het level zo groot als de koppen van het menu, daaronder bij doorgaan het checkpoint waar je verdergaat, een balk in het oranje van het menu, en onder de balk een ring die draait, waar het op wacht en hoeveel procent. De stappen: *Loading*, *Building the level*, *Finding the way*, in een wedstrijd *Setting up the match*, en *Getting the picture ready*. Bij terug naar het titelscherm staat er de naam van het spel.
+- **Het level dat je verlaat** gaat meteen uit de boom en wordt aan het eind van dat beeld opgeruimd, zoals eerst. De bestanden van het nieuwe worden op de threads van de loader gelezen (`ResourceLoader.load_threaded_request` met sub-threads), en tegelijk wat het level bij het opbouwen op naam laadt (`_alongside_of()`): de personages van het vijandthema met wat ze dragen (`EnemyThemes.scenes()`, nieuw), in een level met voertuigen de twee soldaten die erin zitten, en in een wedstrijd de zestien soldaten van de poppen en de wapens van de wapenkast in de hand. De PackedScene van het level en wat ernaast gelezen is, blijven bewaard tot het volgende level gelezen is: wie doodgaat, laadt niets opnieuw van schijf.
+- **De balk**: tot 60% de bestanden (het level telt voor twee derde, wat ernaast gelezen wordt voor een derde), 60% opbouwen, 80% het navmesh, 95% het beeld. Bij elke stap staat de balk meteen op zijn plek in hetzelfde beeld, omdat het volgende beeld even kan duren.
+- **Waar de hoofdthread nog stilstaat**, en de ring dus ook: het opbouwen (zo'n 0,3 s op de GPU), het eerste beeld met het navmesh (0,4 s), en in een wedstrijd het lezen van de arena (1 s). Voor elk daarvan staat er al een beeld met wat er gebeurt.
+- **Het scherm gaat** als het navmesh gebakken is en daarna een beeld getekend is zonder nieuwe pipelines (in de duinen het derde), in een wedstrijd pas als die begonnen is; het vervaagt in 0,35 s terwijl het HUD zijn zwarte gordijn in 0,7 s optrekt, zoals eerst. Zolang het er staat neemt het menu geen invoer aan (`gui_disable_input`) en opent Escape het pauzemenu niet.
+- Een level dat niet bestaat: er gebeurt niets en er komt een fout, zoals bij `change_scene_to_file()`. Een bestand dat niet te lezen is: het spel gaat naar het level waarmee het begint.
+- **Zonder scherm** (`--headless`, de tests) leest de lader alles op de hoofdthread, in één keer, zoals eerst. De renderer die Godot dan gebruikt kan zo te zien geen meshes op andere threads maken: op threads gaf de nettest 16 keer `Parameter "m" is null`, 13 keer een RID die niet bestond, en lampen van `scripts/breakables.gd` zonder glas. Op de GPU staat geen enkele fout in de logs, net als in de trunk.
+
+**Gemeten** op de GPU, `--res=3456x2160 --upscaler=metalfx --quality=3 --scale=auto --enemies=soldiers`, vanaf het titelscherm met een probe die doet wat het menu doet; trunk (`a9bf4d0`, een kopie ernaast) en deze branch om en om, 27 oktober tussen 15:23 en 15:39, load 2 tot 5, geen andere Godot op de GPU (een Blender van een ander project stond open maar rekende niet), aan een lader van 30 W met de accu vol. "Speelbaar" is het moment dat het navmesh gebakken is: daar begon het gordijn op te trekken, en nu ook het laadscherm.
+
+| De duinen vanaf het titelscherm | Speelbaar na | Helemaal in beeld na | Langste stilstaand beeld |
+|---|---|---|---|
+| Trunk | 6,45 / 5,46 / 5,84 s | 7,07 / 6,05 / 6,45 s | het hele laden, 6,46 / 5,47 / 5,85 s, met het titelscherm erop |
+| Laadscherm | 2,97 / 3,13 / 2,87 s | 3,57 / 3,76 / 3,48 s | 0,75 / 0,86 / 0,75 s (opbouwen en navmesh achter elkaar) |
+
+Pipelines die tijdens het tekenen gemaakt worden: 116 in beide, nu onder het laadscherm. Wat na het opkomen komt is gelijk: in de 8 s erna is het langste beeld 56 tot 68 ms, in beide.
+
+Daarna, 15:33 tot 15:38, twee rondes van een dood in de duinen en een wedstrijd (team tegen team, 8, `Match.open()` zoals het menu het doet), om en om. Een dood telt vanaf het moment dat het level opnieuw laadt, 2,5 s na het sterven.
+
+| | Trunk | Laadscherm |
+|---|---|---|
+| Na een dood weer speelbaar na | 2,44 / 2,68 s, het beeld van de dode speler 1,5 s stil | 0,67 / 0,67 s achter het laadscherm, langste beeld 0,63 s |
+| Een wedstrijd begint na | 7,30 / 7,13 s | 4,07 / 3,88 s |
+| ... en is helemaal in beeld na | 11,58 / 7,68 s | 4,64 / 4,40 s |
+| Stilstand bij het begin | 3,2 / 3,0 s, terwijl het beeld half uit het zwart is | 1,2 / 1,1 s, onder het laadscherm |
+
+In de eerste ronde van de trunk stond het spel na het begin van de wedstrijd nog 3,5 s stil op het eerste beeld met de bots, en in de tweede niet: dat lijkt me iets wat macOS de eerste keer compileerde en daarna bewaarde, en dan was het voor het laadscherm, dat na die run kwam, al gedaan. Na het opkomen is het langste beeld in de 8 s erna 20 tot 36 ms, in beide.
+
+**Een tip voor wie de levels bouwt.** Van de 2,1 s lezen staat de balk de laatste 1,3 s op 56%: dan zijn de 587 bestanden binnen en wordt de tekst van `dunes_level.tscn` zelf gelezen, en daar geeft Godot geen voortgang van. Hetzelfde level als binair bestand (`.scn`, met `ResourceSaver` uit de `.tscn` geschreven, in een kopie) laadde zonder GPU in 0,75 / 0,89 / 0,93 s tegen 2,0 / 2,0 / 3,7 s voor de tekst, om en om. Als `tools/level_builder.gd` de levels als `.scn` schreef, scheelde dat ruim een seconde per level dat geladen wordt; het kost leesbare diffs van de levels. Niet gedaan: levels herbouwen is aan de agent van "Kit-ruimtes".
+
+**Getest**, zonder GPU: `tools/selftest.sh` met twee nieuwe controles (een level dat door de uitgang komt, komt achter het laadscherm binnen, en dat gaat als het level gebakken is; na een dood komt het level achter het laadscherm terug), `tools/test_match.sh`, `tools/nettest.sh`, `tools/test_sandbox.sh` en `tools/test_humanoid.sh` slagen (593, 122, 64, 30 en 58 controles). Daarvoor moest er wat bij:
+
+- **De wedstrijdtest** opent een nieuwe wedstrijd in hetzelfde level terwijl het laadscherm van de vorige nog wegging; de lader liet een tweede vraag om hetzelfde level toen liggen. Nu alleen zolang het level nog onderweg is (`_in`).
+- **De nettest** liet de gast aankloppen zodra de host zijn spel opende, en rekende erop dat de host stilstond tot zijn level er was: dan had de host al een robot laten vallen voor de gast binnenkwam. Met het laadscherm blijft de host antwoorden terwijl hij laadt, en een gast die dan aanklopt, wordt toegelaten op het moment dat het level er is (`_arrived()` in `scripts/net.gd` deed dat al). In het spel is dat goed; in de test was de volgorde weg. De host schrijft nu in zijn eigen testmap wanneer de gast mag komen (`READY` in `scripts/net_test.gd`), en de gast wacht daarop.
+- **De Alpen** staan niet in git (`scenes/levels/alps_*`, 218 bestanden): in een worktree moeten ze uit de hoofdcheckout gekloond worden, anders faalt het deel van de Alpen in de selftest. Niet gecommit.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het eruitziet.** Het blad staat in `benchmark/sheets/laadscherm_before_after.jpg`; hoe het beweegt zie je alleen in het spel. Of de ring en de balk zo goed staan, of er een plaatje van het level achter moet, en of *Loading* met zijn stappen in het Engels moet zoals de rest van het menu: mijn keuze.
+- **Waar het nog stilstaat.** Het opbouwen en het navmesh houden de ring samen 0,75 tot 0,86 s stil, en in een wedstrijd het lezen van de arena nog een seconde. Het navmesh op een thread bakken is in "Verbeterpunten" geprobeerd en gaf een route zonder weg; het opbouwen in stukken verdelen raakt elk script van een level. Dat heb ik gelaten.
+- **De balk staat 1,3 s stil op 56%** terwijl de tekst van het level gelezen wordt (zie de tip). Of dat als vastlopen voelt, met de ring die blijft draaien, moet hij zeggen.
+- **Samen spelen** heb ik alleen met `tools/nettest.sh` op één machine getest; een gast die bij een wedstrijd van een ander laadt, wacht niet op het begin van die wedstrijd (dat zegt de host) en ziet het scherm dus eerder gaan.
+- **De eerste keer na een update van macOS** worden de shaders opnieuw gecompileerd (zie "Soldaten: vlugger naarmate het moeilijker is"): dat gebeurt nu deels op de threads van de loader en voor de rest onder het laadscherm, maar ik heb het niet kunnen meten zonder de cache van macOS weg te gooien.
+- **Andere levels** heb ik alleen in de selftest geladen, niet op de GPU gemeten; de fabriek tot en met de Alpen gaan langs dezelfde weg.

@@ -24,6 +24,8 @@ const RANGE_TARGET := Vector3(1, 0, -7.5)
 ## that a test never meets the test of another checkout either.
 const PORT := 24599
 const PORTS := 400
+## The file the host writes once the guest may join, see _join().
+const READY := "nettest_ready"
 const STACK := preload("res://scripts/stack.gd")
 
 ## True for a run of this test. The menu stays on for it, unlike for the
@@ -99,6 +101,8 @@ func _host() -> void:
 	lamps[0].take_damage(1.0, lamps[0].global_position, Vector3.UP)
 	stacks[0].take_damage(1000.0, stacks[0].global_position, Vector3.FORWARD)
 	_check("so do a lamp and a crate", lamps[0].out and stacks[0].standing() == stacks[0].size() - 1)
+	# Now the guest may knock, see _join().
+	FileAccess.open(SelfTest.own_file(READY), FileAccess.WRITE).store_string(_role)
 
 	_check("the guest walks in", await _until(func() -> bool: return game.puppets.size() == 1, 60.0))
 	var puppet: CharacterBody3D = game.puppets.values()[0]
@@ -198,6 +202,14 @@ func _join() -> void:
 	var tree := get_tree()
 	await _press("Play together")
 	_type(1, "127.0.0.1:%d" % _port)
+	# A guest that knocks while the host still loads its level, behind the
+	# loading screen (scripts/loading.gd), is let in the moment that level is
+	# there (net.gd, _arrived()): before the host has had a robot fall and a
+	# lamp and a crate break for it to find so. The host says when it has, in
+	# a file that is newer than this run.
+	var since := int(Time.get_unix_time_from_system()) - 1
+	var ready := func() -> bool: return FileAccess.file_exists(SelfTest.own_file(READY)) and FileAccess.get_modified_time(SelfTest.own_file(READY)) >= since
+	_check("the host is ready for a guest", await _until(ready, 60.0))
 	# The host may still be starting: no answer is an answer after a while.
 	for attempt in 6:
 		if Net.active:

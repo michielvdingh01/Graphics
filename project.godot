@@ -32,6 +32,7 @@ Squad="*res://scripts/squad.gd"
 Sandbox="*res://scripts/sandbox.gd"
 Match="*res://scripts/match.gd"
 Menu="*res://scripts/menu.gd"
+Loading="*res://scripts/loading.gd"
 
 [display]
 

@@ -138,7 +138,7 @@ func open(experiment: String, with_variant := 0) -> bool:
 	# sends the player on if it is the wrong one, see arrive().
 	var scene := get_tree().current_scene
 	if scene and scene.is_node_ready():
-		get_tree().change_scene_to_file(experiments[id].level)
+		Loading.go(experiments[id].level)
 	return true
 
 
@@ -164,7 +164,7 @@ func close() -> void:
 func arrive(game: Node3D) -> void:
 	var spec: Dictionary = experiments[id]
 	if game.scene_file_path != spec.level:
-		get_tree().change_scene_to_file.call_deferred(spec.level)
+		Loading.go.call_deferred(spec.level)
 		return
 	_game = game
 	_zone = null
@@ -214,7 +214,7 @@ func reload() -> void:
 	if _game:
 		_write()
 		_game = null
-		get_tree().reload_current_scene()
+		Loading.again()
 
 
 ## Says of the round that it was good, or that it was not.
