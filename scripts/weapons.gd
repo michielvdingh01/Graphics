@@ -91,6 +91,8 @@ const LET_GO := 0.85
 ## Loading one shell at a time: seconds before the first and after the last.
 const SHELL_LEAD := 0.35
 const SHELL_TAIL := 0.3
+## Seconds after the last shot of a clip that its ping is heard.
+const CLIP_PING := 0.06
 
 # How the weapon in view moves in the hands of whoever carries it. All of it
 # is only drawn: none of it changes where a shot goes.
@@ -430,6 +432,9 @@ func _take_up(data: WeaponData, mag: int, reserve: int) -> void:
 		mesh.set_layer_mask_value(VIEW_LAYER, true)
 	_rig.add_child(model)
 	_models.append(Viewmodel.new(model))
+	# The action of a weapon loaded by a clip stays open once the clip is out.
+	if data.en_bloc:
+		_models[-1].locks_open = true
 	_mags.append(mag)
 	_reserves.append(reserve)
 
@@ -883,6 +888,8 @@ func _fire(data: WeaponData) -> void:
 		_eject(model, data)
 	if model.locks_open and _mags[_index] == 0:
 		_locked = 1.0
+	if data.en_bloc and _mags[_index] == 0:
+		_throw_clip(model, data)
 
 	# Barrels that spin roar as long as they fire, see _spin_barrels().
 	if data.spin_up <= 0.0:
@@ -1053,6 +1060,18 @@ func _eject(model: Viewmodel, data: WeaponData) -> void:
 	Fx.casing(model.eject.global_position, camera.global_basis, player.velocity + out, data.loads_singly)
 
 
+## The last shot of a clip throws the clip out of the top, up and to the
+## right, with a ping that is heard just after the bang: the empty clip
+## leaving, not the shot.
+func _throw_clip(model: Viewmodel, data: WeaponData) -> void:
+	var at: Vector3 = model.mag.global_position if model.mag else model.muzzle.global_position
+	var out := camera.global_basis * Vector3(randf_range(0.5, 0.9), randf_range(2.6, 3.2), randf_range(0.0, 0.4))
+	Fx.casing(at, camera.global_basis, player.velocity + out, false, true)
+	var ping := _handling(data, "ping", &"")
+	if ping != &"":
+		get_tree().create_timer(CLIP_PING).timeout.connect(Sfx.play.bind(ping, -2.0))
+
+
 ## A pump action is worked by hand after every shot: back, which throws the
 ## shell out, and forward again.
 func _update_pump(data: WeaponData) -> void:
@@ -1089,6 +1108,9 @@ func _start_reload() -> void:
 		return
 	if _mags[_index] >= data.mag_size or _reserves[_index] <= 0:
 		return
+	# A clip goes in only once the last one has flown out.
+	if data.en_bloc and _mags[_index] > 0:
+		return
 	_reload_stage = 0
 	_reload_total = data.reload_time
 	if data.loads_singly:
@@ -1123,7 +1145,10 @@ func _update_reload() -> void:
 	var steps: Array[String] = ["mag_out", "mag_in", "bolt"]
 	var sounds: Array[StringName] = [&"reload", &"reload_end", &"switch"]
 	while _reload_stage < moments.size() and fraction >= moments[_reload_stage]:
-		Sfx.play(_handling(data, steps[_reload_stage], sounds[_reload_stage]), -9.0)
+		# There is no magazine to take out of a weapon whose clip flew out
+		# with its last shot: the hand only fetches the next.
+		if not (data.en_bloc and steps[_reload_stage] == "mag_out"):
+			Sfx.play(_handling(data, steps[_reload_stage], sounds[_reload_stage]), -9.0)
 		_reload_stage += 1
 	if _reload_left <= 0.0:
 		var needed := mini(data.mag_size - _mags[_index], _reserves[_index])
@@ -1431,9 +1456,10 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		turn.x -= 0.05 * back
 	if model.action:
 		model.action.position.z += model.travel * maxf(back, _locked)
-	if data.projectile and model.mag:
+	if (data.projectile or data.en_bloc) and model.mag:
 		# The round sticks out of the tube until it is fired, and the next is
-		# there once the reload has brought it.
+		# there once the reload has brought it; so does a clip, which flies
+		# out with its last round.
 		model.mag.visible = _mags[_index] > 0 or (_reload_left > 0.0 and fraction > MAG_OUT)
 	if model.barrels:
 		# They turn about the axis between them, and glow as they heat up.

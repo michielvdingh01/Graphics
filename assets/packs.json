@@ -21,41 +21,41 @@
 		},
 		"close": {
 			"title": "Close quarters",
-			"about": "For halls and streets: short, loud and quick.",
-			"weapons": ["smg", "double_barrel", "machine_pistol", "revolver"],
-			"bots": ["smg", "double_barrel", "machine_pistol", "smg", "double_barrel", "smg"],
+			"about": "For halls and streets: short, loud and quick, and a shotgun that does not stop.",
+			"weapons": ["smg", "double_barrel", "machine_pistol", "revolver", "auto_shotgun"],
+			"bots": ["smg", "auto_shotgun", "machine_pistol", "smg", "double_barrel", "auto_shotgun"],
 			"grenades": 3
 		},
 		"far": {
 			"title": "Long range",
-			"about": "For the dunes and the yard: one shot, and make it count.",
-			"weapons": ["bolt_rifle", "battle_rifle", "revolver"],
-			"bots": ["battle_rifle", "bolt_rifle", "battle_rifle", "battle_rifle", "bolt_rifle", "battle_rifle"],
+			"about": "For the dunes and the yard: one shot, and make it count; the .50 counts at any range.",
+			"weapons": ["bolt_rifle", "battle_rifle", "revolver", "marksman", "anti_materiel"],
+			"bots": ["battle_rifle", "bolt_rifle", "marksman", "battle_rifle", "anti_materiel", "battle_rifle"],
 			"grenades": 2
 		},
 		"1944": {
 			"title": "1944",
-			"about": "Drum, bolt, trench gun and the Colt, as they sounded.",
-			"weapons": ["ppsh", "mosin", "trench_gun", "colt"],
-			"bots": ["ppsh", "mosin", "ppsh", "trench_gun", "ppsh", "mosin"],
-			"far": ["mosin", "ppsh", "mosin", "ppsh", "trench_gun", "mosin"],
+			"about": "Drum, bolt, trench gun, the Colt and the Garand's ping, as they sounded.",
+			"weapons": ["ppsh", "mosin", "trench_gun", "colt", "garand"],
+			"bots": ["ppsh", "garand", "ppsh", "mosin", "trench_gun", "garand"],
+			"far": ["mosin", "garand", "ppsh", "mosin", "garand", "ppsh"],
 			"sidearm": "colt",
 			"grenades": 2,
 			"grenade": "stick_grenade"
 		},
 		"heavy": {
 			"title": "Heavy",
-			"about": "A machine gun, a pump gun and a revolver: slower on your feet.",
-			"weapons": ["lmg", "shotgun", "revolver"],
-			"bots": ["lmg", "shotgun", "lmg", "lmg", "shotgun", "lmg"],
+			"about": "A machine gun, a battle rifle, two shotguns and a revolver: slower on your feet.",
+			"weapons": ["lmg", "shotgun", "revolver", "auto_shotgun", "battle_rifle"],
+			"bots": ["lmg", "auto_shotgun", "battle_rifle", "lmg", "shotgun", "battle_rifle"],
 			"sidearm": "revolver",
 			"grenades": 2
 		},
 		"pistols": {
 			"title": "Pistols only",
-			"about": "Four pistols and your fists.",
-			"weapons": ["pistol", "revolver", "machine_pistol", "colt"],
-			"bots": ["colt", "revolver", "pistol", "machine_pistol", "colt", "revolver"],
+			"about": "Five pistols and your fists.",
+			"weapons": ["pistol", "revolver", "machine_pistol", "colt", "hand_cannon"],
+			"bots": ["colt", "hand_cannon", "pistol", "machine_pistol", "revolver", "hand_cannon"],
 			"grenades": 1
 		}
 	}

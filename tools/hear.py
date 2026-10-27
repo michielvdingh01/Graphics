@@ -26,6 +26,9 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py minigun b b             the same with variant b of the roar and of the motor
     tools/hear.py rocket                  the rocket launcher firing, the rocket going away and
                                           going off 36 m further on
+    tools/hear.py garand                  a whole clip of the M1 Garand, the ping of the clip
+                                          flying out, the next clip going in and two more shots;
+    tools/hear.py garand b a              the same with variant b of the shot (then of the ping)
     tools/hear.py ambience boiler         twelve seconds of the bed of a kind of space (hall,
                                           room, yard, boiler, turbine), with what sounds in it
                                           now and then and three shots for scale
@@ -85,6 +88,8 @@ SPACES = {
 }
 BEDS = dict(re.findall(r'"(\w+)": &"(\w+)"', re.search(r"^const BEDS := \{(.+)\}", SFX, re.M).group(1)))
 NEAR = constant("NEAR")
+# Seconds after the last shot of a clip that its ping is heard.
+CLIP_PING = constant("CLIP_PING", (ROOT / "scripts/weapons.gd").read_text())
 
 
 def enclosed(metres: float) -> list:
@@ -203,6 +208,10 @@ def reload(weapon: str) -> list:
 
     events = played(f"{weapon}_shot", [START])
     begin = START + 0.9
+    clip = data.get("en_bloc") == "true"
+    if clip and (ROOT / "assets/audio" / f"{weapon}_ping").is_dir():
+        # The shot is the last of the clip, which flies out with its ping.
+        events += played(f"{weapon}_ping", [START + CLIP_PING], -2.0)
     if data.get("loads_singly") == "true":
         events += step("pump", START + 0.14, -7.0)
         shells = int(data.get("mag_size", 6))
@@ -212,8 +221,28 @@ def reload(weapon: str) -> list:
         events += step("pump", begin + 0.35 + time + 0.3, -6.0)
     else:
         for name, moment in (("mag_out", 0.14), ("mag_in", 0.72), ("bolt", 0.88)):
-            events += step(name, begin + moment * time, -9.0)
+            # A clip is not taken out: it flew out with the last round.
+            if not (clip and name == "mag_out"):
+                events += step(name, begin + moment * time, -9.0)
     return events
+
+
+def garand(shot: str, ping: str) -> list:
+    """The M1 Garand as scripts/weapons.gd plays it: a whole clip of eight
+    fired at a steady pace, the clip flying out with its ping just after the
+    last bang, the next clip pressed in and the bolt slamming home, and two
+    more shots."""
+    data = dict(re.findall(r"^(\w+) = (.+)$", (ROOT / "weapons/garand.tres").read_text(), re.M))
+    rounds = int(data.get("mag_size", 8))
+    time = float(data.get("reload_time", 2.0))
+    pace = max(60.0 / float(data.get("rounds_per_minute", 300.0)), 0.32)
+    times = [START + i * pace for i in range(rounds)]
+    events = played(shot, times)
+    events += played(ping, [times[-1] + CLIP_PING], -2.0)
+    begin = times[-1] + 0.7
+    events += played("garand_mag_in", [begin + 0.72 * time], -9.0) + played("garand_bolt", [begin + 0.88 * time], -9.0)
+    after = begin + time + 0.35
+    return events + played(shot, [after, after + pace])
 
 
 def casings(weapon: str) -> list:
@@ -497,6 +526,10 @@ def main() -> None:
         name, events = "grenade", grenade()
     elif args[0] == "rocket":
         name, events = "rocket", rocket()
+    elif args[0] == "garand":
+        shot = "garand_shot" + (f"_{args[1]}" if len(args) > 1 and args[1] != "a" else "")
+        ping = "garand_ping" + (f"_{args[2]}" if len(args) > 2 and args[2] != "a" else "")
+        name, events = f"garand_{'_'.join(args[1:]) or 'a'}", garand(shot, ping)
     elif args[0] == "minigun":
         fire = "minigun_fire" + (f"_{args[1]}" if len(args) > 1 and args[1] != "a" else "")
         spin = "minigun_spin" + (f"_{args[2]}" if len(args) > 2 and args[2] != "a" else "")
