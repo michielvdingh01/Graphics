@@ -62,14 +62,16 @@ const COVER_PACE := 1.15
 const FLEE_PACE := 1.3
 ## A person cannot go every way alike, as a robot can. Sideways it goes this
 ## share of how fast it goes ahead and backwards this share, with its weapon
-## up no faster than AIMED_PACE m/s whichever way, and it gets going and
-## stops again at PERSON_ACCEL m/s². Cover that lies further round than
-## TURN_AND_RUN radians from where it faces it does not back into: it turns
-## its back on the player and runs there.
-const SIDEWAYS := 0.6
-const BACKWARDS := 0.38
-const AIMED_PACE := 3.0
-const PERSON_ACCEL := 7.0
+## up this share of its speed at most whichever way, and it gets going and
+## stops again at PERSON_ACCEL m/s². Each is the first number on Easy, the
+## second on Hard, and in between as the difficulty has it (agility in
+## Settings.RULES): on Hard it is quicker on its feet and harder to hit.
+## Cover that lies further round than TURN_AND_RUN radians from where it
+## faces it does not back into: it turns its back on the player and runs.
+const SIDEWAYS := Vector2(0.65, 0.85)
+const BACKWARDS := Vector2(0.4, 0.55)
+const AIMED := Vector2(0.7, 0.9)
+const PERSON_ACCEL := Vector2(8.0, 16.0)
 const TURN_AND_RUN := 1.9
 ## Seconds between two looks for cover while it has none.
 const COVER_RETRY := 0.8
@@ -669,10 +671,23 @@ func _physics_process(delta: float) -> void:
 	var accel := ACCEL
 	if _person and not dead:
 		desired = _paced(desired)
-		accel = PERSON_ACCEL
+		accel = pace_limits().accel
 	velocity.x = move_toward(velocity.x, desired.x, accel * delta)
 	velocity.z = move_toward(velocity.z, desired.z, accel * delta)
 	move_and_slide()
+
+
+## How freely a person moves at the difficulty that is set, see SIDEWAYS:
+## the shares of its speed it goes sideways, backwards and with its weapon
+## up, and how fast it gets going in m/s².
+func pace_limits() -> Dictionary:
+	var agility: float = Settings.rules().get("agility", 0.5)
+	return {
+		"sideways": lerpf(SIDEWAYS.x, SIDEWAYS.y, agility),
+		"backwards": lerpf(BACKWARDS.x, BACKWARDS.y, agility),
+		"aimed": lerpf(AIMED.x, AIMED.y, agility),
+		"accel": lerpf(PERSON_ACCEL.x, PERSON_ACCEL.y, agility),
+	}
 
 
 ## How fast a person can go that way, see SIDEWAYS: `desired`, or slower
@@ -686,10 +701,11 @@ func _paced(desired: Vector3) -> Vector3:
 	ahead = Vector3(ahead.x, 0.0, ahead.z).normalized()
 	var along := flat / wanted
 	var facing := ahead.dot(along)
-	var share := lerpf(SIDEWAYS, 1.0, facing) if facing >= 0.0 else lerpf(SIDEWAYS, BACKWARDS, -facing)
-	var most := speed * share
+	var limits := pace_limits()
+	var share: float = lerpf(limits.sideways, 1.0, facing) if facing >= 0.0 else lerpf(limits.sideways, limits.backwards, -facing)
 	if _aims:
-		most = minf(most, AIMED_PACE)
+		share = minf(share, limits.aimed)
+	var most := speed * share
 	if wanted <= most:
 		return desired
 	return Vector3(along.x * most, desired.y, along.z * most)

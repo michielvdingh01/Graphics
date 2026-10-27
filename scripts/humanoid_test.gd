@@ -33,8 +33,8 @@ var _failures := 0
 ## What is being walked about by hand, and how fast.
 var _walker: CharacterBody3D
 var _stride := Vector3.ZERO
-## While the fight is on: the fastest any of them went backwards, as a share
-## of its own speed, and the fastest any went with its weapon up, in m/s.
+## While the fight is on: the fastest any of them went backwards, and with
+## its weapon up, as a share of its own speed.
 var _sampling := false
 var _backwards := 0.0
 var _aimed := 0.0
@@ -64,7 +64,7 @@ func _process(delta: float) -> void:
 			_backwards = maxf(_backwards, -going.dot(ahead) / e.speed)
 			_aiming[e] = _aiming.get(e, 0.0) + delta if e._aims else 0.0
 			if _aiming[e] > 0.35:
-				_aimed = maxf(_aimed, going.length())
+				_aimed = maxf(_aimed, going.length() / e.speed)
 
 
 func _run() -> void:
@@ -132,9 +132,9 @@ func _run() -> void:
 	_sampling = false
 	# A person goes backwards at a walk, and once its weapon is up at a jog;
 	# it may not be quite down to either the moment it has turned.
-	var person: Node = enemies[0]
-	_check("backwards they go at most %.0f%% of their speed (%.0f%%), with the weapon up at most %.1f m/s (%.1f)" % [person.BACKWARDS * 100.0, _backwards * 100.0, person.AIMED_PACE, _aimed],
-		_backwards <= person.BACKWARDS + 0.1 and _aimed <= person.AIMED_PACE + 0.4)
+	var limits: Dictionary = enemies[0].pace_limits()
+	_check("backwards they go at most %.0f%% of their speed (%.0f%%), with the weapon up at most %.0f%% (%.0f%%)" % [limits.backwards * 100.0, _backwards * 100.0, limits.aimed * 100.0, _aimed * 100.0],
+		_backwards <= limits.backwards + 0.1 and _aimed <= limits.aimed + 0.1)
 
 	# One of them is shot with the rifle from close range.
 	var enemy: CharacterBody3D = enemies[0]
