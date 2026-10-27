@@ -4774,3 +4774,24 @@ Op 22 oktober 2026, na het spelen: "Het ziet er misschien 5% realistischer uit. 
 
 - **Gespeeld is het niet.** Of 38% achteruit en 3 m/s met het wapen op niet te traag oogt, en of het omdraaien naar dekking niet te vaak gebeurt, moet in het spel blijken. De vijanden zijn er makkelijker te raken door: een sprong opzij is trager en ze rennen niet meer met het wapen op.
 - **Bots in een wedstrijd** (`scripts/bot.gd`) bewegen als een speler en zijn niet aangeraakt: die rennen achteruit even hard als een speler dat kan.
+
+## Soldaten: vlugger naarmate het moeilijker is
+
+Op 27 oktober 2026, na het spelen van de trunk: "hoewel de soldaten wat realistischer bewegen, het nu voor mij veel makkelijker is om ze uit te schakelen. Zelfs op Hard, is het nu eigenlijk te makkelijk. [...] Niet zo snel als eerst, maar wel sneller dan nu. Anders is hard gewoon niet hard." Branch `soldatentempo`, vanaf de trunk `a9bf4d0`.
+
+**Wat er nu staat.** Hoe vrij een mens onder de vijanden beweegt, hangt nu af van de moeilijkheid (`agility` in `Settings.RULES`: Easy 0, Normal 0,5, Hard 1), tussen twee grenzen in `scripts/enemy.gd`:
+
+| | Easy | Normal | Hard | Voorheen (de trunk) | Daarvoor |
+|---|---|---|---|---|---|
+| Opzij, deel van zijn snelheid (`SIDEWAYS`) | 65% | 75% | 85% | 60% | 100% |
+| Achteruit (`BACKWARDS`) | 40% | 48% | 55% | 38% | 100% |
+| Met het wapen op (`AIMED`) | 70% | 80% | 90% | 3 m/s | 100% |
+| Op gang komen en stoppen (`PERSON_ACCEL`) | 8 m/s² | 12 m/s² | 16 m/s² | 7 m/s² | 22 m/s² |
+
+Met het wapen op is nu een deel van zijn eigen snelheid in plaats van 3 m/s voor iedereen: een rusher (6 m/s) stormt op Hard met 5,4 m/s op je af in plaats van 3, een grunt (4,2 m/s) gaat met 3,8 m/s, een heavy (2,6 m/s) met 2,3. Een stap opzij die omkeert duurt op Hard een kwart seconde (was een halve, daarvoor een vijfde). Achteruit blijft hij op Hard onder een draf (2,3 m/s voor een grunt), en dekking achter zich loopt hij op elke moeilijkheid nog steeds met zijn rug naar de speler tegemoet. Robots gaan zoals altijd.
+
+`--difficulty=0`, `1` of `2` op de opdrachtregel kiest de moeilijkheid voor één run, zoals `--enemies=` het thema.
+
+**Getest.** `tools/test_humanoid.sh --enemies=soldiers` op elke moeilijkheid: achteruit hooguit 40, 48 en 55% en met het wapen op 70, 80 en 90% van hun snelheid, zoals ingesteld. Op Hard faalde de bekende controle van de voeten op de trap (zie "Soldaten: niet meer achteruit rennen"). `tools/test_match.sh` en `tools/selftest.sh` (586 controles) slagen.
+
+**Wat ik niet kon beoordelen.** Hoe moeilijk het nu is, is in een test niet te zien: dat moet Michiel spelen. De getallen per moeilijkheid zijn mijn keuze.
