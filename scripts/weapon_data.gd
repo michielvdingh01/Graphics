@@ -30,6 +30,11 @@ extends Resource
 ## Loaded one round at a time, each taking `reload_time / mag_size`, instead
 ## of by the magazine; a shot interrupts it.
 @export var loads_singly := false
+## Loaded by a clip that goes in with the rounds and stays in, as in the M1
+## Garand: a new one goes in only once the last round is fired, and that shot
+## throws the empty clip out with a ping (its sound <weapon>_ping, see
+## _handling() in scripts/weapons.gd). The action stays open until then.
+@export var en_bloc := false
 
 @export_group("Accuracy")
 @export var hip_spread_deg := 1.5

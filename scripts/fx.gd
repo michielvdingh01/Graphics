@@ -99,6 +99,9 @@ var _fires: Array[Dictionary] = []
 var _casing_mesh := CylinderMesh.new()
 var _shell_mesh := CylinderMesh.new()
 var _shell_head := CylinderMesh.new()
+## The empty clip of a weapon loaded by clips (WeaponData.en_bloc): sheet
+## steel round the bases of eight rounds.
+var _clip_mesh := BoxMesh.new()
 ## Spent cases in flight: {node, velocity, spin, floor, age, bounces}.
 var _casings: Array[Dictionary] = []
 
@@ -364,6 +367,8 @@ func _ready() -> void:
 	_shell_head.top_radius = 0.0104
 	_shell_head.bottom_radius = 0.0104
 	_shell_head.height = 0.014
+	_clip_mesh.size = Vector3(0.016, 0.052, 0.019)
+	_clip_mesh.material = load("res://materials/gun_steel.tres")
 
 
 ## Moves the clock on by hand while it is held.
@@ -1281,10 +1286,10 @@ func clear() -> void:
 
 ## Spent case thrown from a weapon that points along `basis`: it tumbles,
 ## bounces off the floor below and lies there a while. `shell` makes it the
-## hull of a shotgun shell.
-func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false) -> void:
+## hull of a shotgun shell, `clip` the empty clip of a weapon loaded by clips.
+func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false, clip := false) -> void:
 	var node := MeshInstance3D.new()
-	node.mesh = _shell_mesh if shell else _casing_mesh
+	node.mesh = _clip_mesh if clip else (_shell_mesh if shell else _casing_mesh)
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	if shell:
