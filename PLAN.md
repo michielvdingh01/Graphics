@@ -4777,6 +4777,8 @@ Op 22 oktober 2026, na het spelen: "Het ziet er misschien 5% realistischer uit. 
 
 ## Soldaten: vlugger naarmate het moeilijker is
 
+*Op 27 oktober 2026 op Michiels woord in de trunk gezet, nadat hij het op Hard speelde: "Het start nu goed en Hard is pittiger [...] merge de rest maar".*
+
 Op 27 oktober 2026, na het spelen van de trunk: "hoewel de soldaten wat realistischer bewegen, het nu voor mij veel makkelijker is om ze uit te schakelen. Zelfs op Hard, is het nu eigenlijk te makkelijk. [...] Niet zo snel als eerst, maar wel sneller dan nu. Anders is hard gewoon niet hard." Branch `soldatentempo`, vanaf de trunk `a9bf4d0`.
 
 **Wat er nu staat.** Hoe vrij een mens onder de vijanden beweegt, hangt nu af van de moeilijkheid (`agility` in `Settings.RULES`: Easy 0, Normal 0,5, Hard 1), tussen twee grenzen in `scripts/enemy.gd`:
@@ -4795,3 +4797,5 @@ Met het wapen op is nu een deel van zijn eigen snelheid in plaats van 3 m/s voor
 **Getest.** `tools/test_humanoid.sh --enemies=soldiers` op elke moeilijkheid: achteruit hooguit 40, 48 en 55% en met het wapen op 70, 80 en 90% van hun snelheid, zoals ingesteld. Op Hard faalde de bekende controle van de voeten op de trap (zie "Soldaten: niet meer achteruit rennen"). `tools/test_match.sh` en `tools/selftest.sh` (586 controles) slagen.
 
 **Wat ik niet kon beoordelen.** Hoe moeilijk het nu is, is in een test niet te zien: dat moet Michiel spelen. De getallen per moeilijkheid zijn mijn keuze.
+
+**Het trage opstarten** dat Michiel die dag zag, kwam niet hiervan. macOS 27.0.1 was op 23 oktober om 23:55 geïnstalleerd, en daarmee waren de shaders die macOS voor Godot gecompileerd bewaart (onder `getconf DARWIN_USER_CACHE_DIR`/org.godotengine.godot/com.apple.metal) niet meer geldig: Godot moest ze bij het eerste gebruik opnieuw laten compileren, en een spel dat dat doet tijdens het laden reageert tientallen seconden niet. Na de herstart die middag schreef macOS er ongeveer 750 MB opnieuw; de duinen met soldaten op zijn instelling duurden de eerste keer 42 s en daarna 14, de trunk van voor de soldaten (`5f1509b`) de eerste keer 42 s en daarna 9,5 tegen 10,5 tot 11,3 voor de trunk met de soldaten. Daarna startte het bij hem weer goed. Dat de duinen dan nog traag openen is een eigen opdracht geworden: een laadscherm.
