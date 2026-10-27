@@ -800,7 +800,7 @@ func _show_finished(next: String) -> void:
 	if next == "":
 		Menu.show_end(kills, run)
 	elif not Net.active:
-		get_tree().change_scene_to_file(next)
+		Loading.go(next)
 	elif not Net.is_guest():
 		Net.load_level(next, "", kills)
 
@@ -850,7 +850,7 @@ func _on_player_died() -> void:
 			player.weapons.resupply()
 		return
 	await get_tree().create_timer(RESTART_DELAY, false).timeout
-	get_tree().reload_current_scene()
+	Loading.again()
 
 
 # --- Playing together ---------------------------------------------------------

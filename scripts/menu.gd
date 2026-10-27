@@ -125,10 +125,9 @@ func at_title() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _enabled or not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
 		return
-	# While a level is being loaded there is none: after a death and between
-	# two levels the old one is gone a frame before the new one is there, and
-	# that frame is where a key lands that was pressed during the load.
-	if get_tree().current_scene == null:
+	# While a level is being loaded there is none, or not one to be played:
+	# see loading.gd.
+	if get_tree().current_scene == null or Loading.busy():
 		return
 	match _screen:
 		Screen.NONE:
@@ -180,7 +179,7 @@ func _show(screen: Screen) -> void:
 			_heading(ProjectSettings.get_setting("application/config/name").to_upper(), 64)
 			var checkpoint := Save.checkpoint
 			if checkpoint:
-				var text := "Continue  ·  %s" % _level_name(checkpoint.level)
+				var text := "Continue  ·  %s" % level_name(checkpoint.level)
 				if checkpoint.title:
 					text += ", %s" % (checkpoint.title as String).to_lower()
 				_button(text, _play.bind(checkpoint.level, false))
@@ -285,7 +284,7 @@ func _play(scene: String, fresh: bool) -> void:
 		Save.clear()
 	_show(Screen.NONE)
 	_score(scene)
-	get_tree().change_scene_to_file(scene)
+	Loading.go(scene)
 
 
 func _quit_to_title() -> void:
@@ -293,7 +292,7 @@ func _quit_to_title() -> void:
 	Sandbox.close()
 	Match.close()
 	_show(Screen.TITLE)
-	get_tree().reload_current_scene()
+	Loading.again(ProjectSettings.get_setting("application/config/name"))
 
 
 # --- The sandbox ----------------------------------------------------------------
@@ -381,7 +380,7 @@ func _on_left(reason: String) -> void:
 	_together_note = reason
 	_show(Screen.TOGETHER)
 	if playing:
-		get_tree().reload_current_scene()
+		Loading.again(ProjectSettings.get_setting("application/config/name"))
 
 
 ## Who is in the game, and for a host how the others get in.
@@ -439,7 +438,8 @@ func _on_scene_changed() -> void:
 		_title_camera.make_current()
 
 
-func _level_name(scene: String) -> String:
+## What the menu calls the level at `scene`.
+func level_name(scene: String) -> String:
 	for level in LEVELS:
 		if level.scene == scene:
 			return level.name

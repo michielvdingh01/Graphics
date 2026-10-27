@@ -227,7 +227,7 @@ func load_level(scene: String, at := "", kills := 0, fallen := []) -> void:
 		if guest != 1:
 			_enter.rpc_id(guest, session)
 	entering.emit(scene)
-	get_tree().change_scene_to_file(scene)
+	Loading.go(scene)
 
 
 ## The level on this machine is loaded and ready for the others.
@@ -321,7 +321,7 @@ func _enter(what: Dictionary) -> void:
 		_own_theme = Settings.enemy_theme
 	Settings.enemy_theme = session.theme
 	entering.emit(session.level)
-	get_tree().change_scene_to_file(session.level)
+	Loading.go(session.level)
 
 
 @rpc("any_peer", "call_remote", "reliable")
