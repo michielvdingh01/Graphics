@@ -322,7 +322,7 @@ func net_state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int
 	_reports.append([Time.get_ticks_msec() * 0.001, at, yaw, pitch, speed])
 	if _reports.size() > 12:
 		_reports.pop_front()
-	_doing = doing
+	act(doing)
 	var rearmed := weapon != _weapon
 	_weapon = weapon
 	if down and not dead:
@@ -526,6 +526,9 @@ func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1, look 
 
 ## True if a shot that landed at `at` is one to the head.
 func is_headshot(at: Vector3) -> bool:
+	# A soldier's head is where its rig has it, see HumanoidRig.head_start().
+	if _rig and _rig.has_method(&"head_start"):
+		return at.y > _rig.head_start()
 	return at.y - global_position.y > float(_build.head) - (CROUCH_DROP if _doing & Net.CROUCHED else 0.0)
 
 
@@ -534,7 +537,7 @@ func fall(push: Vector3) -> void:
 	if dead:
 		return
 	dead = true
-	_doing = 0
+	act(0)
 	collision_layer = 0
 	velocity = Vector3.ZERO
 	_label.visible = false
@@ -554,7 +557,7 @@ func _collapse(push: Vector3) -> void:
 func rise(pose: Transform3D) -> void:
 	dead = false
 	_reports.clear()
-	_doing = 0
+	act(0)
 	velocity = Vector3.ZERO
 	global_position = pose.origin
 	rotation = Vector3(0.0, pose.basis.get_euler().y, 0.0)
@@ -565,9 +568,28 @@ func rise(pose: Transform3D) -> void:
 	_dress()
 
 
-## What a bot is doing, the bits of net.gd: its brain says so.
+## What a bot is doing, the bits of net.gd: its brain says so, or the
+## machine of whoever it stands for. A bot that waits behind cover is seen
+## on one knee; somebody who plays is not, for a figure on one knee cannot
+## walk.
 func act(doing: int) -> void:
+	if (doing ^ _doing) & Net.CROUCHED and id < 0:
+		_duck(doing & Net.CROUCHED != 0)
 	_doing = doing
+
+
+## True if it can go down on one knee: a soldier bot can, a robot cannot.
+func ducks() -> bool:
+	return _rig != null and _rig.has_method(&"crouch") and float(_rig.get(&"crouch_drop")) > 0.0
+
+
+## Down on one knee or up again: its figure and its body to a shot.
+func _duck(down: bool) -> void:
+	var capsule := _collider.shape as CapsuleShape3D
+	capsule.height = float(_build.height) - (CROUCH_DROP if down and ducks() else 0.0)
+	_collider.position.y = capsule.height * 0.5
+	if ducks():
+		_rig.crouch(down)
 
 
 # --- What the host's world does to it ----------------------------------------

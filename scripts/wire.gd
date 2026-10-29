@@ -32,5 +32,4 @@ func _flatten() -> void:
 		if child is MeshInstance3D:
 			var mesh := child as MeshInstance3D
 			mesh.transform = Transform3D(Basis.from_scale(Vector3(1.0, FLAT, 1.0)), Vector3.ZERO) * mesh.transform
-	Sfx.play_at(&"clang", global_position, -2.0)
-	Sfx.play_at(&"impact_metal", global_position, 0.0)
+	Sfx.play_at(&"wire_crush", global_position, 4.0)

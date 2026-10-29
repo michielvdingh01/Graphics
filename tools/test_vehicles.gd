@@ -10,7 +10,7 @@ extends SceneTree
 ##
 ##   tools/test_vehicles.sh             all of it
 ##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, motorcycle,
-##                                      hills, wear, run_over, dunes, gate, match
+##                                      fence, hills, wear, run_over, dunes, gate, match
 
 const LIMIT := 600.0
 ## Loaded once the game runs, not as this is read: the autoloads they name
@@ -46,7 +46,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--only="):
 			only = argument.trim_prefix("--only=")
-	for part: String in ["jeep", "truck", "tank", "motorcycle", "hills", "wear", "run_over", "dunes", "gate", "match"]:
+	for part: String in ["jeep", "fence", "truck", "tank", "motorcycle", "hills", "wear", "run_over", "dunes", "gate", "match"]:
 		if only == "" or only == part:
 			print("-- ", part)
 			await call("_" + part)
@@ -289,6 +289,7 @@ func _jeep() -> void:
 	await seconds(1.0)
 	Input.action_release("move_forward")
 	check(jeep.health < health, "jeep: driven into a wall it is hurt (%d of %d left)" % [jeep.health, jeep.data.health])
+	check(jeep._fence == &"", "jeep: and a wall is not heard as a fence")
 	check(player.riding == jeep, "jeep: and whoever drives is still in it")
 	# Whoever drives fires their own weapon where the view is: turned round,
 	# at somebody standing behind the car.
@@ -312,6 +313,34 @@ func _jeep() -> void:
 	await _press("vehicle_seat")
 	check(player.seat == 1 and player.weapons.visible, "jeep: Q moves on to the next seat, where the weapons are out")
 	check(jeep.driver() == null, "jeep: and then nobody drives")
+	await _press("use")
+
+
+## A jeep driven into a fence of wire, as the kit builds one (a thin box of
+## metal), hears it as a fence, see _crashes() in scripts/vehicle.gd.
+func _fence() -> void:
+	var jeep := await _yard("jeep")
+	var fence := StaticBody3D.new()
+	var panel := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(FLOOR, 3.9, 0.12)
+	panel.shape = box
+	panel.position = Vector3(0, 1.95, 30.0)
+	panel.set_meta(&"surface", "metal")
+	fence.add_child(panel)
+	world.add_child(fence)
+	player.global_position = jeep.global_position + jeep.global_basis.x * 1.6
+	await _press("use")
+	await seconds(1.5)
+	Input.action_press("move_forward")
+	var waited := 0.0
+	while jeep.global_position.z < 26.0 and waited < 20.0:
+		await frames(12)
+		waited += 0.1
+	await seconds(1.0)
+	Input.action_release("move_forward")
+	check(jeep._fence == &"fence_crash" and jeep._clock - jeep._fence_when < 2.0, "fence: a jeep that runs into a fence of wire hears it as one (%s)" % jeep._fence)
+	check(autoload("Sfx").has(&"fence_crash") and autoload("Sfx").has(&"fence_crash_wood") and autoload("Sfx").has(&"wire_crush"), "fence: and there is a sound for a fence of wire, one of wood and a coil")
 	await _press("use")
 
 

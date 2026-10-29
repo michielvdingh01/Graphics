@@ -584,6 +584,15 @@ func panic() -> void:
 	_breath = randf() * 0.3
 
 
+## How high in the world its head begins as it stands now: lower while it
+## bends to its sights, runs bent over or kneels. A shot that lands above it
+## is one to the head. `fit` has the same as it stands at rest, which a head
+## bent to its sights is as much as 15 cm under.
+func head_start() -> float:
+	var head := _skeleton.global_transform * _skeleton.get_bone_global_pose(_head)
+	return head.origin.y - 0.02 * _figure.scale.y
+
+
 ## Where its shots leave.
 func muzzle() -> Vector3:
 	return _muzzle.global_position if _muzzle else global_position + Vector3.UP * fit.eyes
@@ -632,7 +641,7 @@ func hit(at: Vector3, direction: Vector3, amount := 0.0) -> void:
 	_hurt_at = _time
 	if _time - _flinched > 0.22:
 		_flinched = _time
-		var high: bool = at.y - global_position.y > fit.head
+		var high: bool = at.y > head_start()
 		_tree.set(FLINCH_CLIP, "hit_head" if high else "hit_chest")
 		_tree.set(FLINCH, AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 	if _time - _cried > 0.5:

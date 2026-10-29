@@ -4862,3 +4862,199 @@ In de eerste ronde van de trunk stond het spel na het begin van de wedstrijd nog
 - **Samen spelen** heb ik alleen met `tools/nettest.sh` op één machine getest; een gast die bij een wedstrijd van een ander laadt, wacht niet op het begin van die wedstrijd (dat zegt de host) en ziet het scherm dus eerder gaan.
 - **De eerste keer na een update van macOS** worden de shaders opnieuw gecompileerd (zie "Soldaten: vlugger naarmate het moeilijker is"): dat gebeurt nu deels op de threads van de loader en voor de rest onder het laadscherm, maar ik heb het niet kunnen meten zonder de cache van macOS weg te gooien.
 - **Andere levels** heb ik alleen in de selftest geladen, niet op de GPU gemeten; de fabriek tot en met de Alpen gaan langs dezelfde weg.
+
+## Speelpunten: headshots, spawns, bots die dekking zoeken, een hek en een granaat
+
+Op 27 oktober 2026 gevraagd: een jeep tegen een hek geeft "een flauw bliepje" in plaats van een crash; een handgranaat klinkt overstuurd, en er zijn betere geluiden in open bibliotheken; in de duinen lijken headshots niet te werken ("zelfs met de sniper twee keer op het hoofd"), kijk of dat in andere maps ook zo is; bots komen van ver in een rechte lijn, vaak naast elkaar, op je af; in wedstrijden met veel bots komen ze steeds op dezelfde plek terug; en minstens vijf wapens per wapenset, die bij het thema passen. Branch `speelpunten`; de wapensets zijn gebouwd op branch `wapensets` (zie verderop).
+
+### Headshots
+
+**Wat er mis was.** Of een schot op het hoofd is, hing af van een vaste hoogte boven de voeten: 1,36 m voor een soldaat in een wedstrijd (`SOLDIER` in `scripts/puppet.gd`), en voor een soldaat op de route de hoogte van zijn hoofd zoals hij stil staat (`fit.head` in `scripts/humanoid_rig.gd`, in de duinen 1,49 m). Maar een soldaat die richt, buigt zijn hoofd naar zijn vizier, en een die rent buigt voorover: dan zakt zijn hoofd tot 15 cm onder die grens, en een schot midden op zijn hoofd telde als een schot in het lijf. Met de Marksman (70, ×2,5 op het hoofd) is dat het verschil tussen één en twee schoten.
+
+**Gemeten** zonder GPU, met een probe die tijdens het vechten van 15 m stralen op het midden van elk hoofd en op elke borst schoot (soldaten, normaal, 30 s):
+
+| Treffers op het midden van het hoofd die als lijf telden | Duinen | Fabriek |
+|---|---|---|
+| Wedstrijd | 107 van 641 (17%) | 20 van 143 (14%) |
+| Route, soldaat die je gezien heeft en richt | 121 van 295 (41%) | – (in de fabriek zag geen van hen de speler) |
+| Route, soldaat die je niet gezien heeft | 2 van 464 | 0 van 132 |
+
+Het zit dus niet in de duinen maar in de soldaten, en in elke map; in de duinen schiet je meer op soldaten die richten. Robots hebben het niet: hun hoofd zit ruim boven hun grens.
+
+**Nu** vraagt de figuur waar zijn hoofd op dit moment begint (`HumanoidRig.head_start()`: het bot van het hoofd, 2 cm lager), en daar kijken `is_headshot()` van `scripts/enemy.gd` en `scripts/puppet.gd` naar; robots houden hun vaste grens. In dezelfde meting telt nu elke treffer op het midden van het hoofd als headshot, en geen enkele op de borst. Een figuur die verder dan 30 m staat, zet zijn houding maar om het tweede of derde beeld (`POSED`): het hoofd loopt dan een beeld achter.
+
+**Wat er overblijft**: in een wedstrijd ging 6% van de stralen op het midden van het hoofd langs de capsule, als het hoofd bij het rennen voorbij zijn lijf hangt. Een eigen bol voor het hoofd zou dat oplossen; niet gedaan.
+
+### Waar wie valt terugkomt
+
+**Wat er mis was.** `Arena.pick()` koos telkens uit dezelfde drie beste plekken, en in de duinen liggen de plekken 7 m uit elkaar: wie terugkwam, stond op precies hetzelfde punt als de vorige. In een wedstrijd van twintig tegen twintig met de speler erin (150 s, de speler staat stil) kwam de andere kant 169 keer terug, op 8 plekken van 30 m, 62% op één ervan: (239, 169) 35 keer en (232, 176) 30 keer.
+
+**Nu** (`scripts/arena.gd`):
+
+- Wie terugkomt maakt de grond binnen 30 m waar hij terugkwam minder waard voor de volgende twaalf (25 m, gerekend als afstand tot het front).
+- Er wordt uit de beste zes getrokken in plaats van drie, en wie terugkomt staat ergens op de grond van die plek, tot halverwege de volgende, waar plaats is, niemand staat en geen vijand het ziet.
+- Een mens ziet een plek tot 300 m (`WATCHED_FROM`), een bot tot 80 m zoals eerst: wie door een kijker ligt te loeren, ziet niemand meer terugkomen. Daarvoor gaat er een lijst `watchers` mee door `come_back()` van de soorten wedstrijd.
+
+In dezelfde proef: 158 keer terug op 28 plekken, de drukste 13%; 80% op 11 plekken (eerst 3). De wedstrijdtest blijft slagen: wie terugkomt staat bij het gevecht en bij een maat (vijand minstens 40 m, in het midden 55 m; maat in het midden 22 m).
+
+### Bots die van dekking naar dekking gaan
+
+**Wat er mis was.** Ziet één bot je, dan weet zijn hele kant waar je bent (`Match.seen()`), en elke bot die niemand ziet sprintte over het navmesh naar die plek: over open zand dezelfde weg, naast en achter elkaar. Een bot die je zag maar te ver weg was voor zijn wapen, liep recht op je af.
+
+**Nu** (`_advance()` en `_next_bound()` in `scripts/bot.gd`): verder dan 25 m (`CLOSES_IN`) gaat een bot niet recht op zijn doel af maar in sprongen van 8 tot 24 m naar een plek van de arena die vanaf het doel niet te zien is (achter een boom, een duinrug, een muur; van de 24 plekken die hem het verst brengen de eerste die dekking geeft, met een straal elk). Elke bot heeft een eigen baan, tot 30 m opzij van de rechte weg, die smaller wordt naarmate hij dichterbij komt; een plek waar een maat staat of heen gaat telt minder. Achter elke dekking wacht hij 0,8 tot 2 s, op één knie als hij een soldaat is (een `CROUCHED` die de pop van een bot nu ook laat zien en waarmee zijn capsule lager wordt; een mens die bukt laat zijn pop staan zoals eerst, want een figuur op één knie kan niet lopen). Wie hem ziet en in bereik is, vecht zoals eerst.
+
+**Gemeten** zonder GPU, drie keer om en om twintig tegen twintig in de duinen (120 s per keer, makkelijk), de speler onkwetsbaar in het midden en elke 3 s te horen voor de hele andere kant; geteld zijn de bots van die kant tussen 40 en 200 m die dichterbij komen of knielen, om de halve seconde:
+
+| | Trunk | Deze branch |
+|---|---|---|
+| ... die de speler vrij ziet | 42 / 50 / 35% | 38 / 32 / 39% |
+| ... met een tweede binnen 4 m | 41 / 36 / 36% | 14 / 14 / 20% |
+| ... die stilstaat of knielt | 6 / 2 / 5% | 31 / 28 / 29% |
+| Keer dat een bot vastliep | 524 / 318 / 416 | 390 / 220 / 416 |
+
+Ze komen dus verspreid, en een derde van de tijd achter iets; ze doen er ook langer over (twee keer zoveel tellingen tussen 40 en 200 m), dus de speler ziet ze vaker in totaal maar minder per keer. Van de knielende zag de speler er nog een derde: in open zand is er niet altijd dekking binnen 24 m, en dan gaat hij naar de plek die hem het verst brengt. Daarna is het aantal plekken dat hij bekijkt van 10 naar 24 gegaan en het wachten van 1–3 naar 0,8–2 s; twee keer om en om daarmee: vrij gezien 39 / 46% tegen 41 / 35%, een tweede binnen 4 m 43 / 42% tegen 17 / 16%, van de knielende nog steeds een derde tot twee vijfde gezien.
+
+**Een fout uit de trunk onderweg**: het navmesh van de duinen ligt tot 0,6 m boven het zand, en een bot telde een hoek van zijn weg pas als bereikt binnen 0,6 m, in drie dimensies: een hoek die zo hoog lag bereikte hij nooit, en hij draaide er rondjes om (zichtbaar als bots die op de plek trappelen). Nu telt een hoek 0,35 m lager en binnen 0,8 m (`path_height_offset`, `path_desired_distance`). Wat nog vastloopt staat tegen een helling die steiler is dan een bot kan lopen terwijl het navmesh zegt dat het kan; ook dat zit in de trunk.
+
+### Een hek, prikkeldraad, een slagboom
+
+**Wat er klonk.** Een voertuig dat ergens tegenaan rijdt, speelt `vehicle_crash`, waarvan 77 tot 98% van wat er klinkt onder de 200 Hz zit: op de luidsprekers van een laptop blijft daar weinig van over. Een rol prikkeldraad die platgereden wordt speelde `clang` (een dreun van 80 Hz) en `impact_metal`: een toon van 0,26 s op 2.655 Hz, het bliepje. Een slagboom die knapt `crate_break` en `clang`.
+
+**Nu**: een voertuig onthoudt welk hek het raakt (`_touch_fences()` in `scripts/vehicle.gd`: een dun blok van metaal of hout, zoals de bouwdoos een hek, een poortvleugel of een railing maakt, dunner dan 25 cm) en laat bij een botsing het hek horen, nooit zachter dan −6 dB, met de klap van het voertuig 6 dB eronder. Opnamen van Freesound (CC0, 14 previews, 3,3 MB, met naam in `credits` van de packs `freesound_explosions` en `freesound_fences` in `assets/manifest.json`):
+
+- `fence_crash`: een metalen hek dat hard geraakt wordt, met het rammelen van gaas erover. Variant `fence_crash_b`: een dieseltruckje dat door een hek rijdt.
+- `fence_crash_wood`: een oude auto die door een houten hek gaat, met hout dat breekt; voor de hekken van de Alpen en de slagboom.
+- `wire_crush`: gaas dat geschud en gesleept wordt over een paal die geraakt wordt, voor de rol prikkeldraad.
+
+`tools/test_vehicles.sh` heeft een deel `fence`: een jeep die tegen een hek van gaas rijdt hoort het als hek, en een muur niet.
+
+### De granaat
+
+**Wat er mis was.** De takes van `explosion` (Kenney's sci-fi "explosionCrunch" met punch 3, drive 2 en een glue erover) hadden een crestfactor van 2 dB: een blok ruis. In het spel klinkt de knal op +6 dB (`scripts/blast.gd`) door de clipper van de World-bus, zodat het geheel 1,7 s op −6 tot −9 dB stond en dan wegviel.
+
+**Nu**: opnamen van echte explosies, waaronder een handgranaat (unfa, "medium-sized, meaty, realistic"), zoals ze zijn, met een klop voor het gewicht en een rommel die drie seconden naloopt. Van de acht gedownloade opnamen waren er vier zelf al geclipt of platgedrukt (crestfactor 1,3 tot 3 dB, platte toppen); die zitten er niet in of alleen als laag. Drie varianten om op het oor te kiezen: `explosion` (a, natuurlijk), `explosion_b` (zwaarder en langer, met een schokgolf eronder; zo luid als de oude en dus dieper in de clipper) en `explosion_c` (korter en scherper, met scherven die na een kwart seconde neerkomen). Het spel speelt `explosion`; `tools/hear.py grenade b` speelt de granaat met variant b, en `tools/hear.py grenade` laat de knal nu op het niveau horen waarop het spel hem speelt, met de hele staart.
+
+### Getest
+
+`tools/selftest.sh` (op het deel van de Alpen na, dat de levelbestanden mist die niet in git staan; met die bestanden uit de hoofdcheckout slaagt `--level=alps`), `tools/test_match.sh`, `tools/test_humanoid.sh` en `tools/test_vehicles.sh` slagen. Alles zonder GPU; laptop met load 2 tot 8, met een tweede sessie die wapens bouwde.
+
+### Wat ik niet kon beoordelen
+
+- **Hoe het klinkt.** De hekken en de granaat heb ik alleen gemeten: crestfactor, spectrum, waar het tegen de clipper zit. Welke variant, en of een hek nu als hek klinkt, is aan zijn oor.
+- **Of de bots nu beter voelen.** Het getal "naast elkaar" is gehalveerd; of ze daardoor moeilijker te raken zijn, en of ze niet te traag komen, merk je alleen door te spelen. De getallen (25 m, 8–24 m, 30 m baan, 0,8–2 s) zijn van mij.
+- **Waar ze terugkomen.** 300 m voor een mens is een gok; over de kaart van de duinen zie je nu minder vaak iemand verschijnen, maar het blijft een kans.
+- **Een hek** in de duinen: ik weet niet zeker welk "hek" hij bedoelde. De poortvleugels van het complex zijn dunne metalen platen en vallen eronder, de rollen prikkeldraad en de slagboom hebben elk een eigen geluid gekregen.
+
+## Vijf wapens in elk pakket
+
+Op 27 oktober 2026 gevraagd: elk pakket moet minstens vijf wapens hebben die bij het pakket passen. Standaard en Stil hadden er vijf, Van dichtbij en 1944 vier, Ver weg en Zwaar drie, Alleen pistolen vier. Wat erbij komt is gekozen door de leidende sessie (die van `speelpunten`); ik heb het gebouwd. Branch `wapensets`, vanaf de trunk op d9b96e4. Niet gemerged, niet gespeeld.
+
+| Pakket | Erbij | Op toets |
+|---|---|---|
+| Van dichtbij | automatisch hagelgeweer (nieuw) | 5 |
+| Ver weg | scherpschuttersgeweer (bestond) en antimaterieelgeweer (nieuw) | 4 en 5 |
+| 1944 | M1 Garand (nieuw) | 5 |
+| Zwaar | automatisch hagelgeweer en gevechtsgeweer (bestond) | 4 en 5 |
+| Alleen pistolen | handkanon (nieuw) | 5 |
+
+- **De wapens die er al waren houden hun toets**; de nieuwe komen erachter. Daardoor staat in 1944 de Garand na de Colt op 5 en in Zwaar de revolver tussen de hagelgeweren op 3, zoals in Standaard het pistool op 2. Ook de lijsten voor bots (`bots`, en in 1944 `far`) en de zin uitleg zijn bijgewerkt; die zin is de tooltip op het scherm Multiplayer. Alleen pistolen houdt zijn regel: geen `sidearm`, zodat het blad elk pistool als wapen weegt ("Five pistols and your fists").
+- **In de wapenkast** (`scripts/armory.gd`) staan de vier achteraan, op 22 tot 25. Omdat een pakket nu andere wapens heeft en een gast met een oud `packs.json` dus iets anders zou dragen dan de host, is `Net.VERSION` 15.
+
+### De vier nieuwe wapens
+
+| | Per treffer | Per minuut | Magazijn | Herladen | Richten | Bijzonder |
+|---|---|---|---|---|---|---|
+| Automatisch hagelgeweer (`auto_shotgun`) | 8 × 12, afnemend van 8 tot 22 m | 300, automatisch | trommel van 20 | 3,2 s | 0,22 s | lopen op 90%, wisselen 0,45 s; geen bloom, wel 2,6° terugslag per schot |
+| Antimaterieelgeweer (`anti_materiel`) | 150, op 600 m nog 105: één treffer in het lijf op elke afstand | 60, halfautomatisch | 5 | 3,6 s | 0,45 s, door een kijker van 24° en tikken naar 7° | lopen op 85%, wisselen 0,6 s, 7,5° terugslag (het beeld schudt), 5° vanaf de heup |
+| M1 Garand (`garand`) | 55, tot 52 m twee treffers | 300, halfautomatisch | klem van 8 | 2,0 s | 0,22 s, door een diopter | herladen pas als de klem leeg is; de laatste kogel gooit de klem eruit, met een ping |
+| Handkanon (`hand_cannon`) | 52, tot 26 m twee treffers | 240, halfautomatisch | 7 | 1,9 s | 0,16 s | 5,5° terugslag, 2,4° vanaf de heup: een wapen om te richten |
+
+**De klem van de Garand** (`en_bloc` in `scripts/weapon_data.gd`, gebruikt in `scripts/weapons.gd`):
+
+- Met een kogel of meer in de klem doet herladen niets, ook niet met R.
+- De laatste kogel gooit de lege klem omhoog en naar rechts het beeld uit (een stalen klem van 52 mm die tolt, stuitert en blijft liggen zoals een huls, `Fx.casing(..., clip)`), en 0,06 s na de knal klinkt de ping (`garand_ping`). De grendel blijft open staan tot de volgende klem erin zit.
+- Herladen: de klem is weg uit het beeld; de linkerhand brengt een nieuwe van boven in het open bovenstuk en drukt hem erin (`garand_mag_in` op 72%), de grendel slaat dicht (`garand_bolt` op 88%). Er klinkt geen magazijn dat eruit gaat, want dat is er niet.
+- Een ping van een ander hoor je niet: de pop van een medespeler of bot telt zijn kogels niet. Een bot met een Garand herlaadt ook halfvol, zoals bots dat met elk wapen doen; dat zit in `scripts/bot.gd`, waar ik vanaf ben gebleven.
+
+**De modellen** (`tools/models/weapons.gd`, `tools/build_model.sh weapons` en `held`), elk met de handschoen en een versie voor wie het een ander ziet dragen:
+
+- **Automatisch hagelgeweer** (6 688 driehoeken), naar de AA-12: een lange kast die recht doorloopt in de kolf, een rail met diopter en korrel in een kap, een kunststof handguard met sleuven, een korte loop met een mondingsrem met drie poorten per kant, en een trommel van 20 onder de kast (het deel `Mag`). De laadhendel links gaat met de grendel mee. De linkerhand pakt de trommel bij het wisselen aan de zijkant, zoals bij de PPSh.
+- **Antimaterieelgeweer** (8 264), naar de Barrett M82: een lange bovenkast van plaatstaal met vensters langs de voorste helft en gaten bovenop, een onderkast met een doos van tien .50-patronen, een zware gecanneleerde loop met de pijlpunt van de dubbele mondingsrem, een tweepoot naar voren geklapt, een lange rail met de kijker van het scherpschuttersgeweer hoger erop, en een kolf met een dik kussen en een monopod.
+- **M1 Garand** (3 592): notenhout tot de voorste band, twee bovenste handguards met banden, een bovenstuk dat open is waar de klem zit (in beeld zie je de bovenste twee patronen in hun klem), de handgreep van de stang rechts, een diopter met twee knoppen achter en een korrel tussen oren op de gascilinder. De klem is het deel `Mag`, omgekeerd, zodat herladen hem van boven brengt.
+- **Handkanon** (2 612), naar de Desert Eagle: een groot stalen frame met een haan, achter de slede met groeven en het achtervizier, ervoor de vaste loop, driekant van boven met een rail waarop de korrel staat; rubberen greepplaten met ribbels.
+- **Gezien**: `benchmark/sheets/wapensets.jpg`, elk vanaf de heup in de fabriek, en de vier modellen voor anderen naast elkaar. Niet gericht, niet tijdens het herladen en niet in de handen van een soldaat: de figuur houdt ze aan de markers `HandR`/`HandL` die dezelfde handen maken als bij de andere wapens.
+
+### Geluid
+
+Alles gemaakt uit de opnamen die in de cache stonden (de bibliotheek van vuurwapens, Kenney, de metalen geluiden), niets gedownload. Elk schot in twee varianten, op het oor te kiezen; het spel speelt de eerste.
+
+| Geluid | A (in het spel) | B |
+|---|---|---|
+| Automatisch hagelgeweer | de Mossberg van dichtbij, de Nova erover, het lijf van de Model 12, een diepe dreun; een kortere rommel dan het pompgeweer (op 0,5 s −44 dB tegen −30), omdat er vijf per seconde volgen | de Mossberg vertraagd met de knal van de AK-47 erover: meer machine |
+| Antimaterieelgeweer | de Mosin vertraagd tot 72%, de klap van de Nova vertraagd eronder, de lage kant van de Carl Gustav, een dreun en een rommel van vier seconden, een echo na een halve seconde; luider dan elk schot waarmee ik het vergeleek (de eerste 100 ms −3,6 dB, het grendelgeweer −7,8, het pompgeweer −7,9) | de Mossberg vertraagd tot 62% voor de klap van de rem, met de knal van de Mosin erover |
+| M1 Garand | de Mosin (een geweer uit dezelfde oorlog met bijna dezelfde patroon), de knal van de SKS erover, de lage kant van de Carl Gustav, een dreun, een rommel en een echo | de SKS (een halfautomaat zoals de Garand) vertraagd tot 85%, over de lage kant van de Mosin |
+| De ping | een lichte tik van metaal (Kenney) met drie tonen die uitsterven, 2,9, 4,7 en 7,4 kHz, de hoogste eerst, en het getril van een veer; 0,6 s | lager en langer: 2,4, 3,7 en 6,1 kHz onder een felle tik, 0,9 s |
+| Handkanon | de Colt vertraagd tot 72%, met de knal van de Mosin erover en de klap van de Nova eronder, een diepe dreun en een rommel; luider en voller dan de revolver | de Mosin vertraagd en kort afgesneden, een geweerpatroon uit een korte loop |
+
+Herladen: eigen geluiden voor de klem en de grendel van de Garand, de doos en de laadhendel van het antimaterieelgeweer (de pomp van het hagelgeweer vertraagd met een klap), de trommel van het hagelgeweer (met rammelende patronen), en het magazijn en de slede van het handkanon (die van het pistool, lager).
+
+Gemeten na de mix van `tools/hear.py`: in de 0,2 s na de achtste kogel van de Garand zit 7 tot 9 dB meer boven 2 kHz dan na de zevende; de ping komt dus boven de staart van het schot uit. Of hij als "ping" klinkt, hoor jij.
+
+### De balans
+
+`tools/weapon_sheet.py`, de bladen `benchmark/sheets/weapons_<pakket>.png`. Waar elk wapen het snelst is (gericht, vanaf de heup, en beide lopend):
+
+- **Van dichtbij**: dubbelloops tot 6 m, **hagelgeweer vanaf de heup 7 tot 9 m** (twee ladingen in 0,2 s; lopend 6 tot 7 m), machinepistool gericht 6 tot 11 m, pistoolmitrailleur tot 22 m, revolver daarboven. Gericht is het hagelgeweer nergens het snelst (0,42 s tot 10 m, het machinepistool 0,34 tot 0,39).
+- **Ver weg**: gevechtsgeweer tot 50 m, het grendelgeweer en **het antimaterieelgeweer gelijk van 51 tot 120 m** (beide één treffer, 0,45 s richten). Voorbij 124 m heeft het grendelgeweer er twee nodig (1,78 s) en het antimaterieelgeweer nog steeds één; het blad houdt op bij 120 m. **Het scherpschuttersgeweer is in dit pakket nergens het snelst**: waar het met twee treffers doodt (0,65 s), doet het grendelgeweer het met één, en het gevechtsgeweer is met drie treffers op 330 per minuut nog sneller (0,60 s). Het blad noemt dat als fout.
+- **1944**: trench gun tot 6 m, PPSh vanaf de heup 8 tot 17 m, **Garand gericht 7 tot 52 m** (0,42 s) en voorbij 80 m, de Mosin gericht 53 tot 80 m. De Mosin had eerst alles van 7 tot 80 m; nu is hij het geweer voor ver weg.
+- **Zwaar**: pompgeweer tot 6 m, **hagelgeweer gericht 7 tot 11 m en lopend vanaf de heup 5 tot 12 m**, gevechtsgeweer daarboven. **De lichte mitrailleur is in dit pakket nergens meer het snelst**: het gevechtsgeweer doodt gericht in 0,42 s waar de mitrailleur 0,56 s nodig heeft, op elke afstand. Wat de mitrailleur heeft (100 kogels, weinig terugslag) telt het blad niet; op de schietbaan van de selftest was het gevechtsgeweer op 40 m ook met terugslag sneller (0,45 tegen 0,93 s gedoseerd).
+- **Alleen pistolen**: machinepistool tot 11 m, **handkanon gericht 12 tot 26 m** (0,41 s), M1911 tot 46 m, revolver 47 tot 62 m; het pistool houdt vanaf de heup 12 tot 23 m.
+
+Twee fouten op de bladen dus, en beide komen door een wapen dat er al was en nu in een tweede pakket ligt. Ik heb aan geen bestaand wapen iets veranderd: het scherpschuttersgeweer ligt ook in Standaard, het gevechtsgeweer ook in Ver weg, en het grendelgeweer is het enige wat alleen in Ver weg ligt. Wat ik uitrekende, voor wie dat wil beslissen:
+
+- **Ver weg.** Het scherpschuttersgeweer krijgt alleen een band als zowel het grendelgeweer als het gevechtsgeweer daar langzamer zijn. Het grendelgeweer met één treffer tot 92 m in plaats van 124 m (`falloff_start` 75, `falloff_end` 150) helpt niet: van 93 tot 120 m wint dan het gevechtsgeweer met drie treffers (0,60 s) en niet het scherpschuttersgeweer (0,65 s). Wat wel kan: een eigen scherpschuttersgeweer voor Ver weg (sneller richten of 2 treffers op hogere snelheid), of het gevechtsgeweer uit Ver weg.
+- **Zwaar.** Het gevechtsgeweer eruit en een ander wapen erin, of de mitrailleur zo veranderen dat hij gericht onder 0,42 s komt (bijvoorbeeld 0,2 s richten en 900 per minuut: 0,40 s).
+- **Het antimaterieelgeweer** richt even snel als het grendelgeweer (0,45 s), zodat ze op het blad van 51 tot 120 m samen het snelst zijn. Langzamer richten (wat bij "traag" zou passen) maakt het op het blad nergens het snelst binnen 120 m; wat het geweer onderscheidt (één treffer voorbij 124 m, halfautomatisch, een kijker met twee standen) ligt buiten het blad. Zwaarder is het wel op alles wat het blad niet telt: lopen op 85%, wisselen 0,6 s, herladen 3,6 s, 7,5° terugslag.
+
+**Op de schietbaan** van de selftest (5 m, met terugslag) doen alle vier wat het blad zegt: hagelgeweer 2 ladingen in 0,21 s, antimaterieelgeweer 1, Garand 2 in 0,21 s, handkanon 2 in 0,26 s.
+
+**Kills per wapen in een potje van bots**, `tools/test_match.sh --pack=<naam> --only-bots`: twaalf bots, vijf minuten team deathmatch op het fabrieksterrein (80 s op vier keer de klok). Aandeel van de kills, tussen haakjes het aandeel van de bots dat het draagt:
+
+| Pakket | Kills | Wapens van de bots | Speciaal, slagen, ontploffingen |
+|---|---|---|---|
+| Van dichtbij | 128 | pistoolmitrailleur 38% (33%), **hagelgeweer 30% (33%)**, machinepistool 11% (17%), dubbelloops 8% (17%) | minigun 7%, rest 5% |
+| Ver weg | 229 | gevechtsgeweer 47% (50%), **antimaterieelgeweer 17% (17%)**, grendelgeweer 15% (17%), scherpschuttersgeweer 10% (17%) | minigun 7%, rest 4% |
+| 1944 | 160 | **Garand 39% (33%)**, PPSh 28% (33%), Mosin 18% (17%), trench gun 5% (17%) | minigun 6%, rest 5% |
+| Zwaar | 138 | gevechtsgeweer 46% (33%), mitrailleur 23% (33%), **hagelgeweer 7% (17%)**, pompgeweer 6% (17%) | minigun 10%, rest 8% |
+| Zwaar, nog eens | 115 | gevechtsgeweer 38%, mitrailleur 25%, **hagelgeweer 17%**, pompgeweer 10% | minigun 5%, rest 4% |
+| Alleen pistolen | 110 | **handkanon 46% (33%)**, pistool 14% (17%), revolver 14% (17%), M1911 13% (17%), machinepistool 5% (17%) | minigun 6%, rest 2% |
+
+Geen wapen haalt meer dan twee keer zijn deel. Het handkanon haalt er 1,4 keer zijn deel (bots richten op de borst en hebben geen last van terugslag, en een bot met een handkanon vecht op 14 m, waar het met twee treffers doodt), de Garand 1,2 keer. De hagelgeweren blijven op dit open terrein onder hun deel, zoals eerder het pompgeweer en de dubbelloops; het automatische in Zwaar ging van 7 naar 17% tussen twee potjes, dus een potje zegt weinig over één wapen. In Zwaar doet het gevechtsgeweer meer dan de mitrailleur, zoals het blad al zei.
+
+### Getest
+
+- `tools/selftest.sh`: 596 controles, geslaagd, waarvan drie nieuw: met een kogel in de klem van de Garand doet herladen niets; de laatste kogel gooit de klem eruit (één klem in de lucht), de grendel blijft open en de klem is uit beeld, en `garand_ping` bestaat; daarna gaat er een hele klem in, acht tegelijk, en gaat de grendel dicht. De controle dat elk pakket aangeboden wordt met twee tot vijf wapens slaagt voor alle zeven. Op de schietbaan op 5 m komen alle vier overeen met het blad.
+- `tools/test_match.sh`: 122 controles, geslaagd; het scherm biedt alle zeven pakketten, en in een potje met 1944 draagt de speler PPSh, Mosin, trench gun, M1911 en Garand op 1 tot 5.
+- `tools/test_match.sh --pack=<naam> --only-bots` voor de vijf pakketten die veranderden, zie hierboven.
+- Niet gedraaid: `tools/nettest.sh` (het wapen gaat als zijn plaats in de kast over de lijn, als getal, niet in een beperkt aantal bits, en dat test de selftest al) en `tools/selftest.sh --balance` (de schietbaan op alle afstanden).
+- **Laptop**: aan een lader van 30 W met de accu vol, load 5; er draaiden tegelijk tests van `speelpunten` (selftest, humanoid), zonder GPU. Op de GPU alleen de vijf beelden van het blad, met het slot, zonder ander spel of editor open.
+
+### Wat ik niet kon beoordelen
+
+- **Hoe het klinkt.** Niets is beluisterd; alles is gemeten op niveau en op wat erin zit. Vooral de ping: drie gesynthetiseerde tonen over een echte tik (A) of een lagere, langere ring (B). Te horen met de commando's hieronder.
+- **Hoe het eruitziet in beweging**: het herladen van de Garand (de hand die de klem van boven brengt), de trommel die wisselt, de klem die eruit vliegt, de terugslag van het antimaterieelgeweer en het handkanon. Alleen als stilstaand beeld vanaf de heup.
+- **De richtlijn**: de hoogte waarop het oog gericht staat (`ads_offset`) is uitgerekend uit de hoogte van het vizier, niet bekeken. Het antimaterieelgeweer kijkt door de kijker die de HUD tekent; de Garand door de ring van zijn diopter, het hagelgeweer door de ring op zijn rail, het handkanon over zijn rail.
+- **Een soldaat met deze wapens**: niet gezien, alleen de modellen los.
+- **Of het leuk is**: of het hagelgeweer met 2,6° terugslag op vijf schoten per seconde te beheersen is, of het antimaterieelgeweer met 7,5° en schudden niet te veel is, en of het handkanon met 5,5° op 0,25 s tussen de schoten nog een tweede treffer haalt op 20 m. Het blad telt geen terugslag.
+- **Merge**: wie dit in de hoofdcheckout zet, kloont de nieuwe geluiden uit `.godot/imported/` van deze worktree mee (`garand_*`, `auto_shotgun_*`, `anti_materiel_*`, `hand_cannon_*`), anders importeert de editor ze opnieuw.
+
+### Wat Michiel kan beluisteren en bekijken
+
+Vanuit de worktree (`cd /Users/michielvandeningh/dev/Graphics/.claude/worktrees/wapensets`):
+
+- `tools/hear.py garand` (een hele klem, de ping, de volgende klem erin en twee schoten), `tools/hear.py garand b a` (schot B), `tools/hear.py garand a b` (ping B), `tools/hear.py reload garand`
+- `tools/hear.py auto_shotgun_shot 300` en `auto_shotgun_shot_b 300`, `tools/hear.py reload auto_shotgun`
+- `tools/hear.py anti_materiel_shot` en `anti_materiel_shot_b`, `tools/hear.py reload anti_materiel`
+- `tools/hear.py hand_cannon_shot 240` en `hand_cannon_shot_b 240`, `tools/hear.py reload hand_cannon`
+- Het blad met de vier in beeld en voor anderen: `benchmark/sheets/wapensets.jpg`; de balans: `benchmark/sheets/weapons_<pakket>.png`.
+- Spelen, met een venster, vanuit de worktree: `GODOT_WINDOW=1 tools/godot.sh -- --pack=1944` (of `close`, `far`, `heavy`, `pistols`) draagt dat pakket op de route; of een potje op het scherm Multiplayer met Weapons op dat pakket. De branch staat op de trunk van d9b96e4.

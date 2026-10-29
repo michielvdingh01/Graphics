@@ -38,8 +38,8 @@ func fell(_who: RefCounted) -> void:
 
 ## Where `who` comes back, with their enemies at `foes` and their own at
 ## `friends`.
-func come_back(_who: RefCounted, foes: PackedVector3Array, friends: PackedVector3Array) -> Transform3D:
-	return host.arena.pick(foes, friends)
+func come_back(_who: RefCounted, foes: PackedVector3Array, friends: PackedVector3Array, watchers: PackedVector3Array) -> Transform3D:
+	return host.arena.pick(foes, friends, PackedInt32Array(), watchers)
 
 
 ## Where a bot that sees nobody should go, or null if that is up to itself.

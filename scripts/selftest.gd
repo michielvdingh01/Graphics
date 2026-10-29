@@ -1013,7 +1013,39 @@ func _minigun(weapons: Node3D) -> void:
 	_check("let go of, it says what it had left", dropped.size() == 2 and dropped[0] == minigun and dropped[1] == 100 and weapons.special() == null)
 	weapons.special_spent.disconnect(note)
 	await _wait(1.0)
+	await _clip(weapons)
 	await _rocket_launcher(weapons)
+
+
+## A weapon loaded by a clip, the M1 Garand of 1944: with a round left in it
+## a reload does nothing; its last round throws the clip out, with a ping,
+## and the action stays open; then the next clip goes in, eight at once.
+func _clip(weapons: Node3D) -> void:
+	var carried: Array[WeaponData] = weapons.loadout.duplicate()
+	var garand: WeaponData = ARMORY.named("garand")
+	var alone: Array[WeaponData] = [garand]
+	weapons.equip(alone, Vector2i(0, 0))
+	await _wait(garand.switch_time + 0.1)
+	var reserve: int = weapons._reserves[0]
+	var clips := func() -> int:
+		return Fx._casings.filter(func(thrown: Dictionary) -> bool: return is_instance_valid(thrown.node) and thrown.node.mesh == Fx._clip_mesh).size()
+	for i in garand.mag_size - 1:
+		weapons._fire(garand)
+	weapons._start_reload()
+	_check("a clip is not topped up: with a round left in it a reload does nothing", weapons._reload_left <= 0.0 and weapons._mags[0] == 1)
+	var before: int = clips.call()
+	weapons._fire(garand)
+	await _wait(0.15)
+	var model: Object = weapons._models[0]
+	print("    M1 Garand: %d clip in the air after the last round, the action %s, the clip in view %s" % [clips.call() - before, "open" if weapons._locked > 0.9 else "shut", model.mag.visible])
+	_check("its last round throws the clip out with its ping, and the action stays open", clips.call() == before + 1 and Sfx.has(&"garand_ping")
+		and weapons._locked > 0.9 and not model.mag.visible)
+	weapons._start_reload()
+	await _wait(garand.reload_time + 0.2)
+	_check("then a whole clip goes in, eight at once, and the action closes", weapons._mags[0] == garand.mag_size and weapons._reserves[0] == reserve - garand.mag_size
+		and model.mag.visible and weapons._locked < 0.1)
+	weapons.equip(carried, ARMORY.grenades(ARMORY.STANDARD))
+	await _wait(0.3)
 
 
 ## The other weapon of the arena: one round in the tube and two to come, each

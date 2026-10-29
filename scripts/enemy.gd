@@ -419,6 +419,9 @@ func preview(pose: float) -> void:
 
 
 func is_headshot(hit_position: Vector3) -> bool:
+	# A character's head is where its rig has it, see HumanoidRig.head_start().
+	if _rig and _rig.has_method(&"head_start"):
+		return hit_position.y > _rig.head_start()
 	return hit_position.y - global_position.y > head_start - (_drop if _crouched else 0.0)
 
 

@@ -81,6 +81,15 @@ const RIGHTING := 2.5
 ## something, and the seconds after one before the next is heard.
 const BUMP := 1.6
 const BUMP_GAP := 0.25
+## A fence it runs into is heard as one: wire that rattles or wood that
+## splinters, never softer than this in dB, and the thump of the vehicle 6 dB
+## under it. What it touched this many seconds before a bump counts. A
+## fence is what the kit builds it of: a box of metal or wood thinner than
+## FENCE_THIN metres.
+const FENCE_LEAST := -6.0
+const FENCE_TOUCHED := 0.15
+const FENCE_THIN := 0.25
+const FENCES := {"metal": &"fence_crash", "wood": &"fence_crash_wood"}
 ## Seconds after somebody has been run over before the same body can be run
 ## over again.
 const RUN_OVER_AGAIN := 0.8
@@ -191,6 +200,10 @@ var _still_for := 0.0
 var _over_for := 0.0
 var _last_velocity := Vector3.ZERO
 var _bumped := 0.0
+## The fence it last touched, as a sound of FENCES, where and when.
+var _fence := &""
+var _fence_at := Vector3.ZERO
+var _fence_when := -1.0
 var _run_over := {}
 var _misfire := 0.0
 var _misfire_in := 1.0
@@ -1078,6 +1091,24 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.linear_velocity += Vector3.UP * GRAVITY * 0.9 * state.step
 	if absf(state.transform.basis.y.y) > 0.9:
 		_over_for = 0.0
+	_touch_fences(state)
+
+
+## Notes a fence among what it touches this step, for _crashes() to hear.
+func _touch_fences(state: PhysicsDirectBodyState3D) -> void:
+	for i in state.get_contact_count():
+		var body := state.get_contact_collider_object(i) as CollisionObject3D
+		if body == null or body.get_shape_owners().is_empty():
+			continue
+		var owner := body.shape_owner_get_owner(body.shape_find_owner(state.get_contact_collider_shape(i))) as CollisionShape3D
+		if owner == null or not owner.shape is BoxShape3D:
+			continue
+		var size := (owner.shape as BoxShape3D).size
+		var sound: StringName = FENCES.get(owner.get_meta(&"surface", ""), &"")
+		if sound != &"" and minf(size.x, size.z) < FENCE_THIN:
+			_fence = sound
+			_fence_at = state.get_contact_collider_position(i)
+			_fence_when = _clock
 
 
 ## A bump: what it ran into is heard, and hurts it if it was hard. What it
@@ -1088,7 +1119,11 @@ func _crashes(delta: float) -> void:
 	_last_velocity = linear_velocity
 	if change > BUMP and _bumped <= 0.0:
 		_bumped = BUMP_GAP
-		_play(data.crash_sound, _hull.get_center(), clampf(-14.0 + change * 1.6, -14.0, 6.0))
+		var db := clampf(-14.0 + change * 1.6, -14.0, 6.0)
+		if _clock - _fence_when < FENCE_TOUCHED and Sfx.has(_fence):
+			Sfx.play_at(_fence, _fence_at, maxf(db, FENCE_LEAST) + 2.0)
+			db -= 6.0
+		_play(data.crash_sound, _hull.get_center(), db)
 		if change > data.crash_from:
 			_hurt((change - data.crash_from) * data.crash_damage, global_transform * _hull.get_center())
 			for i in occupants.size():
