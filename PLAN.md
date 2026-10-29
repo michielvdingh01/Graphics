@@ -4865,6 +4865,8 @@ In de eerste ronde van de trunk stond het spel na het begin van de wedstrijd nog
 
 ## Speelpunten: headshots, spawns, bots die dekking zoeken, een hek en een granaat
 
+*Op 29 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet, samen met de vijf wapens per pakket hieronder. Hij had een deel van de geluiden met `tools/hear.py` gehoord en nog geen variant gekozen; gespeeld had hij het nog niet.*
+
 Op 27 oktober 2026 gevraagd: een jeep tegen een hek geeft "een flauw bliepje" in plaats van een crash; een handgranaat klinkt overstuurd, en er zijn betere geluiden in open bibliotheken; in de duinen lijken headshots niet te werken ("zelfs met de sniper twee keer op het hoofd"), kijk of dat in andere maps ook zo is; bots komen van ver in een rechte lijn, vaak naast elkaar, op je af; in wedstrijden met veel bots komen ze steeds op dezelfde plek terug; en minstens vijf wapens per wapenset, die bij het thema passen. Branch `speelpunten`; de wapensets zijn gebouwd op branch `wapensets` (zie verderop).
 
 ### Headshots
@@ -4946,6 +4948,8 @@ Ze komen dus verspreid, en een derde van de tijd achter iets; ze doen er ook lan
 - **Een hek** in de duinen: ik weet niet zeker welk "hek" hij bedoelde. De poortvleugels van het complex zijn dunne metalen platen en vallen eronder, de rollen prikkeldraad en de slagboom hebben elk een eigen geluid gekregen.
 
 ## Vijf wapens in elk pakket
+
+*Op 29 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet, via de branch `speelpunten`. Hij had een deel van de geluiden met `tools/hear.py` gehoord en nog geen variant gekozen; gespeeld had hij het nog niet.*
 
 Op 27 oktober 2026 gevraagd: elk pakket moet minstens vijf wapens hebben die bij het pakket passen. Standaard en Stil hadden er vijf, Van dichtbij en 1944 vier, Ver weg en Zwaar drie, Alleen pistolen vier. Wat erbij komt is gekozen door de leidende sessie (die van `speelpunten`); ik heb het gebouwd. Branch `wapensets`, vanaf de trunk op d9b96e4. Niet gemerged, niet gespeeld.
 
