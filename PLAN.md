@@ -4970,6 +4970,8 @@ Op 15 m was een granaat dus 6 dB zachter dan naast je, op 30 m 9 dB, op 60 m 17 
 
 Niet beoordeeld: of 20 m goed voelt, en of een veldslag van 20 tegen 20 met explosies tot 200 m in plaats van 80 niet te druk wordt. Niet gespeeld; de 20 m is van mij.
 
+**Zijn keus: take 1.** Na `tools/hear.py takes explosion --at=15` koos hij take 1: unfa's opname van een handgranaat, de korte droge klap. `explosion` is nu alleen die opname, in vier takes die alleen in de rommel eronder verschillen (die laag heeft vier varianten); take 1 is bit voor bit de take die hij hoorde, de andere drie liggen in luidheid binnen 0,1 dB ervan. Het spel gebruikt `explosion` ook voor tonnen, gasflessen en jerrycans. De varianten `explosion_b` en `explosion_c` staan er nog; het spel speelt ze niet.
+
 ## Vijf wapens in elk pakket
 
 *Op 29 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet, via de branch `speelpunten`. Hij had een deel van de geluiden met `tools/hear.py` gehoord en nog geen variant gekozen; gespeeld had hij het nog niet.*
