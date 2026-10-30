@@ -5221,3 +5221,49 @@ Gezien, op de GPU: de worp vanaf het titelscherm in de fabriek en de duinen, en 
 | De rookgranaat horen, met variant b of c | `tools/hear.py smoke`, `tools/hear.py smoke b`, `tools/hear.py smoke c` |
 | De wolk meten of bekijken, 14 m voor elk standpunt of van binnen | `tools/benchmark.sh --smoke=14`, `tools/benchmark.sh --smoke=0` |
 | De noise van de wolk opnieuw maken | `Godot --headless --path . --script tools/gen_smoke_noise.gd` |
+
+## Een installer en updates voor vrienden
+
+Op 30 oktober 2026 gevraagd: het spel over twee dagen met vrienden spelen die een MacBook hebben, met een installatiebestand, en het spel moet zelf updates kunnen vinden en installeren, op basis van GitHub. Gebouwd op de branch `vriendenbuild`.
+
+**Wat er nu is**
+
+- `tools/release.sh` maakt in `build/release` het installatiebestand `GraphicsFPS.dmg` (de app, een snelkoppeling naar Applications en de LEESMIJ), dezelfde app als zip in delen van 256 MB en `update-macos.json`, dat zegt wat die delen zijn. `tools/release.sh --publish` zet dat op GitHub als de nieuwste release. Dat kan los van het bouwen, zodat het installatiebestand eerst geprobeerd kan worden. De release blijft een concept tot alles er staat, dus een spel dat ondertussen kijkt, vindt de laatste complete versie.
+- Het spel kijkt bij elke start naar `update-macos.json` van de nieuwste release, op een vaste link. Alleen een geëxporteerde Mac-build doet dat, en alleen een met een nummer: `tools/export.sh` schrijft de tijd als `jjjjmmdduumm` in `res://build.json`. Een spel uit een checkout heeft nummer 0 en doet niets.
+- Is er iets nieuwers, dan haalt het spel dat op de achtergrond binnen, ook terwijl er gespeeld wordt; onder in het menu staat hoe ver het is. Elk deel wordt met zijn sha256 gecontroleerd. Een download die stilvalt, begint na 30 seconden opnieuw aan dat deel, en een afgebroken download gaat bij de volgende start verder met het deel dat ontbrak.
+- Gasten met een andere build worden door de host geweigerd met de vraag te herstarten. Een spel uit een checkout (nummer 0) speelt met iedereen, zodat Michiel vanuit de editor kan blijven hosten. `Net.VERSION` is daarvoor 17 geworden.
+
+**Waarom een update de hele app is**
+
+Het plan was een nieuwe `.pck` naast de oude app. Dat kan niet: de release-templates van Godot weigeren `--main-pack` ("compiled without support for path overrides"), en een pack alsnog laden met `load_resource_pack` werkt de instellingen, de autoloads en de toetsen niet bij. Daarom pakt het spel de hele app uit in `user://update/<nummer>/app`. De geïnstalleerde app wordt nooit aangeraakt, want macOS bewaakt wat in quarantaine stond en de app kan vanaf de schijfkopie of een verplaatste kopie draaien. Hij blijft de ingang: `Updater` is de eerste autoload, ziet de nieuwere app, opent die met `/usr/bin/open` en stopt zichzelf voor er iets anders geladen is. Dat is ook de reden dat er bij een start even een extra venster te zien kan zijn. `OS.create_process` kan hier niet: op een `.app` wacht dat op de hoofdthread op een antwoord dat op de hoofdthread komt, en meldt na twee seconden een fout terwijl de app wel start.
+
+Een update die opent maar nooit een eerste beeld haalt, laat `trying-<nummer>` achter en wordt daarna niet meer geopend of opgehaald. Zonder dat zou een slechte release niet te genezen zijn: hij haalt de volgende niet op, en opnieuw installeren helpt niet, want `user://update` wint.
+
+**Getest**
+
+- `tools/test_updater.sh` (een minuut): een piepklein project met de echte `updater.gd` en de echte export-template, zonder venster, tegen een server hier. Zeventien controles slagen: niets nieuws, geen netwerk, ophalen en klaarzetten, overstappen bij de volgende start en met "Restart to update", een deel dat blijft hangen, een kapot deel, verder gaan met alleen het deel dat fout was, en een update die nooit een beeld haalde.
+- De echte app op ware grootte, zonder venster, tegen een lokale server: 1,4 GB opgehaald en uitgepakt in 11 seconden, handtekening geldig, en de geïnstalleerde app stapte in minder dan een seconde over op de nieuwe. Over internet hangt de duur af van de lijn.
+- `tools/selftest.sh` en `tools/nettest.sh` slagen. De netwerktest op de echte geëxporteerde app: twee gelijke builds slagen, 33 controles aan elke kant. Een oudere build als gast tegen een nieuwere host stopt precies bij het binnenkomen. De tekst van de weigering ziet die test niet.
+
+**Niet getest**
+
+- **Met een venster.** Alles liep zonder venster, volgens de afspraak. Hoe de overstap eruitziet en of het spel daarna vooraan staat, heeft niemand gezien.
+- **Vanaf GitHub.** Ophalen over https met de doorverwijzing van GitHub is pas te zien als er een release staat.
+- **Na "Open toch".** Vanuit de terminal stopt macOS een app in quarantaine zonder dialoog (`Killed: 9`), dus de eerste start bij een vriend is hier niet na te spelen. Een app die het spel zelf ophaalt krijgt geen quarantainelabel, tenzij macOS dat bij een goedgekeurde app toch doet; dan start de update niet, valt het spel terug op de geïnstalleerde versie en werkt het niet bij. Dat zou de eerste echte update laten zien.
+- Twee keer op de app klikken terwijl de update draait: `open` zet het spel dan alleen vooraan. De code houdt daar rekening mee, de test kan het zonder venster niet zien.
+
+**Wat Michiel moet weten**
+
+- Zonder Apple Developer-account (99 dollar per jaar) weigert de Mac de eerste keer te openen: Systeeminstellingen > Privacy en beveiliging > "Open toch". Dat is eenmalig en staat in de LEESMIJ.
+- Een push bereikt niemand: pas `tools/release.sh` en `--publish` geven vrienden een nieuwe versie. Een release duurt 2 minuten als `build/src` er is.
+- Een update is 1,4 GB, en op de schijf van een vriend staat het spel dan twee keer, elk 2 GB.
+- De `.pck` is 1,97 GB, vlak onder de 2 GiB per bestand van GitHub. Daarom gaat de zip in delen en niet de pack zelf.
+- `scenes/levels` bevat bestanden van de Alpen die niet in git staan: een worktree zonder die kopie mist de Alpen. `tools/release.sh` weigert dan, en daarom kopieerde ik ze uit de hoofdcheckout.
+- Op 30 oktober verwijderde een opruimsessie deze worktree terwijl ik erin werkte, met `build/src`. De laatste build is teruggezet uit zijn delen, en het installatiebestand is daaruit opnieuw gemaakt. De cache wordt met een export opnieuw opgebouwd.
+- Samen spelen is nog steeds de route tegen robots. Een wedstrijd tegen elkaar kan alleen lokaal (stap 4 van de wedstrijden).
+
+| Wat | Commando |
+|---|---|
+| Een nieuwe versie bouwen en proberen | `tools/release.sh` |
+| Die aan iedereen geven | `tools/release.sh --publish` |
+| De updater testen | `tools/test_updater.sh` |
