@@ -29,6 +29,8 @@ const RUNWAY := Vector3(17.5, 0, 5.5)
 ## Where the player stands in the hall for the fights that are tried out:
 ## open floor, with crates and machines to the west of it.
 const FIGHT_STAND := Vector3(12, 0, 4)
+## Longer than a robot goes on firing at what smoke took from it.
+const FIRES_MOST := 3.0
 ## A robot may stand in sight of where the player walks into its zone, starts
 ## the level or carries on from a checkpoint, but not closer than this; the
 ## game has a checkpoint wait for such a zone (TOO_CLOSE in game.gd).
@@ -118,7 +120,8 @@ func _run() -> void:
 	if fights_only:
 		await _fights()
 		await _supplies()
-		_ran(["fights", "supplies"])
+		await _smoke()
+		_ran(["fights", "supplies", "smoke"])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
@@ -141,10 +144,11 @@ func _run() -> void:
 		await _view()
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
+		await _smoke()
 		await _scope_stages()
 		await _music_turns()
 		await _balance()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "scope", "music", "balance"])
+		_ran(["handling", "fights", "supplies", "view", "breakables", "smoke", "scope", "music", "balance"])
 
 	await _slip_past()
 	_ran(["slipping past"])
@@ -1204,6 +1208,131 @@ func _balance(full := false) -> void:
 	player.velocity = Vector3.ZERO
 	await _wait(0.5)
 	_finished.append("balance")
+
+
+## The smoke grenade: on a key of its own, carried by every pack, and what its
+## cloud hides from whom.
+func _smoke() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	player.force_control = true
+	player.health = 1e6
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	Fx.clear()
+	_move(player, FIGHT_STAND)
+	player.rotation.y = PI * 0.5
+	player.head.rotation.x = 0.0
+	await _wait(0.3)
+
+	_check("every pack has two smoke grenades, and pistols one", Array(ARMORY.names()).all(func(pack: String) -> bool:
+		return ARMORY.tacticals(pack) == (1 if pack == "pistols" else 2) and ARMORY.tactical(pack) == "smoke_grenade"))
+	var standard := ARMORY.STANDARD
+	weapons.equip(ARMORY.weapons(standard), ARMORY.grenades(standard), ARMORY.grenade(standard), ARMORY.tacticals(standard), ARMORY.tactical(standard))
+	var pips: Control = game.get_node("HUD")._tacticals
+	var shown: int = pips.count
+	var grenades: int = weapons.grenades
+	Input.action_press("tactical")
+	await _wait(0.1)
+	Input.action_release("tactical")
+	await _wait(0.6)
+	var thrown := tree.get_nodes_in_group("grenade").filter(func(one: Node) -> bool: return one.scene_file_path.ends_with("smoke_grenade.tscn"))
+	_check("its key throws one, and leaves the grenades be", thrown.size() == 1 and weapons.tacticals == 1 and weapons.grenades == grenades)
+	_check("the HUD counts it, in tins", shown == 2 and pips.count == 1 and pips.tins)
+	_check("it is nothing to run from", tree.get_nodes_in_group("hazard").is_empty())
+	await _wait(0.6)
+	_check("there is no cloud as it flies", Smoke.count() == 0 or thrown[0].linear_velocity.length() < 1.0)
+	await _wait(2.0)
+	_check("once it lies still there is", Smoke.count() == 1)
+	weapons.tacticals = 0
+	weapons.resupply()
+	_check("a checkpoint brings them back", weapons.tacticals == weapons.start_tacticals)
+	weapons.tacticals = 0
+	weapons.restock()
+	_check("and so does a fight fought again", weapons.tacticals == weapons.start_tacticals)
+	weapons.equip(ARMORY.weapons(standard), ARMORY.grenades(standard))
+	Fx.clear()
+	await _wait(0.1)
+	_check("a cloud goes with the rest of the effects", Smoke.count() == 0)
+
+	# What it hides, along a line. The cloud stands on the floor, full grown.
+	var floor_y: float = player.global_position.y
+	var at := FIGHT_STAND + Vector3(-8, 0, 0)
+	at.y = floor_y
+	var high := Vector3.UP * 1.5
+	Smoke.billow(at)
+	Fx.held = true
+	Fx.advance(0.2)
+	_check("it takes a moment to grow", not Smoke.blocks(at + Vector3(-6, 1.5, 0), at + Vector3(6, 1.5, 0)))
+	Fx.advance(5.0)
+	_check("then what is behind it is hidden", Smoke.blocks(at + Vector3(-9, 1.5, 0), at + Vector3(9, 1.5, 0)))
+	_check("whoever stands in it is not seen, from close by either", Smoke.blocks(at + high, at + high + Vector3(-1, 0, 0)) and Smoke.blocks(at + Vector3(-20, 1.5, 0), at + high))
+	_check("and sees nobody", Smoke.blocks(at + high, at + Vector3(20, 1.5, 0)))
+	_check("what goes past it or over it is not", not Smoke.blocks(at + Vector3(-9, 1.5, 6), at + Vector3(9, 1.5, 6))
+		and not Smoke.blocks(at + Vector3(-9, 6, 0), at + Vector3(9, 6, 0)))
+	_check("nor is a line through its very edge", not Smoke.blocks(at + Vector3(-9, 1.0, Smoke.RADIUS * 0.99), at + Vector3(9, 1.0, Smoke.RADIUS * 0.99)))
+	Fx.advance(Smoke.LASTS - 5.2 - Smoke.THINS * 0.8)
+	_check("it hides for most of the time it thins", Smoke.blocks(at + Vector3(-9, 1.5, 0), at + Vector3(9, 1.5, 0)))
+	Fx.advance(Smoke.THINS * 0.6)
+	_check("and what is nearly gone hides nothing", not Smoke.blocks(at + Vector3(-9, 1.5, 0), at + Vector3(9, 1.5, 0)))
+	Fx.held = false
+	Fx.advance(Smoke.THINS)
+	await _wait(0.1)
+	_check("and then it is gone", Smoke.count() == 0)
+
+	# Who is on to the player loses them, fires on for a moment where it last
+	# saw them, and comes to look there.
+	var grunt: CharacterBody3D = game.GRUNT.instantiate()
+	grunt.position = FIGHT_STAND + Vector3(-11, 0, 0)
+	game.add_child(grunt)
+	grunt.alert()
+	grunt.takes_cover = false
+	var waited := 0.0
+	while not grunt._has_los and waited < 3.0:
+		await _wait(0.1)
+		waited += 0.1
+	_check("a robot that is after the player sees them", grunt._has_los)
+	var seen: Vector3 = grunt._seen_at
+	Smoke.billow(FIGHT_STAND + Vector3(-5, 0, 0) + Vector3.UP * floor_y)
+	Fx.held = true
+	Fx.advance(5.0)
+	await _wait(0.3)
+	_check("smoke between them: it has lost them, and fires on where they were", grunt._smoked and grunt._has_los and grunt._fires_on > 0.0
+		and grunt._seen_at.distance_to(seen) < 1.5)
+	_move(player, FIGHT_STAND + Vector3(0, 0, 3))
+	await _wait(FIRES_MOST)
+	_check("not for long", grunt._smoked and not grunt._has_los)
+	_check("then it goes to look where it saw them last, not where they are now", grunt.agent.target_position.distance_to(player.global_position) > 2.0
+		and grunt.agent.target_position.distance_to(seen) < 2.5)
+	Fx.held = false
+	Fx.clear()
+	await _wait(0.5)
+	_check("once the smoke is gone it knows again", not grunt._smoked)
+	grunt.queue_free()
+
+	# One that was never on to the player: smoke takes away what it could have seen.
+	var guard: CharacterBody3D = game.GRUNT.instantiate()
+	guard.position = FIGHT_STAND + Vector3(-11, 0, 0)
+	game.add_child(guard)
+	await _wait(0.5)
+	_move(player, FIGHT_STAND)
+	await _wait(0.4)
+	var knew: bool = guard._alerted or guard._has_los
+	Smoke.billow(FIGHT_STAND + Vector3(-5, 0, 0) + Vector3.UP * floor_y)
+	Fx.held = true
+	Fx.advance(5.0)
+	await _wait(0.3)
+	_check("one that only just comes on the player does not see them through it", knew and not (guard._has_los and guard._fires_on <= 0.0))
+	Fx.held = false
+	Fx.clear()
+	guard.queue_free()
+	await _wait(0.1)
+	player.health = player.MAX_HEALTH
+	_finished.append("smoke")
 
 
 ## A count of shots as [shots, seconds] that _fire_at_range() gives, to read:
