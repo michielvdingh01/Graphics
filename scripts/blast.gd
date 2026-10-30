@@ -24,6 +24,10 @@ const CORE := 0.25
 const PLAYER_SHARE := 0.5
 ## Speed in m/s something at the centre is thrown at.
 const PUSH := 9.0
+## Up to how far off the bang sounds as it does next to it, in metres. With
+## the 8 m of any other sound a grenade 15 m off was 6 dB softer than that,
+## 60 m off 17 dB, and 80 m off it was gone.
+const HEARD_NEAR := 20.0
 ## A fire hurts this much a second, in ticks this far apart.
 const BURN_DAMAGE := 24.0
 const BURN_TICK := 0.25
@@ -162,7 +166,7 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 ## player on this machine, who is the first of the players here.
 func _show_blast(position: Vector3, radius: float, size: float) -> void:
 	Fx.explosion(position, size)
-	Sfx.play_at(&"explosion", position, 6.0)
+	Sfx.play_at(&"explosion", position, 6.0, HEARD_NEAR)
 	exploded.emit(position)
 	var witness := get_tree().get_first_node_in_group("player")
 	if witness and witness.has_method("shake"):

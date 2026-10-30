@@ -22,6 +22,8 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py casings rifle           a burst, with the cases landing after it
     tools/hear.py grenade                 the pin, the throw, three bounces and the bang
     tools/hear.py grenade b               the same with variant b of the bang (or c)
+    tools/hear.py takes explosion         every take of a sound once, in the order of their numbers
+                                          and 5 s apart, to say which one; `takes explosion 3` 3 s apart
     tools/hear.py fence                   a vehicle running into a fence of wire three times, at 15,
                                           25 and 40 km/h; `fence b` with variant b, `fence wood` one
                                           of wood, `fence wire` over a coil of wire, `fence barrier`
@@ -93,6 +95,8 @@ SPACES = {
 }
 BEDS = dict(re.findall(r'"(\w+)": &"(\w+)"', re.search(r"^const BEDS := \{(.+)\}", SFX, re.M).group(1)))
 NEAR = constant("NEAR")
+# How far off a bang sounds as it does next to it (scripts/blast.gd).
+HEARD_NEAR = constant("HEARD_NEAR", (ROOT / "scripts/blast.gd").read_text())
 # Seconds after the last shot of a clip that its ping is heard.
 CLIP_PING = constant("CLIP_PING", (ROOT / "scripts/weapons.gd").read_text())
 
@@ -161,16 +165,24 @@ def far(distance: float) -> float:
 
 def placed(events: list, distance: float, side: float = 0.0) -> list:
     """The same events as sounds from `distance` metres ahead and `side`
-    metres to the right, as play_at() in scripts/sfx.gd places them."""
+    metres to the right, as play_at() in scripts/sfx.gd places them: each at
+    the `near` it carries, NEAR if it carries none."""
     out = []
     for event in events:
-        at = dict(event, pos=[side, 0.0, -distance], unit_size=NEAR, max_distance=80.0, filter_db=-6.0, max_db=max(3.0, event["db"]))
+        near = event.pop("near", NEAR)
+        at = dict(event, pos=[side, 0.0, -distance], unit_size=near, max_distance=10.0 * near, filter_db=-6.0, max_db=max(3.0, event["db"]))
         out.append(at)
-        gain = far(math.hypot(distance, side))
+        gain = far(math.hypot(distance, side) * NEAR / near)
         if gain >= 0.05:
             db = event["db"] + 20.0 * math.log10(gain)
             out.append(dict(at, bus="Far", db=db, max_db=max(3.0, db), attenuation=False, panning=0.5))
     return out
+
+
+def bang(sound: str, times: list) -> list:
+    """An explosion as scripts/blast.gd plays it: 6 dB up, and as loud as next
+    to it up to HEARD_NEAR when it is placed."""
+    return [dict(event, near=HEARD_NEAR) for event in played(sound, times, 6.0)]
 
 
 def played(sound: str, times: list, db: float = 0.0) -> list:
@@ -260,14 +272,29 @@ def casings(weapon: str) -> list:
     return events
 
 
-def grenade(bang: str = "explosion") -> list:
+def grenade(blast: str = "explosion") -> list:
     """A grenade from the pin to the bang: the levels of scripts/weapons.gd,
     and bounces that get quieter as scripts/grenade.gd has them. The bang at
     the level scripts/blast.gd plays it at."""
     events = played("pin", [START], -4.0) + played("throw", [START + 0.22], -6.0)
     for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
         events += played("bounce", [START + after], db)
-    return events + played(bang, [START + 0.22 + 2.2], 6.0)
+    return events + bang(blast, [START + 0.22 + 2.2])
+
+
+def takes(sound: str, gap: float) -> list:
+    """Every take of a sound once, in the order of their numbers and `gap`
+    seconds apart, at their own pitch: to tell which of them one means. A
+    bang is played as scripts/blast.gd plays it."""
+    files = sorted((ROOT / "assets/audio" / sound).glob("*.wav"), key=lambda f: int(re.sub(r"\D", "", f.stem.rsplit("_", 1)[-1]) or 0))
+    if not files:
+        raise SystemExit(f"no takes in assets/audio/{sound}/")
+    events = [{"t": START + gap * i, "file": str(f), "bus": "World", "db": 0.0, "pitch": 1.0} for i, f in enumerate(files)]
+    if sound.startswith("explosion"):
+        events = [dict(event, db=6.0, near=HEARD_NEAR) for event in events]
+    for event in events:
+        print(f"{event['t']:5.1f} s  {pathlib.Path(event['file']).name}")
+    return events
 
 
 def fence(kind: str) -> list:
@@ -336,7 +363,7 @@ def rocket() -> list:
     flight = sorted((ROOT / "assets/audio/rocket_flight").glob("*.wav"))[0]
     events = played("rocket_launch", [START])
     events.append({"t": START + 0.05, "file": str(flight), "bus": "World", "db": -6.0, "until": START + 0.8, "fade": 0.5})
-    return events + placed(played("explosion", [START + 0.8]), 36.0)
+    return events + placed(bang("explosion", [START + 0.8]), 36.0)
 
 
 def burst(sound: str, rate: float, db: float = 0.0, start: float = START) -> list:
@@ -552,6 +579,10 @@ def main() -> None:
         name, events = "grenade" + (f"_{variant}" if variant else ""), grenade("explosion" + (f"_{variant}" if variant else ""))
         # The bang rolls on for longer than the tail that is rendered after it.
         length = events[-1]["t"] + 6.0
+    elif args[0] == "takes" and len(args) > 1:
+        gap = float(args[2]) if len(args) > 2 else 5.0
+        name, events = f"takes_{args[1]}", takes(args[1], gap)
+        length = events[-1]["t"] + gap
     elif args[0] == "fence":
         kind = args[1] if len(args) > 1 else "a"
         name, events = f"fence_{kind}", fence(kind)

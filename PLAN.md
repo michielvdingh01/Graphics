@@ -4947,6 +4947,33 @@ Ze komen dus verspreid, en een derde van de tijd achter iets; ze doen er ook lan
 - **Waar ze terugkomen.** 300 m voor een mens is een gok; over de kaart van de duinen zie je nu minder vaak iemand verschijnen, maar het blijft een kans.
 - **Een hek** in de duinen: ik weet niet zeker welk "hek" hij bedoelde. De poortvleugels van het complex zijn dunne metalen platen en vallen eronder, de rollen prikkeldraad en de slagboom hebben elk een eigen geluid gekregen.
 
+### Na het spelen: de granaat zoals het spel hem laat horen
+
+*Op 30 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet, met zijn keus van take 1. Hij had de takes op 15 m gehoord; in het spel had hij de 20 m nog niet gespeeld.*
+
+Op 29 oktober, na het spelen in de trunk: "ik wil toch een andere handgranaat sound. Doe die eerste uit je lijstje maar", met het commando van variant a. Die speelde het spel al. Wat hij in het spel hoorde was toch een andere granaat dan die van `tools/hear.py grenade`, om twee redenen.
+
+**Van ver.** `hear.py` speelt de knal alsof hij naast je afgaat. Het spel plaatste hem zoals elk geluid: tot 8 m vol, daarna 6 dB minder per verdubbeling, de hoge tonen er deels af, en na 80 m niets (Godot laat hem bovendien naar die 80 m toe lineair wegzakken). Nu klinkt een knal tot `HEARD_NEAR` = 20 m (`scripts/blast.gd`) zoals naast je en is hij tot 200 m te horen; `Sfx.play_at()` kreeg daarvoor een `near`, en de galm die de afstand toevoegt rekent mee met de `unit_size` van de speler (`_send_far()`). Elke take op drie afstanden, eerste halve seconde / staart (0,5–3 s) in dBFS, `tools/hear.py` in de fabriekshal:
+
+| | take 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| 15 m, was | −18,6 / −32,7 | −19,9 / −23,8 | −14,2 / −19,7 | −13,1 / −13,2 | −18,7 / −32,8 | −20,0 / −23,9 |
+| 15 m, nu | −13,0 / −30,1 | −13,8 / −18,2 | −8,2 / −14,0 | −8,0 / −8,4 | −13,0 / −30,2 | −13,9 / −18,2 |
+| 30 m, was | −25,4 / −37,3 | −27,1 / −30,6 | −22,0 / −26,9 | −20,2 / −19,9 | −25,4 / −37,4 | −27,2 / −30,6 |
+| 30 m, nu | −16,7 / −31,9 | −17,8 / −21,9 | −12,0 / −17,7 | −11,1 / −11,2 | −16,7 / −32,0 | −17,8 / −21,9 |
+| 60 m, was | −39,4 / −51,3 | −41,1 / −44,5 | −35,9 / −40,9 | −34,1 / −33,9 | −39,3 / −51,4 | −41,2 / −44,5 |
+| 60 m, nu | −22,5 / −34,4 | −24,2 / −27,7 | −19,0 / −24,0 | −17,3 / −17,0 | −22,5 / −34,5 | −24,3 / −27,7 |
+
+Op 15 m was een granaat dus 6 dB zachter dan naast je, op 30 m 9 dB, op 60 m 17 dB. Een eerste meting met `--at`, waarin elke render een willekeurige take koos, gaf 10 dB en een knal die nauwelijks boven zijn galm uitkwam; dat laatste was het verschil tussen de takes, niet de afstand.
+
+**Vier opnamen.** Variant a heeft zes takes uit vier opnamen, en die verschillen meer dan de afstand: 1 en 5 (unfa) een korte droge klap zonder staart, 2 en 6 (Deganoth) fel met een halve staart, 3 (Kinoton) groot met staart, 4 (Bratish) vooral een lange rommel. In de eerste halve seconde scheelt dat 6 dB, in de staart 22 dB. `hear.py grenade` speelt er één, en het spel elke keer een andere. Bij hem was het waarschijnlijk 3: de omhullende van zijn render leek het meest op die take (r 0,80, de andere ten hoogste 0,67). Zeker is dat niet, want ik heb zijn render overschreven voor ik het zeker wist. `tools/hear.py takes explosion` speelt de zes na elkaar, 5 s uit elkaar; met `--at=15` zoals het spel ze nu van 15 m laat horen.
+
+`tools/hear.py rocket` speelt zijn knal nu op +6 dB, zoals het spel (het was 0 dB). `tools/test_sound.sh` controleert de 20 m en de 200 m.
+
+Niet beoordeeld: of 20 m goed voelt, en of een veldslag van 20 tegen 20 met explosies tot 200 m in plaats van 80 niet te druk wordt. Niet gespeeld; de 20 m is van mij.
+
+**Zijn keus: take 1.** Na `tools/hear.py takes explosion --at=15` koos hij take 1: unfa's opname van een handgranaat, de korte droge klap. `explosion` is nu alleen die opname, in vier takes die alleen in de rommel eronder verschillen (die laag heeft vier varianten); take 1 is bit voor bit de take die hij hoorde, de andere drie liggen in luidheid binnen 0,1 dB ervan. Het spel gebruikt `explosion` ook voor tonnen, gasflessen en jerrycans. De varianten `explosion_b` en `explosion_c` staan er nog; het spel speelt ze niet.
+
 ## Vijf wapens in elk pakket
 
 *Op 29 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet, via de branch `speelpunten`. Hij had een deel van de geluiden met `tools/hear.py` gehoord en nog geen variant gekozen; gespeeld had hij het nog niet.*
