@@ -66,6 +66,8 @@ textures/vram_compression/import_etc2_astc=true|' build/src/project.godot
 else
 	printf '\n[rendering]\n\ntextures/vram_compression/import_etc2_astc=true\n' >>build/src/project.godot
 fi
+# The number this build goes by, see scripts/updater.gd.
+printf '{"build": %s}\n' "$(date +%Y%m%d%H%M)" >build/src/build.json
 "$GODOT" --headless --path build/src --export-release "macOS" "$PWD/build/macos/GraphicsFPS.zip" >build/export_macos.log 2>&1
 if [ ! -f build/macos/GraphicsFPS.zip ]; then
 	echo "The macOS export failed, see build/export_macos.log"

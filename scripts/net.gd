@@ -31,7 +31,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 16
+const VERSION := 17
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -252,16 +252,20 @@ func depart(level: Node) -> void:
 
 
 func _on_connected() -> void:
-	_hello.rpc_id(1, VERSION, player_name)
+	_hello.rpc_id(1, VERSION, Updater.build, player_name)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _hello(version: int, title: String) -> void:
+func _hello(version: int, build: int, title: String) -> void:
 	var guest := multiplayer.get_remote_sender_id()
 	if not multiplayer.is_server():
 		return
 	if version != VERSION:
 		_refuse.rpc_id(guest, "The host plays another version of the game")
+		return
+	# A game run from a checkout has no number and plays with anyone.
+	if build and Updater.build and build != Updater.build:
+		_refuse.rpc_id(guest, "The host plays another build of the game: restart it to update")
 		return
 	players[guest] = {"name": title.left(24) if title else "Player"}
 	said.emit("%s joined" % players[guest].name)
