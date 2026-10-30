@@ -1,6 +1,9 @@
 extends CanvasLayer
 
 const MARGIN := 28
+## How far left of the grenades what is on the second key begins: past the
+## pips of the most grenades there can be.
+const TACTICALS_LEFT := 92.0
 ## Seconds a level takes to come up out of black, and the most it waits for
 ## the navmesh of the level before it does.
 const FADE_IN := 0.7
@@ -107,13 +110,18 @@ class Grenades:
 	var count := 0
 	## Stick grenades instead of round ones.
 	var sticks := false
+	## Tins of smoke instead of either.
+	var tins := false
 
 	## One pip for every grenade carried, right to left: a ball with its fuze,
-	## or the can of a stick grenade on its handle.
+	## the can of a stick grenade on its handle, or a tin with its cap.
 	func _draw() -> void:
 		for i in count:
 			var at := Vector2(-11.0 - i * 24.0, -12.0)
-			if sticks:
+			if tins:
+				draw_rect(Rect2(at.x - 6.0, at.y - 9.0, 12.0, 18.0), Color(1, 1, 1, 0.9))
+				draw_rect(Rect2(at.x - 4.0, at.y - 13.0, 8.0, 3.0), Color(1, 1, 1, 0.9))
+			elif sticks:
 				draw_rect(Rect2(at.x - 7.0, at.y - 16.0, 14.0, 12.0), Color(1, 1, 1, 0.9))
 				draw_rect(Rect2(at.x - 2.5, at.y - 4.0, 5.0, 14.0), Color(1, 1, 1, 0.9))
 			else:
@@ -144,6 +152,9 @@ var _fps_label := Label.new()
 var _ammo_label := Label.new()
 var _weapon_label := Label.new()
 var _grenades := Grenades.new()
+## What is on the second key, in the same row, to the left of the most
+## grenades there can be.
+var _tacticals := Grenades.new()
 var _heat := Heat.new()
 ## Where the name of the weapon sits, offset_top and offset_bottom, when there
 ## is no heat to show under it.
@@ -231,6 +242,12 @@ func _ready() -> void:
 	_name_at = Vector2(_weapon_label.offset_top, _weapon_label.offset_bottom)
 	_grenades.offset_bottom -= 88
 	_grenades.offset_top -= 88
+	_tacticals.tins = true
+	_place(_tacticals, Control.PRESET_BOTTOM_RIGHT)
+	_tacticals.offset_bottom = _grenades.offset_bottom
+	_tacticals.offset_top = _grenades.offset_top
+	_tacticals.offset_left -= TACTICALS_LEFT
+	_tacticals.offset_right -= TACTICALS_LEFT
 
 	_health_bar.custom_minimum_size = Vector2(260, 14)
 	_health_bar.show_percentage = false
@@ -312,6 +329,8 @@ func _bind() -> void:
 	_player.weapons.hit_confirmed.connect(_on_hit_confirmed)
 	_player.weapons.grenades_changed.connect(_on_grenades_changed)
 	_on_grenades_changed(_player.weapons.grenades)
+	_player.weapons.tacticals_changed.connect(_on_tacticals_changed)
+	_on_tacticals_changed(_player.weapons.tacticals)
 	var game := get_tree().get_first_node_in_group("game")
 	game.objective_changed.connect(_on_objective_changed)
 	game.kills_changed.connect(_on_kills_changed)
@@ -359,7 +378,7 @@ func _process(delta: float) -> void:
 	var driving: bool = _player.riding != null and _player.seat == 0 and not _player.fires_from_the_wheel()
 	_crosshair.visible = not _player.dead and not driving
 	_crosshair.queue_redraw()
-	for label: Control in [_ammo_label, _weapon_label, _grenades]:
+	for label: Control in [_ammo_label, _weapon_label, _grenades, _tacticals]:
 		label.visible = not driving
 
 	# Aiming a scoped weapon, the view goes black and opens again as a circle.
@@ -453,6 +472,11 @@ func _on_grenades_changed(count: int) -> void:
 	_grenades.count = count
 	_grenades.sticks = _player.weapons.grenade_kind == "stick_grenade"
 	_grenades.queue_redraw()
+
+
+func _on_tacticals_changed(count: int) -> void:
+	_tacticals.count = count
+	_tacticals.queue_redraw()
 
 
 ## A hit on the player, see Player.hit_from: one that came from a side gets
