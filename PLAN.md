@@ -4949,6 +4949,8 @@ Ze komen dus verspreid, en een derde van de tijd achter iets; ze doen er ook lan
 
 ### Na het spelen: de granaat zoals het spel hem laat horen
 
+*Op 30 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet, met zijn keus van take 1. Hij had de takes op 15 m gehoord; in het spel had hij de 20 m nog niet gespeeld.*
+
 Op 29 oktober, na het spelen in de trunk: "ik wil toch een andere handgranaat sound. Doe die eerste uit je lijstje maar", met het commando van variant a. Die speelde het spel al. Wat hij in het spel hoorde was toch een andere granaat dan die van `tools/hear.py grenade`, om twee redenen.
 
 **Van ver.** `hear.py` speelt de knal alsof hij naast je afgaat. Het spel plaatste hem zoals elk geluid: tot 8 m vol, daarna 6 dB minder per verdubbeling, de hoge tonen er deels af, en na 80 m niets (Godot laat hem bovendien naar die 80 m toe lineair wegzakken). Nu klinkt een knal tot `HEARD_NEAR` = 20 m (`scripts/blast.gd`) zoals naast je en is hij tot 200 m te horen; `Sfx.play_at()` kreeg daarvoor een `near`, en de galm die de afstand toevoegt rekent mee met de `unit_size` van de speler (`_send_far()`). Elke take op drie afstanden, eerste halve seconde / staart (0,5–3 s) in dBFS, `tools/hear.py` in de fabriekshal:

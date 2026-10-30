@@ -25,8 +25,8 @@ const PLAYER_SHARE := 0.5
 ## Speed in m/s something at the centre is thrown at.
 const PUSH := 9.0
 ## Up to how far off the bang sounds as it does next to it, in metres. With
-## the 8 m of any other sound a grenade that went off where it was thrown
-## was 10 dB softer than that and mostly the echo of it.
+## the 8 m of any other sound a grenade 15 m off was 6 dB softer than that,
+## 60 m off 17 dB, and 80 m off it was gone.
 const HEARD_NEAR := 20.0
 ## A fire hurts this much a second, in ticks this far apart.
 const BURN_DAMAGE := 24.0
