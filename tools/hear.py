@@ -594,6 +594,8 @@ def main() -> None:
     elif args[0] == "smoke":
         variant = args[1] if len(args) > 1 and args[1] != "a" else ""
         name, events = "smoke" + (f"_{variant}" if variant else ""), smoke("smoke_hiss" + (f"_{variant}" if variant else ""))
+        # The hiss goes on for longer than the tail that is rendered after it.
+        length = events[-1]["t"] + 9.0
     elif args[0] == "takes" and len(args) > 1:
         gap = float(args[2]) if len(args) > 2 else 5.0
         name, events = f"takes_{args[1]}", takes(args[1], gap)

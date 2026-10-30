@@ -4159,7 +4159,9 @@ Op de trunk kwamen de vrachtwagen en de tank meestal niet eens tot de voet van d
 - De dekkingskaart is in de duinen na zo'n 15 seconden spelen klaar (ruw: 3,6 s werk in stukjes van 4 ms). Een robot die eerder dekking zoekt, laat de rest in één keer maken; dat heb ik niet zien gebeuren en niet gemeten in het spel.
 - De vrachtwagen en de tank komen over de steilste duinkanten nog niet overal; de duinen zijn daar steiler dan zand in het echt ligt (de lijzijde van een echte duin is ongeveer 34°).
 
-### Mijnen, flashbangs en rookgranaten (plan, niets gebouwd)
+### Mijnen, flashbangs en rookgranaten (plan, de rookgranaat is gebouwd)
+
+*Sinds 30 oktober 2026 staat de rookgranaat op de branch `claude/competent-golick-5c809a`, zie "De rookgranaat" achteraan. Op drie punten wijkt die af van dit plan: de wolk is geen stapel kaarten maar één bol waar het oog in kijkt, hij drijft niet met de wind mee, en een vijand moest dat geheugen van de plek nog krijgen. Flashbang en mijn zijn niet gebouwd.*
 
 **Waar het op verder bouwt.** Een granaat is nu één soort per pakket (`grenade` in `assets/packs.json`: de gewone of de steelhandgranaat), op G, met een teller rechtsonder (`Grenades` in `scripts/hud.gd`). `scripts/weapons.gd` gooit hem (`_start_throw()`, `_release_grenade()`), `scripts/grenade.gd` laat hem stuiteren en na 2,2 s via `Blast.explode()` ontploffen, met wie hem gooide erbij voor de killfeed. Over de lijn gaat "threw" met de soort, en de andere machine laat een kopie zonder schade vliegen (`echo`). Vijanden zien een granaat als gevaar en rennen weg (groep `hazard`, `danger()`, `Squad.threat()`); bots gooien niets. Wat vijanden zien gaat langs stralen (`_ray_hits_player()` in `scripts/enemy.gd`) en hoe ver ze in licht en schaduw kijken (`_sees_as_far_as()`, `shade_around()`); bots kijken met stralen in `scripts/bot.gd`.
 
@@ -5089,3 +5091,84 @@ Vanuit de worktree (`cd /Users/michielvandeningh/dev/Graphics/.claude/worktrees/
 - `tools/hear.py hand_cannon_shot 240` en `hand_cannon_shot_b 240`, `tools/hear.py reload hand_cannon`
 - Het blad met de vier in beeld en voor anderen: `benchmark/sheets/wapensets.jpg`; de balans: `benchmark/sheets/weapons_<pakket>.png`.
 - Spelen, met een venster, vanuit de worktree: `GODOT_WINDOW=1 tools/godot.sh -- --pack=1944` (of `close`, `far`, `heavy`, `pistols`) draagt dat pakket op de route; of een potje op het scherm Multiplayer met Weapons op dat pakket. De branch staat op de trunk van d9b96e4.
+
+## De rookgranaat
+
+Op 30 oktober 2026 gebouwd op de branch `claude/competent-golick-5c809a`, vanaf de lokale trunk `faab1af`, volgens het plan "Mijnen, flashbangs en rookgranaten". Niet gemerged en niet gepusht.
+
+**Wat Michiel koos** (vooraf gevraagd): de toets is Q, met de linkerknop van het kruis op de controller; alle pakketten krijgen 2 rookgranaten en Pistols 1; ze vullen aan bij een checkpoint en bij een gevecht dat opnieuw begint en ze liggen niet als pickup op de grond. B, T, pickups en alleen de pakketten Silenced en Long range wees hij af.
+
+### Wat er staat
+
+- **Een tweede vak.** De actie `tactical` staat op Q. In `assets/packs.json` staat per pakket `tacticals: 2` (Pistols 1); `tactical` zegt wat het is, met `smoke_grenade` als het er niet staat, zodat de flashbang hier kan inhaken. `scripts/armory.gd` leest dat, `scripts/weapons.gd` houdt het bij naast de granaten en gooit het met dezelfde worp (`_start_throw(true)`). In een voertuig blijft Q de volgende stoel en gooit hij niets, ook niet voor wie de jeep rijdt en schiet. In de sandbox is Q van de varianten en gooit hij ook niets. De HUD telt ze in blikjes, links van de granaten in dezelfde rij; het menu Controls noemt de toets.
+- **Het blikje.** `scenes/smoke_grenade.tscn` met `scripts/smoke_grenade.gd` en een model in `tools/models/props.gd`: 64 mm breed en 115 mm hoog, olijfgroen met een gele band, gaatjes in het deksel en het ontstekingsmechanisme van de gewone granaat. Na 1 s begint het te sissen en trekt er een dun spoor rook uit. De wolk begint zodra het stilligt, 2,5 s na de worp op zijn laatst. In de lucht begint hij dus niet: een worp van 20 m is na een seconde nog onderweg.
+- **De wolk** (`shaders/smoke_cloud.gdshader`, `Fx.smoke_cloud()`). 8 m breed en ongeveer 3 m hoog boven de vloer, met wat meer breedte vlak bij de grond. Hij groeit in 1 s tot twee derde en in 3 s tot vrijwel zijn volle maat, en begint na 14 s te rafelen. Na 18 s is er nog een sliert over en na 20 s niets. Alles volgt uit zijn leeftijd, zoals de andere effecten, dus hij kost geen rekenwerk per beeld op de CPU.
+- **Geen kaarten maar één bol.** Dat is de grootste afwijking van het plan. Elke pixel loopt langs zijn eigen lijn door de rook, tot aan de voorkant van de rook, en van daar nog vier stappen de rook in tot hij niets meer ziet. Dat is één laag op het scherm, van buiten en van binnen. De wolk leest de diepte van de scène, dus hij loopt zonder harde rand tegen de vloer en om wie erin staat. De noise is een tegel van 64 dots in drie dimensies (`assets/noise/smoke.res`, gemaakt met `tools/gen_smoke_noise.gd`).
+- **Het licht** komt uit `Fx.smoke_light()`, zoals bij de andere rook, maar dan van vijf plekken in de wolk samen. Onder een dak zonder zon krijgt de wolk 40% van dat licht en 's nachts 5% van wat de lucht geeft, anders gloeit witte rook in een donkere hal of onder de maan.
+- **Van binnen** zie je tot ongeveer 1 m en daarna niets meer. De eerste 0,75 m voor het oog blijft vrij, zodat je je wapen ziet.
+- **Wat de wolk verbergt** (`scripts/smoke.gd`, het autoload `Smoke`). `Smoke.blocks(from, to)` rekent met dezelfde getallen als de shader, op een afgeplatte bol. Wie erin staat of erachter wordt niet gezien, ook niet van dichtbij, en wie erin staat ziet niemand. Een lijn door minder dan 1,2 m rook wordt niet afgesneden. De wolk verbergt tot ongeveer 16,5 s; wat daarna nog hangt, is doorzichtig genoeg.
+- **Vijanden** (`scripts/enemy.gd`). Het plan ging ervan uit dat een vijand de plek al onthield, maar dat deed alleen een wacht. Een vijand die iemand aan de rook verliest, schiet nu nog 1,2 tot 2,6 s op de plek waar hij die het laatst zag, en loopt daarna daarheen en niet naar waar die persoon nu staat. Een vijand die slaat, doet dat niet. Wie zichzelf verraadt met schoten, blijft voor hem op de oude plek.
+- **Bots** (`scripts/bot.gd`). Ze zien niemand in of achter rook en verliezen dan meteen hun doel. Ze rennen naar waar ze die het laatst zagen, want dat geheugen hadden ze al. Ze schieten niet door op die plek en ze gooien zelf niets.
+- **Over de lijn.** De worp ging al met de soort, dus er kwam geen bericht bij. Elke machine laat zijn eigen kopie van het blikje zijn eigen wolk maken, en die kunnen dus een paar decimeter verschillen. Alleen de host vraagt wat een wolk verbergt, want daar kijken vijanden en bots. `Net.VERSION` is 16: een oudere versie zou van een rookgranaat een losse granaat zonder wolk laten zien.
+- **De eerste keer.** Het blikje en de bol zitten in `Fx.rehearse()`. Vanaf het titelscherm, met een eigen `HOME` zodat de save van Michiel met rust blijft, worden er bij de worp, de rook en de wolk 0 pipelines tijdens het tekenen gemaakt, in de fabriek en in de duinen.
+- **Geluid.** Geen download nodig: gemaakt van ruis, met in het begin de stoomopname die al in de bibliotheek zat (CC0). Drie varianten van 8 s met elk twee takes, die in de laatste 3 s wegsterven: `smoke_hiss` (fel en gelijkmatig), `_b` (dun en hoog, een ventiel) en `_c` (ruwer en voller, een fakkel die aan- en afzwelt). `tools/build_sounds.py` kreeg daarvoor `tail`, `tools/hear.py` de vorm `smoke`.
+
+### Gemeten
+
+`tools/benchmark.sh` met `--smoke=<meter>,<leeftijd>` (nieuw: een volgroeide wolk van 6 s oud zoveel meter voor elk standpunt, 0 is eronder), de stand ervoor om en om met deze branch uit twee bevroren kopieën, 600 beelden per standpunt, drie ronden, 30 oktober 12:47 tot 13:05. Niemand anders mat, load 2,3 tot 2,9, aan een lader van 30 W met de accu op 100%. Binnen een stand verschillen de ronden zelden meer dan 0,05 ms.
+
+Op de speelinstelling (3456×2160, Ultra, MetalFX, renderschaal vanzelf, dat is hier 0,5), in ms per beeld en fps:
+
+| Standpunt | Vóór | Na, geen wolk | Wolk op 14 m | Wolk op 6 m | Van binnen |
+|---|---|---|---|---|---|
+| Duinen 1 | 11,01 (90,8) | 11,00 | 11,55 (86,6) | 12,89 (77,6) | 12,12 (82,5) |
+| Duinen 2 | 11,79 (84,8) | 11,89 (84,1) | 12,32 (81,2) | 13,53 (73,9) | 12,91 (77,4) |
+| Fabriek 1 | 13,97 (71,6) | 13,96 | 14,55 (68,7) | 15,80 (63,3) | 15,14 (66,1) |
+| Fabriek 2 | 14,15 (70,7) | 14,13 | 14,71 (68,0) | 15,87 (63,0) | 15,20 (65,8) |
+
+- **Zonder wolk kost het niets.** De 0,10 ms bij Duinen 2 komt uit één uitschieter; de andere twee ronden zijn gelijk aan de stand ervoor.
+- **Een wolk in beeld kost 0,55 ms, hoe klein hij ook is.** Dat zal vooral de kopie van de dieptebuffer zijn, die Godot alleen maakt zolang zoiets in beeld is. Dat heb ik niet apart gemeten.
+- **Het duurst is er vlak voor staan: 1,7 tot 1,9 ms** (de eerste versie kostte daar 2,4 tot 2,6 ms). Van binnen is goedkoper, 1,0 tot 1,2 ms, omdat de kern van de wolk geen noise leest. Hij kost dan wel over het hele scherm.
+- **In de fabriek zakt het spel met de wolk er vlak voor van 71 naar 63 fps.** Dat is het laagste wat ik zag. Twee wolken tegelijk heb ik niet gemeten.
+- **De kaarten van het plan ter vergelijking:** 60 kaarten van de wolk van een explosie, 6 m voor Duinen 1, kosten 2,43 ms (13,44 ms, drie ronden). Dat is meer dan de bol, ze dekken slechter, ze lopen hard de grond in en je kunt er niet in staan. Ik heb die proef niet bijgesteld, dus het is een ruwe vergelijking, geen eerlijke wedstrijd.
+
+Op de instelling van de tabellen in dit plan (2560×1440, Ultra, FSR 2 op 67%), twee ronden, 13:22 tot 13:30, load 1,7 tot 2,1:
+
+| Standpunt | Vóór | Na, geen wolk | Wolk op 14 m | Wolk op 6 m | Van binnen |
+|---|---|---|---|---|---|
+| Duinen 1 | 10,99 (91,0) | 11,02 | 11,30 (88,5) | 12,32 (81,1) | 11,79 (84,8) |
+| Duinen 2 | 11,04 (90,5) | 11,07 | 11,35 (88,1) | 12,23 (81,8) | 11,82 (84,5) |
+| Fabriek 1 | 12,88 (77,7) | 12,87 | 13,16 (76,0) | 13,92 (71,8) | 13,52 (74,0) |
+| Fabriek 2 | 13,06 (76,6) | 13,05 | 13,32 (75,0) | 14,04 (71,2) | 13,59 (73,5) |
+
+### Getest
+
+Zonder GPU, met de gebouwde Alpen tijdelijk gekloond uit de hoofdcheckout: `tools/selftest.sh` (620 controles), `tools/test_match.sh` (123), `tools/nettest.sh` (66), `tools/test_effects.sh` (269), `tools/test_sandbox.sh` (30), `tools/test_sound.sh` (39), `tools/test_humanoid.sh` (58) en `tools/test_vehicles.sh --only=jeep` (33) slagen. De hele voertuigtest heb ik niet gedraaid.
+
+Nieuw daarin: alle pakketten hebben het juiste aantal; Q gooit er een en laat de granaten met rust; de HUD telt; een checkpoint en een nieuw gevecht vullen aan; de wolk wacht tot het blikje stilligt; wat een lijn wel en niet afsnijdt, ook door de rand, over de wolk heen en tijdens het oplossen; een vijand verliest de speler, schiet door op de oude plek, stopt, loopt daarheen en niet naar waar de speler nu staat, en weet het weer zodra de rook weg is; een bot ziet over open terrein, niet door rook, en daarna weer wel; de rook van een gast staat ook bij de host; in de jeep gooit Q niets.
+
+Gezien, op de GPU: de worp vanaf het titelscherm in de fabriek en de duinen, en de wolk op het blad `benchmark/sheets/rookgranaat.jpg` (de duinen na 0,6 tot 17 s, van binnen, de hal en bij nacht).
+
+### Wat ik niet kon beoordelen
+
+- **Gespeeld is niets, en beluisterd ook niet.** Ik kan niet luisteren: de drie varianten zijn alleen gerenderd en op lengte en piek gecontroleerd. Hoe luid het sissen is en hoe ver het draagt (`HISS_DB` in `scripts/smoke_grenade.gd`, standaard te horen tot 80 m) is een eerste getal.
+- **De tijden zijn van mij:** 1 s tot het sissen, 2,5 s op zijn laatst tot de wolk, 3 s tot hij vol is, 16,5 s verbergen, 20 s in totaal, 1,2 tot 2,6 s doorschieten (`scripts/smoke_grenade.gd`, `scripts/smoke.gd`, `FIRES_ON` in `scripts/enemy.gd`). Of dat lekker speelt, weet ik niet. Dat de wolk er bij een lange worp pas ruim 2 s na het gooien staat, kan te laat voelen.
+- **Een wolk gaat door muren.** Hij blijft een bol: in een gang wordt hij door de wanden afgesneden in plaats van dat hij de gang in stroomt, en aan de andere kant van een muur steekt hij ook uit en verbergt hij ook. Dat is klein op een open plek en zichtbaar in de gangen van het complex en de fabriek.
+- **De wolk drijft niet met de wind mee**, anders dan in het plan. Hij rolt van binnen en stijgt 6 cm per seconde.
+- **Van binnen is de wolk egaal grijs**, zonder beweging. Dat is goedkoop, en het kan saai zijn.
+- **Bots schieten niet door** op de plek waar ze iemand verloren, anders dan vijanden. Ze gebruiken zelf geen rook.
+- **Vijanden en bots horen niet wie uit de rook schiet**: wie schiet, blijft op de oude plek.
+- **De wolk is alleen bekeken** in de duinen overdag en 's nachts en in de fabriek. De andere levels niet, ook de Alpen niet.
+- **De sandbox** telt de blikjes wel in de HUD, maar gooit ze niet, omdat Q daar van de varianten is.
+
+### Bij het mergen
+
+- De drie varianten samen zijn 8,5 MB aan wav. Zodra Michiel er een koos, kunnen de andere twee weg (map en regel in `assets/manifest.json`), en de gekozen variant moet dan `smoke_hiss` heten.
+- Wie dit in de hoofdcheckout zet, kloont de geluiden mee: `tools/clone_imports.py <deze worktree>`.
+- Een worktree heeft de gebouwde Alpen niet: die staan ongetrackt in de hoofdcheckout (218 bestanden in `scenes/levels/`). Zonder die bestanden faalt `tools/selftest.sh` op het deel Alps, op elke branch.
+
+| Wat | Commando |
+|---|---|
+| De rookgranaat horen, met variant b of c | `tools/hear.py smoke`, `tools/hear.py smoke b`, `tools/hear.py smoke c` |
+| De wolk meten of bekijken, 14 m voor elk standpunt of van binnen | `tools/benchmark.sh --smoke=14`, `tools/benchmark.sh --smoke=0` |
+| De noise van de wolk opnieuw maken | `Godot --headless --path . --script tools/gen_smoke_noise.gd` |

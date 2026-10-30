@@ -1123,6 +1123,10 @@ func smoke_cloud(position: Vector3, shape: Dictionary) -> MeshInstance3D:
 		var light := smoke_light(spot)
 		var under_a_roof := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot, spot + Vector3.UP * SMOKE_ROOFED, WORLD)).size() > 0
 		var share := SMOKE_CLOUD_SHADE if under_a_roof and (light.key as Vector3).dot(sun_way) < 0.999 else 1.0
+		# By night what comes from above is what the sky gives, which is next
+		# to nothing.
+		if night and light.key == Vector3.UP:
+			share = SMOKE_CLOUD_NIGHT
 		key += (light.key as Vector3) * (light.key_light as Vector3).length()
 		key_light += (light.key_light as Vector3) * share / spots.size()
 		fill += (light.fill as Vector3) * share * (SMOKE_CLOUD_NIGHT if night else 1.0) / spots.size()
