@@ -32,11 +32,13 @@ const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
 ## - damage: what an enemy's hit does, next to what its scene says;
 ## - warning: how long an attack is announced, next to what its scene says;
 ## - regen_to: the health that comes back by itself; the rest has to be found;
-## - drops: how much there is to find, next to Normal.
+## - drops: how much there is to find, next to Normal;
+## - agility: how quick on its feet an enemy that is a person is, from 0 to 1,
+##   see SIDEWAYS in enemy.gd.
 const RULES: Array[Dictionary] = [
-	{"attackers": 1, "rest": 1.2, "plates": 0.3, "flankers": 1, "damage": 0.6, "warning": 1.3, "regen_to": 50.0, "drops": 1.4},
-	{"attackers": 2, "rest": 1.0, "plates": 0.5, "flankers": 1, "damage": 1.0, "warning": 1.0, "regen_to": 35.0, "drops": 1.0},
-	{"attackers": 3, "rest": 0.5, "plates": 0.75, "flankers": 2, "damage": 1.35, "warning": 0.8, "regen_to": 25.0, "drops": 0.75},
+	{"attackers": 1, "rest": 1.2, "plates": 0.3, "flankers": 1, "damage": 0.6, "warning": 1.3, "regen_to": 50.0, "drops": 1.4, "agility": 0.0},
+	{"attackers": 2, "rest": 1.0, "plates": 0.5, "flankers": 1, "damage": 1.0, "warning": 1.0, "regen_to": 35.0, "drops": 1.0, "agility": 0.5},
+	{"attackers": 3, "rest": 0.5, "plates": 0.75, "flankers": 2, "damage": 1.35, "warning": 0.8, "regen_to": 25.0, "drops": 0.75, "agility": 1.0},
 ]
 const THEMES := preload("res://scripts/enemy_themes.gd")
 
@@ -177,10 +179,13 @@ func _ready() -> void:
 		upscaler = default_upscaler()
 		_load()
 	get_window().size_changed.connect(_fit_window)
-	# The command line decides for this run, whatever was saved.
+	# The command line decides for this run, whatever was saved: who the
+	# enemies are, and with --difficulty=2 how hard (0 Easy, 1 Normal, 2 Hard).
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--enemies="):
 			enemy_theme = arg.get_slice("=", 1)
+		elif arg.begins_with("--difficulty="):
+			difficulty = clampi(arg.get_slice("=", 1).to_int(), 0, RULES.size() - 1)
 	if not enemy_themes.has(enemy_theme):
 		push_warning("No enemies called '%s'; choose from %s. They will be robots." % [enemy_theme, ", ".join(enemy_themes)])
 		enemy_theme = THEMES.ROBOTS
@@ -275,6 +280,10 @@ func apply() -> void:
 	var world := viewport.find_world_3d().environment
 	var open_sky: bool = world != null and world.get_meta(&"open_sky", false)
 	RenderingServer.directional_shadow_atlas_set_size(SUN_ATLAS_BEFORE[quality] if undone("sun_atlas") else (SUN_ATLAS_OPEN if open_sky else SUN_ATLAS), true)
+	# A level by night says so on its environment too, and what is drawn
+	# differently by night reads it from the global shader value "night":
+	# the rooms behind the windows, the glass of the lamps.
+	RenderingServer.global_shader_parameter_set(&"night", 1.0 if world != null and world.get_meta(&"night", false) else 0.0)
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset[5])
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset[5] if ultra and undone("lamp_filter") else preset[6])
 	if undone("glow"):

@@ -30,6 +30,9 @@ var thrower := 0
 var shooter: CollisionObject3D
 ## The weapon it came from, as a place in scripts/armory.gd.
 var weapon := -1
+## Something else it passes through on its way out: the vehicle it was
+## fired from.
+var passes := RID()
 
 var _age := 0.0
 var _puff := 0.0
@@ -104,6 +107,8 @@ func _physics_process(delta: float) -> void:
 	var skip: Array[RID] = []
 	if shooter:
 		skip.append(shooter.get_rid())
+	if passes.is_valid():
+		skip.append(passes)
 	var query := PhysicsRayQueryParameters3D.create(from, to, mask, skip)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit:

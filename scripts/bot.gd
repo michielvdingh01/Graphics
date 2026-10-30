@@ -29,8 +29,13 @@ extends Node
 ## Within STRIKES of somebody it does not fire but hits them with its weapon,
 ## the blow of the player (scripts/weapons.gd): two of them bring anybody
 ## down.
-## What it does not do yet: take cover, fall back, throw grenades, jump or
-## crouch.
+## Further off than CLOSES_IN it does not make straight for whom it goes
+## for, whether it sees them or its side told it of them: it goes from cover
+## to cover along a lane of its own, out to the side of the straight way, and
+## kneels behind each a moment before it goes on, see _advance(). So a side
+## that knows where somebody is comes at them spread out, not in a row.
+##
+## What it does not do yet: fall back, throw grenades or jump.
 
 const WEAPONS := preload("res://scripts/weapons.gd")
 const ARMORY := preload("res://scripts/armory.gd")
@@ -74,11 +79,20 @@ const STUCK := Vector2(0.4, 1.5)
 ## seconds it goes somewhere else after it got stuck on the way to where the
 ## match wants it.
 const REPATH := 0.3
+## Seconds before a way is looked for again for every so many metres the goal
+## is off, and the most it waits.
+const FAR_PATH := 60.0
+const REPATH_MOST := 4.0
 const DETOUR := 3.0
 const EYE := 1.6
 ## A weapon of the arena that is there to be taken this near, in metres, and
 ## in sight, it goes and takes.
 const NOTICES := 10.0
+## By night, the share of how far it sees that is left for somebody who
+## stands in the dark; in the light of a lamp it sees as far as by day. See
+## light_at() in scripts/land.gd.
+const DARK_SIGHT := 0.25
+const LAND := preload("res://scripts/land.gd")
 ## With barrels that spin: a burst ends once they are this hot, from 0 to 1,
 ## and the next does not begin before they have cooled to the second number.
 ## Overheated they could not fire for seconds.
@@ -95,6 +109,22 @@ const SPENT := 0.35
 ## Nearer than this to its target, in metres between the two, it hits them
 ## with its weapon instead of firing.
 const STRIKES := 2.0
+## From cover to cover: further off than CLOSES_IN, in metres, it goes for
+## whom it goes for in bounds of BOUND metres, the first number at the least
+## and the second at the most, along a lane up to LANE metres to the side of
+## the straight way, and waits behind each cover for somewhere between the
+## two numbers of HOLD seconds. A bound it has not finished in BOUND_TIME
+## seconds it gives up. A cover that a friend is within CROWDED metres of,
+## or on the way to, is worth less to it. Of the spots that bring it on
+## furthest it looks at COVER_LOOKS for one that cannot be seen from where
+## it is going: a ray each.
+const CLOSES_IN := 25.0
+const BOUND := Vector2(8.0, 24.0)
+const LANE := 30.0
+const HOLD := Vector2(0.8, 2.0)
+const BOUND_TIME := 8.0
+const CROWDED := 6.0
+const COVER_LOOKS := 24
 ## Further than this from what the screen shows, in metres, it thinks and
 ## moves every other step of the physics, a step twice as long: nobody sees
 ## that at such a distance, and with forty in a match it saves the processor
@@ -161,6 +191,14 @@ var _level := LEVEL
 var _path_at := 0.0
 ## Until when it goes its own way instead of where the match wants it.
 var _detour := 0.0
+## Its lane: how far to the side of the straight way it goes in, from -1 to
+## 1 of LANE. The cover it is on its way to, whether it is, and by when it
+## means to be there; and the seconds it still waits behind the last one.
+var _lane := 0.0
+var _bound := Vector3.ZERO
+var _bounding := false
+var _bound_until := 0.0
+var _holding := 0.0
 ## Whether it is far from what the screen shows, and whether it let the last
 ## step of the physics go by.
 var _far := false
@@ -169,8 +207,16 @@ var _skipped := false
 
 func _ready() -> void:
 	_body = get_parent()
-	_agent.path_desired_distance = 0.6
+	# The navmesh of the dunes lies as much as 0.6 m over the sand: a corner
+	# of the way that high over its feet it would never count as reached, and
+	# it would turn on the spot about it. Corners count lower, and as reached
+	# a little further off.
+	_agent.path_height_offset = 0.35
+	_agent.path_desired_distance = 0.8
 	_agent.target_desired_distance = 1.0
+	# As far as it takes: a bot crosses the Alps, and the 4096 polygons the
+	# search stops at by itself end the way half-way (see scripts/way.gd).
+	_agent.path_search_max_polygons = 0
 	_agent.radius = 0.4
 	_body.add_child.call_deferred(_agent)
 	_own = ARMORY.at(me.weapon)
@@ -197,6 +243,9 @@ func begin() -> void:
 	_bursting = false
 	_rest_until = 0.0
 	_going = false
+	_lane = randf_range(-1.0, 1.0)
+	_bounding = false
+	_holding = 0.0
 	_look = randf() * LOOK
 	_aim = _body.global_position + Vector3.UP * EYE - _body.global_basis.z * 10.0
 	_stood = _body.global_position
@@ -230,6 +279,8 @@ func _doing() -> int:
 		doing |= Net.SPRINTING
 	if _spin > 0.0:
 		doing |= Net.SPINNING
+	if _holding > 0.0 and _body.ducks():
+		doing |= Net.CROUCHED
 	return doing
 
 
@@ -351,6 +402,7 @@ func _physics_process(delta: float) -> void:
 		if wish != null and distance > PRESSES_ON:
 			# It has somewhere to be: it walks on, firing as it goes.
 			desired = _towards(wish, WALK)
+			_holding = 0.0
 		_sprinting = false
 		var on_target := (_aim - eye).normalized().dot((at - eye).normalized()) > cos(deg_to_rad(ON_TARGET))
 		var hot := _data.overheat_after > 0.0 and _hot >= HOT_BURST.x
@@ -383,7 +435,7 @@ func _physics_process(delta: float) -> void:
 		_seen = 0.0
 		_spin_barrels(delta, false)
 		_fire(delta, eye, false)
-		desired = _roam(wish)
+		desired = _roam(wish, delta)
 		_sprinting = desired.length() > WALK and not _data.no_sprint
 		if desired.length_squared() > 0.01:
 			facing = desired
@@ -423,6 +475,8 @@ func _look_around() -> void:
 	var eye: Vector3 = _body.head.global_position
 	var ahead := -_body.global_basis.z
 	var sight: float = _data.bot_sight
+	var land: Node = LAND.of(get_tree())
+	var dark: bool = land != null and land.by_night()
 	var sideways := cos(deg_to_rad(float(_level.fov) * 0.5))
 	var nearest := INF
 	var found: RefCounted = null
@@ -434,10 +488,20 @@ func _look_around() -> void:
 		var distance := to.length()
 		if distance > sight or (distance > AT_ITS_SHOULDER and to.normalized().dot(ahead) < sideways):
 			continue
-		# The head or the chest, with nothing of the level in between.
+		if dark and distance > sight * DARK_SIGHT and distance > sight * lerpf(DARK_SIGHT, 1.0, land.light_at(other.body.global_position)):
+			continue
+		# Smoke hides whoever is behind it or in it, and blinds whoever is in it.
+		if Smoke.blocks(eye, head):
+			continue
+		# The head or the chest, with nothing of the level in between; who sits
+		# in a vehicle is seen in it, and it is the vehicle that is shot.
 		var seen := false
+		var through: Array[RID] = []
+		var riding: Variant = other.body.get(&"riding")
+		if riding is CollisionObject3D:
+			through.append((riding as CollisionObject3D).get_rid())
 		for drop: float in [0.0, 0.5]:
-			if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, head + Vector3.DOWN * drop, WORLD)).is_empty():
+			if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, head + Vector3.DOWN * drop, WORLD, through)).is_empty():
 				seen = true
 				break
 		if not seen:
@@ -484,7 +548,9 @@ func _errand() -> Variant:
 func _fight(delta: float, distance: float) -> Vector3:
 	var reach: float = _data.bot_range
 	if distance > reach:
-		return _towards(_target.body.global_position, WALK)
+		return _advance(_target.body.global_position, WALK, delta)
+	_holding = 0.0
+	_bounding = false
 	if _data.projectile and distance < CLOSE_ROCKET + 2.0:
 		# Too near for a rocket: it backs away.
 		var away: Vector3 = _body.global_position - _target.body.global_position
@@ -501,10 +567,12 @@ func _fight(delta: float, distance: float) -> Vector3:
 ## else to where it last knew of somebody, the nearest first, and otherwise
 ## to the half of the arena where the other side is to be found, or just
 ## somewhere if there are no sides.
-func _roam(wish: Variant) -> Vector3:
+func _roam(wish: Variant, delta: float) -> Vector3:
 	# What the kind of match wants of it comes first.
 	if wish != null:
 		_going = false
+		_holding = 0.0
+		_bounding = false
 		return _towards(wish, SPRINT)
 	var nearest := INF
 	var lead := Vector3.ZERO
@@ -522,11 +590,97 @@ func _roam(wish: Variant) -> Vector3:
 			lead = there
 	if nearest < INF:
 		_going = false
-		return _towards(lead, SPRINT)
+		return _advance(lead, SPRINT, delta)
+	_holding = 0.0
+	_bounding = false
 	if not _going or _body.global_position.distance_to(_goal) < 2.0:
 		_goal = Match.arena.somewhere(1 - me.team) if Match.mode.teams() else Match.arena.anywhere()
 		_going = true
 	return _towards(_goal, SPRINT)
+
+
+## The velocity that takes it towards `there` at `pace` as somebody who may be
+## shot at goes: straight in for the last CLOSES_IN metres, and before that
+## from one cover to the next (see _next_bound()), waiting behind each a
+## moment. Standing still is what it does while it waits.
+func _advance(there: Vector3, pace: float, delta: float) -> Vector3:
+	var at := _body.global_position
+	if Vector2(there.x - at.x, there.z - at.z).length() < CLOSES_IN:
+		_holding = 0.0
+		_bounding = false
+		return _towards(there, pace)
+	if _holding > 0.0:
+		_holding -= delta
+		return Vector3.ZERO
+	if _bounding:
+		var arrived := Vector2(_bound.x - at.x, _bound.z - at.z).length() < 1.5
+		if arrived or _clock > _bound_until:
+			_bounding = false
+			if arrived:
+				_holding = randf_range(HOLD.x, HOLD.y)
+				return Vector3.ZERO
+	if not _bounding:
+		var next: Variant = _next_bound(there)
+		if next == null:
+			return _towards(there, pace)
+		_bound = next
+		_bounding = true
+		_bound_until = _clock + BOUND_TIME
+		# A new way, at once: the last was looked for with a goal far off.
+		_path_at = _clock
+	return _towards(_bound, pace)
+
+
+## The next cover on the way to `there`: of the spots of the arena between
+## BOUND metres off that bring it nearer to where its lane goes, one that
+## cannot be seen from `there`, as far on as there is one; failing that the
+## spot that brings it furthest. Its lane is all of LANE to the side far off,
+## and narrows to nothing as it closes in. Null if no spot brings it on.
+func _next_bound(there: Vector3) -> Variant:
+	var at := _body.global_position
+	var way := Vector3(there.x - at.x, 0.0, there.z - at.z)
+	var gap := way.length()
+	way /= gap
+	var lane := Vector3(-way.z, 0.0, way.x) * _lane * LANE * clampf((gap - CLOSES_IN) / (LANE * 3.0), 0.0, 1.0)
+	var aim := Vector2(there.x + lane.x, there.z + lane.z)
+	var from := Vector2(at.x, at.z)
+	var taken := _friends_going()
+	var scored: Array[Array] = []
+	for spot in Match.arena.spots:
+		var flat := Vector2(spot.x, spot.z)
+		var off := flat.distance_to(from)
+		if off < BOUND.x or off > BOUND.y:
+			continue
+		var gained := from.distance_to(aim) - flat.distance_to(aim)
+		if gained < BOUND.x * 0.5:
+			continue
+		var worth := gained + randf() * 4.0
+		for friend in taken:
+			if friend.distance_to(spot) < CROWDED:
+				worth -= 15.0
+		scored.append([worth, spot])
+	if scored.is_empty():
+		return null
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	var space := _body.get_world_3d().direct_space_state
+	var eye := there + Vector3.UP * EYE
+	for pair: Array in scored.slice(0, COVER_LOOKS):
+		var spot: Vector3 = pair[1]
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, spot + Vector3.UP, WORLD)).is_empty():
+			return spot
+	return scored[0][1]
+
+
+## Where the others of its side stand and are going to cover.
+func _friends_going() -> PackedVector3Array:
+	var found := PackedVector3Array()
+	for other: RefCounted in Match.entrants.values():
+		if other == me or other.out > 0.0 or Match.mode.hostile(me, other) or not is_instance_valid(other.body):
+			continue
+		found.append(other.body.global_position)
+		if other.brain and other.brain._bounding:
+			found.append(other.brain._bound)
+	return found
 
 
 ## The velocity that takes it to `goal` over the navmesh. Where the navmesh
@@ -535,7 +689,10 @@ func _roam(wish: Variant) -> Vector3:
 func _towards(goal: Vector3, pace: float) -> Vector3:
 	if _clock >= _path_at and _agent.target_position.distance_to(goal) > 0.5:
 		_agent.target_position = goal
-		_path_at = _clock + REPATH
+		# A goal far off is looked for again less often: where it is to the
+		# metre only matters close by, and a way across the Alps takes ten
+		# milliseconds to find.
+		_path_at = _clock + clampf(_body.global_position.distance_to(goal) / FAR_PATH, REPATH, REPATH_MOST)
 	var straight := goal - _body.global_position
 	straight.y = 0.0
 	if straight.length() < 1.0:

@@ -268,8 +268,12 @@ func _survey(scene: Node) -> void:
 	if level == null:
 		return
 	# A level that is not a yard between sheds says what its open air sounds
-	# like: see open_air() in tools/kit/land.gd.
+	# like: see open_air() in tools/kit/land.gd. By night (the environment of
+	# the scene says so) it is the bed of that kind by night, if there is one.
 	_open_bed = level.get_meta(&"open_air", &"yard")
+	var world := scene.get_viewport().find_world_3d().environment if scene.is_inside_tree() else null
+	if world and world.get_meta(&"night", false) and _streams.has(StringName(BED + String(_open_bed) + "_night")):
+		_open_bed = StringName(String(_open_bed) + "_night")
 	for zone in level.get_children():
 		if not zone.has_meta(&"bounds"):
 			continue
@@ -640,8 +644,11 @@ func play(sound: StringName, volume_db := 0.0) -> void:
 	_start(player, sound)
 
 
-func play_at(sound: StringName, position: Vector3, volume_db := 0.0) -> void:
-	_start(_placed(position, volume_db), sound)
+## A sound from `position`. Up to `near` metres off it sounds as it does next
+## to it; further off it falls, and it is heard out to ten times that. Any
+## sound but a very loud one is at home with NEAR.
+func play_at(sound: StringName, position: Vector3, volume_db := 0.0, near := NEAR) -> void:
+	_start(_placed(position, volume_db, near), sound)
 
 
 ## The same from something that moves: the sound is `offset` from `node`,
@@ -678,11 +685,11 @@ func passing(from: Vector3, to: Vector3) -> void:
 	play_at(&"whiz", nearest, lerpf(0.0, -9.0, miss / PASS_REACH))
 
 
-func _placed(position: Vector3, volume_db: float) -> AudioStreamPlayer3D:
+func _placed(position: Vector3, volume_db: float, near := NEAR) -> AudioStreamPlayer3D:
 	var player := AudioStreamPlayer3D.new()
 	player.volume_db = volume_db
-	player.unit_size = NEAR
-	player.max_distance = 80.0
+	player.unit_size = near
+	player.max_distance = 10.0 * near
 	# By default a 3D player takes the top off a sound as it gets further away
 	# or quieter: 21 to 29 dB above 5 kHz at 16 m, a robot across the hall.
 	player.attenuation_filter_db = -6.0
@@ -751,7 +758,9 @@ func _send_far(player: AudioStreamPlayer3D, under: Node) -> void:
 	var camera := get_viewport().get_camera_3d()
 	if camera == null or AudioServer.get_bus_index(FAR_BUS) < 0:
 		return
-	var gain := _far(camera.global_position.distance_to(player.global_position))
+	# A sound that carries further than NEAR fills the room from as much
+	# further off.
+	var gain := _far(camera.global_position.distance_to(player.global_position) * NEAR / player.unit_size)
 	if gain < 0.05:
 		return
 	var far := AudioStreamPlayer3D.new()

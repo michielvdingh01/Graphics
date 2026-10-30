@@ -1,0 +1,42 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/alps_ground.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/grass_ground/grass_ground_diff.jpg" id="meadow"]
+[ext_resource type="Texture2D" path="res://assets/textures/grass_ground/grass_ground_nor_gl.jpg" id="meadow_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/withered_grass/withered_grass_diff.jpg" id="straw"]
+[ext_resource type="Texture2D" path="res://assets/textures/withered_grass/withered_grass_nor_gl.jpg" id="straw_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/dirt/dirt_diff.jpg" id="soil"]
+[ext_resource type="Texture2D" path="res://assets/textures/dirt/dirt_nor_gl.jpg" id="soil_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/forest_leaves_02/forest_leaves_02_diff.jpg" id="forest"]
+[ext_resource type="Texture2D" path="res://assets/textures/forest_leaves_02/forest_leaves_02_nor_gl.jpg" id="forest_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/forrest_ground_01/forrest_ground_01_diff.jpg" id="moss"]
+[ext_resource type="Texture2D" path="res://assets/textures/lichen_rock/lichen_rock_diff.jpg" id="rock"]
+[ext_resource type="Texture2D" path="res://assets/textures/lichen_rock/lichen_rock_nor_gl.jpg" id="rock_nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/rocks_ground_02/rocks_ground_02_diff.jpg" id="scree"]
+[ext_resource type="Texture2D" path="res://assets/textures/snow_02/snow_02_diff.jpg" id="snow"]
+[ext_resource type="Texture2D" path="res://assets/textures/aerial_rocks_02/aerial_rocks_02_diff.jpg" id="far_rock"]
+[ext_resource type="Texture2D" path="res://assets/textures/snow_field_aerial/snow_field_aerial_diff.jpg" id="far_snow"]
+[ext_resource type="Texture2D" path="res://assets/textures/gravel_road/gravel_road_diff.jpg" id="gravel"]
+[ext_resource type="Texture2D" path="res://assets/textures/gravel_road/gravel_road_nor_gl.jpg" id="gravel_nor"]
+[ext_resource type="Texture2D" path="res://assets/noise/alps_fbm.png" id="noise"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/meadow_tex = ExtResource("meadow")
+shader_parameter/meadow_nor = ExtResource("meadow_nor")
+shader_parameter/straw_tex = ExtResource("straw")
+shader_parameter/straw_nor = ExtResource("straw_nor")
+shader_parameter/soil_tex = ExtResource("soil")
+shader_parameter/soil_nor = ExtResource("soil_nor")
+shader_parameter/forest_tex = ExtResource("forest")
+shader_parameter/forest_nor = ExtResource("forest_nor")
+shader_parameter/moss_tex = ExtResource("moss")
+shader_parameter/rock_tex = ExtResource("rock")
+shader_parameter/rock_nor = ExtResource("rock_nor")
+shader_parameter/scree_tex = ExtResource("scree")
+shader_parameter/snow_tex = ExtResource("snow")
+shader_parameter/far_rock_tex = ExtResource("far_rock")
+shader_parameter/far_snow_tex = ExtResource("far_snow")
+shader_parameter/gravel_tex = ExtResource("gravel")
+shader_parameter/gravel_nor = ExtResource("gravel_nor")
+shader_parameter/noise_tex = ExtResource("noise")

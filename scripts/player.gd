@@ -14,6 +14,7 @@ signal died
 signal revived
 
 const SPRING := preload("res://scripts/spring.gd")
+const VEHICLE := preload("res://scripts/vehicle.gd")
 
 const WALK_SPEED := 5.0
 const SPRINT_SPEED := 7.2
@@ -118,6 +119,10 @@ var invulnerable := false
 var team := -1
 ## Lets the self-test drive the player without a captured mouse.
 var force_control := false
+## The vehicle the player sits in (scripts/vehicle.gd), and in which seat:
+## the first is the driver's.
+var riding: Node3D
+var seat := -1
 
 var _crouched := false
 var _sliding := false
@@ -142,6 +147,11 @@ var _recoil := Vector3.ZERO
 var _sprint_latched := false
 var _trauma := 0.0
 var _shake_time := 0.0
+## Where somebody who rides but does not drive looks, from the way the
+## vehicle looks; and the layer the player was on before getting in, for a
+## seat where no shot reaches.
+var _seat_yaw := 0.0
+var _layer := 0
 ## How a hit has knocked the head aside: pitch on its x and roll on its z.
 var _knock := SPRING.new(HIT_TIME)
 ## The field of view without what a shot or a blast adds to it for a moment,
@@ -176,7 +186,8 @@ func is_crouched() -> bool:
 
 func is_sprinting() -> bool:
 	return (
-		(Input.is_action_pressed("sprint") or _sprint_latched)
+		not riding
+		and (Input.is_action_pressed("sprint") or _sprint_latched)
 		and Input.get_axis("move_forward", "move_back") < 0.0
 		and not _crouched
 		and not weapons.blocks_sprint()
@@ -252,6 +263,8 @@ func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.
 	hit_from.emit(amount, bearing)
 	health_changed.emit(health, MAX_HEALTH)
 	if health <= 0.0:
+		if riding:
+			riding.request_leave(self)
 		dead = true
 		_set_crouched(true)
 		died.emit()
@@ -261,6 +274,8 @@ func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.
 ## Back on its feet at `pose`, as good as new: for a game with others, where
 ## a death is not the end of the level.
 func revive(pose: Transform3D) -> void:
+	if riding:
+		riding.request_leave(self)
 	dead = false
 	health = MAX_HEALTH
 	_since_damage = 0.0
@@ -282,6 +297,89 @@ func _unhandled_input(event: InputEvent) -> void:
 		_look(event.relative * MOUSE_SENSITIVITY * Settings.mouse_sensitivity)
 	elif event is InputEventJoypadButton and event.is_action_pressed("sprint"):
 		_sprint_latched = true
+	elif event.is_action_pressed("use") and has_control():
+		# In a game with others the host says who sits where: see
+		# request_seat() in scripts/vehicle.gd.
+		if riding:
+			riding.request_leave(self)
+		else:
+			var near := VEHICLE.within_reach(self)
+			if near:
+				near.vehicle.request_seat(self, near.seat)
+	elif event.is_action_pressed("vehicle_seat") and has_control() and riding:
+		riding.request_seat(self, riding.next_seat(seat))
+
+
+## What `body` would get into if it pressed the key now: see
+## within_reach() in scripts/vehicle.gd.
+func vehicle_in_reach() -> Dictionary:
+	return {} if riding or dead else VEHICLE.within_reach(self)
+
+
+## Into seat `which` of `vehicle`; scripts/vehicle.gd calls this once it has
+## room. Whoever drives sees through the camera of the vehicle and puts the
+## weapons away, unless it is a car that is driven with one hand (see
+## VehicleData.driver_fires): then they stay in hand, out of sight, and fire
+## where the middle of that view is. Whoever rides keeps them and their own
+## eyes. Where no shot reaches a seat, none reaches the player in it.
+func sit(vehicle: Node3D, which: int) -> void:
+	if riding == null:
+		_layer = collision_layer
+	riding = vehicle
+	seat = which
+	velocity = Vector3.ZERO
+	_sliding = false
+	_seat_yaw = 0.0
+	collision_layer = _layer if vehicle.exposed(which) else 0
+	var drives := which == 0
+	weapons.lower()
+	weapons.visible = not drives
+	weapons.process_mode = Node.PROCESS_MODE_DISABLED if drives and not vehicle.data.driver_fires else Node.PROCESS_MODE_INHERIT
+	ride(Transform3D())
+
+
+## Out of the vehicle, standing at `pose`, going at `going`.
+func stand(pose: Transform3D, going: Vector3) -> void:
+	riding = null
+	seat = -1
+	collision_layer = _layer
+	weapons.visible = true
+	weapons.process_mode = Node.PROCESS_MODE_INHERIT
+	global_position = pose.origin
+	rotation = Vector3(0.0, pose.basis.get_euler().y, 0.0)
+	velocity = going
+	_was_on_floor = false
+	if not camera.current and not dead:
+		camera.make_current()
+
+
+## Where the vehicle carries the player: the eyes where the eyes of its seat
+## are, looking where the vehicle looks and as far round from there as the
+## player has turned. Whoever drives and fires looks where the view of the
+## vehicle is, see fires_from_the_wheel().
+func ride(_frame: Transform3D) -> void:
+	if riding == null:
+		return
+	var eye: Transform3D = riding.eye_frame(seat)
+	if fires_from_the_wheel():
+		var way: Vector3 = riding.view().aim_point() - eye.origin
+		if way.length() > 1.0:
+			_seat_yaw = angle_difference(eye.basis.get_euler().y, atan2(-way.x, -way.z))
+			head.rotation.x = clampf(atan2(way.y, Vector2(way.x, way.z).length()), -MAX_PITCH, MAX_PITCH)
+	var facing: float = eye.basis.get_euler().y + _seat_yaw
+	rotation = Vector3(0.0, facing, 0.0)
+	global_position = eye.origin - Vector3.UP * _eye_height
+
+
+## True while the player drives a vehicle with their own weapon in hand.
+func fires_from_the_wheel() -> bool:
+	return riding != null and seat == 0 and riding.data.driver_fires and riding.view() != null
+
+
+## How far the last shots have thrown the aim up and aside, in radians: for
+## a view that is not the player's own, see scripts/vehicle_view.gd.
+func kick() -> Vector3:
+	return _recoil
 
 
 ## Turns the view by the given yaw and pitch in radians at the base field of view.
@@ -290,11 +388,24 @@ func _look(amount: Vector2) -> void:
 	amount *= _fov / Settings.fov
 	if Settings.invert_y:
 		amount.y = -amount.y
-	rotate_y(-amount.x)
+	if riding and seat == 0:
+		if riding.view():
+			riding.view().look(amount)
+		return
+	if riding:
+		_seat_yaw -= amount.x
+	else:
+		rotate_y(-amount.x)
 	head.rotation.x = clampf(head.rotation.x - amount.y, -MAX_PITCH, MAX_PITCH)
 
 
 func _physics_process(delta: float) -> void:
+	if riding:
+		# The vehicle carries the player, see ride().
+		velocity = riding.linear_velocity
+		ride(Transform3D())
+		_mend(delta)
+		return
 	var on_floor := is_on_floor()
 	if not on_floor:
 		velocity += get_gravity() * GRAVITY_SCALE * delta
@@ -365,7 +476,11 @@ func _physics_process(delta: float) -> void:
 		landed.emit(dip / LAND_DIP_MAX)
 		Sfx.play(&"land", -6.0)
 	_was_on_floor = is_on_floor()
+	_mend(delta)
 
+
+## Health comes back by itself after a while without a hit.
+func _mend(delta: float) -> void:
 	_since_damage += delta
 	var rules: Dictionary = Settings.rules()
 	var regen_to: float = rules.regen_to
@@ -381,6 +496,8 @@ func _process(delta: float) -> void:
 		stick *= stick.length() * STICK_SPEED * Settings.stick_sensitivity * delta
 		_look(Vector2(stick.x, stick.y * 0.65))
 
+	if riding:
+		ride(Transform3D())
 	var eye := STAND_EYE
 	if dead:
 		eye = 0.4
@@ -404,7 +521,7 @@ func _process(delta: float) -> void:
 	var side := sin(PI * _stride)
 	var lift := -cos(TAU * _stride)
 	# Lean into strafes a little, and more during a slide.
-	var sideways := velocity.dot(global_basis.x)
+	var sideways := velocity.dot(global_basis.x) if not riding else 0.0
 	var tilt := (-sideways * 0.004 + (0.07 if _sliding else 0.0)) * motion + (0.5 if dead else 0.0)
 	_tilt = lerpf(_tilt, tilt, 1.0 - exp(-10.0 * delta))
 	_trauma = maxf(_trauma - SHAKE_DECAY * delta, 0.0)

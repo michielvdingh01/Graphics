@@ -21,11 +21,23 @@ plays a footstep or an enemy's shot, unless --at says from how far.
                                           each step at the moment the game plays it
     tools/hear.py casings rifle           a burst, with the cases landing after it
     tools/hear.py grenade                 the pin, the throw, three bounces and the bang
+    tools/hear.py grenade b               the same with variant b of the bang (or c)
+    tools/hear.py smoke                   the pin, the throw, three bounces and the smoke grenade
+    tools/hear.py smoke b                 hissing; the same with variant b of the hiss (or c)
+    tools/hear.py takes explosion         every take of a sound once, in the order of their numbers
+                                          and 5 s apart, to say which one; `takes explosion 3` 3 s apart
+    tools/hear.py fence                   a vehicle running into a fence of wire three times, at 15,
+                                          25 and 40 km/h; `fence b` with variant b, `fence wood` one
+                                          of wood, `fence wire` over a coil of wire, `fence barrier`
+                                          through a barrier
     tools/hear.py minigun                 the motor coming up to speed, fire until it overheats,
                                           the tail, the steam and the motor running down;
     tools/hear.py minigun b b             the same with variant b of the roar and of the motor
     tools/hear.py rocket                  the rocket launcher firing, the rocket going away and
                                           going off 36 m further on
+    tools/hear.py garand                  a whole clip of the M1 Garand, the ping of the clip
+                                          flying out, the next clip going in and two more shots;
+    tools/hear.py garand b a              the same with variant b of the shot (then of the ping)
     tools/hear.py ambience boiler         twelve seconds of the bed of a kind of space (hall,
                                           room, yard, boiler, turbine), with what sounds in it
                                           now and then and three shots for scale
@@ -38,6 +50,12 @@ plays a footstep or an enemy's shot, unless --at says from how far.
                                           and goes. --layer=<file> tries another file as that layer
     tools/hear.py level_music             where the pieces of a level take turns: the last ten
                                           seconds of each and the first ten of the one after it
+    tools/hear.py drive jeep              a ride as its driver hears it, played by the game itself
+                                          (tools/hear_drive.gd): get in, start, pull away through
+                                          the gears, brake hard to a stop, get out. jeep, truck or tank
+    tools/hear.py drive tank crash        flat out into a wall; `wreck` is the engine hit, alight
+                                          and going up, `gun` the turret turning and the gun firing
+    tools/hear.py drive jeep drive b      the same with variant b of every sound that has one
 
 Only recorded sounds, those with a folder in assets/audio/.
 """
@@ -79,6 +97,10 @@ SPACES = {
 }
 BEDS = dict(re.findall(r'"(\w+)": &"(\w+)"', re.search(r"^const BEDS := \{(.+)\}", SFX, re.M).group(1)))
 NEAR = constant("NEAR")
+# How far off a bang sounds as it does next to it (scripts/blast.gd).
+HEARD_NEAR = constant("HEARD_NEAR", (ROOT / "scripts/blast.gd").read_text())
+# Seconds after the last shot of a clip that its ping is heard.
+CLIP_PING = constant("CLIP_PING", (ROOT / "scripts/weapons.gd").read_text())
 
 
 def enclosed(metres: float) -> list:
@@ -145,16 +167,24 @@ def far(distance: float) -> float:
 
 def placed(events: list, distance: float, side: float = 0.0) -> list:
     """The same events as sounds from `distance` metres ahead and `side`
-    metres to the right, as play_at() in scripts/sfx.gd places them."""
+    metres to the right, as play_at() in scripts/sfx.gd places them: each at
+    the `near` it carries, NEAR if it carries none."""
     out = []
     for event in events:
-        at = dict(event, pos=[side, 0.0, -distance], unit_size=NEAR, max_distance=80.0, filter_db=-6.0, max_db=max(3.0, event["db"]))
+        near = event.pop("near", NEAR)
+        at = dict(event, pos=[side, 0.0, -distance], unit_size=near, max_distance=10.0 * near, filter_db=-6.0, max_db=max(3.0, event["db"]))
         out.append(at)
-        gain = far(math.hypot(distance, side))
+        gain = far(math.hypot(distance, side) * NEAR / near)
         if gain >= 0.05:
             db = event["db"] + 20.0 * math.log10(gain)
             out.append(dict(at, bus="Far", db=db, max_db=max(3.0, db), attenuation=False, panning=0.5))
     return out
+
+
+def bang(sound: str, times: list) -> list:
+    """An explosion as scripts/blast.gd plays it: 6 dB up, and as loud as next
+    to it up to HEARD_NEAR when it is placed."""
+    return [dict(event, near=HEARD_NEAR) for event in played(sound, times, 6.0)]
 
 
 def played(sound: str, times: list, db: float = 0.0) -> list:
@@ -197,6 +227,10 @@ def reload(weapon: str) -> list:
 
     events = played(f"{weapon}_shot", [START])
     begin = START + 0.9
+    clip = data.get("en_bloc") == "true"
+    if clip and (ROOT / "assets/audio" / f"{weapon}_ping").is_dir():
+        # The shot is the last of the clip, which flies out with its ping.
+        events += played(f"{weapon}_ping", [START + CLIP_PING], -2.0)
     if data.get("loads_singly") == "true":
         events += step("pump", START + 0.14, -7.0)
         shells = int(data.get("mag_size", 6))
@@ -206,8 +240,28 @@ def reload(weapon: str) -> list:
         events += step("pump", begin + 0.35 + time + 0.3, -6.0)
     else:
         for name, moment in (("mag_out", 0.14), ("mag_in", 0.72), ("bolt", 0.88)):
-            events += step(name, begin + moment * time, -9.0)
+            # A clip is not taken out: it flew out with the last round.
+            if not (clip and name == "mag_out"):
+                events += step(name, begin + moment * time, -9.0)
     return events
+
+
+def garand(shot: str, ping: str) -> list:
+    """The M1 Garand as scripts/weapons.gd plays it: a whole clip of eight
+    fired at a steady pace, the clip flying out with its ping just after the
+    last bang, the next clip pressed in and the bolt slamming home, and two
+    more shots."""
+    data = dict(re.findall(r"^(\w+) = (.+)$", (ROOT / "weapons/garand.tres").read_text(), re.M))
+    rounds = int(data.get("mag_size", 8))
+    time = float(data.get("reload_time", 2.0))
+    pace = max(60.0 / float(data.get("rounds_per_minute", 300.0)), 0.32)
+    times = [START + i * pace for i in range(rounds)]
+    events = played(shot, times)
+    events += played(ping, [times[-1] + CLIP_PING], -2.0)
+    begin = times[-1] + 0.7
+    events += played("garand_mag_in", [begin + 0.72 * time], -9.0) + played("garand_bolt", [begin + 0.88 * time], -9.0)
+    after = begin + time + 0.35
+    return events + played(shot, [after, after + pace])
 
 
 def casings(weapon: str) -> list:
@@ -220,13 +274,58 @@ def casings(weapon: str) -> list:
     return events
 
 
-def grenade() -> list:
+def grenade(blast: str = "explosion") -> list:
     """A grenade from the pin to the bang: the levels of scripts/weapons.gd,
-    and bounces that get quieter as scripts/grenade.gd has them."""
+    and bounces that get quieter as scripts/grenade.gd has them. The bang at
+    the level scripts/blast.gd plays it at."""
     events = played("pin", [START], -4.0) + played("throw", [START + 0.22], -6.0)
     for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
         events += played("bounce", [START + after], db)
-    return events + played("explosion", [START + 0.22 + 2.2])
+    return events + bang(blast, [START + 0.22 + 2.2])
+
+
+def smoke(hiss: str = "smoke_hiss") -> list:
+    """A smoke grenade from the pin to the end of its hiss: the levels of
+    scripts/weapons.gd, and the hiss one second after the throw at the level
+    scripts/smoke_grenade.gd plays it at."""
+    events = played("pin", [START], -4.0) + played("throw", [START + 0.22], -6.0)
+    for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
+        events += played("bounce", [START + after], db)
+    return events + played(hiss, [START + 0.22 + 1.0], -6.0)
+
+
+def takes(sound: str, gap: float) -> list:
+    """Every take of a sound once, in the order of their numbers and `gap`
+    seconds apart, at their own pitch: to tell which of them one means. A
+    bang is played as scripts/blast.gd plays it."""
+    files = sorted((ROOT / "assets/audio" / sound).glob("*.wav"), key=lambda f: int(re.sub(r"\D", "", f.stem.rsplit("_", 1)[-1]) or 0))
+    if not files:
+        raise SystemExit(f"no takes in assets/audio/{sound}/")
+    events = [{"t": START + gap * i, "file": str(f), "bus": "World", "db": 0.0, "pitch": 1.0} for i, f in enumerate(files)]
+    if sound.startswith("explosion"):
+        events = [dict(event, db=6.0, near=HEARD_NEAR) for event in events]
+    for event in events:
+        print(f"{event['t']:5.1f} s  {pathlib.Path(event['file']).name}")
+    return events
+
+
+def fence(kind: str) -> list:
+    """A vehicle running into a fence three times, at 15, 25 and 40 km/h, as
+    scripts/vehicle.gd plays it (_crashes()): the fence never softer than
+    FENCE_LEAST and the crash of the vehicle 6 dB under it. `wire` is a coil
+    of barbed wire flattened (scripts/wire.gd) and `barrier` a barrier
+    snapped (scripts/barrier.gd), each three times."""
+    if kind == "wire":
+        return [e for i in range(3) for e in played("wire_crush", [START + 2.0 * i], 4.0)]
+    if kind == "barrier":
+        return [e for i in range(3) for e in played("crate_break", [START + 2.5 * i], 2.0) + played("fence_crash_wood", [START + 2.5 * i], 0.0)]
+    sound = {"a": "fence_crash", "b": "fence_crash_b", "wood": "fence_crash_wood"}[kind]
+    least = constant("FENCE_LEAST", (ROOT / "scripts/vehicle.gd").read_text())
+    events = []
+    for i, kmh in enumerate((15, 25, 40)):
+        db = min(max(-14.0 + kmh / 3.6 * 1.6, -14.0), 6.0)
+        events += played(sound, [START + 2.5 * i], max(db, least) + 2.0) + played("vehicle_crash", [START + 2.5 * i], db - 6.0)
+    return events
 
 
 def minigun(fire: str, spin: str) -> list:
@@ -276,7 +375,7 @@ def rocket() -> list:
     flight = sorted((ROOT / "assets/audio/rocket_flight").glob("*.wav"))[0]
     events = played("rocket_launch", [START])
     events.append({"t": START + 0.05, "file": str(flight), "bus": "World", "db": -6.0, "until": START + 0.8, "fade": 0.5})
-    return events + placed(played("explosion", [START + 0.8]), 36.0)
+    return events + placed(bang("explosion", [START + 0.8]), 36.0)
 
 
 def burst(sound: str, rate: float, db: float = 0.0, start: float = START) -> list:
@@ -452,6 +551,26 @@ def mixed(name: str, events: list, tuning: list = None, length: float = 0.0) -> 
     return out
 
 
+def drive(kind: str, ride: str, variant: str) -> pathlib.Path:
+    """A ride recorded from the game as it plays it: see tools/hear_drive.gd.
+    It runs the game's own project, with a home of its own, so that nothing
+    of whoever plays here is read or written."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    out = OUT / f"drive_{kind}_{ride}_{variant}.wav"
+    home = ROOT / ".godot/vehicles_home"
+    home.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [GODOT, "--headless", "--path", str(ROOT), "--log-file", str(OUT / "godot.log"), "--script", "res://tools/hear_drive.gd", "--", kind, ride, variant, str(out)],
+        env=dict(os.environ, HOME=str(home)), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
+    )
+    if result.returncode != 0 or not out.exists():
+        raise SystemExit(result.stdout)
+    for line in result.stdout.splitlines():
+        if line.startswith("  ") and " s  " in line:
+            print(line)
+    return out
+
+
 def main() -> None:
     args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     options = dict(arg[2:].partition("=")[::2] for arg in sys.argv[1:] if arg.startswith("--"))
@@ -468,9 +587,28 @@ def main() -> None:
     elif args[0] == "casings" and len(args) > 1:
         name, events = f"casings_{args[1]}", casings(args[1])
     elif args[0] == "grenade":
-        name, events = "grenade", grenade()
+        variant = args[1] if len(args) > 1 and args[1] != "a" else ""
+        name, events = "grenade" + (f"_{variant}" if variant else ""), grenade("explosion" + (f"_{variant}" if variant else ""))
+        # The bang rolls on for longer than the tail that is rendered after it.
+        length = events[-1]["t"] + 6.0
+    elif args[0] == "smoke":
+        variant = args[1] if len(args) > 1 and args[1] != "a" else ""
+        name, events = "smoke" + (f"_{variant}" if variant else ""), smoke("smoke_hiss" + (f"_{variant}" if variant else ""))
+        # The hiss goes on for longer than the tail that is rendered after it.
+        length = events[-1]["t"] + 9.0
+    elif args[0] == "takes" and len(args) > 1:
+        gap = float(args[2]) if len(args) > 2 else 5.0
+        name, events = f"takes_{args[1]}", takes(args[1], gap)
+        length = events[-1]["t"] + gap
+    elif args[0] == "fence":
+        kind = args[1] if len(args) > 1 else "a"
+        name, events = f"fence_{kind}", fence(kind)
     elif args[0] == "rocket":
         name, events = "rocket", rocket()
+    elif args[0] == "garand":
+        shot = "garand_shot" + (f"_{args[1]}" if len(args) > 1 and args[1] != "a" else "")
+        ping = "garand_ping" + (f"_{args[2]}" if len(args) > 2 and args[2] != "a" else "")
+        name, events = f"garand_{'_'.join(args[1:]) or 'a'}", garand(shot, ping)
     elif args[0] == "minigun":
         fire = "minigun_fire" + (f"_{args[1]}" if len(args) > 1 and args[1] != "a" else "")
         spin = "minigun_spin" + (f"_{args[2]}" if len(args) > 2 and args[2] != "a" else "")
@@ -489,6 +627,12 @@ def main() -> None:
     elif args[0] == "level_music":
         name = "level_music"
         events, length = level_music()
+    elif args[0] == "drive" and len(args) > 1:
+        out = drive(args[1], args[2] if len(args) > 2 else "drive", args[3] if len(args) > 3 else "a")
+        print(out.relative_to(ROOT))
+        if "quiet" not in options:
+            subprocess.run(["afplay", str(out)], check=True)
+        return
     elif args[0] == "music" and len(args) > 1:
         name, events, length = f"music_{args[1]}", music(args[1], options.get("layer", "")), 20.0
     else:

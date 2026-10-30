@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/sparse_grass/sparse_grass_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/sparse_grass/sparse_grass_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/sparse_grass/sparse_grass_arm.jpg" id="arm"]
+
+[resource]
+albedo_color = Color(0.85, 1.0, 0.7, 1)
+albedo_texture = ExtResource("diff")
+orm_texture = ExtResource("arm")
+normal_enabled = true
+normal_texture = ExtResource("nor")
+uv1_scale = Vector3(0.4, 0.4, 0.4)
+uv1_world_triplanar = false

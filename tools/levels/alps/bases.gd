@@ -1,0 +1,55 @@
+extends "res://tools/levels/alps/plan.gd"
+## The two ends of the Alps, where the two sides begin a match: a camp at
+## either end of the Moos, below the wooded slope (CAMPS in plan.gd). Each has
+## its vehicles for the way across: two field cars, two motorcycles with a
+## sidecar, a lorry and a tank. A few more stand about the valley, where
+## whoever is on foot can find one.
+
+## Where the camps are (x and z): the ends assets/arenas.json gives the
+## arena, and the ground each is levelled over.
+const WEST_CAMP: Vector2 = CAMPS[0]
+const EAST_CAMP: Vector2 = CAMPS[1]
+const CAMP := Vector2(90, 70)
+
+
+func _describe() -> void:
+	in_zone("")
+	# The west faces east, the way to the other side; the east faces west.
+	_camp(WEST_CAMP, -90.0)
+	_camp(EAST_CAMP, 90.0)
+	# About the valley: by the farm, the chapel, the cart track, the barns of
+	# the east and the road in the west.
+	vehicle("jeep", Vector2(1085, 862), 20.0)
+	vehicle("motorcycle", Vector2(575, 955), -80.0)
+	vehicle("truck", Vector2(760, 1030), 100.0)
+	vehicle("motorcycle", Vector2(1215, 868), 160.0)
+	vehicle("jeep", Vector2(70, 935), -110.0)
+
+
+## A camp at `at` whose vehicles face `facing` (the yaw of vehicle(): -90
+## is east), lined up along the way out.
+func _camp(at: Vector2, facing: float) -> void:
+	var ahead := Vector2(1, 0) if facing < 0.0 else Vector2(-1, 0)
+	var across := Vector2(0, 1)
+	var row := at - ahead * 12.0
+	vehicle("jeep", row + across * -12.0, facing)
+	vehicle("jeep", row + across * -6.0, facing)
+	vehicle("motorcycle", row + across * 0.0, facing)
+	vehicle("motorcycle", row + across * 4.0, facing)
+	vehicle("truck", row + across * 10.0 - ahead * 4.0, facing)
+	vehicle("tank", row + across * 20.0 - ahead * 6.0, facing)
+	var camp_tent := at - ahead * 30.0 + across * -4.0
+	tent(camp_tent, facing + 90.0)
+	# A bulb under the ridge of the tent, for the evening.
+	bulb(ground(camp_tent.x, camp_tent.y, 2.5), false)
+	# The post keeps watch beside the way out, not across it: the vehicles
+	# drive straight off from their row.
+	sandbag_post(at + ahead * 18.0 + across * -24.0, facing + 180.0)
+	# What a camp keeps by its vehicles: fuel in drums and cans, and crates
+	# of what it eats and shoots.
+	var store := at - ahead * 22.0 + across * 14.0
+	for i in 3:
+		barrel(ground(store.x + i * 0.75, store.y))
+	fuel(ground(store.x + 0.4, store.y + 1.4))
+	fuel(ground(store.x + 1.1, store.y + 1.5))
+	crates(ground(store.x - 3.0, store.y + 2.0), 4)

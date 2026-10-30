@@ -25,6 +25,10 @@ const LEVELS: Array[Dictionary] = [
 	{"name": "Depot", "scene": "res://scenes/depot.tscn", "music": LEVEL_MUSIC},
 	{"name": "Powerhouse", "scene": "res://scenes/powerhouse.tscn", "music": LEVEL_MUSIC},
 	{"name": "Dunes", "scene": "res://scenes/dunes.tscn", "music": LEVEL_MUSIC},
+	# The dunes again by night: a variant, which no exit leads to and whose
+	# exit leads where that of the dunes does. It follows the dunes.
+	{"name": "Dunes at night", "scene": "res://scenes/dunes_night.tscn", "music": LEVEL_MUSIC, "variant": true},
+	{"name": "Alps", "scene": "res://scenes/alps.tscn", "music": LEVEL_MUSIC},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it
 ## cannot hold a right click and click at once, and its scroll is not a wheel.
@@ -121,10 +125,9 @@ func at_title() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _enabled or not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
 		return
-	# While a level is being loaded there is none: after a death and between
-	# two levels the old one is gone a frame before the new one is there, and
-	# that frame is where a key lands that was pressed during the load.
-	if get_tree().current_scene == null:
+	# While a level is being loaded there is none, or not one to be played:
+	# see loading.gd.
+	if get_tree().current_scene == null or Loading.busy():
 		return
 	match _screen:
 		Screen.NONE:
@@ -176,7 +179,7 @@ func _show(screen: Screen) -> void:
 			_heading(ProjectSettings.get_setting("application/config/name").to_upper(), 64)
 			var checkpoint := Save.checkpoint
 			if checkpoint:
-				var text := "Continue  ·  %s" % _level_name(checkpoint.level)
+				var text := "Continue  ·  %s" % level_name(checkpoint.level)
 				if checkpoint.title:
 					text += ", %s" % (checkpoint.title as String).to_lower()
 				_button(text, _play.bind(checkpoint.level, false))
@@ -274,13 +277,14 @@ func _play(scene: String, fresh: bool) -> void:
 		# Together, where everybody goes is the host's to say, and what was
 		# saved of a game alone is left as it is.
 		_show(Screen.NONE)
-		Net.load_level(scene, "" if fresh else Net.session.at, 0 if fresh else Net.session.kills)
+		var again: bool = not fresh and scene == Net.session.level
+		Net.load_level(scene, "" if fresh else Net.session.at, 0 if fresh else Net.session.kills, Net.session.get("fallen", []) if again else [])
 		return
 	if fresh:
 		Save.clear()
 	_show(Screen.NONE)
 	_score(scene)
-	get_tree().change_scene_to_file(scene)
+	Loading.go(scene)
 
 
 func _quit_to_title() -> void:
@@ -288,7 +292,7 @@ func _quit_to_title() -> void:
 	Sandbox.close()
 	Match.close()
 	_show(Screen.TITLE)
-	get_tree().reload_current_scene()
+	Loading.again(ProjectSettings.get_setting("application/config/name"))
 
 
 # --- The sandbox ----------------------------------------------------------------
@@ -376,7 +380,7 @@ func _on_left(reason: String) -> void:
 	_together_note = reason
 	_show(Screen.TOGETHER)
 	if playing:
-		get_tree().reload_current_scene()
+		Loading.again(ProjectSettings.get_setting("application/config/name"))
 
 
 ## Who is in the game, and for a host how the others get in.
@@ -434,7 +438,8 @@ func _on_scene_changed() -> void:
 		_title_camera.make_current()
 
 
-func _level_name(scene: String) -> String:
+## What the menu calls the level at `scene`.
+func level_name(scene: String) -> String:
 	for level in LEVELS:
 		if level.scene == scene:
 			return level.name
@@ -709,6 +714,7 @@ func _controls() -> void:
 		["Aim", "Hold right click", "Hold " + alt, "Hold LT"],
 		["Reload", "R", "R", "X"],
 		["Grenade", "G", "G", "Y"],
+		["Smoke grenade", "Q", "Q", "D-pad left"],
 		["Melee", "V", "V", "Click right stick"],
 		["Switch weapon", "1 to 5, or scroll", "1 to 5", "LB and RB"],
 		["Pause", "Esc", "Esc", "Start"],

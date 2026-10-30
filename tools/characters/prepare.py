@@ -32,6 +32,8 @@ import humanoid  # noqa: E402
 import parts  # noqa: E402
 
 WEAPONS = r"weapon|pistol|rifle|gun|knife|sword|blade|grenade|rocket|launcher|bayonet"
+# How much of the baked occlusion goes into the colour as well, see --occlusion.
+OCCLUSION_IN_COLOUR = 0.3
 
 
 def options() -> argparse.Namespace:
@@ -48,6 +50,8 @@ def options() -> argparse.Namespace:
     parser.add_argument("--keep-weapons", action="store_true")
     parser.add_argument("--bones", default="", help="JSON file mapping profile bone names to source bone names")
     parser.add_argument("--route", choices=("auto", "rigged", "scan", "parts", "repaint"), default="auto")
+    parser.add_argument("--texture-size", type=int, default=atlas.SIDE, help="the side of the one set of textures, in texels: 2048 for one that is seen close up, such as a soldier")
+    parser.add_argument("--occlusion", action="store_true", help="bake how much light from around reaches each texel into the texture: folds, pouches and straps get their shadow")
     parser.add_argument("--look", default="", help="zombie, clown or a uniform: paint the character up as one")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--no-delight", action="store_true", help="scan: leave the light that is baked into the texture")
@@ -353,7 +357,7 @@ def main() -> None:
         across = bones["LeftUpperArm"].head_local - bones["RightUpperArm"].head_local
         report.update(settle(body, armature, args, Vector((0.0, -1.0 if across.x > 0.0 else 1.0, 0.0)), "Hips"))
         thin(body, args.triangles)
-        textures = atlas.pack(body)
+        textures = atlas.pack(body, args.texture_size)
     elif armature is not None:
         report["route"] = "rigged"
         names = {group.name for group in body.vertex_groups}
@@ -370,7 +374,7 @@ def main() -> None:
         # Hair cards get a second face later on: leave room for those.
         cards = [atlas.Source(slot.material).alpha is not None for slot in body.material_slots]
         thin(body, args.triangles - sum(len(polygon.vertices) - 2 for polygon in body.data.polygons if cards and cards[polygon.material_index]))
-        textures = atlas.pack(body)
+        textures = atlas.pack(body, args.texture_size)
     else:
         import scan
         report["route"] = "scan"
@@ -378,6 +382,12 @@ def main() -> None:
 
     if args.flip_normal_y:
         textures.normal[:, :, 1] = 1.0 - textures.normal[:, :, 1]
+    if args.occlusion:
+        # For the light from around, as Godot's ao_texture; and a share of it
+        # in the colour, in linear light, so that a fold reads in the sun too.
+        report["occlusion"] = atlas.bake_occlusion(body, textures)
+        shade = 1.0 - OCCLUSION_IN_COLOUR * (1.0 - textures.occlusion)
+        textures.color[:, :, :3] = (textures.color[:, :, :3] ** 2.2 * shade[:, :, None]) ** (1.0 / 2.2)
     if args.look:
         import looks
         report["look"] = looks.apply(args.look, body, armature, textures, args.seed)

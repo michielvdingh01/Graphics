@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/auto_shotgun.scn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Auto shotgun"
+viewmodel = ExtResource("2")
+shot_sound = &"auto_shotgun_shot"
+damage = 12.0
+headshot_multiplier = 1.5
+rounds_per_minute = 300.0
+automatic = true
+pellets = 8
+max_range = 50.0
+falloff_start = 8.0
+falloff_end = 22.0
+min_damage_scale = 0.2
+mag_size = 20
+reserve_ammo = 60
+reload_time = 3.2
+hip_spread_deg = 2.2
+ads_spread_deg = 1.7
+move_spread_deg = 0.8
+bloom_per_shot_deg = 0.0
+recoil_pitch_deg = 2.6
+recoil_yaw_deg = 1.0
+kick_back = 0.08
+kick_rotation = 0.12
+ads_fov = 62.0
+ads_time = 0.22
+ads_move_scale = 0.55
+flash_size = 0.46
+flash_prongs = 2
+bot_sight = 40.0
+bot_range = 7.0
+move_scale = 0.9
+switch_time = 0.45
+hip_offset = Vector3(0.1, -0.115, -0.3)
+ads_offset = Vector3(0, -0.07, -0.25)
+hip_rotation_deg = Vector3(1.5, 2.5, -2)

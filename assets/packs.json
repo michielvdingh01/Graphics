@@ -1,5 +1,5 @@
 {
-	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start; grenade: what is thrown, a scene in scenes/ (grenade unless the pack says). A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox.",
+	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start; grenade: what is thrown, a scene in scenes/ (grenade unless the pack says). tacticals: how many there are of what goes on the second key; tactical: what that is, a scene in scenes/ too (smoke_grenade unless the pack says). A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox, unless a level says otherwise (metadata/pack on its scene: the dunes by night carry the silenced pack).",
 	"packs": {
 		"standard": {
 			"title": "Standard",
@@ -8,46 +8,62 @@
 			"bots": ["rifle", "smg", "rifle", "shotgun", "rifle", "marksman"],
 			"far": ["marksman", "rifle", "rifle", "marksman", "smg", "rifle"],
 			"sidearm": "pistol",
-			"grenades": 2
+			"grenades": 2,
+			"tacticals": 2
+		},
+		"silenced": {
+			"title": "Silenced",
+			"about": "The standard set with a silencer on each: heard from a few metres, and next to no flash.",
+			"weapons": ["rifle_sd", "pistol_sd", "shotgun_sd", "smg_sd", "marksman_sd"],
+			"bots": ["rifle_sd", "smg_sd", "rifle_sd", "shotgun_sd", "rifle_sd", "marksman_sd"],
+			"far": ["marksman_sd", "rifle_sd", "rifle_sd", "marksman_sd", "smg_sd", "rifle_sd"],
+			"sidearm": "pistol_sd",
+			"grenades": 2,
+			"tacticals": 2
 		},
 		"close": {
 			"title": "Close quarters",
-			"about": "For halls and streets: short, loud and quick.",
-			"weapons": ["smg", "double_barrel", "machine_pistol", "revolver"],
-			"bots": ["smg", "double_barrel", "machine_pistol", "smg", "double_barrel", "smg"],
-			"grenades": 3
+			"about": "For halls and streets: short, loud and quick, and a shotgun that does not stop.",
+			"weapons": ["smg", "double_barrel", "machine_pistol", "revolver", "auto_shotgun"],
+			"bots": ["smg", "auto_shotgun", "machine_pistol", "smg", "double_barrel", "auto_shotgun"],
+			"grenades": 3,
+			"tacticals": 2
 		},
 		"far": {
 			"title": "Long range",
-			"about": "For the dunes and the yard: one shot, and make it count.",
-			"weapons": ["bolt_rifle", "battle_rifle", "revolver"],
-			"bots": ["battle_rifle", "bolt_rifle", "battle_rifle", "battle_rifle", "bolt_rifle", "battle_rifle"],
-			"grenades": 2
+			"about": "For the dunes and the yard: one shot, and make it count; the .50 counts at any range.",
+			"weapons": ["bolt_rifle", "battle_rifle", "revolver", "marksman", "anti_materiel"],
+			"bots": ["battle_rifle", "bolt_rifle", "marksman", "battle_rifle", "anti_materiel", "battle_rifle"],
+			"grenades": 2,
+			"tacticals": 2
 		},
 		"1944": {
 			"title": "1944",
-			"about": "Drum, bolt, trench gun and the Colt, as they sounded.",
-			"weapons": ["ppsh", "mosin", "trench_gun", "colt"],
-			"bots": ["ppsh", "mosin", "ppsh", "trench_gun", "ppsh", "mosin"],
-			"far": ["mosin", "ppsh", "mosin", "ppsh", "trench_gun", "mosin"],
+			"about": "Drum, bolt, trench gun, the Colt and the Garand's ping, as they sounded.",
+			"weapons": ["ppsh", "mosin", "trench_gun", "colt", "garand"],
+			"bots": ["ppsh", "garand", "ppsh", "mosin", "trench_gun", "garand"],
+			"far": ["mosin", "garand", "ppsh", "mosin", "garand", "ppsh"],
 			"sidearm": "colt",
 			"grenades": 2,
+			"tacticals": 2,
 			"grenade": "stick_grenade"
 		},
 		"heavy": {
 			"title": "Heavy",
-			"about": "A machine gun, a pump gun and a revolver: slower on your feet.",
-			"weapons": ["lmg", "shotgun", "revolver"],
-			"bots": ["lmg", "shotgun", "lmg", "lmg", "shotgun", "lmg"],
+			"about": "A machine gun, a battle rifle, two shotguns and a revolver: slower on your feet.",
+			"weapons": ["lmg", "shotgun", "revolver", "auto_shotgun", "battle_rifle"],
+			"bots": ["lmg", "auto_shotgun", "battle_rifle", "lmg", "shotgun", "battle_rifle"],
 			"sidearm": "revolver",
-			"grenades": 2
+			"grenades": 2,
+			"tacticals": 2
 		},
 		"pistols": {
 			"title": "Pistols only",
-			"about": "Four pistols and your fists.",
-			"weapons": ["pistol", "revolver", "machine_pistol", "colt"],
-			"bots": ["colt", "revolver", "pistol", "machine_pistol", "colt", "revolver"],
-			"grenades": 1
+			"about": "Five pistols and your fists.",
+			"weapons": ["pistol", "revolver", "machine_pistol", "colt", "hand_cannon"],
+			"bots": ["colt", "hand_cannon", "pistol", "machine_pistol", "revolver", "hand_cannon"],
+			"grenades": 1,
+			"tacticals": 1
 		}
 	}
 }

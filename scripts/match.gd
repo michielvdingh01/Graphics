@@ -67,6 +67,7 @@ const SCENE := "res://scenes/%s.tscn"
 ## What somebody was hit with that is no weapon of the loadout.
 const MELEE := -2
 const BLAST := -3
+const RUN_OVER := -4
 ## The physics layers of the two sides, 9 and 10: a shot is looked for on
 ## the layer of the other side, and so passes through one's own.
 const SIDES: Array[int] = [1 << 8, 1 << 9]
@@ -287,7 +288,7 @@ func open(what: Dictionary) -> bool:
 	# sends the player on if it is the wrong one, see arrive().
 	var scene_now := get_tree().current_scene
 	if scene_now and scene_now.is_node_ready():
-		get_tree().change_scene_to_file(scene)
+		Loading.go(scene)
 	return true
 
 
@@ -308,14 +309,14 @@ func again() -> void:
 	if active and _game:
 		state = State.LOADING
 		_forget()
-		get_tree().reload_current_scene()
+		Loading.again()
 
 
 ## A level has loaded while a match is open: it becomes the arena, or the
 ## player is sent on to the level that is.
 func arrive(game: Node3D) -> void:
 	if game.scene_file_path != setup.scene:
-		get_tree().change_scene_to_file.call_deferred(setup.scene)
+		Loading.go.call_deferred(setup.scene)
 		return
 	_forget()
 	_game = game
@@ -376,17 +377,25 @@ func judge() -> void:
 ## or more in an arena that is big enough for it.
 func most(kind: String, level: String) -> int:
 	var numbers: Dictionary = kinds.get(kind, {})
-	var arena: Dictionary = _arenas.get(level, {})
+	var arena := _arena_numbers(level)
 	return maxi(int(numbers.get("most", 1)), int(arena.get("most", 0)) * _share(kind))
 
 
 ## How many play a side there, or in all, when nothing else is asked for.
 func usual(kind: String, level: String) -> int:
 	var numbers: Dictionary = kinds.get(kind, {})
-	var arena: Dictionary = _arenas.get(level, {})
+	var arena := _arena_numbers(level)
 	if arena.has("size"):
 		return clampi(int(arena.size) * _share(kind), int(numbers.get("least", 1)), most(kind, level))
 	return int(numbers.get("size", 1))
+
+
+## The numbers of the arena of `level` in assets/match.json. A level that is
+## another played otherwise (the dunes by night) says "like" and has those
+## of that one.
+func _arena_numbers(level: String) -> Dictionary:
+	var arena: Dictionary = _arenas.get(level, {})
+	return _arenas.get(str(arena.like), {}) if arena.has("like") else arena
 
 
 ## What the numbers of an arena, which are a side's, come to in a kind: as
@@ -456,6 +465,8 @@ func score() -> Vector2i:
 func hit(by: Node, target: Object, amount: float, at: Vector3, direction: Vector3, weapon := -1, head := false) -> bool:
 	if plays(target):
 		return harm(number(target), amount, at, direction, number(by), weapon, head)
+	if target.has_method("struck_by"):
+		target.struck_by(number(by))
 	return Net.damage(target, amount, at, direction)
 
 
@@ -591,14 +602,18 @@ func _show_fall(by: int, fallen: int, weapon: int, head: bool, push: Vector3) ->
 func _bring_back(who: Entrant) -> void:
 	var foes := PackedVector3Array()
 	var friends := PackedVector3Array()
+	# Enemies who are people see further: see Arena.WATCHED_FROM.
+	var watchers := PackedVector3Array()
 	for other: Entrant in entrants.values():
 		if other == who or other.out > 0.0:
 			continue
 		if mode.hostile(who, other):
 			foes.append(other.body.global_position)
+			if not other.bot:
+				watchers.append(other.body.global_position)
 		else:
 			friends.append(other.body.global_position)
-	Net.show(self, &"_show_back", [who.id, mode.come_back(who, foes, friends)])
+	Net.show(self, &"_show_back", [who.id, mode.come_back(who, foes, friends, watchers)])
 
 
 func _show_back(id: int, pose: Transform3D) -> void:
@@ -740,7 +755,10 @@ func _set_out_specials() -> void:
 	var kinds := [ARENA.Hideout.OFF_THE_WAY, ARENA.Hideout.UP, ARENA.Hideout.IN_THE_OPEN]
 	var spots: PackedVector3Array = arena.hideouts(kinds.slice(0, weapons.size()))
 	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(ARENAS)) if FileAccess.file_exists(ARENAS) else null
-	var placed: Dictionary = said.get(setup.level, {}).get("specials", {}) if said is Dictionary else {}
+	var own: Dictionary = said.get(setup.level, {}) if said is Dictionary else {}
+	if own.has("like"):
+		own = said.get(str(own.like), {})
+	var placed: Dictionary = own.get("specials", {})
 	for i in mini(weapons.size(), spots.size()):
 		var data := weapons[i]
 		var stand: Node3D = STASH.new()

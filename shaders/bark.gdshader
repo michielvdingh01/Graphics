@@ -16,7 +16,7 @@ uniform float specular : hint_range(0.0, 1.0) = 0.5;
 
 void vertex() {
 	UV *= uv_scale;
-	if (given_way(NODE_POSITION_WORLD, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, 0.5)) {
+	if (given_way(MODEL_MATRIX[3].xyz, MAIN_CAM_INV_VIEW_MATRIX[3].xyz, 0.5)) {
 		VERTEX = vec3(0.0);
 	}
 }

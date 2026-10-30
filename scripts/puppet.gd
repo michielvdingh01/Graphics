@@ -20,7 +20,7 @@ const ARMORY := preload("res://scripts/armory.gd")
 const GRENADE := preload("res://scenes/grenade.tscn")
 ## Who it can be: soldier_01 and up, one for every player by its id.
 const CHARACTER := "res://assets/characters/soldier_%02d/soldier_%02d.glb"
-const CHARACTERS := 5
+const CHARACTERS := 8
 ## The same soldiers in the uniform of the second side of a match, where
 ## there is one.
 const SECOND := "res://assets/characters/soldier_%02d_desert/soldier_%02d_desert.glb"
@@ -30,6 +30,8 @@ const DELAY := 0.1
 ## The longest it carries on by itself when nothing is heard, in seconds.
 const COAST := 0.25
 const EYE := 1.6
+## How high the hips of a soldier are over its feet, for sitting.
+const HIPS := 0.95
 const CROUCH_EYE := 0.95
 const LAYER := 2
 const HIT_MASK := 0b100101  # world + enemy + breakable
@@ -72,6 +74,10 @@ var head := Node3D.new()
 ## thinks for.
 var team := -1
 var driven := false
+## The vehicle it sits in on its player's machine, and in which seat: see
+## sit() and scripts/vehicle.gd. The vehicle carries it there.
+var riding: Node3D
+var seat := -1
 ## Nothing it carries stops a shot: scripts/weapons.gd asks that of whatever
 ## has a head to hit.
 var deflected := false
@@ -143,7 +149,7 @@ func _dress() -> void:
 	var data: WeaponData = ARMORY.at(_weapon)
 	var rig := HUMANOID.new()
 	rig.name = "Model"
-	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "default"}
+	var cast := {"weapon": data.resource_path.get_file().get_basename(), "moves": "soldier"}
 	if _look.has("character"):
 		cast.merge(_look)
 	elif ResourceLoader.exists(path):
@@ -193,6 +199,11 @@ func _eyes() -> float:
 func _physics_process(_delta: float) -> void:
 	if _reports.is_empty():
 		return
+	# In a vehicle it is where the vehicle carries it; only where it looks
+	# is its player's.
+	if riding:
+		_steer_look()
+		return
 	# The two reports that the moment to show lies between. Past the last one
 	# it carries on the way it was going, for a moment.
 	var now := Time.get_ticks_msec() * 0.001 - DELAY
@@ -218,6 +229,9 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# At the wheel the vehicle shows the driver; a passenger is seen.
+	if _rig:
+		_rig.visible = riding == null or seat != 0
 	if ARMORY.at(_weapon).spin_up > 0.0 or _spin > 0.0 or _roaring:
 		_spin_barrels(ARMORY.at(_weapon), delta)
 	if _rig == null or dead:
@@ -233,6 +247,39 @@ func _process(delta: float) -> void:
 		_rig.lower()
 	else:
 		_rig.aim(head.global_position - head.global_basis.z * 20.0)
+
+
+## Where it looks in a vehicle, as its player looks: the vehicle has put it
+## in its seat (ride()).
+func _steer_look() -> void:
+	var last: Array = _reports[-1]
+	rotation.y = last[2]
+	head.rotation.x = last[3]
+	head.position.y = _eyes()
+	velocity = riding.linear_velocity if riding is RigidBody3D else Vector3.ZERO
+
+
+## Into seat `which` of `vehicle`, as its player got in on its own machine.
+## At the wheel the vehicle shows a figure of its own; a passenger is this
+## soldier, low in the seat, with its weapon up.
+func sit(vehicle: Node3D, which: int) -> void:
+	riding = vehicle
+	seat = which
+	collision_layer = _layer if vehicle.exposed(which) and not dead else 0
+
+
+## Out of the vehicle: from now on where its machine says it is.
+func stand(_pose: Transform3D, _going: Vector3) -> void:
+	riding = null
+	seat = -1
+	collision_layer = 0 if dead else _layer
+	_reports.clear()
+
+
+## Carried by its vehicle: the hips where the seat has them, and since the
+## soldier stands, its feet that much below them, in the vehicle.
+func ride(frame: Transform3D) -> void:
+	global_position = frame.origin - Vector3.UP * HIPS
 
 
 ## Strikes a pose for a screenshot of a puppet that nobody is behind: 1 with
@@ -268,14 +315,14 @@ func net_state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int
 	if dead and not down:
 		# Back on its feet somewhere else: there is no way between the two.
 		_reports.clear()
-	if _reports.is_empty():
+	if _reports.is_empty() and riding == null:
 		global_position = at
 		rotation.y = yaw
 		visible = true
 	_reports.append([Time.get_ticks_msec() * 0.001, at, yaw, pitch, speed])
 	if _reports.size() > 12:
 		_reports.pop_front()
-	_doing = doing
+	act(doing)
 	var rearmed := weapon != _weapon
 	_weapon = weapon
 	if down and not dead:
@@ -328,7 +375,7 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 		# Thirty rounds a second are one roar, see _spin_barrels().
 		_roars_until = Time.get_ticks_msec() * 0.001 + ROAR_GAP
 	else:
-		Sfx.play_at(data.shot_sound, muzzle)
+		Sfx.play_at(data.shot_sound, muzzle, data.shot_db)
 	if Match.active and not ends.is_empty():
 		# Whoever it was meant for hears it go by.
 		Sfx.passing(muzzle, ends[0])
@@ -479,6 +526,9 @@ func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1, look 
 
 ## True if a shot that landed at `at` is one to the head.
 func is_headshot(at: Vector3) -> bool:
+	# A soldier's head is where its rig has it, see HumanoidRig.head_start().
+	if _rig and _rig.has_method(&"head_start"):
+		return at.y > _rig.head_start()
 	return at.y - global_position.y > float(_build.head) - (CROUCH_DROP if _doing & Net.CROUCHED else 0.0)
 
 
@@ -487,7 +537,7 @@ func fall(push: Vector3) -> void:
 	if dead:
 		return
 	dead = true
-	_doing = 0
+	act(0)
 	collision_layer = 0
 	velocity = Vector3.ZERO
 	_label.visible = false
@@ -507,7 +557,7 @@ func _collapse(push: Vector3) -> void:
 func rise(pose: Transform3D) -> void:
 	dead = false
 	_reports.clear()
-	_doing = 0
+	act(0)
 	velocity = Vector3.ZERO
 	global_position = pose.origin
 	rotation = Vector3(0.0, pose.basis.get_euler().y, 0.0)
@@ -518,9 +568,28 @@ func rise(pose: Transform3D) -> void:
 	_dress()
 
 
-## What a bot is doing, the bits of net.gd: its brain says so.
+## What a bot is doing, the bits of net.gd: its brain says so, or the
+## machine of whoever it stands for. A bot that waits behind cover is seen
+## on one knee; somebody who plays is not, for a figure on one knee cannot
+## walk.
 func act(doing: int) -> void:
+	if (doing ^ _doing) & Net.CROUCHED and id < 0:
+		_duck(doing & Net.CROUCHED != 0)
 	_doing = doing
+
+
+## True if it can go down on one knee: a soldier bot can, a robot cannot.
+func ducks() -> bool:
+	return _rig != null and _rig.has_method(&"crouch") and float(_rig.get(&"crouch_drop")) > 0.0
+
+
+## Down on one knee or up again: its figure and its body to a shot.
+func _duck(down: bool) -> void:
+	var capsule := _collider.shape as CapsuleShape3D
+	capsule.height = float(_build.height) - (CROUCH_DROP if down and ducks() else 0.0)
+	_collider.position.y = capsule.height * 0.5
+	if ducks():
+		_rig.crouch(down)
 
 
 # --- What the host's world does to it ----------------------------------------

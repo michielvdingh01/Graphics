@@ -1,6 +1,7 @@
 extends "res://tools/levels/dunes/plan.gd"
 ## The dunes: from the edge of a wood over the dunes to the back door of the
-## complex an army guards there, by day. Build with: tools/build_level.sh dunes
+## complex an army guards there, by day and by night. Build with:
+## tools/build_level.sh dunes
 ##
 ## The plan is in tools/levels/dunes/plan.gd, with the lie of the land and
 ## what grows on it, and next to it a file for every stretch of the way.
@@ -9,6 +10,9 @@ const STRETCHES: Array[String] = ["wood", "valley", "camp", "complex"]
 
 
 func _describe() -> void:
+	# It is also played by night (scenes/dunes_night.tscn): the lamps that
+	# burn then go into a night of their own, see night_light().
+	_by_night = true
 	# The land is laid in blocks of its own; what stands on it is cut to match.
 	_detail_block = Vector3(32, 400, 32)
 	_lie_of_the_land()

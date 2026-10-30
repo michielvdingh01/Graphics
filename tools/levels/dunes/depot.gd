@@ -369,11 +369,14 @@ func watch_post(at: Vector2, looks: Vector3) -> void:
 		for z: float in [-1.0, 1.0]:
 			_local_box(WALL, xf, Vector3(x * (half - 0.11), 1.6, z * (half - 0.11)), Vector3(0.22, 0.6, 0.22), SLIGHT)
 	_local_box(WALL, xf, Vector3(0, 2.5, 0), Vector3(half * 2.0 + 0.7, 0.2, half * 2.0 + 0.7), SLIGHT)
-	# A searchlight on the roof, off by day.
+	# A searchlight on the roof, off by day; by night it sweeps the ground
+	# before the wall.
 	fine(FAR)
 	cylinder("galvanised", xf * Vector3(0.5, 2.6, 0.6), 0.03, 0.54, SLIGHT, Vector3.ZERO, -1.0, 6)
 	rod("galvanised", xf * Vector3(0.5, 3.2, 0.42), xf * Vector3(0.5, 3.3, 0.86), 0.24, SLIGHT, 12)
+	rod("lamp_glass", xf * Vector3(0.5, 3.299, 0.858), xf * Vector3(0.5, 3.301, 0.872), 0.205, SLIGHT, 12)
 	coarse()
+	searchlight(xf * Vector3(0.5, 3.3, 0.95), xf.basis.z, 9.0)
 
 
 ## A leaf of the gate: a frame of steel tube, sheet below, bars above, on
@@ -485,12 +488,16 @@ func flood_mast(at: Vector2, inwards: Vector3, height := 8.2, aims := Vector3.ZE
 		var aim := (look + across * side * 0.45 + Vector3.DOWN * 0.55).normalized()
 		var lamp := Transform3D(Basis.looking_at(-aim), head + across * side * 0.5 + Vector3.UP * 0.12 + aim * 0.08)
 		_box("galvanised", lamp, Vector3(0.42, 0.34, 0.2), SLIGHT)
-		_box("galvanised", lamp * Transform3D(Basis(), Vector3(0, 0, 0.102)), Vector3(0.36, 0.28, 0.01), SLIGHT)
+		_box("lamp_glass", lamp * Transform3D(Basis(), Vector3(0, 0, 0.102)), Vector3(0.36, 0.28, 0.01), SLIGHT)
 		_box("galvanised", lamp * Transform3D(Basis(), Vector3(0, 0.19, 0.06)), Vector3(0.46, 0.02, 0.34), SLIGHT)
 	# The conduit down the mast to its switch.
 	rod("galvanised", foot + inwards * 0.085 + Vector3.UP * 1.3, head + inwards * 0.06, 0.012, SLIGHT, 5)
 	rounded_box("galvanised", Transform3D(Basis(), foot + inwards * 0.12 + Vector3.UP * 1.3), Vector3(0.16, 0.24, 0.1), 0.01, SLIGHT)
 	coarse()
+	# By night both lamps burn: one light for the two, down at the ground
+	# between where they look.
+	var down := (look + Vector3.DOWN * 0.55).normalized()
+	night_beam(Transform3D(Basis.looking_at(down, look), head + Vector3.UP * 0.12 + down * 0.25), SODIUM, 22.0, 27.0, 100.0)
 
 
 # --- Walls with openings, and what is in them ---------------------------------------
@@ -1133,13 +1140,17 @@ func dish(xf: Transform3D, radius: float, foot: Vector3) -> void:
 # --- What hangs on a wall and stands against it ----------------------------------------
 
 
-## A bulkhead lamp on a wall, off: a cast housing with a cage over its
-## glass. `at` is the middle of its back on the face of the wall, which
-## looks along `out`. It is a fitting and no lamp: nothing is lit by it.
+## A bulkhead lamp on a wall: a cast housing with a cage over its glass.
+## `at` is the middle of its back on the face of the wall, which looks along
+## `out`. By day it is off, a fitting that lights nothing; by night it burns.
 func bulkhead(at: Vector3, out: Vector3) -> void:
 	var on_wall := Transform3D(Basis(Vector3.UP.cross(out), Vector3.UP, out), at)
 	rounded_box("dark_steel", on_wall * Transform3D(Basis(), Vector3(0, 0, 0.04)), Vector3(0.36, 0.22, 0.08), 0.02, SLIGHT)
-	painted(on_wall * Transform3D(Basis(), Vector3(0, 0, 0.082)), Vector2(0.27, 0.14), Color(0.62, 0.6, 0.5, 0.3))
+	if _by_night:
+		_local_box("lamp_glass", on_wall, Vector3(0, 0, 0.085), Vector3(0.27, 0.14, 0.012), SLIGHT)
+		night_bulb(on_wall * Vector3(0, -0.04, 0.32), BULB_LIGHT, 1.3, 5.5)
+	else:
+		painted(on_wall * Transform3D(Basis(), Vector3(0, 0, 0.082)), Vector2(0.27, 0.14), Color(0.62, 0.6, 0.5, 0.3))
 	for bar: float in [-0.09, 0.0, 0.09]:
 		_local_box("dark_steel", on_wall, Vector3(bar, 0, 0.1), Vector3(0.012, 0.17, 0.03), SLIGHT)
 	_local_box("dark_steel", on_wall, Vector3(0, 0, 0.1), Vector3(0.3, 0.012, 0.03), SLIGHT)

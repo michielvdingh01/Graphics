@@ -135,6 +135,11 @@ func _run() -> void:
 	_check("up to 8 m a sound adds nothing to the reverb", _sfx._far(3.0) == 0.0 and _sfx._far(8.0) == 0.0)
 	_check("at 16 m it adds %.1f dB against full level, at 24 m %.1f, at 60 m %.1f" % [linear_to_db(_sfx._far(16.0)), linear_to_db(_sfx._far(24.0)), linear_to_db(_sfx._far(60.0))],
 		is_equal_approx(_sfx._far(16.0), 0.5) and _sfx._far(24.0) > _sfx._far(16.0) and _sfx._far(60.0) < _sfx._far(24.0))
+	var near: float = load("res://scripts/blast.gd").HEARD_NEAR
+	var bang: AudioStreamPlayer3D = _sfx._placed(Vector3.ZERO, 6.0, near)
+	_check("a bang sounds as next to it up to %.0f m and is heard out to %.0f m" % [bang.unit_size, bang.max_distance],
+		bang.unit_size == near and bang.max_distance == 10.0 * near and bang.max_distance > 80.0 and bang.max_db >= 6.0)
+	bang.free()
 	await _load("factory")
 	camera.make_current()
 	camera.global_position = Vector3(0.0, 1.7, 0.0)

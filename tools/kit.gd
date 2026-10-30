@@ -1,4 +1,4 @@
-extends "res://tools/kit/rooms.gd"
+extends "res://tools/kit/alpine.gd"
 ## The kit: everything that is built in code and can stand in any level. A
 ## level extends this file, or its plan does.
 ##
@@ -30,9 +30,15 @@ extends "res://tools/kit/rooms.gd"
 ##   tools/kit/houses.gd      its houses: terrace() for a row of them
 ##   tools/kit/rooms.gd       a level laid out as rooms: room(), door(),
 ##                            window(), fight(), build_rooms()
+##   tools/kit/alpine.gd      what stands in a valley of Tyrol: hay_barn(),
+##                            farmhouse(), chapel(), wayside_cross(),
+##                            marterl(), hunting_stand(), slant_fence(),
+##                            rail_fence(), hay_pole(), woodpile(),
+##                            footbridge(), pole_line(), trough()
 ##
 ## Something new goes into the drawer it belongs in, or into a new one before
-## the last, which lays out rooms with everything the others hold. A piece
+## the rooms, which lay out a level with everything the others hold. The
+## valley of Tyrol came after them: a level of rooms has no use for it. A piece
 ## takes where it stands and what it stands against as arguments and knows
 ## nothing of the level it is used in. tools/levels/showroom.gd sets the kit
 ## out side by side, to judge a piece from close by without building and

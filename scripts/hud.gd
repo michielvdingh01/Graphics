@@ -1,8 +1,13 @@
 extends CanvasLayer
 
 const MARGIN := 28
-## Seconds a level takes to come up out of black.
+## How far left of the grenades what is on the second key begins: past the
+## pips of the most grenades there can be.
+const TACTICALS_LEFT := 92.0
+## Seconds a level takes to come up out of black, and the most it waits for
+## the navmesh of the level before it does.
 const FADE_IN := 0.7
+const BAKE_WAIT := 2.0
 ## Where a hit came from shows as a red arc on a ring around the crosshair:
 ## the radius of that ring and the thickness of an arc as shares of the height
 ## of the screen, and the length of an arc in radians. An arc stands for
@@ -17,11 +22,9 @@ const ARC_FADE := 0.9
 const ARC_COUNT := 4
 const ARC_SAME := deg_to_rad(20.0)
 ## The ring that shows who of the watch is growing sure of the player, as a
-## share of the height of the screen, and from how far off a watch counts as
-## near enough to tell the player that he stands in the shade.
+## share of the height of the screen.
 const WATCH_RADIUS := 0.105
-const WATCH_NEAR := 70.0
-const LAND := preload("res://scripts/land.gd")
+const VEHICLE_HUD := preload("res://scripts/vehicle_hud.gd")
 ## Under this share of full health the red at the edges of the screen
 ## breathes: this many times a second, by this much of its strength either way.
 const PULSE_BELOW := 0.3
@@ -107,13 +110,18 @@ class Grenades:
 	var count := 0
 	## Stick grenades instead of round ones.
 	var sticks := false
+	## Tins of smoke instead of either.
+	var tins := false
 
 	## One pip for every grenade carried, right to left: a ball with its fuze,
-	## or the can of a stick grenade on its handle.
+	## the can of a stick grenade on its handle, or a tin with its cap.
 	func _draw() -> void:
 		for i in count:
 			var at := Vector2(-11.0 - i * 24.0, -12.0)
-			if sticks:
+			if tins:
+				draw_rect(Rect2(at.x - 6.0, at.y - 9.0, 12.0, 18.0), Color(1, 1, 1, 0.9))
+				draw_rect(Rect2(at.x - 4.0, at.y - 13.0, 8.0, 3.0), Color(1, 1, 1, 0.9))
+			elif sticks:
 				draw_rect(Rect2(at.x - 7.0, at.y - 16.0, 14.0, 12.0), Color(1, 1, 1, 0.9))
 				draw_rect(Rect2(at.x - 2.5, at.y - 4.0, 5.0, 14.0), Color(1, 1, 1, 0.9))
 			else:
@@ -144,6 +152,9 @@ var _fps_label := Label.new()
 var _ammo_label := Label.new()
 var _weapon_label := Label.new()
 var _grenades := Grenades.new()
+## What is on the second key, in the same row, to the left of the most
+## grenades there can be.
+var _tacticals := Grenades.new()
 var _heat := Heat.new()
 ## Where the name of the weapon sits, offset_top and offset_bottom, when there
 ## is no heat to show under it.
@@ -162,10 +173,9 @@ var _banner := Label.new()
 var _crosshair := Crosshair.new()
 var _hitmarker := Hitmarker.new()
 var _hit_arcs := HitArcs.new()
-## Who is growing sure of the player, in a level where a watch is kept, and
-## the word for a player who stands where the watch does not see him.
+## Who is growing sure of the player, in a level where a watch is kept.
 var _watchers := Watchers.new()
-var _shade_label := Label.new()
+var _vehicle_hud: Control = VEHICLE_HUD.new()
 ## The hits that still show where they came from. For each: `bearing`, the
 ## direction it came from in the world, level with the floor, which the arc
 ## keeps pointing at while the player turns; `age` in seconds; and `strength`,
@@ -232,6 +242,12 @@ func _ready() -> void:
 	_name_at = Vector2(_weapon_label.offset_top, _weapon_label.offset_bottom)
 	_grenades.offset_bottom -= 88
 	_grenades.offset_top -= 88
+	_tacticals.tins = true
+	_place(_tacticals, Control.PRESET_BOTTOM_RIGHT)
+	_tacticals.offset_bottom = _grenades.offset_bottom
+	_tacticals.offset_top = _grenades.offset_top
+	_tacticals.offset_left -= TACTICALS_LEFT
+	_tacticals.offset_right -= TACTICALS_LEFT
 
 	_health_bar.custom_minimum_size = Vector2(260, 14)
 	_health_bar.show_percentage = false
@@ -263,17 +279,29 @@ func _ready() -> void:
 	_place(_hitmarker, Control.PRESET_CENTER, 0)
 	_place(_hit_arcs, Control.PRESET_CENTER, 0)
 	_place(_watchers, Control.PRESET_CENTER, 0)
-	_shade_label.text = "IN THE SHADE"
-	_shade_label.add_theme_font_size_override("font_size", 22)
-	_shade_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_shade_label.modulate.a = 0.0
-	_place(_shade_label, Control.PRESET_CENTER_BOTTOM, 96)
+
+	_place(_vehicle_hud, Control.PRESET_FULL_RECT, 0)
 
 	_curtain.color = Color.BLACK
 	_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place(_curtain, Control.PRESET_FULL_RECT, 0)
-	create_tween().tween_property(_curtain, "modulate:a", 0.0, FADE_IN)
+	_lift_curtain()
 	_bind.call_deferred()
+
+
+## The level comes up out of black once it has baked its navmesh, which in
+## the dunes is a frame of a third of a second: under the curtain, not
+## halfway up.
+func _lift_curtain() -> void:
+	var waited := 0.0
+	var game := get_parent()
+	while game and game.has_signal(&"baked") and not game.get(&"is_baked") and waited < BAKE_WAIT:
+		await get_tree().process_frame
+		if not is_inside_tree():
+			# The level was left before it was baked.
+			return
+		waited += get_process_delta_time()
+	create_tween().tween_property(_curtain, "modulate:a", 0.0, FADE_IN)
 
 
 func _place(control: Control, preset: Control.LayoutPreset, margin := MARGIN) -> void:
@@ -290,6 +318,7 @@ func _place(control: Control, preset: Control.LayoutPreset, margin := MARGIN) ->
 
 func _bind() -> void:
 	_player = get_tree().get_first_node_in_group("player")
+	_vehicle_hud.player = _player
 	_player.health_changed.connect(_on_health_changed)
 	_player.damaged.connect(func(amount: float) -> void: _hurt = minf(_hurt + amount / 25.0, 1.0))
 	_player.hit_from.connect(_on_hit_from)
@@ -300,6 +329,8 @@ func _bind() -> void:
 	_player.weapons.hit_confirmed.connect(_on_hit_confirmed)
 	_player.weapons.grenades_changed.connect(_on_grenades_changed)
 	_on_grenades_changed(_player.weapons.grenades)
+	_player.weapons.tacticals_changed.connect(_on_tacticals_changed)
+	_on_tacticals_changed(_player.weapons.tacticals)
 	var game := get_tree().get_first_node_in_group("game")
 	game.objective_changed.connect(_on_objective_changed)
 	game.kills_changed.connect(_on_kills_changed)
@@ -312,27 +343,22 @@ func _bind() -> void:
 
 
 ## What a player has to know of the enemies that keep watch: who of them is
-## growing sure of him, and whether he stands in the shade, where they hardly
-## see him. Nothing of it shows in a level without a watch, or once every
-## watch near by knows.
-func _watch(delta: float, half_height: float) -> void:
+## growing sure of him. Whether he stands in the shade, where they hardly see
+## him, is his to find out. Nothing of it shows in a level without a watch,
+## or once every watch near by knows.
+func _watch(half_height: float) -> void:
 	var view: Basis = _player.global_basis.inverse()
-	var near := false
 	_watchers.eyes.clear()
 	for enemy: Node3D in get_tree().get_nodes_in_group(&"watch"):
 		if not enemy.is_watching() or not enemy.can_process():
 			continue
 		var to := enemy.global_position - _player.global_position
-		near = near or to.length() < WATCH_NEAR
 		if enemy.awareness > 0.02:
 			var from: Vector3 = view * to
 			_watchers.eyes.append(Vector2(atan2(from.x, -from.z), clampf(enemy.awareness, 0.0, 1.0)))
 	_watchers.radius = half_height * 2.0 * WATCH_RADIUS
 	_watchers.visible = not _player.dead
 	_watchers.queue_redraw()
-	var land := LAND.of(get_tree())
-	var hidden: bool = near and not _player.dead and land != null and land.shade_around(_player.global_position) > 0.5
-	_shade_label.modulate.a = move_toward(_shade_label.modulate.a, 0.7 if hidden else 0.0, delta * 3.0)
 
 
 func _process(delta: float) -> void:
@@ -347,8 +373,13 @@ func _process(delta: float) -> void:
 	var spread := tan(deg_to_rad(weapons.current_spread_deg()))
 	_crosshair.gap = 3.0 + spread / tan(deg_to_rad(_player.camera.fov * 0.5)) * half_height
 	_crosshair.opacity = 1.0 - weapons.ads_blend
-	_crosshair.visible = not _player.dead
+	# Whoever drives has no weapon in hand, unless it is a car that lets them
+	# fire: the vehicle says what there is.
+	var driving: bool = _player.riding != null and _player.seat == 0 and not _player.fires_from_the_wheel()
+	_crosshair.visible = not _player.dead and not driving
 	_crosshair.queue_redraw()
+	for label: Control in [_ammo_label, _weapon_label, _grenades, _tacticals]:
+		label.visible = not driving
 
 	# Aiming a scoped weapon, the view goes black and opens again as a circle.
 	var scope: float = weapons.scope_blend()
@@ -382,7 +413,7 @@ func _process(delta: float) -> void:
 		_hit_arcs.thickness = half_height * 2.0 * ARC_THICKNESS
 		_hit_arcs.queue_redraw()
 
-	_watch(delta, half_height)
+	_watch(half_height)
 
 	_hurt = maxf(_hurt - delta * 1.5, 0.0)
 	var low_health := clampf(1.0 - _health_ratio / 0.5, 0.0, 1.0) * 0.6
@@ -441,6 +472,11 @@ func _on_grenades_changed(count: int) -> void:
 	_grenades.count = count
 	_grenades.sticks = _player.weapons.grenade_kind == "stick_grenade"
 	_grenades.queue_redraw()
+
+
+func _on_tacticals_changed(count: int) -> void:
+	_tacticals.count = count
+	_tacticals.queue_redraw()
 
 
 ## A hit on the player, see Player.hit_from: one that came from a side gets

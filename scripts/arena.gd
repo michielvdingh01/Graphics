@@ -11,10 +11,13 @@ extends RefCounted
 ##
 ## Of what the plan says makes a spot better or worse, it knows an enemy close
 ## by, an enemy who sees the spot, somebody standing on it, how far the
-## nearest enemy is and how near a friend, and it draws from the best three.
-## Distances are as the crow flies, not walked. scripts/match.gd makes one
+## nearest enemy is and how near a friend, and whether somebody came back
+## near it a moment ago; it draws from the best few, and puts whoever comes
+## back anywhere on the ground of that spot. Distances are as the crow flies,
+## not walked. scripts/match.gd makes one
 ## when a level has become an arena.
 
+const WAY := preload("res://scripts/way.gd")
 const WORLD := 1
 const GRID := 2.0
 const EYE := 1.6
@@ -33,7 +36,17 @@ const SEEN_FROM := 80.0
 const FRONT := Vector2(35.0, 60.0)
 const WITH_FRIENDS := 20.0
 ## Of the best spots, how many are drawn from: not always the same one.
-const DRAWN := 3
+const DRAWN := 6
+## Somebody who came back makes the ground within CROWDED metres of where
+## they did worth less for the next RECENT who come back: one after another
+## would otherwise come back on the same spot, which the other side then
+## only has to watch. What one of them costs a spot, in metres of FRONT.
+const RECENT := 12
+const CROWDED := 30.0
+const CROWDING := 25.0
+## A person, and not a bot, sees a spot from this far, in metres: who looks
+## through a scope picks off whoever comes back where they can see it.
+const WATCHED_FROM := 300.0
 ## How many of the spots a choice looks at closely, the best first: seeing
 ## costs two rays for every enemy.
 const LOOKS := 24
@@ -55,6 +68,10 @@ const AWAY := 30.0
 
 ## Where somebody can stand, on the floor.
 var spots := PackedVector3Array()
+## Where the last RECENT came back, the latest last.
+var _recent := PackedVector3Array()
+## About how far apart the spots lie, in metres.
+var _grid := GRID
 ## The spots two teams begin at, as indices, and how far it is to walk from
 ## either of them to every spot.
 var ends: Array[int] = [0, 0]
@@ -115,7 +132,12 @@ func survey(game: Node3D) -> bool:
 					walked[other] = true
 					todo.append(other)
 
-	# The spots on that floor.
+	# The spots on that floor: GRID apart, or further on floor of kilometres,
+	# where there would be a million and only MOST are kept.
+	var floor_area := 0.0
+	for p: int in walked:
+		floor_area += absf(_area(outlines[p]))
+	var grid := maxf(GRID, sqrt(floor_area / (MOST * 2.5)))
 	spots = PackedVector3Array()
 	var looked := {}
 	for p: int in walked:
@@ -128,9 +150,9 @@ func survey(game: Node3D) -> bool:
 		for point in outlines[p]:
 			from = from.min(point)
 			to = to.max(point)
-		for x in range(ceili(from.x / GRID), floori(to.x / GRID) + 1):
-			for z in range(ceili(from.y / GRID), floori(to.y / GRID) + 1):
-				var flat := Vector2(x, z) * GRID + Vector2(0.37, 0.41)
+		for x in range(ceili(from.x / grid), floori(to.x / grid) + 1):
+			for z in range(ceili(from.y / grid), floori(to.y / grid) + 1):
+				var flat := Vector2(x, z) * grid + Vector2(0.37, 0.41)
 				if not Geometry2D.is_point_in_polygon(flat, outlines[p]):
 					continue
 				var y := (plane.d - plane.normal.x * flat.x - plane.normal.z * flat.y) / plane.normal.y
@@ -150,16 +172,52 @@ func survey(game: Node3D) -> bool:
 		for i in range(0, spots.size(), stride):
 			kept.append(spots[i])
 		spots = kept
+	_grid = maxf(grid, sqrt(floor_area / spots.size()))
 
 	# Its ends: the spot that is the longest walk from the start, and the one
-	# that is the longest walk from that.
-	var from_start := _walks_from(start)
-	ends[0] = _furthest(from_start)
-	walks[0] = _walks_from(spots[ends[0]])
-	ends[1] = _furthest(walks[0])
+	# that is the longest walk from that. Unless the level says where they
+	# are (assets/arenas.json): then the spots nearest to those.
+	var said := _said_ends(game)
+	if said.size() == 2:
+		for k in 2:
+			var best := INF
+			for i in spots.size():
+				var gap := Vector2(spots[i].x - said[k].x, spots[i].z - said[k].z).length()
+				if gap < best:
+					best = gap
+					ends[k] = i
+		walks[0] = _walks_from(spots[ends[0]])
+	else:
+		var from_start := _walks_from(start)
+		ends[0] = _furthest(from_start)
+		walks[0] = _walks_from(spots[ends[0]])
+		ends[1] = _furthest(walks[0])
 	walks[1] = _walks_from(spots[ends[1]])
 	took = (Time.get_ticks_usec() - began) / 1e6
 	return true
+
+
+## Where the level says its two sides begin, as assets/arenas.json has it
+## under "ends", or nothing.
+func _said_ends(game: Node3D) -> PackedVector3Array:
+	var level := game.scene_file_path.get_file().get_basename()
+	var path := "res://assets/arenas.json"
+	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+	var ends_said := PackedVector3Array()
+	if said is Dictionary and (said as Dictionary).get(level) is Dictionary:
+		for end: Variant in (said[level] as Dictionary).get("ends", []):
+			ends_said.append(Vector3(end[0], end[1], end[2]))
+	return ends_said
+
+
+## The area inside an outline, signed by which way it goes round.
+func _area(outline: PackedVector2Array) -> float:
+	var sum := 0.0
+	for i in outline.size():
+		var a := outline[i]
+		var b := outline[(i + 1) % outline.size()]
+		sum += a.x * b.y - b.x * a.y
+	return sum * 0.5
 
 
 ## How far it is to walk from one end to the other.
@@ -197,12 +255,15 @@ func line_up(side: int, count: int) -> Array[Transform3D]:
 ## within TOO_NEAR of and that nobody stands on. Of those, with friends about,
 ## one near them and about FRONT from the nearest enemy: back in the fight in
 ## a few seconds, and not at the far end of an arena as big as the dunes.
-## Without friends, or where nothing near the fight is safe, the one furthest
-## from the nearest enemy. If no spot is safe, the one furthest from them all,
+## Ground where others came back a moment ago counts against a spot. Without
+## friends, or where nothing near the fight is safe, the one furthest from
+## the nearest enemy. If no spot is safe, the one furthest from them all,
 ## which is counted in `emergencies`.
 ##
 ## `among` narrows it down to those spots, as around() gives them: a base.
-func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := PackedInt32Array()) -> Transform3D:
+## `watchers` are those of `foes` who are people: they see as far as
+## WATCHED_FROM, bots only SEEN_FROM.
+func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := PackedInt32Array(), watchers := PackedVector3Array()) -> Transform3D:
 	var gaps := PackedFloat32Array()
 	var worth := PackedFloat32Array()
 	gaps.resize(spots.size())
@@ -221,31 +282,70 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := Packed
 			if not foes.is_empty():
 				off = maxf(FRONT.x - gap, 0.0) * 3.0 + maxf(gap - FRONT.y, 0.0) + (30.0 if near > gap else 0.0)
 			worth[i] = -(off + maxf(near - WITH_FRIENDS, 0.0))
+		for back in _recent:
+			if back.distance_to(spots[i]) < CROWDED:
+				worth[i] -= CROWDING
 	var order := Array(among) if not among.is_empty() else range(spots.size())
 	order.sort_custom(func(a: int, b: int) -> bool: return worth[a] > worth[b])
-	var good := _safe(order.slice(0, LOOKS), gaps, foes, friends, DRAWN if not friends.is_empty() else 1)
+	var good := _safe(order.slice(0, LOOKS), gaps, foes, friends, watchers, DRAWN if not friends.is_empty() else 1)
 	if good.is_empty():
 		# Where the fight is, everything may be in somebody's sight: then the
 		# spots furthest from the enemy, as when there are no friends.
-		order.sort_custom(func(a: int, b: int) -> bool: return gaps[a] > gaps[b])
+		order.sort_custom(func(a: int, b: int) -> bool: return gaps[a] - _crowd(a) > gaps[b] - _crowd(b))
 		if not friends.is_empty():
-			good = _safe(order.slice(0, LOOKS), gaps, foes, friends, 1)
+			good = _safe(order.slice(0, LOOKS), gaps, foes, friends, watchers, 1)
 	var best := -1
 	if not good.is_empty():
 		best = good.pick_random()
 	else:
 		emergencies += 1
 		best = order[0]
+	var at := _somewhere_on(best, foes, friends, watchers)
+	_recent.append(at)
+	if _recent.size() > RECENT:
+		_recent.remove_at(0)
 	var towards := _middle()
 	for foe in foes:
-		if towards == _middle() or foe.distance_to(spots[best]) < towards.distance_to(spots[best]):
+		if towards == _middle() or foe.distance_to(at) < towards.distance_to(at):
 			towards = foe
-	return _facing(spots[best], _ahead(spots[best], towards))
+	return _facing(at, _ahead(at, towards))
+
+
+## What the ground where others came back a moment ago takes off `spot`.
+func _crowd(spot: int) -> float:
+	var cost := 0.0
+	for back in _recent:
+		if back.distance_to(spots[spot]) < CROWDED:
+			cost += CROWDING
+	return cost
+
+
+## Somewhere on the ground of `spot`: as far as halfway to the next spot,
+## where there is room, nobody stands and nobody of `foes` or `watchers`
+## sees it, else the spot itself. Spots of the dunes lie seven metres apart.
+func _somewhere_on(spot: int, foes: PackedVector3Array, friends: PackedVector3Array, watchers: PackedVector3Array) -> Vector3:
+	var grid := minf(_grid, 10.0)
+	for i in 4:
+		var try := spots[spot] + Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5)) * grid
+		var on := NavigationServer3D.map_get_closest_point(_map, try)
+		if on.distance_to(try) > 1.0 or _taken(on, foes) or _taken(on, friends) or not _room(on):
+			continue
+		var seen := false
+		for foe in foes:
+			if foe.distance_to(on) < SEEN_FROM and _sees(foe, on):
+				seen = true
+				break
+		for watcher in watchers:
+			if not seen and watcher.distance_to(on) < WATCHED_FROM and _sees(watcher, on):
+				seen = true
+		if not seen:
+			return on
+	return spots[spot]
 
 
 ## Of `candidates`, the first `wanted` that no enemy is too near to or sees
-## and that nobody stands on.
-func _safe(candidates: Array, gaps: PackedFloat32Array, foes: PackedVector3Array, friends: PackedVector3Array, wanted: int) -> Array[int]:
+## and that nobody stands on. Of `watchers` it is as far as WATCHED_FROM.
+func _safe(candidates: Array, gaps: PackedFloat32Array, foes: PackedVector3Array, friends: PackedVector3Array, watchers: PackedVector3Array, wanted: int) -> Array[int]:
 	var good: Array[int] = []
 	for spot: int in candidates:
 		if gaps[spot] < TOO_NEAR or _taken(spots[spot], foes) or _taken(spots[spot], friends):
@@ -255,6 +355,9 @@ func _safe(candidates: Array, gaps: PackedFloat32Array, foes: PackedVector3Array
 			if foe.distance_to(spots[spot]) < SEEN_FROM and _sees(foe, spots[spot]):
 				seen = true
 				break
+		for watcher in watchers:
+			if not seen and watcher.distance_to(spots[spot]) < WATCHED_FROM and _sees(watcher, spots[spot]):
+				seen = true
 		if not seen:
 			good.append(spot)
 			if good.size() >= wanted:
@@ -429,7 +532,7 @@ func _room(at: Vector3) -> bool:
 ## sets out on it looks at, which is never the wall that the place itself
 ## lies behind.
 func _ahead(from: Vector3, to: Vector3) -> Vector3:
-	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	var path := WAY.between(_map, from, to)
 	var walked := 0.0
 	for i in range(1, path.size()):
 		walked += path[i - 1].distance_to(path[i])
@@ -452,7 +555,7 @@ func _middle() -> Vector3:
 
 ## How far it is to walk from `from` to `to`; NO_WAY where there is no way.
 func walk(from: Vector3, to: Vector3) -> float:
-	var path := NavigationServer3D.map_get_path(_map, from, to, true)
+	var path := WAY.between(_map, from, to)
 	if path.is_empty() or path[-1].distance_to(to) > 1.5:
 		return NO_WAY
 	var length := 0.0
@@ -465,7 +568,7 @@ func walk(from: Vector3, to: Vector3) -> float:
 func _walks_from(from: Vector3) -> PackedFloat32Array:
 	var lengths := PackedFloat32Array()
 	for spot in spots:
-		var path := NavigationServer3D.map_get_path(_map, from, spot, true)
+		var path := WAY.between(_map, from, spot)
 		var length := NO_WAY
 		if not path.is_empty() and path[-1].distance_to(spot) < 1.5:
 			length = 0.0

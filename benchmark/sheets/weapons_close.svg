@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1212" font-family="Arial">
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1238" font-family="Arial">
 <rect width="100%" height="100%" fill="#f6f4ee"/>
 <text x="60" y="60" font-size="30" font-weight="bold" fill="#111">Close quarters</text>
-<text x="60" y="88" font-size="16" fill="#444">For halls and streets: short, loud and quick. Time to bring down somebody with 100 health, worked out from the weapon data: no recoil, no heads.</text>
+<text x="60" y="88" font-size="16" fill="#444">For halls and streets: short, loud and quick, and a shotgun that does not stop. Time to bring down somebody with 100 health, worked out from the weapon data: no recoil, no heads.</text>
 <text x="60" y="130" font-size="18" font-weight="bold" fill="#222">aimed</text>
 <line x1="110.0" y1="480.0" x2="710.0" y2="480.0" stroke="#ddd"/>
 <text x="104.0" y="484.0" font-size="12" fill="#666" text-anchor="end">0.00 s</text>
@@ -36,6 +36,7 @@
 <polyline points="115.0,431.6 120.0,431.6 125.0,431.6 130.0,431.6 135.0,431.6 140.0,398.6 145.0,398.6" fill="none" stroke="#d4542a" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="115.0,405.0 120.0,405.0 125.0,405.0 130.0,405.0 135.0,405.0 140.0,405.0 145.0,405.0 150.0,405.0 155.0,394.9 160.0,394.9 165.0,394.9 170.0,384.7 175.0,384.7 180.0,374.6 185.0,364.4 190.0,364.4 195.0,354.3 200.0,344.1 205.0,323.8 210.0,313.6 215.0,313.6 220.0,313.6 225.0,313.6 230.0,313.6 235.0,313.6 240.0,313.6 245.0,293.3 250.0,283.2 255.0,273.0 260.0,262.9" fill="none" stroke="#2a9d5b" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="115.0,359.0 120.0,359.0 125.0,359.0 130.0,359.0 135.0,359.0 140.0,359.0 145.0,359.0 150.0,359.0 155.0,359.0 160.0,359.0 165.0,359.0 170.0,359.0 175.0,359.0 180.0,359.0 185.0,359.0 190.0,359.0 195.0,359.0 200.0,359.0 205.0,359.0 210.0,359.0 215.0,359.0 220.0,359.0 225.0,359.0 230.0,359.0 235.0,359.0 240.0,359.0 245.0,359.0 250.0,359.0 255.0,359.0 260.0,359.0 265.0,359.0 270.0,359.0 275.0,359.0 280.0,359.0 285.0,359.0 290.0,359.0 295.0,359.0 300.0,359.0 305.0,359.0 310.0,359.0 315.0,359.0 320.0,359.0 325.0,359.0 330.0,359.0 335.0,359.0 340.0,359.0 345.0,359.0 350.0,359.0 355.0,359.0 360.0,359.0 365.0,359.0 370.0,359.0 375.0,359.0 380.0,359.0 385.0,359.0 390.0,359.0 395.0,359.0 400.0,359.0 405.0,359.0 410.0,359.0 415.0,359.0 420.0,359.0 425.0,271.0 430.0,271.0 435.0,271.0 440.0,271.0 445.0,271.0 450.0,271.0 455.0,271.0 460.0,271.0 465.0,271.0 470.0,271.0 475.0,271.0 480.0,271.0 485.0,271.0 490.0,271.0 495.0,271.0 500.0,271.0 505.0,271.0 510.0,271.0 515.0,271.0 520.0,271.0 525.0,271.0 530.0,271.0 535.0,271.0 540.0,271.0 545.0,271.0 550.0,271.0 555.0,271.0 560.0,271.0 565.0,271.0 570.0,271.0 575.0,271.0 580.0,271.0 585.0,271.0 590.0,271.0 595.0,271.0 600.0,271.0 605.0,271.0 610.0,271.0 615.0,271.0 620.0,271.0 625.0,271.0 630.0,271.0 635.0,271.0 640.0,271.0 645.0,271.0 650.0,271.0 655.0,271.0 660.0,271.0 665.0,271.0 670.0,271.0 675.0,271.0 680.0,271.0 685.0,271.0 690.0,271.0 695.0,271.0 700.0,271.0 705.0,271.0 710.0,271.0" fill="none" stroke="#8a4fbf" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="115.0,387.6 120.0,387.6 125.0,387.6 130.0,387.6 135.0,387.6 140.0,387.6 145.0,387.6 150.0,387.6 155.0,387.6 160.0,387.6 165.0,387.6 170.0,343.6 175.0,343.6 180.0,299.6 185.0,255.6 190.0,211.6" fill="none" stroke="#c4961a" stroke-width="3" stroke-linejoin="round"/>
 <text x="780" y="130" font-size="18" font-weight="bold" fill="#222">hip</text>
 <line x1="830.0" y1="480.0" x2="1430.0" y2="480.0" stroke="#ddd"/>
 <text x="824.0" y="484.0" font-size="12" fill="#666" text-anchor="end">0.00 s</text>
@@ -70,6 +71,7 @@
 <polyline points="835.0,480.0 840.0,480.0 845.0,480.0 850.0,480.0 855.0,447.0 860.0,447.0" fill="none" stroke="#d4542a" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="835.0,429.2 840.0,429.2 845.0,429.2 850.0,429.2 855.0,429.2 860.0,429.2 865.0,429.2 870.0,429.2 875.0,419.1 880.0,419.1 885.0,419.1 890.0,408.9 895.0,408.9 900.0,398.8 905.0,388.6 910.0,378.5 915.0,358.2 920.0,327.7 925.0,287.1" fill="none" stroke="#2a9d5b" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="835.0,392.0 840.0,392.0 845.0,392.0 850.0,392.0 855.0,392.0 860.0,392.0 865.0,392.0 870.0,392.0 875.0,392.0 880.0,392.0 885.0,392.0 890.0,392.0 895.0,392.0 900.0,392.0 905.0,304.0 910.0,304.0 915.0,304.0 920.0,216.0 925.0,216.0" fill="none" stroke="#8a4fbf" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="835.0,436.0 840.0,436.0 845.0,436.0 850.0,436.0 855.0,436.0 860.0,436.0 865.0,436.0 870.0,436.0 875.0,436.0 880.0,392.0 885.0,348.0 890.0,348.0 895.0,304.0 900.0,216.0 905.0,172.0" fill="none" stroke="#c4961a" stroke-width="3" stroke-linejoin="round"/>
 <text x="60" y="590" font-size="18" font-weight="bold" fill="#222">aimed, walking</text>
 <line x1="110.0" y1="940.0" x2="710.0" y2="940.0" stroke="#ddd"/>
 <text x="104.0" y="944.0" font-size="12" fill="#666" text-anchor="end">0.00 s</text>
@@ -104,6 +106,7 @@
 <polyline points="115.0,891.6 120.0,891.6 125.0,891.6 130.0,891.6 135.0,891.6 140.0,858.6 145.0,858.6" fill="none" stroke="#d4542a" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="115.0,865.0 120.0,865.0 125.0,865.0 130.0,865.0 135.0,865.0 140.0,865.0 145.0,865.0 150.0,865.0 155.0,854.9 160.0,854.9 165.0,854.9 170.0,844.7 175.0,844.7 180.0,834.6 185.0,824.4 190.0,824.4 195.0,814.3 200.0,804.1 205.0,783.8 210.0,773.6 215.0,773.6 220.0,763.5 225.0,753.3 230.0,743.2 235.0,722.9" fill="none" stroke="#2a9d5b" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="115.0,819.0 120.0,819.0 125.0,819.0 130.0,819.0 135.0,819.0 140.0,819.0 145.0,819.0 150.0,819.0 155.0,819.0 160.0,819.0 165.0,819.0 170.0,819.0 175.0,819.0 180.0,819.0 185.0,819.0 190.0,819.0 195.0,819.0 200.0,819.0 205.0,819.0 210.0,819.0 215.0,819.0 220.0,819.0 225.0,819.0 230.0,819.0 235.0,819.0 240.0,819.0 245.0,819.0 250.0,819.0 255.0,819.0 260.0,819.0 265.0,819.0 270.0,819.0 275.0,819.0 280.0,819.0 285.0,819.0 290.0,819.0 295.0,819.0 300.0,819.0 305.0,819.0 310.0,819.0 315.0,819.0 320.0,819.0 325.0,819.0 330.0,819.0 335.0,819.0 340.0,731.0 345.0,731.0 350.0,731.0 355.0,731.0 360.0,731.0 365.0,731.0 370.0,731.0 375.0,731.0 380.0,731.0 385.0,643.0 390.0,643.0 395.0,643.0 400.0,643.0 405.0,643.0 410.0,643.0" fill="none" stroke="#8a4fbf" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="115.0,847.6 120.0,847.6 125.0,847.6 130.0,847.6 135.0,847.6 140.0,847.6 145.0,847.6 150.0,847.6 155.0,847.6 160.0,847.6 165.0,803.6 170.0,803.6 175.0,759.6 180.0,715.6 185.0,671.6" fill="none" stroke="#c4961a" stroke-width="3" stroke-linejoin="round"/>
 <text x="780" y="590" font-size="18" font-weight="bold" fill="#222">hip, walking</text>
 <line x1="830.0" y1="940.0" x2="1430.0" y2="940.0" stroke="#ddd"/>
 <text x="824.0" y="944.0" font-size="12" fill="#666" text-anchor="end">0.00 s</text>
@@ -138,13 +141,16 @@
 <polyline points="835.0,940.0 840.0,940.0 845.0,940.0 850.0,940.0 855.0,907.0" fill="none" stroke="#d4542a" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="835.0,889.2 840.0,889.2 845.0,889.2 850.0,889.2 855.0,889.2 860.0,889.2 865.0,889.2 870.0,889.2 875.0,879.1 880.0,879.1 885.0,879.1 890.0,858.8 895.0,838.5 900.0,808.0 905.0,777.5 910.0,747.1" fill="none" stroke="#2a9d5b" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="835.0,852.0 840.0,852.0 845.0,852.0 850.0,852.0 855.0,852.0 860.0,852.0 865.0,852.0 870.0,852.0 875.0,764.0 880.0,676.0 885.0,676.0" fill="none" stroke="#8a4fbf" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="835.0,896.0 840.0,896.0 845.0,896.0 850.0,896.0 855.0,896.0 860.0,896.0 865.0,896.0 870.0,852.0 875.0,852.0 880.0,808.0 885.0,764.0 890.0,720.0 895.0,632.0" fill="none" stroke="#c4961a" stroke-width="3" stroke-linejoin="round"/>
 <rect x="60" y="1054" width="22" height="6" fill="#1f6fb2"/>
-<text x="92" y="1060" font-size="16" fill="#111"><tspan font-weight="bold">SMG</tspan>  ·  20 per hit, 900 a minute, 32 in a magazine  ·  quickest aimed 12, 14-22 m; hip 9-12, 19-20 m; aimed, walking 12, 14-22 m; hip, walking 9 m</text>
+<text x="92" y="1060" font-size="16" fill="#111"><tspan font-weight="bold">SMG</tspan>  ·  20 per hit, 900 a minute, 32 in a magazine  ·  quickest aimed 12, 14-22 m; hip 10-12, 19-20 m; aimed, walking 12, 14-22 m; hip, walking 9 m</text>
 <rect x="60" y="1080" width="22" height="6" fill="#d4542a"/>
 <text x="92" y="1086" font-size="16" fill="#111"><tspan font-weight="bold">Double barrel</tspan>  ·  132 per hit, 400 a minute, 2 in a magazine  ·  quickest aimed 1-5 m; hip 1-6 m; aimed, walking 1-5 m; hip, walking 1-5 m</text>
 <rect x="60" y="1106" width="22" height="6" fill="#2a9d5b"/>
-<text x="92" y="1112" font-size="16" fill="#111"><tspan font-weight="bold">Machine pistol</tspan>  ·  17 per hit, 1300 a minute, 20 in a magazine  ·  quickest aimed 6-11, 13 m; hip 7-8, 13-18 m; aimed, walking 6-11, 13 m; hip, walking 6-8, 10-16 m</text>
+<text x="92" y="1112" font-size="16" fill="#111"><tspan font-weight="bold">Machine pistol</tspan>  ·  17 per hit, 1300 a minute, 20 in a magazine  ·  quickest aimed 6-11, 13 m; hip 13-18 m; aimed, walking 6-11, 13 m; hip, walking 8, 10-16 m</text>
 <rect x="60" y="1132" width="22" height="6" fill="#8a4fbf"/>
 <text x="92" y="1138" font-size="16" fill="#111"><tspan font-weight="bold">Revolver</tspan>  ·  60 per hit, 150 a minute, 6 in a magazine  ·  quickest aimed 23-120 m; aimed, walking 23-54 m</text>
-<text x="60" y="1172" font-size="16" fill="#2a7a3b">✓ every weapon is the quickest somewhere, and none is close to the quickest everywhere</text>
+<rect x="60" y="1158" width="22" height="6" fill="#c4961a"/>
+<text x="92" y="1164" font-size="16" fill="#111"><tspan font-weight="bold">Auto shotgun</tspan>  ·  96 per hit, 300 a minute, 20 in a magazine  ·  quickest hip 7-9 m; hip, walking 6-7 m</text>
+<text x="60" y="1198" font-size="16" fill="#2a7a3b">✓ every weapon is the quickest somewhere, and none is close to the quickest everywhere</text>
 </svg>

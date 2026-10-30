@@ -9,11 +9,11 @@ extends Node
 signal exploded(position: Vector3)
 
 const WORLD := 1
-## Layers a blast looks for bodies on: player, enemy, debris, explosive and
-## breakable. The level itself is one body of thousands of shapes with
-## nothing to say to a blast, which is why whatever explodes or breaks is on
-## a layer of its own as well.
-const REACHED := 0b111110
+## Layers a blast looks for bodies on: player, enemy, debris, explosive,
+## breakable and vehicle. The level itself is one body of thousands of shapes
+## with nothing to say to a blast, which is why whatever explodes or breaks
+## is on a layer of its own as well.
+const REACHED := 0b1111110
 ## The most shapes a blast looks at. A lamp is one or two of them, a pile of
 ## crates up to three, and a dozen piles can stand around one barrel.
 const MOST := 96
@@ -24,6 +24,10 @@ const CORE := 0.25
 const PLAYER_SHARE := 0.5
 ## Speed in m/s something at the centre is thrown at.
 const PUSH := 9.0
+## Up to how far off the bang sounds as it does next to it, in metres. With
+## the 8 m of any other sound a grenade 15 m off was 6 dB softer than that,
+## 60 m off 17 dB, and 80 m off it was gone.
+const HEARD_NEAR := 20.0
 ## A fire hurts this much a second, in ticks this far apart.
 const BURN_DAMAGE := 24.0
 const BURN_TICK := 0.25
@@ -143,6 +147,8 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 			# a player what it does to anybody.
 			Match.harm(Match.number(body), damage * strength, middle, away * 2.5, by, Match.BLAST)
 		elif body.has_method("take_blast"):
+			if body.has_method("struck_by"):
+				body.struck_by(by)
 			body.take_blast(damage * strength, middle, away * 2.5)
 		elif body.has_method("take_damage"):
 			body.take_damage(damage * strength * (PLAYER_SHARE if player else 1.0), middle, away * 2.5)
@@ -151,7 +157,7 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 			body.shove(away * PUSH * strength)
 		elif body is CharacterBody3D:
 			body.velocity += away * PUSH * strength
-		elif body is RigidBody3D:
+		elif body is RigidBody3D and not body.has_method("take_blast"):
 			body.apply_central_impulse(away * PUSH * strength * body.mass)
 	_sear(space, position, radius, through)
 
@@ -160,7 +166,7 @@ func explode(position: Vector3, radius: float, damage: float, size := 1.0, sourc
 ## player on this machine, who is the first of the players here.
 func _show_blast(position: Vector3, radius: float, size: float) -> void:
 	Fx.explosion(position, size)
-	Sfx.play_at(&"explosion", position, 6.0)
+	Sfx.play_at(&"explosion", position, 6.0, HEARD_NEAR)
 	exploded.emit(position)
 	var witness := get_tree().get_first_node_in_group("player")
 	if witness and witness.has_method("shake"):

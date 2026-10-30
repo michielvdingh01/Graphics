@@ -13,6 +13,8 @@ extends Node
 ## ask the other how far it is, so each waits for what it should get to see.
 
 const FACTORY := "res://scenes/factory.tscn"
+## The level with motorcycles that two ride one of, see _host_ride().
+const ALPS := "res://scenes/alps.tscn"
 ## The level the factory leads on to.
 const NEXT := "res://scenes/works.tscn"
 ## An open lane in the factory with 6 m of clear floor to the east of it.
@@ -22,6 +24,8 @@ const RANGE_TARGET := Vector3(1, 0, -7.5)
 ## that a test never meets the test of another checkout either.
 const PORT := 24599
 const PORTS := 400
+## The file the host writes once the guest may join, see _join().
+const READY := "nettest_ready"
 const STACK := preload("res://scripts/stack.gd")
 
 ## True for a run of this test. The menu stays on for it, unlike for the
@@ -62,6 +66,10 @@ func _run() -> void:
 	_check("the game opens on its title screen", Menu.at_title() and tree.paused)
 	if _role == "host":
 		await _host()
+	elif _role == "host_ride":
+		await _host_ride()
+	elif _role == "join_ride":
+		await _join_ride()
 	else:
 		await _join()
 	print("NETTEST %s %s" % [_role, "PASSED" if _failures == 0 else "FAILED (%d)" % _failures])
@@ -93,6 +101,8 @@ func _host() -> void:
 	lamps[0].take_damage(1.0, lamps[0].global_position, Vector3.UP)
 	stacks[0].take_damage(1000.0, stacks[0].global_position, Vector3.FORWARD)
 	_check("so do a lamp and a crate", lamps[0].out and stacks[0].standing() == stacks[0].size() - 1)
+	# Now the guest may knock, see _join().
+	FileAccess.open(SelfTest.own_file(READY), FileAccess.WRITE).store_string(_role)
 
 	_check("the guest walks in", await _until(func() -> bool: return game.puppets.size() == 1, 60.0))
 	var puppet: CharacterBody3D = game.puppets.values()[0]
@@ -123,6 +133,7 @@ func _host() -> void:
 	var blasts := [0]
 	Blast.exploded.connect(func(_at: Vector3) -> void: blasts[0] += 1)
 	_check("a grenade the guest throws goes off here", await _until(func() -> bool: return blasts[0] >= 1, 40.0))
+	_check("and so does the cloud of its smoke grenade stand here", await _until(func() -> bool: return Smoke.count() >= 1, 15.0))
 	_check("the robot went for the guest", shooter._player == puppet or shooter.dead)
 	shooter.set_physics_process(false)
 
@@ -192,6 +203,14 @@ func _join() -> void:
 	var tree := get_tree()
 	await _press("Play together")
 	_type(1, "127.0.0.1:%d" % _port)
+	# A guest that knocks while the host still loads its level, behind the
+	# loading screen (scripts/loading.gd), is let in the moment that level is
+	# there (net.gd, _arrived()): before the host has had a robot fall and a
+	# lamp and a crate break for it to find so. The host says when it has, in
+	# a file that is newer than this run.
+	var since := int(Time.get_unix_time_from_system()) - 1
+	var ready := func() -> bool: return FileAccess.file_exists(SelfTest.own_file(READY)) and FileAccess.get_modified_time(SelfTest.own_file(READY)) >= since
+	_check("the host is ready for a guest", await _until(ready, 60.0))
 	# The host may still be starting: no answer is an answer after a while.
 	for attempt in 6:
 		if Net.active:
@@ -247,6 +266,11 @@ func _join() -> void:
 	await _wait(0.1)
 	Input.action_release("grenade")
 	_check("the guest's grenade goes off here too", await _until(func() -> bool: return blasts[0] >= 1, 10.0) and weapons.grenades == carried - 1)
+	var tins: int = weapons.tacticals
+	Input.action_press("tactical")
+	await _wait(0.1)
+	Input.action_release("tactical")
+	_check("its smoke grenade makes a cloud here too", await _until(func() -> bool: return Smoke.count() >= 1, 6.0) and tins > 0 and weapons.tacticals == tins - 1)
 	_check("a barrel the host sets off is gone here", await _until(func() -> bool: return blasts[0] >= 2 and tree.get_nodes_in_group("explosive").size() == barrels - 1, 15.0))
 	_check("a lamp and a crate the host breaks then break here too, in pieces", await _until(func() -> bool: return lamps[1].out and stacks[1].standing() == stacks[1].size() - 1, 10.0)
 		and STACK.pieces() > 0)
@@ -391,6 +415,132 @@ func _act(action: String) -> void:
 	key.action = action
 	key.pressed = true
 	Input.parse_input_event(key)
+
+
+# --- Riding together (tools/nettest.sh --ride) ------------------------------------
+
+
+## The host of a ride: in the Alps it gets on a motorcycle at the camp in the
+## west, waits for the guest to get into the sidecar, rides off, waits for
+## the guest to get out again, and wears the motorcycle down.
+func _host_ride() -> void:
+	var tree := get_tree()
+	# The Alps are no level of the list to play together: hosted as the
+	# menu hosts one.
+	Menu._host(ALPS)
+	_check("hosts a game in the Alps", await _until(_in_level.bind(ALPS), 60.0) and Net.active and Net.is_host())
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	player.health = 1e6
+	var bike := _motorcycle(game)
+	_check("there is a motorcycle at the camp in the west", bike != null)
+	if bike == null:
+		return
+	player.global_position = bike.global_position + bike.global_basis.x * -1.4 + Vector3.UP
+	await _wait(0.3)
+	bike.request_seat(player, 0)
+	_check("the host is at the handlebars, and runs it", await _until(func() -> bool: return bike.driver() == player, 3.0) and bike.runs_here())
+	_check("the guest comes", await _until(func() -> bool: return game.puppets.size() == 1, 60.0))
+	var puppet: CharacterBody3D = game.puppets.values()[0]
+	_check("and gets into the sidecar", await _until(func() -> bool: return bike.occupants[1] == puppet, 40.0))
+	_check("where it sits, with the motorcycle", await _until(func() -> bool: return puppet.riding == bike and puppet.global_position.distance_to(bike.seat_frame(1).origin) < 1.2, 5.0))
+	var from := bike.global_position
+	# Not so far that it leaves the open ground of the camp: beyond it stand
+	# the trees of a hedge, and the guest rides on from wherever it stops.
+	Input.action_press("move_forward")
+	await _wait(2.5)
+	Input.action_release("move_forward")
+	print("  the motorcycle went %.1f m, at %.1f m/s at the end" % [bike.global_position.distance_to(from), bike.speed])
+	_check("rides off with the guest in the sidecar", bike.global_position.distance_to(from) > 8.0 and bike.occupants[1] == puppet)
+	_check("the guest is carried along", puppet.global_position.distance_to(bike.seat_frame(1).origin) < 1.2)
+	_check("the guest gets out again", await _until(func() -> bool: return bike.occupants[1] == null and puppet.riding == null, 30.0))
+	await _wait(0.5)
+	bike.take_damage(150.0, bike.global_position, Vector3.FORWARD)
+	_check("a hit wears it down", bike.health < bike.data.health)
+	# Now the other way round: the guest drives, the host rides along.
+	bike.request_leave(player)
+	_check("the host gets off, and runs it with nobody at the handlebars", bike.driver() == null and bike.runs_here())
+	_check("the guest takes the handlebars, and its machine runs it now", await _until(func() -> bool: return bike.driver() == puppet and not bike.runs_here(), 30.0))
+	player.global_position = bike.global_position + bike.global_basis.x * 2.2 + Vector3.UP
+	await _wait(0.3)
+	bike.request_seat(player, 1)
+	_check("the host gets into the sidecar", await _until(func() -> bool: return bike.occupants[1] == player and player.riding == bike, 5.0))
+	var still := bike.global_position
+	_check("and is carried off as the guest rides", await _until(func() -> bool: return bike.global_position.distance_to(still) > 8.0, 30.0))
+	print("  seen here, the guest's motorcycle went %.1f m; the eyes of the host are %.2f m from those of the sidecar" % [bike.global_position.distance_to(still), (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin)])
+	_check("with the eyes where the sidecar has them", (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin) < 0.3)
+	await _until(func() -> bool: return bike.speed < 1.0, 15.0)
+	bike.request_leave(player)
+	_check("and gets out", player.riding == null and bike.occupants[1] == null)
+	# The guest says when it has seen it; leaving before would end its game.
+	await _until(func() -> bool: return game.puppets.is_empty(), 40.0)
+
+
+## The guest of a ride: gets into the sidecar of the motorcycle the host is
+## at the handlebars of, is carried along while it rides, gets out, and sees
+## the motorcycle worn down.
+func _join_ride() -> void:
+	var tree := get_tree()
+	await _press("Play together")
+	_type(1, "127.0.0.1:%d" % _port)
+	for attempt in 10:
+		if Net.active:
+			break
+		if not Net.is_joining():
+			await _press("Join the game")
+		await _wait(1.0)
+	_check("joins the host in the Alps", await _until(_in_level.bind(ALPS), 90.0) and Net.is_guest())
+	if not Net.active:
+		return
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	player.health = 1e6
+	var bike := _motorcycle(game)
+	_check("the same motorcycle is there", bike != null)
+	if bike == null:
+		return
+	var host: CharacterBody3D = game.puppets.get(1)
+	_check("with the host at its handlebars, run by the host", await _until(func() -> bool: return host != null and bike.driver() == host, 20.0) and not bike.runs_here())
+	player.global_position = bike.global_position + bike.global_basis.x * 2.2 + Vector3.UP
+	await _wait(0.5)
+	bike.request_seat(player, 1)
+	_check("gets into the sidecar when the host says so", await _until(func() -> bool: return bike.occupants[1] == player and player.riding == bike, 5.0))
+	var from := bike.global_position
+	_check("is carried along as the host rides off", await _until(func() -> bool: return bike.global_position.distance_to(from) > 8.0, 20.0))
+	print("  seen here, the motorcycle went %.1f m; the player is %.2f m from the eyes of the sidecar" % [bike.global_position.distance_to(from), (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin)])
+	_check("with the eyes where the sidecar has them", (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin) < 0.3)
+	await _until(func() -> bool: return bike.speed < 1.0, 10.0)
+	bike.request_leave(player)
+	_check("and gets out", player.riding == null and bike.occupants[1] == null)
+	_check("sees the motorcycle worn down by the host", await _until(func() -> bool: return bike.health < bike.data.health, 20.0))
+	# Now the guest drives and the host rides along.
+	_check("the host gets off", await _until(func() -> bool: return bike.driver() == null, 20.0))
+	player.global_position = bike.global_position + bike.global_basis.x * -1.4 + Vector3.UP
+	await _wait(0.3)
+	bike.request_seat(player, 0)
+	_check("the guest takes the handlebars, and runs it here", await _until(func() -> bool: return bike.driver() == player, 5.0) and bike.runs_here())
+	_check("the host gets into the sidecar", await _until(func() -> bool: return host != null and bike.occupants[1] == host, 20.0))
+	var from_here := bike.global_position
+	Input.action_press("move_forward")
+	await _wait(4.0)
+	Input.action_release("move_forward")
+	print("  the guest rode %.1f m, at %.1f m/s at the end" % [bike.global_position.distance_to(from_here), bike.speed])
+	_check("rides off with the host in the sidecar", bike.global_position.distance_to(from_here) > 8.0 and bike.occupants[1] == host)
+	_check("the host is carried along here", host.global_position.distance_to(bike.seat_frame(1).origin) < 1.2)
+	_check("the host gets out again", await _until(func() -> bool: return bike.occupants[1] == null, 30.0))
+	bike.request_leave(player)
+	await _wait(0.5)
+
+
+## The motorcycle nearest to the camp in the west of the Alps.
+func _motorcycle(game: Node) -> RigidBody3D:
+	var best: RigidBody3D = null
+	for vehicle: Node in game.get_tree().get_nodes_in_group("vehicle"):
+		if vehicle.get(&"kind") == "motorcycle" and (best == null or (vehicle as Node3D).global_position.distance_to(Vector3(330, 0, 905)) < best.global_position.distance_to(Vector3(330, 0, 905))):
+			best = vehicle
+	return best
 
 
 func _pause() -> void:

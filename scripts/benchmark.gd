@@ -18,7 +18,8 @@ extends Node
 ## --weapon=3 puts that weapon of the loadout in view as the player holds it,
 ## --weapon=3,1 as it looks aimed down the sights and --weapon=3,0,0.4 as it
 ## looks 40% of the way through reloading. --spawn=path@x,y,z,yaw
-## stands a scene in the level at that spot, a model or an enemy, without
+## stands a scene in the level at that spot (a y that begins with a plus is
+## over the ground there, as in --at), a model or an enemy, without
 ## letting it run; several are separated by semicolons, a fifth number scales
 ## it and a sixth poses an enemy: 1 aiming, 2 in mid-stride, 3 shot to pieces,
 ## 4 firing.
@@ -40,9 +41,16 @@ extends Node
 ## view, six degrees wide, to show what the effects cost while they are all
 ## going off. --barrage=1 does the same with an explosion and its fire that
 ## many times a second, nine metres ahead of every view.
+## --smoke=12 stands the cloud of a smoke grenade on the floor that many metres
+## ahead of every view, grown and held still, and --smoke=0 under the view, to
+## measure it from outside and from inside; a second number is its age in
+## seconds.
 ## In a level on land --profile also takes away the trees and, in turn,
 ## each kind of mesh the builder lays in blocks: ground, strewn (grass),
 ## undergrowth, litter, beyond (the wood around the land), detail, trim.
+## The trees are those the level stands one by one and those it plants by
+## the thousand (scripts/grove.gd); what --spawn stood there is "spawned",
+## to weigh fifty of one tree against fifty of another with --off=trees.
 ## --only=zones,dust limits --profile to those effects, to measure one thing
 ## several times over instead of everything once.
 ## --warmup=0 starts measuring a view that many frames after the camera got
@@ -93,6 +101,8 @@ var _animate := false
 var _off := PackedStringArray()
 var _at := PackedStringArray()
 var _spawn := PackedStringArray()
+## What --spawn stood in the level.
+var _spawned: Array[Node3D] = []
 var _weapon := PackedFloat64Array()
 var _shoot := PackedFloat64Array()
 var _hold := -1.0
@@ -100,6 +110,7 @@ var _blast := PackedFloat64Array()
 var _ignite := PackedFloat64Array()
 var _detonate := PackedFloat64Array()
 var _firefight := 0.0
+var _smoke := PackedFloat64Array()
 var _fire_due := 0.0
 var _barrage := 0.0
 var _blast_due := 0.0
@@ -154,6 +165,8 @@ func _ready() -> void:
 			_detonate = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--firefight="):
 			_firefight = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--smoke="):
+			_smoke = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--barrage="):
 			_barrage = arg.get_slice("=", 1).to_float()
 		elif arg.begins_with("--only="):
@@ -222,13 +235,16 @@ func _run() -> void:
 		player.process_mode = Node.PROCESS_MODE_DISABLED
 		player.visible = not _weapon.is_empty()
 	# An effect is looked at with its clock stopped at the age that was asked for.
-	Fx.held = _hold >= 0.0 or not _shoot.is_empty()
+	Fx.held = _hold >= 0.0 or not _shoot.is_empty() or not _smoke.is_empty()
 	for entry in _spawn:
 		var numbers := entry.get_slice("@", 1).split_floats(",")
 		var node: Node3D = (load(entry.get_slice("@", 0)) as PackedScene).instantiate()
 		node.process_mode = Node.PROCESS_MODE_DISABLED
 		tree.current_scene.add_child(node)
+		_spawned.append(node)
 		node.position = Vector3(numbers[0], numbers[1], numbers[2])
+		if entry.get_slice("@", 1).get_slice(",", 1).strip_edges().begins_with("+"):
+			node.set_meta(&"over_ground", numbers[1])
 		node.rotation_degrees.y = numbers[3]
 		if numbers.size() > 4:
 			node.scale = Vector3.ONE * numbers[4]
@@ -237,6 +253,14 @@ func _run() -> void:
 		if _animate:
 			node.process_mode = Node.PROCESS_MODE_INHERIT
 			node.set_physics_process(false)
+	# What stands at a height over the ground is put there once the level's
+	# colliders are there, a frame late.
+	if _spawned.any(func(node: Node3D) -> bool: return node.has_meta(&"over_ground")):
+		await tree.physics_frame
+		await tree.physics_frame
+		for node in _spawned:
+			if node.has_meta(&"over_ground"):
+				node.position.y = _ground_under(node.position.x, node.position.z) + float(node.get_meta(&"over_ground"))
 	if (_posted or not _awake.is_empty()) and tree.current_scene.has_method("post_robots"):
 		tree.current_scene.post_robots()
 	if _awake.size() >= 3 and player and tree.current_scene.has_method("post_robots"):
@@ -338,6 +362,15 @@ func _run() -> void:
 			if not _weapon.is_empty():
 				player.weapons.smoke(1.0)
 			Fx.advance(_shoot[0])
+		if not _smoke.is_empty():
+			await tree.physics_frame
+			await tree.physics_frame
+			Fx.clear()
+			var ahead := -view.global_basis.z
+			ahead = Vector3(ahead.x, 0.0, ahead.z).normalized() * _smoke[0]
+			var spot: Vector3 = view.global_position + ahead
+			Smoke.billow(Vector3(spot.x, Fx.floor_below(spot, 40.0), spot.z))
+			Fx.advance(_smoke[1] if _smoke.size() > 1 else 6.0)
 		var compiled := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW)
 		for i in _warmup_frames:
 			await tree.process_frame
@@ -516,6 +549,10 @@ func _profile_targets() -> Dictionary:
 	var scene := get_tree().current_scene
 	var environment := get_viewport().find_world_3d().environment
 	var targets := {"sun_shadow": [], "lamp_shadows": []}
+	if not _spawned.is_empty():
+		targets["spawned"] = []
+		for node in _spawned:
+			targets["spawned"].append([node, "visible"])
 	for effect: String in ["ssao", "ssil", "ssr", "volumetric_fog", "glow"]:
 		targets[effect] = [[environment, effect + "_enabled"]]
 	for light: Light3D in scene.find_children("*", "Light3D", true, false):
@@ -526,6 +563,14 @@ func _profile_targets() -> Dictionary:
 		var node := scene.find_child(part, true, false)
 		if node:
 			targets[part.to_lower()] = [[node, "visible"]]
+	# By night: the lamps that burn then only, and the beams of the
+	# searchlights in the air.
+	var night := scene.get_node_or_null("Level/NightLamps")
+	if night:
+		targets["night_lamps"] = [[night, "visible"]]
+		targets["beams"] = []
+		for beam in night.find_children("Beam", "MeshInstance3D", true, false):
+			targets["beams"].append([beam, "visible"])
 	# In a level that is cut into zones, every zone has such parts of its own,
 	# and "zones" is drawing only the zones in sight: off draws all of them.
 	var level := scene.get_node_or_null("Level")
@@ -533,8 +578,16 @@ func _profile_targets() -> Dictionary:
 	# blocks and names by what they are: the ground, what is strewn on it,
 	# the undergrowth, the litter, the wood beyond the land.
 	if level and level.has_node("Ground"):
-		if level.has_node("Trees"):
-			targets["trees"] = [[level.get_node("Trees"), "visible"]]
+		for planted: String in ["Trees", "Grove"]:
+			if level.has_node(planted):
+				if not targets.has("trees"):
+					targets["trees"] = []
+				targets["trees"].append([level.get_node(planted), "visible"])
+		# A level of kilometres: the grass drawn round the eye
+		# (scripts/meadow.gd) and the land itself, lifted grids.
+		for part: String in ["Meadow", "LandMesh"]:
+			if level.has_node(part):
+				targets[part.to_lower()] = [[level.get_node(part), "visible"]]
 		for mesh in level.get_children():
 			if mesh is MeshInstance3D:
 				var kind := String(mesh.name).rstrip("0123456789").to_lower()

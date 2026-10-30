@@ -13,6 +13,8 @@ extends Node3D
 signal ammo_changed(weapon_name: String, mag: int, reserve: int)
 signal hit_confirmed(headshot: bool, killed: bool)
 signal grenades_changed(count: int)
+## The same for what is on the second key, see ARMORY.tactical().
+signal tacticals_changed(count: int)
 ## A weapon from the arena was taken up, or let go of (null).
 signal special_changed(data: WeaponData)
 ## The weapon from the arena was fired empty and thrown away.
@@ -38,6 +40,9 @@ const HIT_MASK := 0b100101  # world + enemy + breakable
 ## metre of flame at the muzzle: the pistol 17 m, the shotgun 42.
 const HEARD := 100.0
 const FIRE_BUFFER := 0.12
+## Seconds a sight takes from its first stage to its far one and back, see
+## WeaponData.far_fov.
+const ZOOM_TIME := 0.2
 ## Turns a second of barrels that spin, at full speed.
 const SPIN_TURNS := 5.5
 ## Seconds a weapon from the arena that is fired empty stays in the hands
@@ -88,6 +93,8 @@ const LET_GO := 0.85
 ## Loading one shell at a time: seconds before the first and after the last.
 const SHELL_LEAD := 0.35
 const SHELL_TAIL := 0.3
+## Seconds after the last shot of a clip that its ping is heard.
+const CLIP_PING := 0.06
 
 # How the weapon in view moves in the hands of whoever carries it. All of it
 # is only drawn: none of it changes where a shot goes.
@@ -254,6 +261,11 @@ class Viewmodel:
 
 ## 0 at the hip, 1 fully aimed down sights.
 var ads_blend := 0.0
+## For a sight with a far stage, which is tapped rather than held: 0 at the
+## hip, 1 at the first stage, 2 at the far one. And how far the view has
+## gone from the first to the far one, from 0 to 1.
+var _stage := 0
+var _zoom := 0.0
 ## The weapons in hand on 1 and on: those of the pack that is carried, see
 ## equip().
 var loadout: Array[WeaponData] = []
@@ -263,6 +275,11 @@ var grenades := 2
 var start_grenades := 2
 var most_grenades := 3
 var grenade_kind := ARMORY.GRENADE
+## What goes on the second key, the smoke of a pack: how many are carried, how
+## many a level starts with, and what they are. Picked up nowhere.
+var tacticals := 0
+var start_tacticals := 0
+var tactical_kind := ARMORY.TACTICAL
 
 var _index := 0
 var _pending := 0
@@ -306,6 +323,7 @@ var _motor := AudioStreamPlayer.new()
 var _roar := AudioStreamPlayer.new()
 var _throw_left := 0.0
 var _thrown := true
+var _throws_tactical := false
 var _melee_left := 0.0
 var _landed := true
 var _bloom := 0.0
@@ -351,12 +369,16 @@ var _smoke_due := false
 func _ready() -> void:
 	add_child(_rig)
 	# In a match everybody carries the pack of the match, see scripts/armory.gd;
-	# elsewhere the standard pack, or the one --pack=<name> asks for.
-	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else ARMORY.STANDARD
+	# elsewhere the pack the level says it is played with (metadata/pack on
+	# its scene, as the dunes by night carry the silenced one), else the
+	# standard pack; or the one --pack=<name> asks for.
+	var game := get_tree().get_first_node_in_group(&"game")
+	var own: String = game.get_meta(&"pack", ARMORY.STANDARD) if game else ARMORY.STANDARD
+	var pack: String = Match.setup.get("pack", ARMORY.STANDARD) if Match.active else (own if ARMORY.names().has(own) else ARMORY.STANDARD)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
 			pack = arg.get_slice("=", 1)
-	equip(ARMORY.weapons(pack), ARMORY.grenades(pack), ARMORY.grenade(pack))
+	equip(ARMORY.weapons(pack), ARMORY.grenades(pack), ARMORY.grenade(pack), ARMORY.tacticals(pack), ARMORY.tactical(pack))
 	_build_fill()
 	player.hit_from.connect(_on_hit)
 	player.landed.connect(_on_landed)
@@ -372,10 +394,11 @@ func _ready() -> void:
 
 
 ## Takes up `weapons` on 1 and on, each with a full magazine and the reserve a
-## level starts with, and as many grenades as `grenade_count` starts with, of
-## at most its second number, of the kind `grenade` names. Whatever was in
-## hand is put away; with nothing to take up it is the standard pack.
-func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade := ARMORY.GRENADE) -> void:
+## level starts with, as many grenades as `grenade_count` starts with, of at
+## most its second number, of the kind `grenade` names, and `tactical_count` of
+## the kind `tactical` names on the second key. Whatever was in hand is put
+## away; with nothing to take up it is the standard pack.
+func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade := ARMORY.GRENADE, tactical_count := 0, tactical := ARMORY.TACTICAL) -> void:
 	for model in _models:
 		_rig.remove_child(model.root)
 		model.root.queue_free()
@@ -395,6 +418,8 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade 
 	_landed = true
 	_pump_stage = 2
 	_locked = 0.0
+	_stage = 0
+	_zoom = 0.0
 	_settle_barrels()
 	_models[_index].root.visible = true
 	start_grenades = grenade_count.x
@@ -402,6 +427,10 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade 
 	grenade_kind = grenade
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
+	start_tacticals = tactical_count
+	tactical_kind = tactical
+	tacticals = start_tacticals
+	tacticals_changed.emit(tacticals)
 	_settle()
 	_emit_ammo.call_deferred()
 
@@ -416,6 +445,9 @@ func _take_up(data: WeaponData, mag: int, reserve: int) -> void:
 		mesh.set_layer_mask_value(VIEW_LAYER, true)
 	_rig.add_child(model)
 	_models.append(Viewmodel.new(model))
+	# The action of a weapon loaded by a clip stays open once the clip is out.
+	if data.en_bloc:
+		_models[-1].locks_open = true
 	_mags.append(mag)
 	_reserves.append(reserve)
 
@@ -513,7 +545,19 @@ func current() -> WeaponData:
 
 
 func ads_fov() -> float:
-	return current().ads_fov
+	var data := current()
+	if data.far_fov <= 0.0:
+		return data.ads_fov
+	return lerpf(data.ads_fov, data.far_fov, smoothstep(0.0, 1.0, _zoom))
+
+
+## Takes the sights down at once and forgets a stage that was tapped: on the
+## way into a vehicle, where the view is another and the weapon may be put
+## away with them still up.
+func lower() -> void:
+	ads_blend = 0.0
+	_stage = 0
+	_zoom = 0.0
 
 
 func move_speed_scale() -> float:
@@ -543,7 +587,7 @@ func current_spread_deg() -> float:
 		spread += data.ramp_spread_deg * (1.0 - _ramp)
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
 	spread += data.move_spread_deg * minf(speed / 8.0, 1.5) * (1.0 - 0.7 * ads_blend)
-	if not player.is_on_floor():
+	if not player.is_on_floor() and not player.riding:
 		spread += 2.0
 	elif player.is_crouched() and not player.is_sliding():
 		spread *= 0.7
@@ -575,18 +619,22 @@ func preview(index: int, aim := 0.0, reload := 0.0, blow := 0.0) -> void:
 
 
 ## Brings whatever has run low back up to what a level starts with: the
-## reserve of every weapon and the grenades. What is over that is kept.
+## reserve of every weapon, the grenades and what is on the second key. What
+## is over that is kept.
 func resupply() -> void:
 	for i in loadout.size():
 		if not loadout[i].special:
 			_reserves[i] = maxi(_reserves[i], _start_reserve(loadout[i]))
 	grenades = maxi(grenades, start_grenades)
 	grenades_changed.emit(grenades)
+	tacticals = maxi(tacticals, start_tacticals)
+	tacticals_changed.emit(tacticals)
 	_emit_ammo()
 
 
 ## Everything as a level starts: full magazines, the reserve a weapon begins
-## with and the grenades. For a fight that is fought again.
+## with, the grenades and what is on the second key. For a fight that is
+## fought again.
 func restock() -> void:
 	for i in loadout.size():
 		if not loadout[i].special:
@@ -594,6 +642,8 @@ func restock() -> void:
 			_reserves[i] = _start_reserve(loadout[i])
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
+	tacticals = start_tacticals
+	tacticals_changed.emit(tacticals)
 	_emit_ammo()
 
 
@@ -712,8 +762,19 @@ func _process(delta: float) -> void:
 
 	var data := current()
 	var busy := _switch_left > 0.0 or _reload_left > 0.0 or _throw_left > 0.0 or _melee_left > 0.0
-	var aiming := control and Input.is_action_pressed("ads") and not busy and not data.aim_spins
+	var up := Input.is_action_pressed("ads")
+	if data.far_fov > 0.0:
+		# A sight with a far stage is tapped: up, further, and down again. It
+		# stays up through a reload; setting off at a sprint, a throw, a blow
+		# and getting killed take it down.
+		if control and Input.is_action_just_pressed("ads"):
+			_stage = (_stage + 1) % 3
+		if player.dead or (control and Input.is_action_just_pressed("sprint")):
+			_stage = 0
+		up = _stage > 0
+	var aiming := control and up and not busy and not data.aim_spins
 	ads_blend = move_toward(ads_blend, 1.0 if aiming else 0.0, delta / data.ads_time)
+	_zoom = move_toward(_zoom, 1.0 if aiming and _stage == 2 else 0.0, delta / ZOOM_TIME)
 	_bloom = move_toward(_bloom, 0.0, data.bloom_recovery_deg * delta)
 
 	if data.spin_up <= 0.0:
@@ -746,6 +807,10 @@ func _process(delta: float) -> void:
 			_start_reload()
 		if Input.is_action_just_pressed("grenade"):
 			_start_throw()
+		# In a vehicle that key moves on to the next seat, and the sandbox has
+		# it for something else.
+		if Input.is_action_just_pressed("tactical") and player.riding == null and not Sandbox.active:
+			_start_throw(true)
 		if Input.is_action_just_pressed("melee"):
 			_start_melee()
 
@@ -786,7 +851,7 @@ func _fire(data: WeaponData) -> void:
 			var direction := camera.global_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)
 			direction = direction.normalized()
 			var end := origin + direction * data.max_range
-			var query := PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()])
+			var query := PhysicsRayQueryParameters3D.create(origin, end, mask, _ours())
 			var hit := space.intersect_ray(query)
 			if hit:
 				end = hit.position
@@ -846,10 +911,12 @@ func _fire(data: WeaponData) -> void:
 		_eject(model, data)
 	if model.locks_open and _mags[_index] == 0:
 		_locked = 1.0
+	if data.en_bloc and _mags[_index] == 0:
+		_throw_clip(model, data)
 
 	# Barrels that spin roar as long as they fire, see _spin_barrels().
 	if data.spin_up <= 0.0:
-		Sfx.play(data.shot_sound)
+		Sfx.play(data.shot_sound, data.shot_db)
 	_rounds += 1
 	get_tree().call_group(&"watch", &"hears", camera.global_position, data.flash_size * HEARD)
 	Save.tally("shots")
@@ -871,7 +938,7 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	var off := sqrt(randf()) * spread
 	var direction := (camera.global_basis * Vector3(cos(angle) * off, sin(angle) * off, -1.0)).normalized()
 	var start := origin + camera.global_basis * Vector3(0.06, -0.05, -0.7)
-	var query := PhysicsRayQueryParameters3D.create(origin, start, HIT_MASK, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(origin, start, HIT_MASK, _ours())
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		start = origin
 	var rocket: Node3D = data.projectile.instantiate()
@@ -879,6 +946,8 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	rocket.direct = data.damage
 	rocket.thrower = Match.number(player) if Match.active else 0
 	rocket.shooter = player
+	if player.riding:
+		rocket.passes = player.riding.get_rid()
 	rocket.weapon = ARMORY.index(data)
 	get_tree().current_scene.add_child(rocket)
 	rocket.global_position = start
@@ -975,14 +1044,28 @@ func _kick_view(data: WeaponData) -> void:
 
 
 ## Where the shots of the weapon in hand leave it.
+## What a shot of the player's passes through: the player, and the vehicle
+## the player rides in.
+func _ours() -> Array[RID]:
+	var ours: Array[RID] = [player.get_rid()]
+	if player.riding:
+		ours.append(player.riding.get_rid())
+	return ours
+
+
 func muzzle_position() -> Vector3:
 	return _models[_index].muzzle.global_position
 
 
 ## The flash at the muzzle of the weapon in hand. Over the sights it is
-## smaller, so that it does not hide what is being shot at.
+## smaller, so that it does not hide what is being shot at. Whoever fires
+## from behind the wheel has the weapon out of sight: the flash is where the
+## muzzle is, for the view of the vehicle to see.
 func flash() -> void:
 	var data := current()
+	if not visible:
+		Fx.muzzle_flash(null, Transform3D(Fx.facing(-camera.global_basis.z), muzzle_position()), data.flash_size, data.flash_prongs)
+		return
 	Fx.muzzle_flash(_models[_index].muzzle, Transform3D(), data.flash_size * lerpf(1.0, 0.65, ads_blend), data.flash_prongs)
 
 
@@ -998,6 +1081,18 @@ func _eject(model: Viewmodel, data: WeaponData) -> void:
 		return
 	var out := camera.global_basis * Vector3(randf_range(1.6, 2.4), randf_range(0.8, 1.5), randf_range(-0.2, 0.5))
 	Fx.casing(model.eject.global_position, camera.global_basis, player.velocity + out, data.loads_singly)
+
+
+## The last shot of a clip throws the clip out of the top, up and to the
+## right, with a ping that is heard just after the bang: the empty clip
+## leaving, not the shot.
+func _throw_clip(model: Viewmodel, data: WeaponData) -> void:
+	var at: Vector3 = model.mag.global_position if model.mag else model.muzzle.global_position
+	var out := camera.global_basis * Vector3(randf_range(0.5, 0.9), randf_range(2.6, 3.2), randf_range(0.0, 0.4))
+	Fx.casing(at, camera.global_basis, player.velocity + out, false, true)
+	var ping := _handling(data, "ping", &"")
+	if ping != &"":
+		get_tree().create_timer(CLIP_PING).timeout.connect(Sfx.play.bind(ping, -2.0))
 
 
 ## A pump action is worked by hand after every shot: back, which throws the
@@ -1023,7 +1118,8 @@ func _update_pump(data: WeaponData) -> void:
 ## share ("mag_in"), else `fallback`. Recording a step for one weapon and
 ## adding it to the manifest is all it takes to give that weapon its own.
 func _handling(data: WeaponData, step: String, fallback: StringName) -> StringName:
-	var own := StringName("%s_%s" % [String(data.shot_sound).trim_suffix("_shot"), step])
+	var named := String(data.handled_as) if data.handled_as else String(data.shot_sound).trim_suffix("_shot")
+	var own := StringName("%s_%s" % [named, step])
 	if Sfx.has(own):
 		return own
 	return StringName(step) if Sfx.has(StringName(step)) else fallback
@@ -1034,6 +1130,9 @@ func _start_reload() -> void:
 	if _reload_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0 or _melee_left > 0.0:
 		return
 	if _mags[_index] >= data.mag_size or _reserves[_index] <= 0:
+		return
+	# A clip goes in only once the last one has flown out.
+	if data.en_bloc and _mags[_index] > 0:
 		return
 	_reload_stage = 0
 	_reload_total = data.reload_time
@@ -1069,7 +1168,10 @@ func _update_reload() -> void:
 	var steps: Array[String] = ["mag_out", "mag_in", "bolt"]
 	var sounds: Array[StringName] = [&"reload", &"reload_end", &"switch"]
 	while _reload_stage < moments.size() and fraction >= moments[_reload_stage]:
-		Sfx.play(_handling(data, steps[_reload_stage], sounds[_reload_stage]), -9.0)
+		# There is no magazine to take out of a weapon whose clip flew out
+		# with its last shot: the hand only fetches the next.
+		if not (data.en_bloc and steps[_reload_stage] == "mag_out"):
+			Sfx.play(_handling(data, steps[_reload_stage], sounds[_reload_stage]), -9.0)
 		_reload_stage += 1
 	if _reload_left <= 0.0:
 		var needed := mini(data.mag_size - _mags[_index], _reserves[_index])
@@ -1081,34 +1183,42 @@ func _update_reload() -> void:
 
 
 ## The left hand lets go of the weapon, which breaks off a reload, and comes
-## back once the grenade is on its way.
-func _start_throw() -> void:
-	if grenades <= 0 or _throw_left > 0.0 or _switch_left > 0.0 or _melee_left > 0.0:
+## back once the grenade, or with `tactical` what is on the second key, is on
+## its way.
+func _start_throw(tactical := false) -> void:
+	if (tacticals if tactical else grenades) <= 0 or _throw_left > 0.0 or _switch_left > 0.0 or _melee_left > 0.0:
 		return
 	_reload_left = 0.0
+	_stage = 0
 	_throw_left = THROW_TIME
 	_thrown = false
+	_throws_tactical = tactical
 	Sfx.play(&"pin", -4.0)
 
 
 func _release_grenade() -> void:
 	_thrown = true
-	grenades -= 1
-	grenades_changed.emit(grenades)
+	if _throws_tactical:
+		tacticals -= 1
+		tacticals_changed.emit(tacticals)
+	else:
+		grenades -= 1
+		grenades_changed.emit(grenades)
+	var kind := tactical_kind if _throws_tactical else grenade_kind
 	var eye := camera.global_position
 	var aim := camera.global_basis
 	# It leaves from the left hand, unless there is a wall where that is.
 	var from := eye + aim * Vector3(-0.22, -0.1, -0.45)
-	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, _ours())
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		from = eye
-	var grenade: RigidBody3D = ARMORY.thrown(grenade_kind).instantiate()
+	var grenade: RigidBody3D = ARMORY.thrown(kind).instantiate()
 	get_tree().current_scene.add_child(grenade)
 	grenade.global_position = from
 	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
 	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
 	grenade.thrower = Match.number(player) if Match.active else 0
-	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity, grenade_kind])
+	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity, kind])
 	Sfx.play(&"throw", -6.0)
 
 
@@ -1118,6 +1228,7 @@ func _start_melee(dry := false) -> void:
 	if _melee_left > 0.0 or _switch_left > 0.0 or _throw_left > 0.0:
 		return
 	_reload_left = 0.0
+	_stage = 0
 	_melee_left = MELEE_TIME
 	_landed = false
 	if dry:
@@ -1138,7 +1249,7 @@ func _land_blow() -> void:
 	var mask := HIT_MASK | (Match.foes_of(player) if Match.active else 0)
 	for off: Vector2 in [Vector2.ZERO, Vector2(-0.22, 0), Vector2(0.22, 0), Vector2(0, -0.25), Vector2(0, 0.18)]:
 		var end := origin + aim * Vector3(off.x, off.y, -1.0).normalized() * MELEE_REACH
-		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, mask, [player.get_rid()]))
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, end, mask, _ours()))
 		if hit and (found.is_empty() or (hit.collider.has_method("is_headshot") and not found.collider.has_method("is_headshot"))):
 			found = hit
 	if found.is_empty():
@@ -1170,6 +1281,7 @@ func _switch_to(index: int) -> void:
 	_landed = true
 	_pending = index
 	_reload_left = 0.0
+	_stage = 0
 	# A heavy weapon takes longer to put away and to bring up.
 	_switch_total = maxf(current().switch_time, loadout[index].switch_time)
 	_switch_left = _switch_total
@@ -1228,7 +1340,7 @@ func _animate_viewmodel(data: WeaponData, delta: float) -> void:
 	# Up against a wall it is drawn back with the muzzle up, instead of poking
 	# through to the other side.
 	var eye := camera.global_position
-	var query := PhysicsRayQueryParameters3D.create(eye, eye - camera.global_basis.z * REACH, 1, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(eye, eye - camera.global_basis.z * REACH, 1, _ours())
 	var wall := get_world_3d().direct_space_state.intersect_ray(query)
 	var room := eye.distance_to(wall.position) / REACH if wall else 1.0
 	_crowded = lerpf(_crowded, 1.0 - smoothstep(0.3, 1.0, room), 1.0 - exp(-12.0 * delta))
@@ -1374,9 +1486,10 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		turn.x -= 0.05 * back
 	if model.action:
 		model.action.position.z += model.travel * maxf(back, _locked)
-	if data.projectile and model.mag:
+	if (data.projectile or data.en_bloc) and model.mag:
 		# The round sticks out of the tube until it is fired, and the next is
-		# there once the reload has brought it.
+		# there once the reload has brought it; so does a clip, which flies
+		# out with its last round.
 		model.mag.visible = _mags[_index] > 0 or (_reload_left > 0.0 and fraction > MAG_OUT)
 	if model.barrels:
 		# They turn about the axis between them, and glow as they heat up.

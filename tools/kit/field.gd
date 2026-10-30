@@ -44,6 +44,7 @@ const VEHICLES := {
 	"truck": {"span": 2.0, "boxes": [[Vector3(0, 1.3, -2.1), Vector3(2.2, 1.9, 2.5)], [Vector3(0, 1.75, 1.55), Vector3(2.4, 2.8, 4.0)]]},
 	"tank": {"span": 2.4, "boxes": [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)], [Vector3(0, 2.0, -3.3), Vector3(0.3, 0.3, 3.6)]]},
 	"tank_b": {"span": 2.4, "boxes": [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.0), Vector3(2.6, 0.85, 2.8)]]},
+	"motorcycle": {"span": 1.0, "boxes": [[Vector3(0, 0.62, -0.02), Vector3(0.62, 0.86, 2.15)], [Vector3(1.06, 0.62, -0.06), Vector3(0.7, 0.5, 1.72)]]},
 }
 ## The sheet of what an army stencils on what it drives, as far as a level
 ## uses it: the ten figures in a row, and under them the letters a number
@@ -51,7 +52,7 @@ const VEHICLES := {
 ## Each as [where on the sheet it begins, how much of the sheet it takes].
 ## See _stencils() in tools/gen_foliage.gd.
 const FIGURES := Rect2(0, 0.5, 0.1, 0.125)
-const NUMBER_BEGINS := {"jeep": Rect2(0, 0.625, 0.25, 0.125), "truck": Rect2(0.25, 0.625, 0.25, 0.125), "tank": Rect2(0.5, 0.625, 0.25, 0.125), "tank_b": Rect2(0.5, 0.625, 0.25, 0.125)}
+const NUMBER_BEGINS := {"jeep": Rect2(0, 0.625, 0.25, 0.125), "truck": Rect2(0.25, 0.625, 0.25, 0.125), "tank": Rect2(0.5, 0.625, 0.25, 0.125), "tank_b": Rect2(0.5, 0.625, 0.25, 0.125), "motorcycle": Rect2(0, 0.625, 0.25, 0.125)}
 const STROKE := Rect2(0.825, 0.625, 0.1, 0.125)
 ## How far the turret of each tank is traversed to its right, in degrees.
 const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
@@ -59,6 +60,20 @@ const TRAVERSE := {"tank": 0.0, "tank_b": 38.0}
 ## The node the vehicles of the level stand under, and how many there are.
 var _vehicles: Node3D
 var _vehicle_count := 0
+## What a vehicle breaks or flattens as it drives into it, each a body of its
+## own with a mesh of its own (scripts/barrier.gd, scripts/wire.gd): the node
+## they stand under, them by name, and the one that is being built now, into
+## which whatever is built goes, see _breakable_into().
+const CRUSHABLE := &"crushable"
+const BREAKABLE := 32
+var _crushables: Node3D
+var _owned := {}
+var _owning: StaticBody3D
+## The vehicle that can be driven whose number and load are being built, and
+## whether what is built now is on its turret: it goes into a mesh of its own
+## that moves with it, see _trim() and _commit().
+var _riding: Node3D
+var _on_turret := false
 ## How many shelter() there are, for their names.
 var _shelters := 0
 ## How far before the glass of the level a shot stops, on the wall the glass
@@ -92,6 +107,10 @@ func _dice(at: Vector2, salt := 0) -> RandomNumberGenerator:
 ## strand of wire, a toggle. They throw no shadow and are not drawn from
 ## further off than TRIM_REACH, see _commit().
 func _trim(mat: String, at: Vector3) -> SurfaceTool:
+	if _owning:
+		return _still(_tool_named("|own %s/%s" % [_owning.name, mat]), mat)
+	if _riding:
+		return _still(_tool_named("|vehicle %s%s/%s" % [_riding.name, " turret" if _on_turret else "", mat]), mat)
 	@warning_ignore("integer_division")
 	return _still(_tool_named("|trim %d %d/%s" % [int(at.x) / GROUND_BLOCK, int(at.z) / GROUND_BLOCK, mat]), mat)
 
@@ -108,12 +127,27 @@ func _still(st: SurfaceTool, mat: String) -> SurfaceTool:
 ## Something small that is in nobody's way goes with the small things, as
 ## long as _small says so: a mug, a peg, a helmet.
 func _tool(mat: String, flags: int, at: Vector3) -> SurfaceTool:
+	if _owning:
+		return _trim(mat, at)
 	if _small and flags & DETAIL and flags & NO_COLLIDE and not _moving:
 		return _trim(mat, at)
 	return _still(super(mat, flags, at), mat)
 
 
 func _commit(zone_name: String, kind: String) -> void:
+	if kind.begins_with("vehicle "):
+		# A vehicle that carries nothing of some material still asked for a
+		# surface of it.
+		var kept := 0
+		for key: String in _tools.keys():
+			if key.begins_with("%s|%s/" % [zone_name, kind]):
+				var arrays: Array = (_tools[key] as SurfaceTool).commit_to_arrays()
+				if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null or (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+					_tools.erase(key)
+				else:
+					kept += 1
+		if kept == 0:
+			return
 	super(zone_name, kind)
 	if kind.begins_with("trim "):
 		var small := _root.get_child(0) as MeshInstance3D
@@ -127,6 +161,35 @@ func _commit(zone_name: String, kind: String) -> void:
 		column.extra_cull_margin = 12.0
 	elif kind == "glass" and zone_name == "" and _glass_reveal > 0.0:
 		(_root.get_child(0) as MeshInstance3D).set_meta(&"reveal", _glass_reveal)
+	elif kind.begins_with("own "):
+		# Something a vehicle breaks: its mesh goes with its body, in the
+		# coordinates of the level.
+		var mesh := _root.get_child(0) as MeshInstance3D
+		var body: StaticBody3D = _owned[kind.get_slice(" ", 1)]
+		mesh.owner = null
+		_root.remove_child(mesh)
+		_add(mesh, body)
+		mesh.name = "Mesh"
+		mesh.transform = body.transform.affine_inverse()
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if body.get_meta(&"shadow", false) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.visibility_range_end = TRIM_REACH
+		mesh.visibility_range_end_margin = 8.0
+	elif kind.begins_with("vehicle "):
+		# The number and the load of a vehicle that can be driven go along
+		# with it, and what is on its turret turns with that: see
+		# scripts/vehicle.gd. The mesh is in the coordinates of the level.
+		var load := _root.get_child(0) as MeshInstance3D
+		var ride: Node3D = _vehicles.get_node(NodePath(kind.get_slice(" ", 1)))
+		load.owner = null
+		_root.remove_child(load)
+		_add(load, ride)
+		load.name = "TurretLoad" if kind.ends_with(" turret") else "Load"
+		load.transform = ride.transform.affine_inverse()
+		load.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		load.visibility_range_end = TRIM_REACH
+		load.visibility_range_end_margin = 8.0
+		if kind.ends_with(" turret"):
+			load.set_meta(&"on_turret", true)
 
 
 ## The light under a roof that keeps the sky off: in a tent, under a net,
@@ -439,6 +502,9 @@ func sandbag_post(at: Vector2, yaw_deg: float, width := 4.2, depth := 2.4, layer
 		var corner := front + side * end * (width * 0.5 - 0.15) - ahead * 0.3
 		sandbags(corner, corner - ahead * depth, layers)
 	cover("earth", at, maxf(width, depth) * 0.6, 0.8)
+	# By night a lantern on the ground inside, against a wall.
+	var lantern := at - ahead * (depth * 0.3) + side * (width * 0.5 - 0.5)
+	storm_lantern(ground(lantern.x, lantern.y, 0.01))
 
 
 ## A ring of sandbags `radius` across its middle, with a way in on the side
@@ -822,6 +888,8 @@ func bivouac(at: Vector2, yaw_deg: float) -> void:
 		_pole(on_ground(xf * Vector3(x, 0, 0)), xf * Vector3(x, 1.09, 0), 0.022, 0.018, 5)
 		_guy(xf * Vector3(x, 1.06, 0), xf * Vector3(x * 2.15, 0, 0))
 	_collide_box(xf * Transform3D(Basis(), Vector3(0, 0.45, 0)), Vector3(2.2, 0.9, 1.5), "soft")
+	# By night a lantern hangs on the pole at the open end.
+	storm_lantern(xf * Vector3(long + 0.035, 0.98, 0), true)
 
 
 ## A roll or a bag of cloth lying at `middle` along `way`: a blanket rolled
@@ -933,6 +1001,11 @@ func camo_net(at: Vector2, yaw_deg: float, size: Vector2, height := 3.3) -> void
 	shelter(Transform3D(xf.basis, corner.call(0.0, 0.0, height * 0.5 - 0.3)), Vector3(size.x + 0.6, height + 0.6, size.y + 3.0), NET_LIGHT, 1.6)
 	var reach := maxf(half.x, half.y) if absf(fposmod(yaw_deg, 90.0) - 45.0) < 20.0 else 0.0
 	casts_shade(middle, Vector3(maxf(half.x, reach) + 0.5, 0.7, maxf(half.y, reach) + 1.2) if absf(fposmod(yaw_deg, 180.0) - 90.0) > 45.0 else Vector3(maxf(half.y, reach) + 1.2, 0.7, maxf(half.x, reach) + 0.5))
+	# By night bulbs hang from its middle line, one to every nine metres.
+	var bulbs := maxi(1, roundi(size.x / 9.0))
+	for i in bulbs:
+		var x := -half.x + size.x * (i + 0.5) / bulbs
+		hanging_bulb(corner.call(x, 0.0, height - 0.25), 0.55)
 
 
 # --- Wire and barriers ---------------------------------------------------------------
@@ -1018,6 +1091,9 @@ func wire_coil(from: Vector2, to: Vector2) -> void:
 		turns.append(Vector2(_clutter_rng.randf_range(-0.08, 0.08), _clutter_rng.randf_range(-0.3, 0.3)))
 	var pickets := maxi(2, int(length / 3.0) + 1)
 	var gap := length / maxf(int(length / 3.0), 1.0)
+	# A vehicle flattens it: it is a body of its own, see scripts/wire.gd.
+	var middle_at := (from + to) * 0.5
+	_breakable_into("Wire", "res://scripts/wire.gd", ground(middle_at.x, middle_at.y))
 	var heads: Array[Vector3] = []
 	for stake in pickets:
 		var at := from + way * gap * stake
@@ -1046,6 +1122,33 @@ func wire_coil(from: Vector2, to: Vector2) -> void:
 	var high := maxf(ground_height(from.x, from.y), ground_height(to.x, to.y)) + 1.15
 	var half_way := (from + to) * 0.5
 	_collide_box(Transform3D(Basis.looking_at(along), Vector3(half_way.x, (low + high) * 0.5, half_way.y)), Vector3(0.9, high - low, length), "metal")
+	_breakable_into("", "", Vector3.ZERO)
+
+
+## Builds what follows into a body of its own at `at`, with `script`, which
+## a vehicle breaks or flattens as it drives into it; an empty name builds
+## into the level again. Its colliders go into that body, and its mesh, see _commit().
+## A shot and a blast find it as they found it in the level.
+func _breakable_into(body_name: String, script: String, at: Vector3, shadow := false) -> void:
+	if body_name == "":
+		_owning = null
+		_into = null
+		return
+	if _crushables == null:
+		_crushables = Node3D.new()
+		_crushables.name = "Crushables"
+		_add(_crushables, _root)
+	var body := StaticBody3D.new()
+	body.name = body_name
+	body.position = at
+	body.collision_layer = 1 | BREAKABLE
+	body.set_script(load(script))
+	body.set_meta(&"shadow", shadow)
+	_add(body, _crushables)
+	body.add_to_group(CRUSHABLE, true)
+	_owned[String(body.name)] = body
+	_owning = body
+	_into = body
 
 
 ## A barrier across a track: a pole, red and white, on a post with a weight
@@ -1072,6 +1175,15 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 	var arm := xf * Transform3D(tilt, Vector3(0, 1.0, 0))
 	var lying := Basis(Vector3.BACK, -PI * 0.5)
 	var bands := int(length / 0.5)
+	if not raised:
+		var rest := on_ground(xf * Vector3(length - 0.2, 0, 0))
+		cylinder("steel", rest, 0.025, 0.94, SLIGHT, Vector3.ZERO, -1.0, 6)
+		for z: float in [-0.05, 0.05]:
+			_local_box("steel", xf, Vector3(length - 0.2, 0.98, z), Vector3(0.04, 0.16, 0.008), SLIGHT)
+		_collide_box(Transform3D(xf.basis, rest + Vector3.UP * 0.53), Vector3(0.06, 1.06, 0.12), "metal")
+	# The pole with its weight and its disc snaps off its post when a vehicle
+	# drives into it: a body of its own, see scripts/barrier.gd.
+	_breakable_into("Barrier", "res://scripts/barrier.gd", arm.origin, true)
 	for i in bands:
 		# Thicker at the butt than at the tip, as a pole is.
 		var thick := lerpf(0.055, 0.038, float(i) / bands)
@@ -1082,11 +1194,6 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 	_collide_box(arm * Transform3D(Basis(), Vector3((bands * 0.5 - 0.85) * 0.5, 0, 0)), Vector3(bands * 0.5 + 0.85, 0.11, 0.11), "metal")
 	_cylinder("steel", arm * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0, -0.13)), 0.018, 0.26, SLIGHT, -1.0, 6)
 	if not raised:
-		var rest := on_ground(xf * Vector3(length - 0.2, 0, 0))
-		cylinder("steel", rest, 0.025, 0.94, SLIGHT, Vector3.ZERO, -1.0, 6)
-		for z: float in [-0.05, 0.05]:
-			_local_box("steel", xf, Vector3(length - 0.2, 0.98, z), Vector3(0.04, 0.16, 0.008), SLIGHT)
-		_collide_box(Transform3D(xf.basis, rest + Vector3.UP * 0.53), Vector3(0.06, 1.06, 0.12), "metal")
 		# The disc, red with a white bar, on two links of chain.
 		var middle := Vector3(length * 0.5, -0.32, 0)
 		_cylinder("enamel_red", arm * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), middle + Vector3(0, 0, -0.006)), 0.21, 0.012, SLIGHT, -1.0, 16)
@@ -1095,6 +1202,7 @@ func barrier_pole(at: Vector2, yaw_deg: float, length := 5.0, raised := false) -
 			_local_box("paper", arm, middle + Vector3(0, 0, z), Vector3(0.3, 0.065, 0.004), SLIGHT)
 		for x: float in [-0.1, 0.1]:
 			_local_box("steel", arm, middle + Vector3(x, 0.25, 0), Vector3(0.008, 0.12, 0.008), SLIGHT)
+	_breakable_into("", "", Vector3.ZERO)
 
 
 ## A sentry box of boards, its open front facing `yaw_deg`: on skids, with
@@ -1128,6 +1236,9 @@ func sentry_box(at: Vector2, yaw_deg: float) -> void:
 	# Inside: a shelf, and a peg with what hangs on it.
 	_local_box("wood", xf, Vector3(0, 1.25, -0.5), Vector3(1.1, 0.03, 0.16), SLIGHT)
 	_local_box("wood", xf, Vector3(0.45, 1.7, -0.56), Vector3(0.03, 0.03, 0.08), SLIGHT)
+	# By night a lantern on a hook under the eave of the way in.
+	_local_box("dark_steel", xf, Vector3(0.48, 2.06, 0.66), Vector3(0.01, 0.08, 0.01), SLIGHT)
+	storm_lantern(xf * Vector3(0.48, 2.02, 0.66), true)
 
 
 ## A board on a post with `text` on it, which has to be in the manifest as a
@@ -1290,7 +1401,9 @@ func watch_tower(at: Vector2, height := 7.0, yaw_deg := 0.0) -> void:
 		_local_box("wood", xf, Vector3(0, 0.2 + share * (height + 0.2), lerpf(2.1, 1.56, share)), Vector3(0.5, 0.04, 0.04), SLIGHT)
 	var lamp := xf * Transform3D(Basis.from_euler(Vector3(deg_to_rad(70.0), deg_to_rad(45.0), 0)), Vector3(1.3, height + 1.72, 1.3))
 	_cylinder("dark_steel", lamp, 0.2, 0.3, SLIGHT, -1.0, 10)
+	_cylinder("lamp_glass", lamp * Transform3D(Basis(), Vector3(0, 0.3, 0)), 0.17, 0.012, SLIGHT, -1.0, 10)
 	_local_box("dark_steel", xf, Vector3(1.3, height + 1.56, 1.3), Vector3(0.05, 0.3, 0.05), SLIGHT)
+	searchlight(xf * Vector3(1.3, height + 1.78, 1.3), xf.basis * Vector3(1, 0, 1), 14.0)
 
 
 ## A hut of corrugated sheet bent over hoops, `length` long along the X of
@@ -1397,6 +1510,180 @@ func campfire(at: Vector2) -> void:
 	_box("steel", Transform3D(Basis(Vector3.UP, own.randf() * TAU), seats[2] + Vector3(0.2, 0.2, 0)), Vector3(0.17, 0.055, 0.12), SLIGHT)
 	_small = false
 	smoke(Vector3(at.x, hearth.y + 0.3, at.y), 30.0)
+	# By night it burns: scripts/campfire.gd lights it once the level is there.
+	if _by_night:
+		var fire := Node3D.new()
+		fire.name = "Campfire"
+		fire.position = hearth + Vector3.UP * 0.05
+		fire.set_script(load("res://scripts/campfire.gd"))
+		night_light(fire)
+
+
+# --- By night ------------------------------------------------------------------
+
+
+## The colours of the lamps of the field by night: the flame of a lantern, a
+## bulb on a cable from a generator, the sodium lamps on the masts of a wall,
+## and the arc of a searchlight.
+const FLAME := Color(1.0, 0.58, 0.28)
+const BULB_LIGHT := Color(1.0, 0.74, 0.48)
+const SODIUM := Color(1.0, 0.66, 0.34)
+const ARC := Color(0.9, 0.94, 1.0)
+## A lamp of the night throws a shadow as far as NIGHT_SHADOW metres from
+## whoever looks, and from NIGHT_SEEN on fades out over NIGHT_FADE: the
+## engine's own fade, lamp by lamp. Farther off a lamp is its glass alone.
+const NIGHT_SHADOW := 40.0
+const NIGHT_SEEN := 120.0
+const NIGHT_FADE := 30.0
+## A small lamp, a bulb or a lantern, lights nothing from this far on: what
+## it lights is a few metres round it, and from farther off its glass is all
+## there is to see of it. Every lamp that lights a spot costs that spot.
+const SMALL_SEEN := 55.0
+const SMALL_FADE := 15.0
+## How strong the beam of a searchlight is in the air, see light_beam().
+const BEAM_AIR := 0.12
+
+
+## A lamp that burns by night at `at`, of `colour`, `energy` strong, as far as
+## `reach`: an OmniLight3D in the night of the level, called Bulb so that it
+## can be shot out (see night_light()). Most throw no shadow: one that does
+## draws six of them. Nothing by day, nor in a level that has no night.
+func night_bulb(at: Vector3, colour: Color, energy: float, reach: float, shadow := false) -> void:
+	if not _by_night:
+		return
+	var light := OmniLight3D.new()
+	light.name = "Bulb"
+	light.position = at
+	light.light_color = colour
+	light.light_energy = energy
+	light.omni_range = reach
+	light.omni_attenuation = 1.4
+	light.shadow_enabled = shadow
+	_night_fades(light)
+	light.distance_fade_begin = SMALL_SEEN
+	light.distance_fade_length = SMALL_FADE
+	night_light(light)
+	light.add_to_group(&"night_bulbs", true)
+
+
+## A beam that burns by night from `xf` along its -Z, `angle` degrees across:
+## a SpotLight3D in the night of the level, called Floodlight (or a name that
+## begins so) so that it can be shot out. Returns it, null without a night.
+func night_beam(xf: Transform3D, colour: Color, energy: float, reach: float, angle: float, shadow := true, beam_name := "Floodlight") -> SpotLight3D:
+	if not _by_night:
+		return null
+	var light := SpotLight3D.new()
+	light.name = beam_name
+	light.transform = xf
+	light.light_color = colour
+	light.light_energy = energy
+	light.spot_range = reach
+	light.spot_angle = angle * 0.5
+	light.spot_angle_attenuation = 0.8
+	light.spot_attenuation = 1.1
+	light.shadow_enabled = shadow
+	_night_fades(light)
+	night_light(light)
+	light.add_to_group(&"night_beams", true)
+	return light
+
+
+func _night_fades(light: Light3D) -> void:
+	# Nothing of the night is baked: the dunes have no lightmap, and the day
+	# has none of these lamps.
+	light.light_bake_mode = Light3D.BAKE_DISABLED
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = NIGHT_SEEN
+	light.distance_fade_length = NIGHT_FADE
+	light.distance_fade_shadow = NIGHT_SHADOW
+
+
+## A storm lantern: a tin fount, a glass globe between wires under a cap, and
+## a bail. `at` is where it stands, or with `hung` the hook it hangs from. By
+## night it burns; a level without a night has none.
+func storm_lantern(at: Vector3, hung := false) -> void:
+	if not _by_night:
+		return
+	var foot := at + (Vector3.DOWN * 0.36 if hung else Vector3.ZERO)
+	_small = true
+	cylinder(ARMY, foot, 0.075, 0.065, SLIGHT, Vector3.ZERO, 0.068, 12)
+	_turned("lamp_glass", foot + Vector3.UP * 0.065, Vector3.UP, [
+		Vector2(0.036, 0.0), Vector2(0.05, 0.03), Vector2(0.053, 0.065), Vector2(0.044, 0.105), Vector2(0.03, 0.125),
+	], 12, true)
+	cylinder(ARMY, foot + Vector3.UP * 0.19, 0.058, 0.03, SLIGHT, Vector3.ZERO, 0.032, 12)
+	cylinder(ARMY, foot + Vector3.UP * 0.22, 0.022, 0.035, SLIGHT, Vector3.ZERO, 0.018, 8)
+	for i in 3:
+		var round := TAU * i / 3.0
+		var out := Vector3(cos(round), 0, sin(round))
+		rod("dark_steel", foot + out * 0.07 + Vector3.UP * 0.065, foot + out * 0.06 + Vector3.UP * 0.19, 0.003, SLIGHT, 4)
+	# The bail, over the top from one side to the other.
+	var last := foot + Vector3(-0.065, 0.1, 0)
+	for i in range(1, 7):
+		var turn := PI * i / 6.0
+		var point := foot + Vector3(-cos(turn) * 0.065, 0.1 + sin(turn) * (at.y - foot.y - 0.1 if hung else 0.2), 0)
+		rod("dark_steel", last, point, 0.0025, SLIGHT, 4)
+		last = point
+	_small = false
+	night_bulb(foot + Vector3.UP * 0.13, FLAME, 1.2, 6.0)
+
+
+## A bare bulb on its cable, by night: `at` is where the cable hangs from, and
+## the bulb is `drop` under it. A level without a night has none.
+func hanging_bulb(at: Vector3, drop := 0.6, energy := 2.0, reach := 9.0) -> void:
+	if not _by_night:
+		return
+	_small = true
+	rod("rubber", at, at + Vector3.DOWN * drop, 0.005, SLIGHT, 4)
+	cylinder("dark_steel", at + Vector3.DOWN * (drop + 0.05), 0.02, 0.05, SLIGHT, Vector3.ZERO, -1.0, 8)
+	_ball("lamp_glass", at + Vector3.DOWN * (drop + 0.09), 0.038)
+	_small = false
+	night_bulb(at + Vector3.DOWN * (drop + 0.1), BULB_LIGHT, energy, reach)
+
+
+## A searchlight by night at `head`, sweeping to and fro over `sweep` degrees
+## either side of `out` (outwards, level), its beam `dip` degrees down:
+## scripts/sweep.gd swings it, and a cone in the air shows the beam. It can
+## be shot out like a floodlight.
+func searchlight(head: Vector3, out: Vector3, dip := 10.0, sweep := 55.0) -> void:
+	var look := Basis.looking_at(Vector3(out.x, 0, out.z).normalized(), Vector3.UP) * Basis(Vector3.RIGHT, -deg_to_rad(dip))
+	var light := night_beam(Transform3D(look, head), ARC, 60.0, 110.0, 7.0, true, "FloodlightSweep")
+	if light == null:
+		return
+	light.set_script(load("res://scripts/sweep.gd"))
+	light.set(&"reach_deg", sweep)
+	light.add_to_group(&"searchlights", true)
+	# The beam in the air is shorter than the light: it is gone before the
+	# light comes down on the ground.
+	light_beam(light, 38.0, 7.0)
+
+
+## The beam of `light`, a spot, seen in the air: a cone `length` long and
+## `angle` degrees across along its -Z, that adds light to what is behind
+## it, most in its middle and near the lamp (shaders/light_beam.gdshader).
+func light_beam(light: SpotLight3D, length: float, angle: float) -> void:
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.12
+	cone.bottom_radius = tan(deg_to_rad(angle * 0.5)) * length + 0.12
+	cone.height = length
+	cone.radial_segments = 16
+	cone.rings = 1
+	cone.cap_top = false
+	cone.cap_bottom = false
+	var material := ShaderMaterial.new()
+	material.shader = load("res://shaders/light_beam.gdshader")
+	material.set_shader_parameter(&"colour", light.light_color)
+	material.set_shader_parameter(&"strength", BEAM_AIR)
+	material.set_shader_parameter(&"beam_length", length)
+	cone.material = material
+	var beam := MeshInstance3D.new()
+	beam.name = "Beam"
+	beam.mesh = cone
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	# The cylinder stands on Y with its top up: laid along -Z, its top at the lamp.
+	beam.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0, -length * 0.5))
+	light.add_child(beam)
+	beam.owner = light.owner
 
 
 # --- What says that men live here ------------------------------------------------------
@@ -1628,21 +1915,38 @@ func smoke(at: Vector3, height: float) -> void:
 
 ## A vehicle of tools/models/vehicles.gd on the ground at `at`: "jeep",
 ## "truck", "tank" or "tank_b", its nose towards `yaw_deg` (0 looks along
-## +Z). It rests on the ground as the ground lies.
-func vehicle(kind: String, at: Vector2, yaw_deg: float) -> void:
+## +Z). It rests on the ground as the ground lies. Unless it is `parked`,
+## it can be driven (scripts/vehicle.gd): its number and its load go with it
+## and its colliders are its own; a tank_b is a tank whose turret is turned.
+## A parked one is part of the level, as anything else that stands in it:
+## one with a sheet thrown over it, say.
+func vehicle(kind: String, at: Vector2, yaw_deg: float, parked := false) -> void:
 	var facts: Dictionary = VEHICLES[kind]
 	# A model's nose points along -Z.
 	var xf := resting(at.x, at.y, yaw_deg + 180.0, facts.span)
-	var node: Node3D = (load("res://scenes/models/%s.scn" % kind) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
-	node.name = kind.to_pascal_case()
-	node.transform = xf
+	var model := kind if parked or kind != "tank_b" else "tank"
+	var node: Node3D = (load("res://scenes/models/%s.scn" % model) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
 	if _vehicles == null:
 		_vehicles = Node3D.new()
 		_vehicles.name = "Vehicles"
 		_add(_vehicles, _root)
-	_add(node, _vehicles)
-	for part: Array in facts.boxes:
-		_collide_box(xf * Transform3D(Basis(), part[0]), part[1], "metal")
+	if parked:
+		node.name = kind.to_pascal_case()
+		node.transform = xf
+		_add(node, _vehicles)
+		for part: Array in facts.boxes:
+			_collide_box(xf * Transform3D(Basis(), part[0]), part[1], "metal")
+	else:
+		var body := RigidBody3D.new()
+		body.name = kind.to_pascal_case()
+		body.transform = xf
+		body.set_script(load("res://scripts/vehicle.gd"))
+		body.set("kind", model)
+		body.set("turret_deg", TRAVERSE.get(kind, 0.0))
+		_add(body, _vehicles)
+		node.name = "Model"
+		_add(node, body)
+		_riding = body
 	cover("earth", at, facts.span * 1.6, 0.7)
 	# No two are the same vehicle: each has its number, and what it carries.
 	_vehicle_count += 1
@@ -1654,9 +1958,13 @@ func vehicle(kind: String, at: Vector2, yaw_deg: float) -> void:
 			_load_jeep(xf, own)
 		"truck":
 			_load_truck(xf, own)
+		"motorcycle":
+			pass
 		_:
 			_load_tank(xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2)), xf, own)
 	_small = false
+	_riding = null
+	_on_turret = false
 
 
 ## A part of the sheet of stencils, painted `size` wide and high on a face
@@ -1705,10 +2013,16 @@ func _number(kind: String, xf: Transform3D, serial: int) -> void:
 			for side: float in [-1.0, 1.0]:
 				_stencilled(number, xf * _on_side(Vector3(side * 0.611, 1.69, -2.45), side), 0.075, begins)
 			_stencilled(number, xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.52, 0.86, -3.446)), 0.085, begins)
+		"motorcycle":
+			# On the nose of the sidecar, either side.
+			for side: float in [-1.0, 1.0]:
+				_stencilled(number, xf * _on_side(Vector3(1.06 + side * 0.255, 0.62, -0.6), side), 0.045, begins)
 		_:
 			var turret := xf * Transform3D(Basis(Vector3.UP, -deg_to_rad(TRAVERSE[kind])), Vector3(0, 0, -0.2))
+			_on_turret = true
 			for side: float in [-1.0, 1.0]:
 				_stencilled(number.right(2), turret * _on_side(Vector3(side * 1.081, 1.98, 0.6), side), 0.34)
+			_on_turret = false
 
 
 ## A box that lies on a vehicle: of `mat`, `size` across, its middle at
@@ -1784,10 +2098,13 @@ func _load_tank(turret: Transform3D, hull: Transform3D, own: RandomNumberGenerat
 	if own.randf() < 0.5:
 		# A baulk of timber along the guard, for when it bogs.
 		_cylinder("wood", hull * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3((1.0 if own.randf() < 0.5 else -1.0) * 1.22, 1.6, -1.1)), 0.085, 2.2, SLIGHT, 0.085, 7)
+	# What lies on the turret goes round with it.
+	_on_turret = true
 	if own.randf() < 0.5:
-		_bundle(st, turret * Vector3(own.randf_range(-0.3, 0.3), 2.21, 1.62), turret.basis.x.normalized(), 0.8, 0.1, Color(0.2, own.randf_range(0.6, 0.85), 1.0, 0.0))
+		_bundle(_trim(CANVAS, turret.origin), turret * Vector3(own.randf_range(-0.3, 0.3), 2.21, 1.62), turret.basis.x.normalized(), 0.8, 0.1, Color(0.2, own.randf_range(0.6, 0.85), 1.0, 0.0))
 	if own.randf() < 0.4:
 		helmet(turret * Vector3(-0.45, 2.38, 0.25), own.randf_range(0, 360))
 		_small = true
+	_on_turret = false
 	if own.randf() < 0.4:
 		_stowed_box(ARMY, hull, Vector3(-0.3, 1.72, 2.2), Vector3(0.34, 0.3, 0.15), own.randf_range(-20, 20))

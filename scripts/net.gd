@@ -31,14 +31,18 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 11
+const VERSION := 16
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
 const JOIN_TIME := 8.0
 const CONFIG := "user://net.cfg"
-## What a guest may have the host do to a node, see ask().
-const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm"]
+## What a guest may have the host do to a node, see ask(): the last three
+## are a vehicle's, see scripts/vehicle.gd.
+const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm", &"seat_asked", &"seat_left_asked", &"worn_by"]
+## What the machine that runs a vehicle may have the others do to it, see
+## vehicle_did().
+const VEHICLE_DEEDS: Array[StringName] = [&"_fired_here"]
 ## What a machine may report its player did, see player_did().
 const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched", &"struck", &"knocked"]
 const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
@@ -57,8 +61,9 @@ var players := {}
 ## The ids of those whose level is loaded, as a set.
 var present := {}
 ## What is being played: the level, the checkpoint to carry on from after
-## everybody has died, the kills that stood then, who the enemies are, and
-## the match that it is, if it is one: what Match.open() takes.
+## everybody has died, the kills, the robots that have fallen there (see
+## game.gd), who the enemies are, and the match that it is, if it is one: what
+## Match.open() takes.
 var session := NOBODY.duplicate()
 ## What this player is called, and the address last joined.
 var player_name := "Player"
@@ -210,10 +215,10 @@ func leave() -> void:
 
 
 ## Takes everybody to a level: to its start, or to the checkpoint `at`.
-func load_level(scene: String, at := "", kills := 0) -> void:
+func load_level(scene: String, at := "", kills := 0, fallen := []) -> void:
 	if not active or not multiplayer.is_server():
 		return
-	session = {"level": scene, "at": at, "kills": kills, "theme": Settings.enemy_theme, "match": Match.setup if Match.active else {}}
+	session = {"level": scene, "at": at, "kills": kills, "fallen": fallen, "theme": Settings.enemy_theme, "match": Match.setup if Match.active else {}}
 	present = {}
 	_waiting.clear()
 	game = null
@@ -222,7 +227,7 @@ func load_level(scene: String, at := "", kills := 0) -> void:
 		if guest != 1:
 			_enter.rpc_id(guest, session)
 	entering.emit(scene)
-	get_tree().change_scene_to_file(scene)
+	Loading.go(scene)
 
 
 ## The level on this machine is loaded and ready for the others.
@@ -316,7 +321,7 @@ func _enter(what: Dictionary) -> void:
 		_own_theme = Settings.enemy_theme
 	Settings.enemy_theme = session.theme
 	entering.emit(session.level)
-	get_tree().change_scene_to_file(session.level)
+	Loading.go(session.level)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -418,7 +423,9 @@ func damage(target: Object, amount: float, at: Vector3, direction: Vector3) -> b
 	if not is_guest():
 		return target.take_damage(amount, at, direction)
 	ask(target, &"take_damage", [amount, at, direction])
-	if target.get(&"dead") != false:
+	# Somebody else's player, run down by a vehicle this machine drives, keeps
+	# no count of its own here.
+	if target.get(&"dead") != false or target.get(&"health") == null:
 		return false
 	# Counted off here too, so that the next shot knows where it stands
 	# before the host has answered.
@@ -462,6 +469,34 @@ func heat_bits(heat: float) -> int:
 ## How hot the weapon of somebody is, from 0 to 1, from what they are doing.
 func heat_of(doing: int) -> float:
 	return float((doing >> HEAT) & HOTTEST) / HOTTEST
+
+
+## Tells the others how a vehicle that this machine runs stands: see
+## net_state() in scripts/vehicle.gd. Thirty times a second while it moves.
+func vehicle_state(vehicle: Node, state: Array) -> void:
+	if active and game and present.size() > 1:
+		_vehicle_state.rpc(vehicle.get_path(), state)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", 3)
+func _vehicle_state(path: NodePath, state: Array) -> void:
+	var vehicle := get_node_or_null(path)
+	if game and vehicle and vehicle.has_method("net_state"):
+		vehicle.net_state(multiplayer.get_remote_sender_id(), state)
+
+
+## Has the others show what a vehicle this machine runs did, one of
+## VEHICLE_DEEDS: the gun of a tank fired.
+func vehicle_did(vehicle: Node, what: StringName, args := []) -> void:
+	if active and game and present.size() > 1:
+		_vehicle_did.rpc(vehicle.get_path(), what, args)
+
+
+@rpc("any_peer", "call_remote", "reliable", 3)
+func _vehicle_did(path: NodePath, what: StringName, args: Array) -> void:
+	var vehicle := get_node_or_null(path)
+	if game and vehicle and VEHICLE_DEEDS.has(what) and vehicle.has_method(what):
+		vehicle.callv(what, args)
 
 
 ## Tells the others what this machine's player did, one of DEEDS, which their

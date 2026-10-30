@@ -71,6 +71,8 @@ var _flames: ArrayMesh
 ## has an instance uniform `amount`, below which a particle is left out.
 var _bursts: Array[Mesh] = []
 var _shell := SphereMesh.new()
+## What the cloud of a smoke grenade is drawn on: a ball, one in radius.
+var _standing := SphereMesh.new()
 var _tracer: ArrayMesh
 var _flame: ArrayMesh
 ## Surface -> one [albedo, normal, orm, emission] per variant of its hole.
@@ -99,6 +101,9 @@ var _fires: Array[Dictionary] = []
 var _casing_mesh := CylinderMesh.new()
 var _shell_mesh := CylinderMesh.new()
 var _shell_head := CylinderMesh.new()
+## The empty clip of a weapon loaded by clips (WeaponData.en_bloc): sheet
+## steel round the bases of eight rounds.
+var _clip_mesh := BoxMesh.new()
 ## Spent cases in flight: {node, velocity, spin, floor, age, bounces}.
 var _casings: Array[Dictionary] = []
 
@@ -146,6 +151,15 @@ var _blown := 0
 ## How far over an explosion its cloud of smoke hangs, in metres: where the
 ## light on it is looked for.
 const SMOKE_HEIGHT := 1.2
+## How much further than its fullest the cloud of a smoke grenade can reach.
+const SMOKE_CLOUD_BOX := 1.8
+## Its smoke is white where the rest is soot: how much of the light on smoke
+## it gets under a roof with no sun on it, for it not to glow in a dim hall,
+## how high a roof can be in metres, and how much it gets of what the night
+## sky is taken to give.
+const SMOKE_CLOUD_SHADE := 0.4
+const SMOKE_ROOFED := 40.0
+const SMOKE_CLOUD_NIGHT := 0.05
 ## How bright the light of the sky makes smoke, against a lamp of energy 1
 ## that shines straight on it: a roof keeps half of it out.
 const SMOKE_SKY := 0.5
@@ -212,6 +226,7 @@ var _soot_marks: Array[Decal] = []
 ## from a mask. What follows from here to RAGGED says what it does with that
 ## mask and has to follow it: see shaders/wet_floor.gdshader.
 const WET_FLOOR := preload("res://shaders/wet_floor.gdshader")
+const SMOKE_TIN := preload("res://scenes/models/smoke_grenade.scn")
 ## How wide the shore of a puddle is, in what the mask is measured in.
 const SHORE := 0.035
 ## The scale at which the mask is read a second time, and how much of that
@@ -327,7 +342,15 @@ func _ready() -> void:
 	_shell.material = wave
 	_tracer = _burst_mesh(1, preload("res://shaders/tracer.gdshader"))
 	_flame = _flame_mesh()
-	_bursts = [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]
+	var standing := ShaderMaterial.new()
+	standing.shader = preload("res://shaders/smoke_cloud.gdshader")
+	standing.set_shader_parameter(&"noise", _stacked(preload("res://assets/noise/smoke.res")))
+	_standing.radius = 1.0
+	_standing.height = 2.0
+	_standing.radial_segments = 24
+	_standing.rings = 12
+	_standing.material = standing
+	_bursts = [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames, _standing]
 	_ready_glass()
 	_ready_burning()
 	_ready_splash()
@@ -364,6 +387,8 @@ func _ready() -> void:
 	_shell_head.top_radius = 0.0104
 	_shell_head.bottom_radius = 0.0104
 	_shell_head.height = 0.014
+	_clip_mesh.size = Vector3(0.016, 0.052, 0.019)
+	_clip_mesh.material = load("res://materials/gun_steel.tres")
 
 
 ## Moves the clock on by hand while it is held.
@@ -623,6 +648,8 @@ func rehearse(extras: Array[MeshInstance3D] = []) -> void:
 		looks.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		looks.custom_aabb = AABB(Vector3.ONE * -REACH, Vector3.ONE * REACH * 2.0)
 		stage.add_child(looks)
+	# The tin of a smoke grenade, which no level has lying about.
+	stage.add_child(SMOKE_TIN.instantiate())
 	for extra in extras:
 		stage.add_child(extra)
 	add_child(stage)
@@ -828,8 +855,8 @@ func smoke_light(position: Vector3) -> Dictionary:
 	var sun := _sun()
 	if sun and sun.visible:
 		lights.append([sun.light_energy, sun.global_basis.z, sun.light_color, 80.0])
-	for lamp in _level_lamps():
-		var strength := _lamp_strength(lamp, position)
+	for lamp in level_lamps():
+		var strength := lamp_strength(lamp, position)
 		if strength > 0.0:
 			var to := lamp.global_position - position
 			lights.append([strength, to.normalized(), lamp.light_color, to.length() - SMOKE_CLEAR])
@@ -849,7 +876,7 @@ func smoke_light(position: Vector3) -> Dictionary:
 ## How brightly a lamp lights a point, by the renderer's own reckoning: its
 ## energy, less what is lost over the distance and, for a spot, towards the
 ## edge of its beam. Nothing for a lamp that is out or out of reach.
-func _lamp_strength(lamp: Light3D, position: Vector3) -> float:
+func lamp_strength(lamp: Light3D, position: Vector3) -> float:
 	if not is_instance_valid(lamp) or not lamp.visible:
 		return 0.0
 	var reach := lamp.get_param(Light3D.PARAM_RANGE)
@@ -866,7 +893,7 @@ func _lamp_strength(lamp: Light3D, position: Vector3) -> float:
 
 
 ## The lamps the level builder put in the level, looked up once per level.
-func _level_lamps() -> Array[Light3D]:
+func level_lamps() -> Array[Light3D]:
 	var scene := get_tree().current_scene
 	if scene.get_instance_id() != _lamps_of:
 		_lamps_of = scene.get_instance_id()
@@ -905,12 +932,13 @@ func _rgb(colour: Color) -> Vector3:
 
 
 ## A fire that burns for `seconds` on a patch `across` metres wide around
-## `position`: the flames, the light they throw and the smoke that rises off
-## them. Freeing what it returns puts it out.
-func fire(position: Vector3, across: float, seconds: float) -> Node3D:
+## `position`: the flames, the light they throw and, unless `smokes` is
+## false, the smoke that rises off them (a campfire has a column of its own).
+## Freeing what it returns puts it out.
+func fire(position: Vector3, across: float, seconds: float, smokes := true) -> Node3D:
 	var scale := clampf(across, 0.5, 1.6)
 	var flames := _burst(_flames, Transform3D(Basis(), position), seconds, {&"life": seconds, &"radius": across * 0.5, &"size": Vector2(0.24, 1.3) * scale})
-	_burn(flames, Vector3.UP * 0.5 * scale, 1.6 * scale, 3.5 + across * 2.0, seconds, time + 0.3)
+	_burn(flames, Vector3.UP * 0.5 * scale, 1.6 * scale, 3.5 + across * 2.0, seconds, time + 0.3 if smokes else INF)
 	return flames
 
 
@@ -1072,11 +1100,65 @@ func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
 		{&"tint": Color(0.62, 0.62, 0.64, 0.42), &"speed": 0.9, &"spread": 0.3, &"size": Vector2(0.015, 0.17), &"life": 1.0, &"rise": 0.3, &"amount": lerpf(0.45, 1.0, amount)})
 
 
+## The cloud of a smoke grenade, which grows out of `position` on the floor and
+## stands there: scripts/smoke.gd keeps it and says what it is told in
+## `shape`. It is too wide to hang in one light: a shaft of sun on one side of
+## it does not light the rest, so it gets what five spots in it get together.
+func smoke_cloud(position: Vector3, shape: Dictionary) -> MeshInstance3D:
+	var out: float = shape[&"radius"]
+	var middle := position + Vector3.UP * SMOKE_HEIGHT
+	var spots: Array[Vector3] = [middle]
+	for side: Vector3 in [Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
+		# Higher than the middle: on a slope they would be in the ground.
+		spots.append(middle + side * out * 0.6 + Vector3.UP * out * 0.4)
+	var sun := _sun()
+	var sun_way := sun.global_basis.z if sun else Vector3.ZERO
+	var world := get_viewport().find_world_3d()
+	var space := world.direct_space_state
+	var night: bool = world.environment != null and world.environment.get_meta(&"night", false)
+	var key := Vector3.ZERO
+	var key_light := Vector3.ZERO
+	var fill := Vector3.ZERO
+	for spot in spots:
+		var light := smoke_light(spot)
+		var under_a_roof := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot, spot + Vector3.UP * SMOKE_ROOFED, WORLD)).size() > 0
+		var share := SMOKE_CLOUD_SHADE if under_a_roof and (light.key as Vector3).dot(sun_way) < 0.999 else 1.0
+		# By night what comes from above is what the sky gives, which is next
+		# to nothing.
+		if night and light.key == Vector3.UP:
+			share = SMOKE_CLOUD_NIGHT
+		key += (light.key as Vector3) * (light.key_light as Vector3).length()
+		key_light += (light.key_light as Vector3) * share / spots.size()
+		fill += (light.fill as Vector3) * share * (SMOKE_CLOUD_NIGHT if night else 1.0) / spots.size()
+	var lit := {&"key": key.normalized() if key.length() > 0.0 else Vector3.UP, &"key_light": key_light, &"fill": fill}
+	return _burst(_standing, Transform3D(Basis(), position), shape[&"life"], shape.merged(lit), out * SMOKE_CLOUD_BOX)
+
+
+## A puff of the smoke out of an engine that is hit, carried along `drift`:
+## grey while it only smokes, black and thick as `thick` goes to 1, once it
+## burns.
+func engine_smoke(position: Vector3, drift: Vector3, thick := 0.0) -> void:
+	_burst(_puffs, Transform3D(_up_along(drift), position), 3.2,
+		{&"tint": Color(0.3, 0.29, 0.28, 0.7).lerp(Color(0.07, 0.065, 0.06, 0.9), thick), &"speed": 1.2, &"spread": 0.4, &"size": Vector2(0.35, 1.8 + 1.0 * thick), &"life": 3.0, &"rise": 0.7, &"amount": 1.0})
+
+
 ## A puff of the smoke a rocket leaves behind it, `direction` the way it flies:
 ## thicker than a barrel's, slow to spread and slow to go.
 func rocket_trail(position: Vector3, direction: Vector3) -> void:
 	_burst(_puffs, Transform3D(_up_along(-direction), position), 2.4,
 		{&"tint": Color(0.66, 0.66, 0.68, 0.5), &"speed": 0.35, &"spread": 0.5, &"size": Vector2(0.07, 0.55), &"life": 2.2, &"rise": 0.12, &"amount": 0.4})
+
+
+## The slices of `sheet`, square and one under the other, as a texture of
+## three dimensions: see tools/gen_smoke_noise.gd.
+func _stacked(sheet: Image) -> ImageTexture3D:
+	var across := sheet.get_width()
+	var slices: Array[Image] = []
+	for i in sheet.get_height() / across:
+		slices.append(sheet.get_region(Rect2i(0, i * across, across, across)))
+	var stacked := ImageTexture3D.new()
+	stacked.create(sheet.get_format(), across, across, slices.size(), false, slices)
+	return stacked
 
 
 ## Makes ready what a shot into a puddle throws up.
@@ -1272,10 +1354,10 @@ func clear() -> void:
 
 ## Spent case thrown from a weapon that points along `basis`: it tumbles,
 ## bounces off the floor below and lies there a while. `shell` makes it the
-## hull of a shotgun shell.
-func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false) -> void:
+## hull of a shotgun shell, `clip` the empty clip of a weapon loaded by clips.
+func casing(position: Vector3, basis: Basis, velocity: Vector3, shell := false, clip := false) -> void:
 	var node := MeshInstance3D.new()
-	node.mesh = _shell_mesh if shell else _casing_mesh
+	node.mesh = _clip_mesh if clip else (_shell_mesh if shell else _casing_mesh)
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	if shell:

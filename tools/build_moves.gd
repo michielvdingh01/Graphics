@@ -86,7 +86,7 @@ func _initialize() -> void:
 		print("%-14s %s" % [move_name, fact])
 	for set_name: String in manifest.sets:
 		var way: Dictionary = manifest.sets[set_name]
-		for move: String in [way.idle, way.fingers] + way.gaits + way.attacks + way.get("strikes", []) + [way.get("carry", way.idle), way.get("grip", way.fingers)]:
+		for move: String in [way.idle, way.fingers] + way.gaits + way.attacks + way.get("strikes", []) + [way.get("carry", way.idle), way.get("grip", way.fingers), way.get("kneel", way.idle)]:
 			if not facts.has(move):
 				push_error("set %s names a move that is not there: %s" % [set_name, move])
 	library.set_meta("moves", facts)

@@ -36,7 +36,11 @@ varying float height;
 
 void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
-	height = VERTEX.y;
+	// A vehicle's model says how high over the ground each point of it was
+	// built, as its wheels and its turret are parts that each have their own
+	// origin (see _tri() in tools/models/vehicles.gd); anything else stands
+	// on the ground at its origin.
+	height = CUSTOM0.x > 500.0 ? CUSTOM0.x - 1000.0 : VERTEX.y;
 }
 
 void fragment() {

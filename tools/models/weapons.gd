@@ -60,6 +60,10 @@ const RAIL_TOP := 0.0307
 ## The glove made last and whether it is a left hand, for _holds_also().
 var _worn: Node3D
 var _worn_left := false
+## While the standard five are built a second time with a silencer, for the
+## pack "silenced": each is then named <weapon>_sd, and has a can on its
+## muzzle (see _muzzle()).
+var _silenced := false
 
 
 func model(model_name: String) -> void:
@@ -92,6 +96,18 @@ func _describe() -> void:
 	_lmg()
 	_rocket_launcher()
 	_rocket()
+	_auto_shotgun()
+	_anti_materiel()
+	_garand()
+	_hand_cannon()
+	# The standard five once more, each with a silencer.
+	_silenced = true
+	_rifle()
+	_pistol()
+	_shotgun()
+	_smg()
+	_marksman()
+	_silenced = false
 
 
 # --- Rifle ---------------------------------------------------------------------
@@ -100,7 +116,7 @@ func _describe() -> void:
 ## Carbine with a flat-top receiver, a slotted handguard and a reflex sight:
 ## an AR-15 with a 14.5 inch barrel, to the measurements of the real thing.
 func _rifle() -> void:
-	model("rifle")
+	model(_named("rifle"))
 
 	# Upper receiver, and the lower with its magazine well.
 	_section(ALU, UPPER_TUBE, -0.105, 0.095, 0.0012)
@@ -212,7 +228,7 @@ func _rifle() -> void:
 	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, lean, Vector3.RIGHT.cross(lean)), _at(0.071, -0.152)), Vector2(0.0113, 0.029), 180.0,
 		_at(-0.02, -0.19, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.535)))
+	_muzzle(0.535, 0.0195, 0.175, 0.055)
 	marker("Eject", Transform3D(Basis(), _at(0.01, 0.006, 0.024)))
 	marker("MagHold", Transform3D(Basis(), _at(0.075, -0.19)))
 
@@ -313,7 +329,7 @@ func _flip_sight(ahead: float, rear: bool) -> void:
 
 ## Striker-fired service pistol with a polymer frame.
 func _pistol() -> void:
-	model("pistol")
+	model(_named("pistol"))
 
 	_polymer_pistol()
 
@@ -325,7 +341,7 @@ func _pistol() -> void:
 
 	_handgun_hands(grip)
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.14)))
+	_muzzle(0.14, 0.0155, 0.165)
 	marker("Eject", Transform3D(Basis(), _at(0.022, 0.012, 0.016)))
 	marker("MagHold", Transform3D(Basis(), _at(-0.065, -0.17)))
 
@@ -529,7 +545,7 @@ func _trench_gun() -> void:
 ## A pump-action shotgun, its stock and forend of `furniture`; `trench` for
 ## the old one, see _trench_gun().
 func _pump_gun(model_name: String, furniture: String, trench: bool) -> void:
-	model(model_name)
+	model(_named(model_name))
 
 	# Receiver: flat-sided under a rounded top, with the trigger plate let in below.
 	_section(STEEL, [
@@ -648,7 +664,7 @@ func _pump_gun_barrel(furniture: String) -> void:
 		_at(-0.1, -0.075, -0.07), 0.034, 0.0, _at(-0.3, -0.36, -0.2),
 		[_at(-0.085, -0.074, -0.014), _at(-0.058, -0.064, -0.008), _at(-0.03, -0.059, -0.004), _at(-0.006, -0.057, -0.001)])
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.585)))
+	_muzzle(0.585, 0.024, 0.2)
 	marker("Eject", Transform3D(Basis(), _at(-0.01, 0.0, 0.026)))
 	marker("MagHold", Transform3D(Basis(), _at(-0.03, -0.085)))
 
@@ -659,7 +675,7 @@ func _pump_gun_barrel(furniture: String) -> void:
 ## Compact submachine gun: a stick magazine, a wire stock and a cocking
 ## handle on the left that travels with the bolt.
 func _smg() -> void:
-	model("smg")
+	model(_named("smg"))
 
 	# Receiver: a tube of pressed steel, eight-sided above and square below,
 	# with the lower of moulded plastic under it.
@@ -737,7 +753,7 @@ func _smg() -> void:
 	_holds_also("mag", Transform3D(Basis(), _at(0.056, -0.165)), Vector2(0.0102, 0.018), 180.0,
 		_at(-0.03, -0.2, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.29)))
+	_muzzle(0.29, 0.0185, 0.17)
 	marker("Eject", Transform3D(Basis(), _at(0.03, 0.004, 0.022)))
 	marker("MagHold", Transform3D(Basis(), _at(0.057, -0.2)))
 
@@ -749,7 +765,7 @@ func _smg() -> void:
 ## HUD takes over with the picture through the scope; this is what is seen of
 ## it from the hip.
 func _marksman() -> void:
-	model("marksman")
+	model(_named("marksman"))
 
 	# The receivers of the carbine, a size up for the longer cartridge.
 	var wide := UPPER_TUBE.map(func(corner: Vector2) -> Vector2: return Vector2(corner.x * 1.07 if absf(corner.x) > 0.008 else corner.x, corner.y))
@@ -828,7 +844,7 @@ func _marksman() -> void:
 	_holds_also("mag", Transform3D(Basis(), _at(0.06, -0.125)), Vector2(0.013, 0.038), 180.0,
 		_at(-0.03, -0.165, -0.03), 0.03, 0.0, _at(-0.12, -0.42, -0.2))
 
-	marker("Muzzle", Transform3D(Basis(), _at(0.745)))
+	_muzzle(0.745, 0.0195, 0.185, 0.02)
 	marker("Eject", Transform3D(Basis(), _at(0.02, 0.006, 0.024)))
 	marker("MagHold", Transform3D(Basis(), _at(0.06, -0.155)))
 
@@ -1307,7 +1323,358 @@ func _rocket() -> void:
 	_m = Transform3D()
 
 
+# --- The fifth weapons of the packs -------------------------------------------
+
+
+## A drum-fed automatic shotgun in 12 gauge, after the AA-12: a long box of a
+## receiver that runs straight back into the stock, a rail on top with an
+## aperture behind and a hooded post in front, a vented handguard round a
+## short barrel with a brake, and a drum of twenty under it whose feed goes
+## up into the receiver. The charging handle on the left goes with the bolt.
+func _auto_shotgun() -> void:
+	model("auto_shotgun")
+	var top := 0.0515
+	# The receiver, a little narrower above the bore, with the seam of its two
+	# halves along each side and the pins through them.
+	_section(STEEL, _chamfer([Vector2(-0.026, -0.052), Vector2(0.026, -0.052), Vector2(0.026, 0.026), Vector2(0.02, 0.036), Vector2(-0.02, 0.036), Vector2(-0.026, 0.026)], 0.004), -0.15, 0.2, 0.003)
+	for side: float in [-1.0, 1.0]:
+		_plate(RUBBER, _at(0.025, -0.014, side * 0.0262), Vector3(0.0006, 0.0014, 0.33))
+		for pin: Vector2 in [Vector2(-0.125, -0.032), Vector2(0.175, -0.032), Vector2(0.06, 0.014), Vector2(-0.06, 0.014)]:
+			_bar(STEEL, _at(pin.x, pin.y, side * 0.026), _at(pin.x, pin.y, side * 0.0274), 0.0034, 10)
+	# The ejection port on the right, the slot the handle runs in on the left.
+	_plate(RUBBER, _at(0.035, 0.008, 0.0263), Vector3(0.0006, 0.022, 0.075))
+	_slot(_at(0.07, 0.016, -0.0262), Vector3.LEFT, 0.13, 0.0075)
+	_picatinny(ALU, -0.13, 0.19, top, 0.034)
+	_rail_sight(-0.1, top, true)
+	_rail_sight(0.17, top, false)
+
+	# A handguard of moulded plastic with vents down its sides, round the barrel.
+	_section(POLY, _chamfer([Vector2(-0.024, -0.045), Vector2(0.024, -0.045), Vector2(0.024, 0.02), Vector2(0.017, 0.03), Vector2(-0.017, 0.03), Vector2(-0.024, 0.02)], 0.004), 0.2, 0.41, 0.003)
+	for i in 4:
+		for side: float in [-1.0, 1.0]:
+			_slot(_at(0.245 + i * 0.045, -0.006, side * 0.0242), Vector3(side, 0, 0), 0.032, 0.01)
+	_bar(STEEL, _at(0.2), _at(0.52), 0.0125, 16)
+	# The brake: a block with three ports a side.
+	_section(STEEL, _chamfer([Vector2(-0.0165, -0.0165), Vector2(0.0165, -0.0165), Vector2(0.0165, 0.0165), Vector2(-0.0165, 0.0165)], 0.004), 0.5, 0.565, 0.0012)
+	for i in 3:
+		for side: float in [-1.0, 1.0]:
+			_slot(_at(0.514 + i * 0.017, 0, side * 0.0167), Vector3(side, 0, 0), 0.011, 0.013)
+	_bar(RUBBER, _at(0.5651), _at(0.5655), 0.0095, 12)
+
+	# The stock, straight on from the receiver, with its pad and a sling loop.
+	_side(POLY, _chamfer([
+		Vector2(-0.15, 0.036), Vector2(-0.36, 0.03), Vector2(-0.365, -0.1), Vector2(-0.33, -0.104), Vector2(-0.25, -0.064), Vector2(-0.15, -0.052),
+	], 0.004), 0.046, 0.008)
+	_side(RUBBER, [Vector2(-0.358, 0.032), Vector2(-0.363, -0.102), Vector2(-0.376, -0.102), Vector2(-0.371, 0.032)], 0.048, 0.004)
+	for i in 5:
+		_plate(RUBBER, _at(-0.3755 + i * 0.0003, -0.08 + i * 0.024), Vector3(0.04, 0.0016, 0.0012))
+	_ring(STEEL, _at(-0.31, -0.07, -0.0245), Vector3.LEFT, 0.006, 0.0016)
+	_grip()
+
+	part("Bolt")
+	_bar(STEEL, _at(0.12, 0.016, -0.026), _at(0.12, 0.016, -0.042), 0.0045, 10)
+	_ball(STEEL, _at(0.12, 0.016, -0.045), 0.0075)
+
+	part("Mag", Transform3D(Basis(), _at(0.1, -0.06)))
+	# The feed, and the drum on it with its axis across the gun.
+	_section(STEEL, _chamfer([Vector2(-0.015, -0.08), Vector2(0.015, -0.08), Vector2(0.015, -0.05), Vector2(-0.015, -0.05)], 0.003), 0.065, 0.135, 0.002)
+	_turned(POLY, _at(0.1, -0.135, -0.034), Vector3.RIGHT, PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.072, 0.0), Vector2(0.076, 0.004), Vector2(0.076, 0.064), Vector2(0.072, 0.068), Vector2(0.0, 0.068)]), 32)
+	for side: float in [-1.0, 1.0]:
+		_ring(POLY, _at(0.1, -0.135, side * 0.034), Vector3.RIGHT, 0.05, 0.0028)
+	_turned(STEEL, _at(0.1, -0.135, 0.034), Vector3.RIGHT, PackedVector2Array([Vector2(0.018, 0.0), Vector2(0.018, 0.004), Vector2(0.012, 0.006), Vector2(0.0, 0.006)]), 16)
+	_bar(BRASS, _at(0.07, -0.05), _at(0.13, -0.05), 0.0095, 12)
+
+	_trigger_hand()
+	_support_hand(0.31, 0.03, "", 0.0075)
+	# To change the drum the same hand takes it by its side, as the PPSh's.
+	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), _at(0.1, -0.135, -0.042)), Vector2(0.076, 0.034), -96.0,
+		_at(0.03, -0.16, -0.11), 0.034, 0.0, _at(-0.13, -0.42, -0.26))
+	marker("Muzzle", Transform3D(Basis(), _at(0.57)))
+	marker("Eject", Transform3D(Basis(), _at(0.035, 0.008, 0.028)))
+	marker("MagHold", Transform3D(Basis(), _at(0.1, -0.135, -0.042)))
+
+
+## A sight clamped on a rail whose top is `top` above the bore, `ahead` of
+## the origin: an aperture between two ears behind (`rear`), or a hooded post
+## in front. Its middle is `top` + 0.0181 above the bore, where the eye is
+## when the weapon is aimed. The sights of the submachine gun, on a higher rail.
+func _rail_sight(ahead: float, top: float, rear: bool) -> void:
+	_section(STEEL, _chamfer([Vector2(-0.0128, top - 0.0041), Vector2(0.0128, top - 0.0041), Vector2(0.0128, top + 0.0059), Vector2(-0.0128, top + 0.0059)], 0.0016), ahead - 0.012, ahead + 0.012, 0.0008)
+	_bar(STEEL, _at(ahead, top + 0.0006, -0.0128), _at(ahead, top + 0.0006, -0.0166), 0.0038, 6)
+	if rear:
+		_side(STEEL, _chamfer([Vector2(ahead - 0.004, top + 0.0059), Vector2(ahead + 0.004, top + 0.0059), Vector2(ahead + 0.003, top + 0.0131), Vector2(ahead - 0.003, top + 0.0131)], 0.001), 0.006, 0.0008)
+		_ring(STEEL, _at(ahead, top + 0.0181), Vector3.BACK, 0.0062, 0.002)
+		for side: float in [-1.0, 1.0]:
+			_side(STEEL, _chamfer([Vector2(ahead - 0.01, top + 0.0059), Vector2(ahead + 0.01, top + 0.0059), Vector2(ahead + 0.007, top + 0.0271), Vector2(ahead - 0.006, top + 0.0271)], 0.002), 0.0028, 0.0008, side * 0.0114)
+	else:
+		_ring(STEEL, _at(ahead, top + 0.0181), Vector3.BACK, 0.0105, 0.0018)
+		_side(STEEL, _chamfer([Vector2(ahead - 0.006, top + 0.0059), Vector2(ahead + 0.006, top + 0.0059), Vector2(ahead + 0.003, top + 0.0086), Vector2(ahead - 0.003, top + 0.0086)], 0.0008), 0.02, 0.0008)
+		_block(STEEL, _at(ahead, top + 0.0129), Vector3(0.0022, 0.011, 0.003), 0.0005)
+		_dot(_at(ahead - 0.0016, top + 0.0166), 0.001)
+
+
+## A .50 anti-materiel rifle after the Barrett M82: a long upper receiver of
+## pressed steel, pierced along its front half, over a lower that holds a
+## box of ten; a heavy fluted barrel with the double-chambered arrowhead of a
+## brake, a bipod folded forward under it, a long rail with the telescopic
+## sight of the marksman's rifle set higher, and a stock with a thick pad and
+## a monopod. The charging handle on the right goes with the bolt.
+func _anti_materiel() -> void:
+	model("anti_materiel")
+	var rail := 0.046
+	# The upper: a box with its corners cut, longer than any other receiver.
+	_section(STEEL, _chamfer([Vector2(-0.028, -0.04), Vector2(0.028, -0.04), Vector2(0.028, 0.026), Vector2(0.022, 0.034), Vector2(-0.022, 0.034), Vector2(-0.028, 0.026)], 0.004), -0.13, 0.44, 0.003)
+	# Its front half is cut away in windows down each side and holes on top.
+	for i in 5:
+		for side: float in [-1.0, 1.0]:
+			_slot(_at(0.17 + i * 0.054, -0.006, side * 0.0282), Vector3(side, 0, 0), 0.04, 0.026)
+	for i in 4:
+		_slot(_at(0.2 + i * 0.06, 0.0342, 0.0), Vector3.UP, 0.024, 0.012)
+	for side: float in [-1.0, 1.0]:
+		for pin: Vector2 in [Vector2(-0.11, -0.025), Vector2(0.11, -0.025), Vector2(0.43, -0.025)]:
+			_bar(STEEL, _at(pin.x, pin.y, side * 0.028), _at(pin.x, pin.y, side * 0.0296), 0.0042, 10)
+	_plate(RUBBER, _at(0.02, 0.008, 0.0283), Vector3(0.0006, 0.026, 0.09))
+	_picatinny(ALU, -0.12, 0.42, rail, 0.032)
+	# The lower, with its magazine well, under the back of the upper.
+	_side(STEEL, _chamfer([
+		Vector2(-0.13, -0.04), Vector2(-0.13, -0.058), Vector2(-0.04, -0.062), Vector2(0.04, -0.062), Vector2(0.05, -0.07), Vector2(0.21, -0.07),
+		Vector2(0.22, -0.05), Vector2(0.22, -0.04),
+	], 0.003), 0.052, 0.003)
+
+	# Barrel, fluted, and the brake: two chambers with a window a side each,
+	# coming to a point in front.
+	_bar(STEEL, _at(0.44), _at(0.48), 0.022, 20)
+	_bar(STEEL, _at(0.48), _at(0.87), 0.0165, 20)
+	for i in 6:
+		var lean := TAU * (i + 0.5) / 6.0
+		_slot(_at(0.66, sin(lean) * 0.0166, cos(lean) * 0.0166), Vector3(cos(lean), sin(lean), 0.0), 0.3, 0.005)
+	_section(STEEL, _chamfer([Vector2(-0.032, -0.017), Vector2(0.032, -0.017), Vector2(0.032, 0.017), Vector2(-0.032, 0.017)], 0.005), 0.865, 0.955, 0.0015)
+	for ahead: float in [0.888, 0.932]:
+		for side: float in [-1.0, 1.0]:
+			_slot(_at(ahead, 0, side * 0.0322), Vector3(side, 0, 0), 0.03, 0.026)
+	# The point of the arrowhead, as seen from above.
+	slab(STEEL, _m * Transform3D(Basis(Vector3.FORWARD, Vector3.RIGHT, Vector3.DOWN), Vector3.ZERO),
+		_ccw([Vector2(0.955, -0.032), Vector2(0.955, 0.032), Vector2(0.978, 0.011), Vector2(0.978, -0.011)]), 0.03, 0.002, _part)
+	_bar(RUBBER, _at(0.9781), _at(0.9785), 0.0085, 12)
+
+	# The bipod, folded forward along the barrel.
+	_block(STEEL, _at(0.455, -0.04), Vector3(0.05, 0.016, 0.03), 0.003)
+	for side: float in [-1.0, 1.0]:
+		_bar(STEEL, _at(0.46, -0.044, side * 0.02), _at(0.74, -0.036, side * 0.024), 0.0065, 10)
+		_block(RUBBER, _at(0.75, -0.036, side * 0.024), Vector3(0.016, 0.014, 0.03), 0.004)
+
+	# The stock: a long flat butt with a cheek piece, a thick pad and a monopod under it.
+	_side(STEEL, _chamfer([
+		Vector2(-0.13, 0.03), Vector2(-0.42, 0.028), Vector2(-0.428, -0.112), Vector2(-0.39, -0.118), Vector2(-0.3, -0.074), Vector2(-0.2, -0.062),
+		Vector2(-0.13, -0.058),
+	], 0.004), 0.05, 0.007)
+	_side(POLY, _chamfer([Vector2(-0.2, 0.028), Vector2(-0.38, 0.028), Vector2(-0.375, 0.052), Vector2(-0.21, 0.052)], 0.006), 0.04, 0.008)
+	_side(RUBBER, [Vector2(-0.42, 0.03), Vector2(-0.428, -0.116), Vector2(-0.452, -0.116), Vector2(-0.444, 0.03)], 0.054, 0.006)
+	_bar(STEEL, _at(-0.33, -0.09), _at(-0.33, -0.135), 0.006, 10)
+	_ball(RUBBER, _at(-0.33, -0.138), 0.01)
+	_grip()
+
+	# The sight of the marksman's rifle, higher on its rail.
+	var held := _m
+	_m = held * Transform3D(Basis(), _at(0.05, rail - RAIL_TOP))
+	_telescope(0.067)
+	_m = held
+
+	part("Bolt")
+	_bar(STEEL, _at(0.02, 0.008, 0.028), _at(0.02, 0.008, 0.05), 0.006, 10)
+	_ball(STEEL, _at(0.02, 0.008, 0.054), 0.0095)
+
+	part("Mag", Transform3D(Basis(), _at(0.135, -0.07)))
+	_side(STEEL, _chamfer([Vector2(0.06, -0.06), Vector2(0.06, -0.17), Vector2(0.21, -0.17), Vector2(0.21, -0.06)], 0.004), 0.038, 0.003)
+	_block(STEEL, _at(0.135, -0.174), Vector3(0.042, 0.009, 0.156), 0.003)
+	for i in 3:
+		for side: float in [-1.0, 1.0]:
+			_plate(STEEL, _at(0.135, -0.09 - i * 0.025, side * 0.0192), Vector3(0.0008, 0.005, 0.13))
+	_bar(BRASS, _at(0.066, -0.062), _at(0.2, -0.062), 0.011, 12)
+
+	_trigger_hand()
+	_support_hand(0.3, 0.034, "", 0.003)
+	_mag_hold(_at(0.135, -0.13), Vector3.UP, Vector2(0.019, 0.075))
+	marker("Muzzle", Transform3D(Basis(), _at(0.98)))
+	marker("Eject", Transform3D(Basis(), _at(0.02, 0.008, 0.03)))
+	marker("MagHold", Transform3D(Basis(), _at(0.135, -0.17)))
+
+
+## The M1 Garand: a long barrel in a stock of walnut with two upper
+## handguards held by bands, a receiver open on top where the clip of eight
+## sits, the operating rod with its handle on the right, a peep sight with
+## two knobs behind and a post between two ears on the gas cylinder at the
+## muzzle. The clip is the part Mag, turned over, so that a reload brings
+## the next one down into the top of the receiver; scripts/weapons.gd hides
+## it once its last round has thrown it out.
+func _garand() -> void:
+	model("garand")
+	# The receiver: whole behind and in front of the opening, the sides and
+	# the floor of the well between.
+	var receiver: Array[Vector2] = [Vector2(-0.016, -0.014), Vector2(0.016, -0.014), Vector2(0.016, 0.01), Vector2(0.011, 0.018), Vector2(-0.011, 0.018), Vector2(-0.016, 0.01)]
+	_section(STEEL, receiver, -0.13, -0.065, 0.0015)
+	_section(STEEL, receiver, 0.035, 0.11, 0.0015)
+	for side: float in [-1.0, 1.0]:
+		_side(STEEL, [Vector2(-0.065, -0.014), Vector2(0.035, -0.014), Vector2(0.035, 0.012), Vector2(-0.065, 0.012)], 0.004, 0.001, side * 0.014)
+	_section(STEEL, [Vector2(-0.012, -0.014), Vector2(0.012, -0.014), Vector2(0.012, -0.006), Vector2(-0.012, -0.006)], -0.065, 0.035, 0.001)
+	# Barrel, its chamber, and the gas cylinder at the muzzle with the tube of
+	# the operating rod under it, the bayonet lug and the plug in front.
+	_bar(STEEL, _at(0.11), _at(0.69), 0.009, 16)
+	_bar(STEEL, _at(0.11), _at(0.17), 0.0125, 16)
+	_bar(STEEL, _at(0.6), _at(0.69), 0.0135, 16)
+	_bar(STEEL, _at(0.585, -0.019), _at(0.69, -0.019), 0.008, 12)
+	_block(STEEL, _at(0.655, -0.031), Vector3(0.008, 0.012, 0.03), 0.001)
+	_bar(STEEL, _at(0.69), _at(0.698), 0.011, 16)
+	_bar(RUBBER, _at(0.6981), _at(0.6985), 0.004, 8)
+	# The operating rod along the right, under the handguard.
+	_bar(STEEL, _at(0.03, -0.006, 0.0145), _at(0.585, -0.016, 0.0115), 0.0035, 8)
+	# Sights: a post between ears on the gas cylinder; a ring of a peep with
+	# its knobs on the heel of the receiver. Both reach 0.032 above the bore.
+	_block(STEEL, _at(0.67, 0.0185), Vector3(0.008, 0.012, 0.016), 0.001)
+	_block(STEEL, _at(0.67, 0.028), Vector3(0.003, 0.009, 0.004), 0.0005)
+	for side: float in [-1.0, 1.0]:
+		_side(STEEL, [Vector2(0.664, 0.022), Vector2(0.676, 0.022), Vector2(0.674, 0.035), Vector2(0.666, 0.035)], 0.0025, 0.0005, side * 0.0065)
+	_block(STEEL, _at(-0.105, 0.022), Vector3(0.026, 0.01, 0.026), 0.002)
+	_side(STEEL, [Vector2(-0.108, 0.026), Vector2(-0.102, 0.026), Vector2(-0.102, 0.0275), Vector2(-0.108, 0.0275)], 0.004, 0.0005)
+	_ring(STEEL, _at(-0.105, 0.032), Vector3.BACK, 0.0042, 0.0016)
+	var knob := PackedVector2Array([Vector2(0.008, 0.0), Vector2(0.008, 0.006), Vector2(0.0072, 0.007), Vector2(0.0, 0.007)])
+	_turned(STEEL, _at(-0.105, 0.023, 0.013), Vector3.RIGHT, knob, 14)
+	_turned(STEEL, _at(-0.105, 0.023, -0.013), Vector3.LEFT, knob, 14)
+
+	# The stock, from the butt to the front band, deep under the receiver.
+	_side(WALNUT, _chamfer([
+		Vector2(0.47, -0.006), Vector2(0.12, -0.006), Vector2(0.1, -0.014), Vector2(-0.13, -0.014), Vector2(-0.18, 0.004), Vector2(-0.4, -0.006),
+		Vector2(-0.405, -0.125), Vector2(-0.37, -0.127), Vector2(-0.24, -0.062), Vector2(-0.12, -0.05), Vector2(-0.04, -0.062), Vector2(0.08, -0.062),
+		Vector2(0.12, -0.034), Vector2(0.47, -0.026),
+	], 0.004), 0.036, 0.007)
+	_side(STEEL, [Vector2(-0.4, -0.006), Vector2(-0.405, -0.125), Vector2(-0.411, -0.125), Vector2(-0.406, -0.006)], 0.037, 0.002)
+	# The two upper handguards, and the bands that hold them.
+	_side(WALNUT, [Vector2(0.135, 0.0), Vector2(0.29, 0.0), Vector2(0.29, 0.016), Vector2(0.135, 0.016)], 0.028, 0.005)
+	_side(WALNUT, [Vector2(0.32, 0.0), Vector2(0.455, 0.0), Vector2(0.455, 0.014), Vector2(0.32, 0.014)], 0.026, 0.005)
+	for span: Vector2 in [Vector2(0.293, 0.315), Vector2(0.457, 0.478)]:
+		_section(STEEL, _chamfer([Vector2(-0.0195, -0.03), Vector2(0.0195, -0.03), Vector2(0.0195, 0.018), Vector2(-0.0195, 0.018)], 0.006), span.x, span.y, 0.001)
+	_grip(WALNUT)
+
+	part("Bolt")
+	# The bolt in the top of the receiver, and the handle of the operating rod.
+	_block(STEEL, _at(-0.09, 0.012), Vector3(0.016, 0.01, 0.04), 0.002)
+	_block(STEEL, _at(0.0, 0.004, 0.0175), Vector3(0.006, 0.01, 0.034), 0.001)
+	_bar(STEEL, _at(0.006, 0.006, 0.019), _at(0.006, 0.009, 0.036), 0.0042, 8)
+	_ball(STEEL, _at(0.006, 0.009, 0.0385), 0.0062)
+
+	part("Mag", Transform3D(Basis(Vector3.RIGHT, Vector3.DOWN, Vector3.FORWARD), _at(-0.015, 0.006)))
+	# The clip round the heads of the rounds, and the two rounds on top of the
+	# stack, one either side.
+	for side: float in [-1.0, 1.0]:
+		_block(STEEL, _at(-0.046, 0.002, side * 0.0108), Vector3(0.0018, 0.018, 0.022), 0.0005)
+	_block(STEEL, _at(-0.058, 0.002), Vector3(0.022, 0.018, 0.003), 0.0005)
+	for round: Vector3 in [Vector3(0.0, 0.009, 0.0045), Vector3(0.0, 0.002, -0.0055)]:
+		_bar(BRASS, _at(-0.056, round.y, round.z), _at(0.006, round.y, round.z), 0.0058, 10)
+		_turned(BRASS, _at(0.006, round.y, round.z), Vector3.FORWARD, PackedVector2Array([Vector2(0.0058, 0.0), Vector2(0.0046, 0.012), Vector2(0.002, 0.026), Vector2(0.0, 0.029)]), 10)
+
+	_trigger_hand()
+	_support_hand(0.25, 0.021, "", 0.01)
+	# To load, the hand brings a clip down into the top of the receiver and
+	# the thumb presses it home.
+	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), _at(-0.02, 0.016, -0.004)), Vector2(0.012, 0.012), -96.0,
+		_at(-0.085, 0.03, -0.09), 0.03, 0.0, _at(-0.3, -0.25, -0.25))
+	marker("Muzzle", Transform3D(Basis(), _at(0.70)))
+	marker("Eject", Transform3D(Basis(), _at(-0.02, 0.016, 0.0)))
+	marker("MagHold", Transform3D(Basis(), _at(-0.02, 0.016, -0.004)))
+
+
+## A hand cannon in .50, after the Desert Eagle: a big frame of steel with a
+## hammer, a slide at the back that carries the bolt, and in front of it the
+## barrel, fixed, three-sided on top with a rail on it that the front sight
+## stands on. A magazine of seven in a grip with rubber panels, held as the
+## pistol is.
+func _hand_cannon() -> void:
+	model("hand_cannon")
+	# The frame, with its dust cover running out under the barrel.
+	_side(STEEL, [
+		Vector2(-0.074, -0.011), Vector2(-0.083, -0.02), Vector2(-0.074, -0.045), Vector2(-0.091, -0.13), Vector2(-0.031, -0.142),
+		Vector2(-0.006, -0.052), Vector2(-0.004, -0.03), Vector2(0.15, -0.03), Vector2(0.158, -0.011),
+	], 0.03, 0.003)
+	_side(RUBBER, [Vector2(-0.071, -0.052), Vector2(-0.087, -0.124), Vector2(-0.035, -0.136), Vector2(-0.015, -0.058)], 0.034, 0.004)
+	# Ribs across the panels, down the middle of the grip.
+	for side: float in [-1.0, 1.0]:
+		for i in 6:
+			var t := i / 5.0
+			_plate(GRIP, _at(-0.045 - 0.016 * t, -0.066 - 0.058 * t, side * 0.0172), Vector3(0.0006, 0.002, 0.028))
+	_line(STEEL, [_at(0.034, -0.03), _at(0.038, -0.054), _at(0.022, -0.072), _at(-0.006, -0.07), _at(-0.012, -0.054)], 0.0034)
+	_line(STEEL, [_at(0.013, -0.03), _at(0.015, -0.045), _at(0.009, -0.057)], 0.003)
+	_block(STEEL, _at(0.03, -0.018, -0.0158), Vector3(0.002, 0.006, 0.02), 0.001)
+	# The hammer, cocked, behind the slide.
+	_side(STEEL, [Vector2(-0.074, 0.0), Vector2(-0.082, 0.016), Vector2(-0.094, 0.02), Vector2(-0.092, 0.012), Vector2(-0.082, 0.006), Vector2(-0.078, -0.012)], 0.009, 0.0015)
+
+	# The barrel, fixed in the frame: three-sided on top, with a rail along it
+	# and the front sight on that.
+	_section(STEEL, _chamfer([Vector2(-0.0145, -0.012), Vector2(0.0145, -0.012), Vector2(0.0145, 0.006), Vector2(0.006, 0.02), Vector2(-0.006, 0.02), Vector2(-0.0145, 0.006)], 0.002), 0.03, 0.165, 0.0015)
+	_picatinny(STEEL, 0.045, 0.158, 0.0262, 0.018)
+	_block(STEEL, _at(0.152, 0.0298), Vector3(0.0035, 0.008, 0.006), 0.0006)
+	_dot(_at(0.149, 0.031))
+	_bar(RUBBER, _at(0.1652), _at(0.1656), 0.0058, 12)
+
+	part("Slide")
+	# What moves: the slide at the back with its grooves, the safety either
+	# side and the rear sight; the ejection port on its right.
+	_section(STEEL, _chamfer([Vector2(-0.0155, -0.012), Vector2(0.0155, -0.012), Vector2(0.0155, 0.012), Vector2(0.011, 0.02), Vector2(-0.011, 0.02), Vector2(-0.0155, 0.012)], 0.002), -0.078, 0.03, 0.0015)
+	for side: float in [-1.0, 1.0]:
+		for i in 7:
+			_plate(RUBBER, _at(-0.071 + i * 0.005, 0.0, side * 0.0157), Vector3(0.0006, 0.02, 0.0022))
+		_block(STEEL, _at(-0.064, 0.008, side * 0.0165), Vector3(0.003, 0.007, 0.014), 0.001)
+	_block(STEEL, _at(-0.068, 0.0255), Vector3(0.02, 0.011, 0.01), 0.001)
+	for side: float in [-1.0, 1.0]:
+		_dot(_at(-0.073, 0.0285, side * 0.0055))
+	_plate(BARE, _at(-0.012, 0.008, 0.0157), Vector3(0.0006, 0.012, 0.03))
+
+	var grip := Vector3(0, 0.975, -0.222)
+	part("Mag", Transform3D(Basis(Vector3.RIGHT, grip, Vector3.RIGHT.cross(grip)), _at(-0.04, -0.08)))
+	_side(STEEL, [Vector2(-0.062, -0.03), Vector2(-0.082, -0.13), Vector2(-0.044, -0.139), Vector2(-0.02, -0.04)], 0.02, 0.001)
+	_block(STEEL, _at(-0.064, -0.14), Vector3(0.026, 0.008, 0.054), 0.002, Vector3(-12, 0, 0))
+	_bar(BRASS, _at(-0.058, -0.027), _at(-0.022, -0.027), 0.0068, 10)
+	_handgun_hands(grip)
+	marker("Muzzle", Transform3D(Basis(), _at(0.168)))
+	marker("Eject", Transform3D(Basis(), _at(-0.012, 0.014, 0.016)))
+	marker("MagHold", Transform3D(Basis(), _at(-0.065, -0.17)))
+
+
 # --- Shared pieces -------------------------------------------------------------
+
+
+## The name a weapon is built under: its own, and with a silencer on it
+## <weapon>_sd.
+func _named(weapon_name: String) -> String:
+	return weapon_name + "_sd" if _silenced else weapon_name
+
+
+## The marker Muzzle, `ahead` of the origin, where a shot leaves the weapon.
+## With a silencer (_silenced) a can goes on there first, `radius` round and
+## `length` long, of which `seated` reaches back over the muzzle device; the
+## shot then leaves at the front of the can.
+func _muzzle(ahead: float, radius: float, length: float, seated := 0.0) -> void:
+	if _silenced:
+		part("Body")
+		_can(_at(ahead - seated), radius, length)
+		ahead += length - seated
+	marker("Muzzle", Transform3D(Basis(), _at(ahead)))
+
+
+## A silencer from `from` forwards: a collar that screws on, the tube with a
+## band of grip near its back, and a front cap with a chamfer and the hole
+## the shot leaves by.
+func _can(from: Vector3, radius: float, length: float) -> void:
+	var collar := minf(0.018, length * 0.12)
+	_turned(ALU, from, Vector3.FORWARD, [
+		Vector2(0.0, 0.0), Vector2(radius * 0.78, 0.0), Vector2(radius * 0.82, 0.002), Vector2(radius * 0.82, collar - 0.002), Vector2(radius * 0.9, collar),
+	], 24)
+	_turned(POLY, from, Vector3.FORWARD, [
+		Vector2(radius * 0.9, collar), Vector2(radius * 0.97, collar + 0.001), Vector2(radius, collar + 0.003), Vector2(radius, length - 0.007),
+		Vector2(radius * 0.94, length - 0.001), Vector2(radius * 0.36, length), Vector2(radius * 0.3, length - 0.004), Vector2(0.0, length - 0.006),
+	], 28, true)
+	# A band of rings to grip it by when it is screwed on or off.
+	for i in 5:
+		_ring(STEEL, from + Vector3.FORWARD * (collar + 0.009 + i * 0.0045), Vector3.FORWARD, radius + 0.0002, 0.0011)
 
 
 ## Point `ahead` of the origin along the barrel, `up` above it and `right` of it.

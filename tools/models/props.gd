@@ -7,6 +7,7 @@ extends "res://tools/model_builder.gd"
 func _describe() -> void:
 	_grenade()
 	_stick_grenade()
+	_smoke_grenade()
 	_cell()
 	_ammo_can()
 
@@ -82,6 +83,27 @@ func _stick_grenade() -> void:
 	# The cord out of the end, and its bead.
 	_line("cord", [Vector3(0, -0.19, 0), Vector3(0, -0.203, 0), Vector3(0.005, -0.218, 0.002), Vector3(0.011, -0.233, -0.002), Vector3(0.013, -0.245, 0.0)], 0.0012, 6)
 	_ball("porcelain", Vector3(0.013, -0.254, 0.0), 0.0085)
+
+
+## A smoke grenade as it flies, pin pulled and lever gone: a tin of sheet steel
+## 64 mm across and 115 mm high, its seams rolled over, a yellow band for what
+## is in it and the holes in its lid that the smoke comes out of, with the
+## fuze of the fragmentation grenade screwed into the middle. Along +Y, the
+## origin in its middle.
+func _smoke_grenade() -> void:
+	model("smoke_grenade")
+	_turned("robot_olive", Vector3(0, -0.0575, 0), Vector3.UP, [
+		Vector2(0.0, 0.0), Vector2(0.0295, 0.0), Vector2(0.032, 0.0025), Vector2(0.032, 0.1125), Vector2(0.0295, 0.115), Vector2(0.0, 0.115),
+	], 24)
+	for at: float in [-0.054, 0.054]:
+		_ring("robot_olive", Vector3(0, at, 0), Vector3.UP, 0.032, 0.0014)
+	_ring("steel_yellow", Vector3(0, 0.012, 0), Vector3.UP, 0.0322, 0.0045)
+	for i in 6:
+		var out := Vector3(cos(TAU * i / 6.0), 0, sin(TAU * i / 6.0)) * 0.021
+		_bar("gun_bare", out + Vector3(0, 0.0568, 0), out + Vector3(0, 0.0578, 0), 0.0035, 8)
+	_turned("gun_steel", Vector3(0, 0.0575, 0), Vector3.UP, [
+		Vector2(0.0125, 0), Vector2(0.0125, 0.006), Vector2(0.009, 0.008), Vector2(0.009, 0.02), Vector2(0.0075, 0.022), Vector2(0, 0.022),
+	], 16)
 
 
 ## Fragmentation grenade as it flies, pin pulled and lever gone: a steel ball

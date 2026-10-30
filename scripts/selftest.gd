@@ -13,11 +13,14 @@ extends Node
 ## until its fight starts, that a checkpoint is still there after a restart
 ## of the game and after a death, that the door at the exit is shut until
 ## the level is cleared, and that every crate, box and lamp in it can be
-## broken. Where a level is cut into zones that are only drawn when they can
+## broken. Before that, in the factory, that a checkpoint counts for whoever
+## slips past a fight and that what has fallen stays down (_slip_past()).
+## Where a level is cut into zones that are only drawn when they can
 ## be seen, it looks for lines of sight into a zone from where that zone is
 ## switched off.
 
 const ARMORY := preload("res://scripts/armory.gd")
+const WAY := preload("res://scripts/way.gd")
 ## Spots in the factory level: on the mezzanine deck, an open lane with 6 m
 ## of clear floor to the east of it, and a stretch of floor to sprint along.
 const MEZZANINE := Vector3(-10, 3.2, -9.5)
@@ -26,8 +29,11 @@ const RUNWAY := Vector3(17.5, 0, 5.5)
 ## Where the player stands in the hall for the fights that are tried out:
 ## open floor, with crates and machines to the west of it.
 const FIGHT_STAND := Vector3(12, 0, 4)
+## Longer than a robot goes on firing at what smoke took from it.
+const FIRES_MOST := 3.0
 ## A robot may stand in sight of where the player walks into its zone, starts
-## the level or carries on from a checkpoint, but not closer than this.
+## the level or carries on from a checkpoint, but not closer than this; the
+## game has a checkpoint wait for such a zone (TOO_CLOSE in game.gd).
 const SPAWN_DISTANCE := 14.0
 ## Distance in metres between the points a route is sampled at.
 const STRIDE := 0.5
@@ -103,7 +109,8 @@ func _run() -> void:
 		tree.change_scene_to_file(levels[0].scene)
 		await tree.scene_changed
 		await _wait(0.5)
-		await _play_through(levels[0], Menu.LEVELS[at + 1].scene if at + 1 < Menu.LEVELS.size() else "")
+		await _baked()
+		await _play_through(levels[0], _after(at))
 		_ran([levels[0].name])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
@@ -113,14 +120,16 @@ func _run() -> void:
 	if fights_only:
 		await _fights()
 		await _supplies()
-		_ran(["fights", "supplies"])
+		await _smoke()
+		_ran(["fights", "supplies", "smoke"])
 		print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 		tree.quit(1 if _failures else 0)
 		return
 	# --view leaves out everything but how the view moves, --breaks
-	# everything but what can be shot to pieces, and --balance everything but
-	# the range every weapon is fired on, at every distance.
-	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--balance", _balance.bind(true), "balance"]]:
+	# everything but what can be shot to pieces, --scope everything but the
+	# stages of a sight, and --balance everything but the range every weapon
+	# is fired on, at every distance.
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--scope", _scope_stages, "scope"], ["--balance", _balance.bind(true), "balance"]]:
 		if only[0] not in OS.get_cmdline_user_args():
 			continue
 		await (only[1] as Callable).call()
@@ -135,9 +144,14 @@ func _run() -> void:
 		await _view()
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
+		await _smoke()
+		await _scope_stages()
 		await _music_turns()
 		await _balance()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "music", "balance"])
+		_ran(["handling", "fights", "supplies", "view", "breakables", "smoke", "scope", "music", "balance"])
+
+	await _slip_past()
+	_ran(["slipping past"])
 
 	# Every level, in the order they are played, each entered the way the
 	# game enters it: the first from the menu, the rest through an exit.
@@ -145,8 +159,15 @@ func _run() -> void:
 	tree.change_scene_to_file(Menu.LEVELS[0].scene)
 	await tree.scene_changed
 	for i in Menu.LEVELS.size():
+		if Menu.LEVELS[i].get("variant", false):
+			# The same level played another way is not on the route: it is
+			# entered from the menu.
+			Save.clear()
+			tree.change_scene_to_file(Menu.LEVELS[i].scene)
+			await tree.scene_changed
 		await _wait(0.5)
-		await _play_through(Menu.LEVELS[i], Menu.LEVELS[i + 1].scene if i + 1 < Menu.LEVELS.size() else "")
+		await _baked()
+		await _play_through(Menu.LEVELS[i], _after(i))
 	_ran(Menu.LEVELS.map(func(level: Dictionary) -> String: return level.name))
 
 	print("SELFTEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
@@ -291,6 +312,9 @@ func _handling() -> void:
 	await _wait(0.6)
 	_check("scope takes over from the weapon in view", weapons.scope_blend() == 1.0 and not weapons._models[4].root.visible)
 	Input.action_release("ads")
+	# Its sight is tapped, not held (see _scope_stages()): letting go leaves
+	# it up.
+	weapons.lower()
 
 	# Enemy types.
 	var rusher: CharacterBody3D = game.RUSHER.instantiate()
@@ -440,6 +464,58 @@ func _handling() -> void:
 ## a level one after the other. Apart from the handling and after the fights:
 ## three seconds more in _handling() were enough for the cover in _fights()
 ## to come out otherwise with a collider more (on 15 October 2026).
+## The marksman's sight has a far stage, so its key is tapped: once is up,
+## and it stays up; twice is closer still; three times is back at the hip.
+func _scope_stages() -> void:
+	var player: CharacterBody3D = get_tree().current_scene.player
+	var weapons: Node3D = player.weapons
+	player.force_control = true
+	player.health = 1e6
+	for action in ["move_forward", "move_right", "sprint", "crouch", "jump", "ads", "fire"]:
+		Input.action_release(action)
+	weapons.equip(ARMORY.weapons(ARMORY.STANDARD), ARMORY.grenades(ARMORY.STANDARD))
+	weapons._switch_to(4)
+	await _wait(0.6)
+	var marksman: WeaponData = weapons.current()
+	var tap := func() -> void:
+		Input.action_press("ads")
+		await _wait(0.1)
+		Input.action_release("ads")
+	await tap.call()
+	await _wait(0.5)
+	var near: float = player.camera.fov
+	_check("the marksman's scope stays up once the key is let go", weapons.scope_blend() == 1.0 and absf(near - marksman.ads_fov) < 1.0)
+	await tap.call()
+	await _wait(0.5)
+	var far: float = player.camera.fov
+	_check("a second tap brings it closer still", weapons.scope_blend() == 1.0 and absf(far - marksman.far_fov) < 0.5)
+	await tap.call()
+	await _wait(0.6)
+	_check("and a third takes it down", weapons.ads_blend == 0.0 and player.camera.fov > 70.0)
+	print("    the marksman's scope at %.1f° and at %.1f°" % [near, far])
+	await tap.call()
+	await _wait(0.4)
+	Input.action_press("sprint")
+	await _wait(0.1)
+	Input.action_release("sprint")
+	await _wait(0.4)
+	_check("setting off at a sprint takes it down as well", weapons.ads_blend == 0.0)
+	await tap.call()
+	await _wait(0.4)
+	weapons._switch_to(0)
+	await _wait(0.6)
+	weapons._switch_to(4)
+	await _wait(0.6)
+	_check("and so does putting the weapon away", weapons.current() == marksman and weapons.ads_blend == 0.0)
+	# The rest of the standard pack is aimed by holding the key, as it was.
+	weapons._switch_to(0)
+	await _wait(0.6)
+	await tap.call()
+	await _wait(0.4)
+	_check("the rifle is still aimed only while the key is held", weapons.ads_blend == 0.0)
+	_finished.append("scope")
+
+
 func _music_turns() -> void:
 	# The theme is a piece on its own: at its end it starts again.
 	Sfx.music([Menu.THEME], 0.0)
@@ -941,7 +1017,39 @@ func _minigun(weapons: Node3D) -> void:
 	_check("let go of, it says what it had left", dropped.size() == 2 and dropped[0] == minigun and dropped[1] == 100 and weapons.special() == null)
 	weapons.special_spent.disconnect(note)
 	await _wait(1.0)
+	await _clip(weapons)
 	await _rocket_launcher(weapons)
+
+
+## A weapon loaded by a clip, the M1 Garand of 1944: with a round left in it
+## a reload does nothing; its last round throws the clip out, with a ping,
+## and the action stays open; then the next clip goes in, eight at once.
+func _clip(weapons: Node3D) -> void:
+	var carried: Array[WeaponData] = weapons.loadout.duplicate()
+	var garand: WeaponData = ARMORY.named("garand")
+	var alone: Array[WeaponData] = [garand]
+	weapons.equip(alone, Vector2i(0, 0))
+	await _wait(garand.switch_time + 0.1)
+	var reserve: int = weapons._reserves[0]
+	var clips := func() -> int:
+		return Fx._casings.filter(func(thrown: Dictionary) -> bool: return is_instance_valid(thrown.node) and thrown.node.mesh == Fx._clip_mesh).size()
+	for i in garand.mag_size - 1:
+		weapons._fire(garand)
+	weapons._start_reload()
+	_check("a clip is not topped up: with a round left in it a reload does nothing", weapons._reload_left <= 0.0 and weapons._mags[0] == 1)
+	var before: int = clips.call()
+	weapons._fire(garand)
+	await _wait(0.15)
+	var model: Object = weapons._models[0]
+	print("    M1 Garand: %d clip in the air after the last round, the action %s, the clip in view %s" % [clips.call() - before, "open" if weapons._locked > 0.9 else "shut", model.mag.visible])
+	_check("its last round throws the clip out with its ping, and the action stays open", clips.call() == before + 1 and Sfx.has(&"garand_ping")
+		and weapons._locked > 0.9 and not model.mag.visible)
+	weapons._start_reload()
+	await _wait(garand.reload_time + 0.2)
+	_check("then a whole clip goes in, eight at once, and the action closes", weapons._mags[0] == garand.mag_size and weapons._reserves[0] == reserve - garand.mag_size
+		and model.mag.visible and weapons._locked < 0.1)
+	weapons.equip(carried, ARMORY.grenades(ARMORY.STANDARD))
+	await _wait(0.3)
 
 
 ## The other weapon of the arena: one round in the tube and two to come, each
@@ -1100,6 +1208,131 @@ func _balance(full := false) -> void:
 	player.velocity = Vector3.ZERO
 	await _wait(0.5)
 	_finished.append("balance")
+
+
+## The smoke grenade: on a key of its own, carried by every pack, and what its
+## cloud hides from whom.
+func _smoke() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	player.force_control = true
+	player.health = 1e6
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	Fx.clear()
+	_move(player, FIGHT_STAND)
+	player.rotation.y = PI * 0.5
+	player.head.rotation.x = 0.0
+	await _wait(0.3)
+
+	_check("every pack has two smoke grenades, and pistols one", Array(ARMORY.names()).all(func(pack: String) -> bool:
+		return ARMORY.tacticals(pack) == (1 if pack == "pistols" else 2) and ARMORY.tactical(pack) == "smoke_grenade"))
+	var standard := ARMORY.STANDARD
+	weapons.equip(ARMORY.weapons(standard), ARMORY.grenades(standard), ARMORY.grenade(standard), ARMORY.tacticals(standard), ARMORY.tactical(standard))
+	var pips: Control = game.get_node("HUD")._tacticals
+	var shown: int = pips.count
+	var grenades: int = weapons.grenades
+	Input.action_press("tactical")
+	await _wait(0.1)
+	Input.action_release("tactical")
+	await _wait(0.6)
+	var thrown := tree.get_nodes_in_group("grenade").filter(func(one: Node) -> bool: return one.scene_file_path.ends_with("smoke_grenade.tscn"))
+	_check("its key throws one, and leaves the grenades be", thrown.size() == 1 and weapons.tacticals == 1 and weapons.grenades == grenades)
+	_check("the HUD counts it, in tins", shown == 2 and pips.count == 1 and pips.tins)
+	_check("it is nothing to run from", tree.get_nodes_in_group("hazard").is_empty())
+	await _wait(0.6)
+	_check("there is no cloud as it flies", Smoke.count() == 0 or thrown[0].linear_velocity.length() < 1.0)
+	await _wait(2.0)
+	_check("once it lies still there is", Smoke.count() == 1)
+	weapons.tacticals = 0
+	weapons.resupply()
+	_check("a checkpoint brings them back", weapons.tacticals == weapons.start_tacticals)
+	weapons.tacticals = 0
+	weapons.restock()
+	_check("and so does a fight fought again", weapons.tacticals == weapons.start_tacticals)
+	weapons.equip(ARMORY.weapons(standard), ARMORY.grenades(standard))
+	Fx.clear()
+	await _wait(0.1)
+	_check("a cloud goes with the rest of the effects", Smoke.count() == 0)
+
+	# What it hides, along a line. The cloud stands on the floor, full grown.
+	var floor_y: float = player.global_position.y
+	var at := FIGHT_STAND + Vector3(-8, 0, 0)
+	at.y = floor_y
+	var high := Vector3.UP * 1.5
+	Smoke.billow(at)
+	Fx.held = true
+	Fx.advance(0.2)
+	_check("it takes a moment to grow", not Smoke.blocks(at + Vector3(-6, 1.5, 0), at + Vector3(6, 1.5, 0)))
+	Fx.advance(5.0)
+	_check("then what is behind it is hidden", Smoke.blocks(at + Vector3(-9, 1.5, 0), at + Vector3(9, 1.5, 0)))
+	_check("whoever stands in it is not seen, from close by either", Smoke.blocks(at + high, at + high + Vector3(-1, 0, 0)) and Smoke.blocks(at + Vector3(-20, 1.5, 0), at + high))
+	_check("and sees nobody", Smoke.blocks(at + high, at + Vector3(20, 1.5, 0)))
+	_check("what goes past it or over it is not", not Smoke.blocks(at + Vector3(-9, 1.5, 6), at + Vector3(9, 1.5, 6))
+		and not Smoke.blocks(at + Vector3(-9, 6, 0), at + Vector3(9, 6, 0)))
+	_check("nor is a line through its very edge", not Smoke.blocks(at + Vector3(-9, 1.0, Smoke.RADIUS * 0.99), at + Vector3(9, 1.0, Smoke.RADIUS * 0.99)))
+	Fx.advance(Smoke.LASTS - 5.2 - Smoke.THINS * 0.8)
+	_check("it hides for most of the time it thins", Smoke.blocks(at + Vector3(-9, 1.5, 0), at + Vector3(9, 1.5, 0)))
+	Fx.advance(Smoke.THINS * 0.6)
+	_check("and what is nearly gone hides nothing", not Smoke.blocks(at + Vector3(-9, 1.5, 0), at + Vector3(9, 1.5, 0)))
+	Fx.held = false
+	Fx.advance(Smoke.THINS)
+	await _wait(0.1)
+	_check("and then it is gone", Smoke.count() == 0)
+
+	# Who is on to the player loses them, fires on for a moment where it last
+	# saw them, and comes to look there.
+	var grunt: CharacterBody3D = game.GRUNT.instantiate()
+	grunt.position = FIGHT_STAND + Vector3(-11, 0, 0)
+	game.add_child(grunt)
+	grunt.alert()
+	grunt.takes_cover = false
+	var waited := 0.0
+	while not grunt._has_los and waited < 3.0:
+		await _wait(0.1)
+		waited += 0.1
+	_check("a robot that is after the player sees them", grunt._has_los)
+	var seen: Vector3 = grunt._seen_at
+	Smoke.billow(FIGHT_STAND + Vector3(-5, 0, 0) + Vector3.UP * floor_y)
+	Fx.held = true
+	Fx.advance(5.0)
+	await _wait(0.3)
+	_check("smoke between them: it has lost them, and fires on where they were", grunt._smoked and grunt._has_los and grunt._fires_on > 0.0
+		and grunt._seen_at.distance_to(seen) < 1.5)
+	_move(player, FIGHT_STAND + Vector3(0, 0, 3))
+	await _wait(FIRES_MOST)
+	_check("not for long", grunt._smoked and not grunt._has_los)
+	_check("then it goes to look where it saw them last, not where they are now", grunt.agent.target_position.distance_to(player.global_position) > 2.0
+		and grunt.agent.target_position.distance_to(seen) < 2.5)
+	Fx.held = false
+	Fx.clear()
+	await _wait(0.5)
+	_check("once the smoke is gone it knows again", not grunt._smoked)
+	grunt.queue_free()
+
+	# One that was never on to the player: smoke takes away what it could have seen.
+	var guard: CharacterBody3D = game.GRUNT.instantiate()
+	guard.position = FIGHT_STAND + Vector3(-11, 0, 0)
+	game.add_child(guard)
+	await _wait(0.5)
+	_move(player, FIGHT_STAND)
+	await _wait(0.4)
+	var knew: bool = guard._alerted or guard._has_los
+	Smoke.billow(FIGHT_STAND + Vector3(-5, 0, 0) + Vector3.UP * floor_y)
+	Fx.held = true
+	Fx.advance(5.0)
+	await _wait(0.3)
+	_check("one that only just comes on the player does not see them through it", knew and not (guard._has_los and guard._fires_on <= 0.0))
+	Fx.held = false
+	Fx.clear()
+	guard.queue_free()
+	await _wait(0.1)
+	player.health = player.MAX_HEALTH
+	_finished.append("smoke")
 
 
 ## A count of shots as [shots, seconds] that _fire_at_range() gives, to read:
@@ -1932,6 +2165,16 @@ func _glows(mesh: MeshInstance3D) -> bool:
 	return false
 
 
+## The scene the exit of Menu.LEVELS[i] leads to: the next level on the
+## route, "" after the last. A variant of a level (the dunes by night) is not
+## on the route; it follows the level it is a variant of, whose exit it has.
+func _after(i: int) -> String:
+	for later in range(i + 1, Menu.LEVELS.size()):
+		if not Menu.LEVELS[later].get("variant", false):
+			return Menu.LEVELS[later].scene
+	return ""
+
+
 ## Plays the level that is loaded from its start to its exit: zone by zone
 ## and checkpoint by checkpoint, with a restart of the game at the first
 ## checkpoint and a death at the last. `next` is the level its exit should
@@ -1949,6 +2192,9 @@ func _play_through(level: Dictionary, next: String) -> void:
 	_check("%s: has things that explode, each with its model" % title, not explosives.is_empty()
 		and explosives.all(func(e: Node) -> bool: return e.get_node_or_null(e.model) != null))
 	_inventory(game, title)
+	var land: Node = load("res://scripts/land.gd").of(tree)
+	if land and land.by_night():
+		await _try_dark(game, land, title)
 
 	# The route as the level describes it, before anything is fought over.
 	var walk := _walk(game)
@@ -1990,16 +2236,19 @@ func _play_through(level: Dictionary, next: String) -> void:
 				print("    spawn in view: %s/%s at %.1f m" % [zone.id, spawn.name, eye.distance_to(at)])
 	_check("%s: every robot can reach the player from its post" % title, stranded == 0)
 	_check("%s: none stands close by and in view where its zone is walked into" % title, exposed == 0)
-	# Nor where the player appears: at the start, or at a checkpoint with the
-	# zones before it cleared.
+	# Nor where the player appears: at the start, or at a checkpoint, from
+	# any zone but those it waits for, which are cleared before it counts.
+	# What lies before it may have been slipped past, and still stand.
 	var company := 0
-	var poses := [[-1, "the start", game.start.origin]]
+	var poses := [[[], "the start", game.start.origin]]
 	for checkpoint: RefCounted in game.checkpoints:
-		poses.append([checkpoint.order, checkpoint.title, checkpoint.pose.origin])
+		poses.append([checkpoint.among, checkpoint.title, checkpoint.pose.origin])
+		if _routes_only:
+			print("    checkpoint %s waits for %s" % [checkpoint.title, ", ".join(checkpoint.among.map(func(zone: RefCounted) -> String: return zone.title))])
 	for pose: Array in poses:
 		var eye: Vector3 = pose[2] + Vector3.UP * 1.6
 		for zone: RefCounted in game.zones:
-			if zone.order < pose[0]:
+			if zone in pose[0]:
 				continue
 			for spawn: Node3D in _spawns(zone):
 				var at := spawn.global_position
@@ -2127,7 +2376,7 @@ func _play_through(level: Dictionary, next: String) -> void:
 
 	# And out.
 	var lamp := game.exit.get_node_or_null("Lamp") as Node3D
-	_check("%s: the exit opens when every zone is cleared" % title, game.exit_open and (lamp == null or lamp.visible)
+	_check("%s: the exit opens when the last fight is won" % title, game.exit_open and (lamp == null or lamp.visible)
 		and game.objective == game.exit.get_meta(&"title"))
 	var left := []
 	game.finished.connect(func(to: String) -> void: left.append(to))
@@ -2144,9 +2393,95 @@ func _play_through(level: Dictionary, next: String) -> void:
 		await tree.scene_changed
 		_check("%s: and the next one starts from its beginning" % title, tree.current_scene.scene_file_path == next
 			and Save.resume_point(next).get("at", "?") == "")
+		var behind: bool = await _behind_the_loading_screen()
+		_check("%s: it comes in behind the loading screen, which goes once it can be played" % title, behind)
 	else:
 		_check("%s: and that is the end of the game" % title, Save.checkpoint.is_empty())
 	_finished.append(title)
+
+
+## The route goes by place, and what falls stays down, tried in the first
+## level: a checkpoint counts for whoever slips past the fight before it, but
+## not while the zone it lies in is held; what has fallen there and elsewhere
+## is still down after a death and after a restart of the game, also in a
+## zone where others still stand; and the exit opens once the last fight is
+## won, whatever still stands on the way there.
+func _slip_past() -> void:
+	var tree := get_tree()
+	var level: Dictionary = Menu.LEVELS[0]
+	Save.clear()
+	tree.change_scene_to_file(level.scene)
+	await tree.scene_changed
+	await _wait(0.5)
+	await _baked()
+	var game := tree.current_scene
+	# A checkpoint in no zone with a zone before it, and the next one, which
+	# lies in a zone that comes after the first.
+	var open := -1
+	for i in game.checkpoints.size():
+		if open < 0 and game.checkpoints[i].among.is_empty() and game.zones[0].order < game.checkpoints[i].order:
+			open = i
+	var held := open + 1
+	if open < 0 or held >= game.checkpoints.size() or game.checkpoints[held].among.is_empty():
+		_check("%s has a checkpoint past a fight, and after it one in a zone" % level.name, false)
+		return
+	var passed: RefCounted = game.zones[0]
+	var within: RefCounted = game.checkpoints[held].among[0]
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	player.health = 1e6
+	_move(player, game.checkpoints[open].pose.origin)
+	await _wait(0.3)
+	_check("a checkpoint counts for whoever slips past the fight before it", Save.resume_point(level.scene).get("at", "") == game.checkpoints[open].id
+		and not passed.started and not passed.cleared and game.objective == "Reach %s" % within.title)
+	_move(player, game.checkpoints[held].pose.origin)
+	await _wait(0.3)
+	_check("but not where it lies in a zone that is still held", game._checkpoint == open and within.fighting())
+	var one: Node3D = passed.robots[0]
+	one.take_damage(1e6, one.global_position, Vector3.DOWN)
+	for robot: Node3D in within.robots:
+		robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
+	await _wait(0.3)
+	var kills: int = game.kills
+	_check("once that zone is cleared it counts, for whoever stands in it", game._checkpoint == held and within.cleared
+		and Save.resume_point(level.scene).get("at", "") == game.checkpoints[held].id and kills == 1 + within.robots.size())
+	for how: String in ["a death", "a restart of the game"]:
+		var old := game
+		if how == "a death":
+			player.health = 1.0
+			player.take_damage(50.0)
+		else:
+			Save.reload()
+			tree.change_scene_to_file(level.scene)
+		var loading := false
+		for i in 80:
+			await _wait(0.1)
+			loading = loading or Loading.busy()
+			if tree.current_scene != null and tree.current_scene != old:
+				break
+		if how == "a death":
+			_check("after a death the level comes again behind the loading screen", loading)
+		game = tree.current_scene
+		await _wait(0.5)
+		player = game.player
+		player.force_control = true
+		player.health = 1e6
+		passed = game.zones[0]
+		within = game.checkpoints[held].among[0]
+		var standing: Array = passed.robots.filter(func(robot: Variant) -> bool: return is_instance_valid(robot) and not robot.dead)
+		_check("after %s, what fell stays down, also where others still stand" % how, game != old
+			and player.global_position.distance_to(game.checkpoints[held].pose.origin) < 0.5 and game.kills == kills
+			and within.cleared and within.robots.is_empty() and not passed.cleared and passed.alive == _spawns(passed).size() - 1
+			and standing.size() == passed.alive and _waiting(standing, _spawns(passed).slice(1)))
+	var last: RefCounted = game.zones[-1]
+	_check("the exit is shut while the last fight is still to be won", not game.exit_open and game.objective == "Reach %s" % game.zones[game.zones.find(within) + 1].title)
+	for robot: Node3D in last.robots:
+		robot.take_damage(1e6, robot.global_position, Vector3.DOWN)
+	await _wait(0.3)
+	_check("and opens once it is, whatever stands on the way there", game.exit_open and not passed.cleared
+		and game.objective == game.exit.get_meta(&"title"))
+	Save.clear()
+	_finished.append("slipping past")
 
 
 ## The way from the start past every checkpoint to the exit, as points
@@ -2178,7 +2513,7 @@ func _walk(game: Node) -> PackedVector3Array:
 		if not _reaches(map, stops[i], stops[i + 1]):
 			print("    no way from %s to %s" % [stops[i], stops[i + 1]])
 			return PackedVector3Array()
-		var leg := NavigationServer3D.map_get_path(map, stops[i], stops[i + 1], true)
+		var leg := WAY.between(map, stops[i], stops[i + 1])
 		for j in leg.size() - 1:
 			var steps := maxi(1, ceili(leg[j].distance_to(leg[j + 1]) / STRIDE))
 			for k in steps:
@@ -2291,6 +2626,50 @@ func _on_watch(robots: Array) -> bool:
 	return not robots.is_empty() and robots.all(func(robot: Node) -> bool: return robot.is_watching())
 
 
+## By night: the ground a floodlight shines on is in the light, somebody in
+## the wood is in the dark and somebody in the open under the moon in
+## between; and a floodlight that is shot out lights nothing any more. Asks
+## scripts/land.gd, which is what the watch asks.
+func _try_dark(game: Node, land: Node, title: String) -> void:
+	var space: PhysicsDirectSpaceState3D = game.player.get_world_3d().direct_space_state
+	var lamp: Node = null
+	var lit := Vector3.INF
+	for one: Node in game.get_node("Level/Breakables").get_children():
+		if not one.get(&"light") is SpotLight3D or one.out:
+			continue
+		var light: SpotLight3D = one.light
+		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(light.global_position, light.global_position - light.global_basis.z * 30.0, 1))
+		if ground.is_empty():
+			continue
+		# Where this lamp alone puts somebody in the light.
+		var others := 0.0
+		for other: Light3D in Fx.level_lamps():
+			if other != light:
+				others += Fx.lamp_strength(other, ground.position + land.CHEST)
+		if others < land.LIT * 0.2 and land.light_at(ground.position) > 0.9:
+			lamp = one
+			lit = ground.position
+			break
+	_check("%s: where a floodlight shines, somebody stands in the light" % title, lamp != null)
+	var dark := Vector3.INF
+	var moonlit := Vector3.INF
+	for x in range(8, 60, 4):
+		for z in range(186, 214, 4):
+			var top := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, 60, z), Vector3(x, -10, z), 1))
+			if top.is_empty():
+				continue
+			var light: float = land.light_at(top.position)
+			if light < 0.05 and dark == Vector3.INF:
+				dark = top.position
+			elif absf(light - land.MOONLIT) < 0.01 and moonlit == Vector3.INF:
+				moonlit = top.position
+	_check("%s: in the shade of the wood it is dark, and out of it there is the moon" % title, dark != Vector3.INF and moonlit != Vector3.INF and land.hidden_at(dark) and not land.hidden_at(lit if lit != Vector3.INF else moonlit))
+	if lamp:
+		lamp.take_damage(100.0, lamp.global_position, Vector3.DOWN)
+		await _wait(0.6)
+		_check("%s: and once it is shot out, it lights nobody" % title, lamp.out and land.light_at(lit) < 0.5)
+
+
 ## Tries the shade on the watch of a zone: somebody who stands in the shade
 ## in front of one of its guards is not seen, and somebody who stands in the
 ## light there is, which starts their fight. It takes a guard that stands
@@ -2313,7 +2692,8 @@ func _try_watch(game: Node, zone: RefCounted, title: String) -> bool:
 				var floor_hit := space.intersect_ray(floor_ray)
 				if floor_hit.is_empty() or not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, floor_hit.position + Vector3.UP * 1.35, 1)).is_empty():
 					continue
-				var shade: float = land.shade_around(floor_hit.position)
+				# The shade by day, the dark by night (scripts/land.gd).
+				var shade: float = 1.0 - land.light_at(floor_hit.position)
 				if (shade > 0.9 or shade < 0.1) and spots[shade > 0.5] == Vector3.INF:
 					spots[shade > 0.5] = floor_hit.position
 		if spots[true] == Vector3.INF or spots[false] == Vector3.INF:
@@ -2329,7 +2709,8 @@ func _try_watch(game: Node, zone: RefCounted, title: String) -> bool:
 		await _wait(0.8)
 		_move(game.player, spots[true])
 		await _wait(guard.notice_time + 1.0)
-		_check("%s: somebody who stands in the shade is not seen by the watch" % title, not zone.started and guard.awareness < 0.05)
+		var hidden := "the dark" if land.by_night() else "the shade"
+		_check("%s: somebody who stands in %s is not seen by the watch" % [title, hidden], not zone.started and guard.awareness < 0.05)
 		_move(game.player, spots[false])
 		await _wait(guard.notice_time + 0.8)
 		_check("%s: somebody who stands in the light is, and that starts their fight" % title, zone.fighting() and guard.is_alert())
@@ -2366,7 +2747,7 @@ func _kinds(enemies: Array) -> Array:
 
 ## True if the navmesh has a way from one point to the other.
 func _reaches(map: RID, from: Vector3, to: Vector3) -> bool:
-	var route := NavigationServer3D.map_get_path(map, from, to, true)
+	var route := WAY.between(map, from, to)
 	return route.size() > 1 and route[0].distance_to(from) < 1.0 and route[-1].distance_to(to) < 1.0
 
 
@@ -2404,3 +2785,29 @@ func _check(label: String, ok: bool) -> void:
 
 func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds, true, true).timeout
+
+
+## Waits for the level that has loaded to have baked its navmesh, which it
+## does on a thread of its own, and for the server that finds the ways over
+## it to have it: at most ten seconds.
+## Whether the level that has just come in did so behind the loading screen
+## (scripts/loading.gd), and whether that went once the level was baked.
+func _behind_the_loading_screen() -> bool:
+	var game := get_tree().current_scene
+	if not Loading.busy():
+		return false
+	var waited := 0.0
+	while Loading.busy() and waited < 10.0:
+		await _wait(0.1)
+		waited += 0.1
+	return not Loading.busy() and game.get(&"is_baked")
+
+
+func _baked() -> void:
+	var game := get_tree().current_scene
+	var waited := 0.0
+	while not game.get(&"is_baked") and waited < 10.0:
+		await _wait(0.1)
+		waited += 0.1
+	for i in 3:
+		await get_tree().physics_frame

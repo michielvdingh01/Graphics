@@ -146,7 +146,7 @@ func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
 	var killer: RefCounted = Match.entrants.get(by)
 	if who == null:
 		return
-	var with := "explosion" if weapon == Match.BLAST else "melee" if weapon == Match.MELEE else ""
+	var with := "explosion" if weapon == Match.BLAST else "melee" if weapon == Match.MELEE else "run over" if weapon == Match.RUN_OVER else ""
 	if weapon >= 0 and weapon < WEAPONS.ARMORY.ALL.size():
 		with = WEAPONS.ARMORY.ALL[weapon].display_name.to_lower()
 	var text := "%s  ▸  %s" % [killer.title, who.title] if killer else "%s went down" % who.title

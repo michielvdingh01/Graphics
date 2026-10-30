@@ -48,6 +48,7 @@ What an entry can say besides its source:
             their layers, which only differ in the low end: of use where
             there are layers and next to no recordings
     length  cut a take off after this many seconds
+    tail    seconds over which a take dies away at its end
     stereo  keep both channels; without it a take is the left channel only,
             because the two microphones of a recording are not in step and
             lose level when summed
@@ -586,6 +587,13 @@ def faded(take: list, length: float) -> list:
     ]
 
 
+def dying(take: list, seconds: float) -> list:
+    """A take that dies away over its last `seconds`."""
+    count = len(take[0])
+    fall = int(seconds * RATE)
+    return [[sample * min(1.0, (count - i) / fall) ** 2 for i, sample in enumerate(channel)] for channel in take]
+
+
 def clipped(take: list, drive: float, punch: float) -> list:
     """A take with its peak at 1, pushed into the soft clip."""
     peak = top(take)
@@ -653,7 +661,8 @@ def build(sound: dict, packs: dict, scratch: pathlib.Path) -> None:
             mean = math.sqrt(sum(sample * sample for channel in take for sample in channel) / sum(len(channel) for channel in take))
             gain = min(10.0 ** (sound["rms"] / 20.0) * 32768.0 / PEAK / mean, 1.0)
             take = [[sample * gain for sample in channel] for channel in take]
-        takes.append(take if bed else faded(take, sound.get("length", 0.0)))
+        take = take if bed else faded(take, sound.get("length", 0.0))
+        takes.append(dying(take, sound["tail"]) if "tail" in sound else take)
 
     out = OUT / sound["id"]
     out.mkdir(parents=True, exist_ok=True)

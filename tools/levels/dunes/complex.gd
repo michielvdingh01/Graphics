@@ -130,7 +130,7 @@ func _inner_yard() -> void:
 	vehicle("jeep", Vector2(89.6, 15.2), 5.0)
 	vehicle("truck", Vector2(99.5, 15.2), 0.0)
 	vehicle("truck", Vector2(107.0, 15.0), -2.0)
-	vehicle("tank", Vector2(120.0, 15.4), 0.0)
+	vehicle("tank", Vector2(120.0, 15.4), 0.0, true)
 	# The tank in the shed is laid up under a tarpaulin: over its hull and
 	# its turret, with the gun out in front.
 	sheeted(resting(120.0, 15.4, 180.0, 2.4), [[Vector3(0, 0.85, 0), Vector3(3.0, 1.5, 6.0)], [Vector3(0, 2.0, 0.1), Vector3(2.0, 0.85, 3.0)]])
@@ -656,4 +656,4 @@ func _route_through() -> void:
 	])
 	# Through the door: the level ends a step inside.
 	var face := BLOCK_NORTH + 0.25
-	route_exit("Leave by the back door", AABB(Vector3(BACK_DOOR_X - 2.3, YARD_Y - 0.1, face + 1.2), Vector3(4.6, 3.6, 3.0)), "", Vector3(BACK_DOOR_X, YARD_Y + 5.6, BLOCK_NORTH), Vector3.FORWARD)
+	route_exit("Leave by the back door", AABB(Vector3(BACK_DOOR_X - 2.3, YARD_Y - 0.1, face + 1.2), Vector3(4.6, 3.6, 3.0)), "alps", Vector3(BACK_DOOR_X, YARD_Y + 5.6, BLOCK_NORTH), Vector3.FORWARD)

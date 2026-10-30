@@ -237,6 +237,9 @@ class Atlas:
         self.normal[:] = (0.5, 0.5, 1.0)
         self.rough = np.full((side, side), 0.8, dtype=np.float32)
         self.metal = np.zeros((side, side), dtype=np.float32)
+        # How much of the light from around reaches each texel, 0..1, once
+        # bake_occlusion() has worked it out; None for a character without.
+        self.occlusion = None
         self.face = None
         self.weights = None
         self.cutout = False
@@ -291,6 +294,8 @@ class Atlas:
         self.normal = dilate(self.normal, covered, 8)
         packed = dilate(np.stack([self.rough, self.metal], axis=-1), covered, 8)
         self.rough, self.metal = packed[:, :, 0], packed[:, :, 1]
+        if self.occlusion is not None:
+            self.occlusion = dilate(self.occlusion[:, :, None], covered, 8)[:, :, 0]
 
     def material(self, obj: bpy.types.Object, name: str, folder: str) -> dict:
         """Writes the three textures and gives the mesh the material that uses them."""
@@ -298,6 +303,8 @@ class Atlas:
         if not self.cutout:
             color[:, :, 3] = 1.0
         orm = np.ones((self.side, self.side, 4), dtype=np.float32)
+        if self.occlusion is not None:
+            orm[:, :, 0] = self.occlusion
         orm[:, :, 1] = self.rough
         orm[:, :, 2] = self.metal
         normal = np.ones((self.side, self.side, 4), dtype=np.float32)
@@ -310,9 +317,10 @@ class Atlas:
         mesh = obj.data
         used = [obj.material_slots[polygon.material_index].name.endswith("#cutout") if obj.material_slots else False for polygon in mesh.polygons]
         mesh.materials.clear()
-        mesh.materials.append(_material(name, images, False))
+        occluded = self.occlusion is not None
+        mesh.materials.append(_material(name, images, False, occluded))
         if self.cutout and any(used):
-            mesh.materials.append(_material(name + "_cutout", images, True))
+            mesh.materials.append(_material(name + "_cutout", images, True, occluded))
             mesh.polygons.foreach_set("material_index", [1 if cut else 0 for cut in used])
         else:
             mesh.polygons.foreach_set("material_index", [0] * len(mesh.polygons))
@@ -333,7 +341,7 @@ def _save(name: str, data: np.ndarray, folder: str, kind: str, srgb: bool) -> bp
     return image
 
 
-def _material(name: str, images: dict, cutout: bool) -> bpy.types.Material:
+def _material(name: str, images: dict, cutout: bool, occluded: bool = False) -> bpy.types.Material:
     material = bpy.data.materials.new(name)
     if material.node_tree is None:
         material.use_nodes = True
@@ -360,8 +368,63 @@ def _material(name: str, images: dict, cutout: bool) -> bpy.types.Material:
     links.new(texture("orm").outputs["Color"], split.inputs[0])
     links.new(split.outputs[1], shader.inputs["Roughness"])
     links.new(split.outputs[2], shader.inputs["Metallic"])
+    if occluded:
+        # The exporter takes occlusion from a group of this name, and finding
+        # it in the red of the same texture writes one texture for the three.
+        settings = bpy.data.node_groups.get("glTF Material Output")
+        if settings is None:
+            settings = bpy.data.node_groups.new("glTF Material Output", "ShaderNodeTree")
+            settings.interface.new_socket("Occlusion", in_out="INPUT", socket_type="NodeSocketFloat")
+        output = nodes.new("ShaderNodeGroup")
+        output.node_tree = settings
+        links.new(split.outputs[0], output.inputs["Occlusion"])
     material.use_backface_culling = True
     return material
+
+
+# How far round a texel the bake looks for what shades it, in metres: a fold,
+# the space under a pouch or a strap, the helmet over the ears; not the body
+# as a whole, which the light of the level and SSAO already see to.
+OCCLUSION_REACH = 0.22
+
+
+def bake_occlusion(obj: bpy.types.Object, atlas: "Atlas", samples: int = 32) -> dict:
+    """Works out with Cycles, on the CPU, how much light from around reaches
+    each texel of the atlas, as the mesh stands at rest, into atlas.occlusion.
+    The mesh's UVs have to be the atlas's already, see pack()."""
+    image = bpy.data.images.new("occlusion", atlas.side, atlas.side, alpha=False, float_buffer=True)
+    image.colorspace_settings.name = "Non-Color"
+    targets = []
+    for slot in obj.material_slots:
+        if slot.material is None or slot.material.node_tree is None:
+            continue
+        nodes = slot.material.node_tree.nodes
+        target = nodes.new("ShaderNodeTexImage")
+        target.image = image
+        nodes.active = target
+        targets.append((nodes, target))
+    scene = bpy.context.scene
+    engine = scene.render.engine
+    scene.render.engine = "CYCLES"
+    # Cycles on the GPU would draw next to the game without the GPU slot.
+    scene.cycles.device = "CPU"
+    scene.cycles.samples = samples
+    scene.render.bake.margin = 16
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new("occlusion")
+    scene.world.light_settings.distance = OCCLUSION_REACH
+    for other in scene.objects:
+        other.select_set(False)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.bake(type="AO")
+    atlas.occlusion = pixels(image)[:, :, 0].astype(np.float32).copy()
+    for nodes, target in targets:
+        nodes.remove(target)
+    bpy.data.images.remove(image)
+    scene.render.engine = engine
+    covered = atlas.covered()
+    return {"reach_m": OCCLUSION_REACH, "samples": samples, "mean": round(float(atlas.occlusion[covered].mean()), 3)}
 
 
 def pack(obj: bpy.types.Object, side: int = SIDE) -> Atlas:

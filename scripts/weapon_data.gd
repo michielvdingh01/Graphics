@@ -30,6 +30,11 @@ extends Resource
 ## Loaded one round at a time, each taking `reload_time / mag_size`, instead
 ## of by the magazine; a shot interrupts it.
 @export var loads_singly := false
+## Loaded by a clip that goes in with the rounds and stays in, as in the M1
+## Garand: a new one goes in only once the last round is fired, and that shot
+## throws the empty clip out with a ping (its sound <weapon>_ping, see
+## _handling() in scripts/weapons.gd). The action stays open until then.
+@export var en_bloc := false
 
 @export_group("Accuracy")
 @export var hip_spread_deg := 1.5
@@ -55,12 +60,26 @@ extends Resource
 ## Aimed through a telescopic sight: the HUD shows the picture through it and
 ## the weapon itself goes out of view.
 @export var scoped := false
+## The field of view of a second stage of the sight that brings things
+## closer still, 0 for a sight with one. A weapon that has it is not aimed by
+## holding the key but by tapping it: once to ads_fov, again to far_fov, a
+## third time back to the hip.
+@export var far_fov := 0.0
 
 @export_group("Muzzle")
 ## Length of the flash in metres, and the number of tongues the muzzle device
 ## splits it into: 0 for a bare muzzle, 2 for a brake that blows to the sides.
 @export var flash_size := 0.34
 @export var flash_prongs := 4
+## How much quieter its shot is played than the sound is in its file, in dB.
+## Every shot is cut to the same peak; one with a silencer has lost its bang
+## and is played lower. How far it is heard by a guard or a bot is
+## flash_size: a flash that small goes with a shot that quiet.
+@export var shot_db := 0.0
+## The weapon whose sounds of handling it has (its magazine, its bolt), by
+## the name of its shot without "_shot"; empty for its own. A weapon with a
+## silencer is handled as the one without.
+@export var handled_as := &""
 
 @export_group("Viewmodel")
 @export var hip_offset := Vector3(0.2, -0.2, -0.4)
