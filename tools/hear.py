@@ -22,6 +22,8 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py casings rifle           a burst, with the cases landing after it
     tools/hear.py grenade                 the pin, the throw, three bounces and the bang
     tools/hear.py grenade b               the same with variant b of the bang (or c)
+    tools/hear.py smoke                   the pin, the throw, three bounces and the smoke grenade
+    tools/hear.py smoke b                 hissing; the same with variant b of the hiss (or c)
     tools/hear.py takes explosion         every take of a sound once, in the order of their numbers
                                           and 5 s apart, to say which one; `takes explosion 3` 3 s apart
     tools/hear.py fence                   a vehicle running into a fence of wire three times, at 15,
@@ -280,6 +282,16 @@ def grenade(blast: str = "explosion") -> list:
     for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
         events += played("bounce", [START + after], db)
     return events + bang(blast, [START + 0.22 + 2.2])
+
+
+def smoke(hiss: str = "smoke_hiss") -> list:
+    """A smoke grenade from the pin to the end of its hiss: the levels of
+    scripts/weapons.gd, and the hiss one second after the throw at the level
+    scripts/smoke_grenade.gd plays it at."""
+    events = played("pin", [START], -4.0) + played("throw", [START + 0.22], -6.0)
+    for after, db in ((1.0, -4.0), (1.45, -9.0), (1.75, -14.0)):
+        events += played("bounce", [START + after], db)
+    return events + played(hiss, [START + 0.22 + 1.0], -6.0)
 
 
 def takes(sound: str, gap: float) -> list:
@@ -579,6 +591,9 @@ def main() -> None:
         name, events = "grenade" + (f"_{variant}" if variant else ""), grenade("explosion" + (f"_{variant}" if variant else ""))
         # The bang rolls on for longer than the tail that is rendered after it.
         length = events[-1]["t"] + 6.0
+    elif args[0] == "smoke":
+        variant = args[1] if len(args) > 1 and args[1] != "a" else ""
+        name, events = "smoke" + (f"_{variant}" if variant else ""), smoke("smoke_hiss" + (f"_{variant}" if variant else ""))
     elif args[0] == "takes" and len(args) > 1:
         gap = float(args[2]) if len(args) > 2 else 5.0
         name, events = f"takes_{args[1]}", takes(args[1], gap)
