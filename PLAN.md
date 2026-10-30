@@ -5094,7 +5094,9 @@ Vanuit de worktree (`cd /Users/michielvandeningh/dev/Graphics/.claude/worktrees/
 
 ## De rookgranaat
 
-Op 30 oktober 2026 gebouwd op de branch `claude/competent-golick-5c809a`, vanaf de lokale trunk `faab1af`, volgens het plan "Mijnen, flashbangs en rookgranaten". Niet gemerged en niet gepusht.
+*Op 30 oktober 2026 op Michiels woord ("Ja, merge") in de trunk gezet. Gespeeld had hij hem nog niet, en hij had nog geen variant van het sissen gekozen; de drie staan er dus alle drie in en het spel speelt `smoke_hiss`.*
+
+Op 30 oktober 2026 gebouwd op de branch `claude/competent-golick-5c809a`, vanaf de lokale trunk `faab1af`, volgens het plan "Mijnen, flashbangs en rookgranaten".
 
 **Wat Michiel koos** (vooraf gevraagd): de toets is Q, met de linkerknop van het kruis op de controller; alle pakketten krijgen 2 rookgranaten en Pistols 1; ze vullen aan bij een checkpoint en bij een gevecht dat opnieuw begint en ze liggen niet als pickup op de grond. B, T, pickups en alleen de pakketten Silenced en Long range wees hij af.
 
