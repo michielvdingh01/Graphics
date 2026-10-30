@@ -32,6 +32,7 @@ var _clouds: Array[Dictionary] = []
 
 ## A cloud that starts to grow out of `at`.
 func billow(at: Vector3) -> void:
+	_forget()
 	_clouds.append({"at": at, "born": Fx.time, "look": Fx.smoke_cloud(at, {
 		&"life": LASTS, &"thins": THINS, &"radius": RADIUS, &"high": HIGH, &"grows": GROWS,
 	})})
@@ -47,12 +48,9 @@ func count() -> int:
 ## whoever stands in a cloud is not seen, not from close by either, and sees
 ## nobody.
 func blocks(from: Vector3, to: Vector3) -> bool:
-	if _clouds.is_empty():
-		return false
-	_forget()
 	for cloud in _clouds:
 		var age: float = Fx.time - float(cloud.born)
-		if 1.0 - smoothstep(LASTS - THINS, LASTS, age) < HIDES:
+		if not is_instance_valid(cloud.look) or 1.0 - smoothstep(LASTS - THINS, LASTS, age) < HIDES:
 			continue
 		# Squashed so that the cloud is a ball, one across.
 		var out := RADIUS * lerpf(SEED, 1.0, 1.0 - exp(-GROWS * age))

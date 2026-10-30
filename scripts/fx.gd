@@ -154,9 +154,11 @@ const SMOKE_HEIGHT := 1.2
 ## How much further than its fullest the cloud of a smoke grenade can reach.
 const SMOKE_CLOUD_BOX := 1.8
 ## Its smoke is white where the rest is soot: how much of the light on smoke
-## it gets out of the sun, for it not to glow in a dim hall, and how much of
-## what the night sky is taken to give.
+## it gets under a roof with no sun on it, for it not to glow in a dim hall,
+## how high a roof can be in metres, and how much it gets of what the night
+## sky is taken to give.
 const SMOKE_CLOUD_SHADE := 0.4
+const SMOKE_ROOFED := 40.0
 const SMOKE_CLOUD_NIGHT := 0.05
 ## How bright the light of the sky makes smoke, against a lamp of energy 1
 ## that shines straight on it: a roof keeps half of it out.
@@ -1107,17 +1109,20 @@ func smoke_cloud(position: Vector3, shape: Dictionary) -> MeshInstance3D:
 	var middle := position + Vector3.UP * SMOKE_HEIGHT
 	var spots: Array[Vector3] = [middle]
 	for side: Vector3 in [Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
-		spots.append(middle + side * out * 0.6)
+		# Higher than the middle: on a slope they would be in the ground.
+		spots.append(middle + side * out * 0.6 + Vector3.UP * out * 0.4)
 	var sun := _sun()
 	var sun_way := sun.global_basis.z if sun else Vector3.ZERO
-	var world := get_viewport().find_world_3d().environment
-	var night: bool = world != null and world.get_meta(&"night", false)
+	var world := get_viewport().find_world_3d()
+	var space := world.direct_space_state
+	var night: bool = world.environment != null and world.environment.get_meta(&"night", false)
 	var key := Vector3.ZERO
 	var key_light := Vector3.ZERO
 	var fill := Vector3.ZERO
 	for spot in spots:
 		var light := smoke_light(spot)
-		var share := 1.0 if (light.key as Vector3).dot(sun_way) > 0.999 else SMOKE_CLOUD_SHADE
+		var under_a_roof := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot, spot + Vector3.UP * SMOKE_ROOFED, WORLD)).size() > 0
+		var share := SMOKE_CLOUD_SHADE if under_a_roof and (light.key as Vector3).dot(sun_way) < 0.999 else 1.0
 		key += (light.key as Vector3) * (light.key_light as Vector3).length()
 		key_light += (light.key_light as Vector3) * share / spots.size()
 		fill += (light.fill as Vector3) * share * (SMOKE_CLOUD_NIGHT if night else 1.0) / spots.size()

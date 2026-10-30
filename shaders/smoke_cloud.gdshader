@@ -44,11 +44,11 @@ const float RISE = 0.06;
 // first this many metres in and each further on by this share. So that a
 // pixel lands on the same spot of a billow from frame to frame: stops that
 // fall anywhere show as grain.
-const int STOPS = 18;
-const int FINDS = 3;
-const int INSIDE = 7;
-const float FIRST = 0.14;
-const float FURTHER = 1.45;
+const int STOPS = 12;
+const int FINDS = 2;
+const int INSIDE = 4;
+const float FIRST = 0.16;
+const float FURTHER = 2.0;
 // How thick the smoke is per metre.
 const float THICK = 3.5;
 // A pixel stops once it sees no more than this of what is behind.
@@ -66,8 +66,11 @@ const float SKIRT_HIGH = 1.0;
 const float LUMPS = 1.5;
 const float FRAYED = 0.8;
 const float EDGE = 0.3;
-// Past this it is deep inside, and there is nothing to read.
-const float DEEP = 1.1;
+// The noise is only read where it can make a difference: not further out than
+// the billows reach, nor deeper in, and the grain only near the edge.
+const float OUT_OF_REACH = -0.55;
+const float DEEP = 0.6;
+const float NEAR_EDGE = 0.45;
 // How many times the noise goes round per metre.
 const float BILLOWS = 0.11;
 const float GRAIN = 0.31;
@@ -90,14 +93,15 @@ varying flat float left;
 varying flat float roll;
 
 // Where `p`, in metres from the middle, lies in the smoke: over nought it is
-// in it, and the further over the deeper.
-float depth_in(vec3 p, float out_to, float height, float eaten, float rolled) {
+// in it, and the further over the deeper. Without `grain` that is the billows
+// alone, which goes for the inside of a cloud.
+float depth_in(vec3 p, float out_to, float height, float eaten, float rolled, bool grain) {
 	vec3 q = p / vec3(out_to, out_to * height, out_to);
 	q.xz /= 1.0 + SKIRT * exp(-max(p.y, 0.0) / SKIRT_HIGH);
 	float body = 1.0 - dot(q, q) - eaten;
-	if (body > -LUMPS * 0.5 && body < DEEP) {
+	if (body > OUT_OF_REACH && body < DEEP) {
 		body += (texture(noise, p * BILLOWS + vec3(0.0, -rolled, 0.0)).r - 0.45) * LUMPS;
-		if (abs(body) < FRAYED) {
+		if (grain && abs(body) < NEAR_EDGE) {
 			body += (texture(noise, p * GRAIN + vec3(0.0, -rolled * CHURN, 0.0)).g - 0.5) * FRAYED;
 		}
 	}
@@ -137,30 +141,32 @@ void fragment() {
 	float stride = (far - near) / float(STOPS);
 	float at = near + stride * 0.5 * fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
 	float before = near;
-	float body = depth_in(eye + ray * at, reach, high, eaten, roll);
+	float body = depth_in(eye + ray * at, reach, high, eaten, roll, true);
 	for (int i = 1; i < STOPS && body <= 0.0 && at < far; i++) {
 		before = at;
 		at += stride;
-		body = depth_in(eye + ray * at, reach, high, eaten, roll);
+		body = depth_in(eye + ray * at, reach, high, eaten, roll, true);
 	}
 	if (body <= 0.0) {
 		discard;
 	}
-	// Then back to where it begins, unless the eye is in it.
+	// Then back to where it begins, unless the eye is in it, which is where
+	// it is nought.
 	if (at > near) {
 		for (int i = 0; i < FINDS; i++) {
 			float middle = 0.5 * (before + at);
-			if (depth_in(eye + ray * middle, reach, high, eaten, roll) > 0.0) {
+			if (depth_in(eye + ray * middle, reach, high, eaten, roll, true) > 0.0) {
 				at = middle;
 			} else {
 				before = middle;
 			}
 		}
+		body = 0.0;
 	}
 	// Which way the smoke faces there, for the whole of this pixel: where it is
 	// thinner up and towards the key light, the light gets to it.
 	vec3 p = eye + ray * at;
-	float lean = RELIEF * (depth_in(p, reach, high, eaten, roll) - depth_in(p + normalize(key + vec3(0.0, 1.0, 0.0)) * RELIEF_REACH, reach, high, eaten, roll));
+	float lean = RELIEF * (body - depth_in(p + normalize(key + vec3(0.0, 1.0, 0.0)) * RELIEF_REACH, reach, high, eaten, roll, false));
 	float towards = dot(p, key) / reach;
 	float up = clamp(p.y / (reach * high), 0.0, 1.0);
 	vec3 light = key_light * mix(KEY_THROUGH, 1.0, smoothstep(-0.9, 0.7, towards + lean))
@@ -170,7 +176,7 @@ void fragment() {
 	float pace = FIRST;
 	for (int i = 0; i < INSIDE && seen < ENOUGH && at < far; i++) {
 		float next = min(at + pace, far);
-		float density = smoothstep(0.0, EDGE, depth_in(eye + ray * next, reach, high, eaten, roll));
+		float density = smoothstep(0.0, EDGE, depth_in(eye + ray * next, reach, high, eaten, roll, false));
 		seen += (1.0 - seen) * (1.0 - exp(-density * thick * (next - at)));
 		at = next;
 		pace *= FURTHER;
