@@ -71,6 +71,21 @@ func run(test: SceneTree) -> void:
 			if burst is MeshInstance3D and burst.get_instance_shader_parameter(&"amount") == -1.0:
 				rehearsed.append(burst.mesh)
 	test.check(rehearsed.has(fx._clouds) and rehearsed.has(fx._smoke), "the rehearsal draws both meshes of the smoke, with nothing in them")
+	test.check(rehearsed.has(fx._standing), "and the ball the cloud of a smoke grenade is drawn on")
+	var drawn_tin := false
+	for stage in fx.get_children().slice(stage_before):
+		drawn_tin = drawn_tin or stage.get_children().any(func(part: Node) -> bool: return part.scene_file_path == fx.SMOKE_TIN.resource_path)
+	test.check(drawn_tin, "and the tin of one")
+
+	var smoke: Node = test.autoload("Smoke")
+	smoke.billow(SUNLIT)
+	var made: Array = game.get_children().filter(func(node: Node) -> bool: return node is MeshInstance3D and node.mesh == fx._standing)
+	test.check(made.size() == 1 and (made[0].get_instance_shader_parameter(&"key_light") as Vector3).length() > 0.0 and (made[0].get_instance_shader_parameter(&"key") as Vector3).is_normalized(),
+		"the cloud of a smoke grenade is handed the light it stands in")
+	test.check(made.size() == 1 and made[0].get_instance_shader_parameter(&"radius") == smoke.RADIUS and made[0].get_instance_shader_parameter(&"life") == smoke.LASTS,
+		"and told how large it is and how long it lasts, by what decides what it hides")
+	if made.size() == 1:
+		made[0].queue_free()
 
 	# The column of an explosion is the last of it to go, after six seconds;
 	# the smoke of a fire goes three seconds after the fire.

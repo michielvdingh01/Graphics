@@ -13,6 +13,8 @@ extends Node3D
 signal ammo_changed(weapon_name: String, mag: int, reserve: int)
 signal hit_confirmed(headshot: bool, killed: bool)
 signal grenades_changed(count: int)
+## The same for what is on the second key, see ARMORY.tactical().
+signal tacticals_changed(count: int)
 ## A weapon from the arena was taken up, or let go of (null).
 signal special_changed(data: WeaponData)
 ## The weapon from the arena was fired empty and thrown away.
@@ -273,6 +275,11 @@ var grenades := 2
 var start_grenades := 2
 var most_grenades := 3
 var grenade_kind := ARMORY.GRENADE
+## What goes on the second key, the smoke of a pack: how many are carried, how
+## many a level starts with, and what they are. Picked up nowhere.
+var tacticals := 0
+var start_tacticals := 0
+var tactical_kind := ARMORY.TACTICAL
 
 var _index := 0
 var _pending := 0
@@ -316,6 +323,7 @@ var _motor := AudioStreamPlayer.new()
 var _roar := AudioStreamPlayer.new()
 var _throw_left := 0.0
 var _thrown := true
+var _throws_tactical := false
 var _melee_left := 0.0
 var _landed := true
 var _bloom := 0.0
@@ -370,7 +378,7 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pack=") and not Match.active and ARMORY.names().has(arg.get_slice("=", 1)):
 			pack = arg.get_slice("=", 1)
-	equip(ARMORY.weapons(pack), ARMORY.grenades(pack), ARMORY.grenade(pack))
+	equip(ARMORY.weapons(pack), ARMORY.grenades(pack), ARMORY.grenade(pack), ARMORY.tacticals(pack), ARMORY.tactical(pack))
 	_build_fill()
 	player.hit_from.connect(_on_hit)
 	player.landed.connect(_on_landed)
@@ -386,10 +394,11 @@ func _ready() -> void:
 
 
 ## Takes up `weapons` on 1 and on, each with a full magazine and the reserve a
-## level starts with, and as many grenades as `grenade_count` starts with, of
-## at most its second number, of the kind `grenade` names. Whatever was in
-## hand is put away; with nothing to take up it is the standard pack.
-func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade := ARMORY.GRENADE) -> void:
+## level starts with, as many grenades as `grenade_count` starts with, of at
+## most its second number, of the kind `grenade` names, and `tactical_count` of
+## the kind `tactical` names on the second key. Whatever was in hand is put
+## away; with nothing to take up it is the standard pack.
+func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade := ARMORY.GRENADE, tactical_count := 0, tactical := ARMORY.TACTICAL) -> void:
 	for model in _models:
 		_rig.remove_child(model.root)
 		model.root.queue_free()
@@ -418,6 +427,10 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade 
 	grenade_kind = grenade
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
+	start_tacticals = tactical_count
+	tactical_kind = tactical
+	tacticals = start_tacticals
+	tacticals_changed.emit(tacticals)
 	_settle()
 	_emit_ammo.call_deferred()
 
@@ -606,18 +619,22 @@ func preview(index: int, aim := 0.0, reload := 0.0, blow := 0.0) -> void:
 
 
 ## Brings whatever has run low back up to what a level starts with: the
-## reserve of every weapon and the grenades. What is over that is kept.
+## reserve of every weapon, the grenades and what is on the second key. What
+## is over that is kept.
 func resupply() -> void:
 	for i in loadout.size():
 		if not loadout[i].special:
 			_reserves[i] = maxi(_reserves[i], _start_reserve(loadout[i]))
 	grenades = maxi(grenades, start_grenades)
 	grenades_changed.emit(grenades)
+	tacticals = maxi(tacticals, start_tacticals)
+	tacticals_changed.emit(tacticals)
 	_emit_ammo()
 
 
 ## Everything as a level starts: full magazines, the reserve a weapon begins
-## with and the grenades. For a fight that is fought again.
+## with, the grenades and what is on the second key. For a fight that is
+## fought again.
 func restock() -> void:
 	for i in loadout.size():
 		if not loadout[i].special:
@@ -625,6 +642,8 @@ func restock() -> void:
 			_reserves[i] = _start_reserve(loadout[i])
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
+	tacticals = start_tacticals
+	tacticals_changed.emit(tacticals)
 	_emit_ammo()
 
 
@@ -788,6 +807,10 @@ func _process(delta: float) -> void:
 			_start_reload()
 		if Input.is_action_just_pressed("grenade"):
 			_start_throw()
+		# In a vehicle that key moves on to the next seat, and the sandbox has
+		# it for something else.
+		if Input.is_action_just_pressed("tactical") and player.riding == null and not Sandbox.active:
+			_start_throw(true)
 		if Input.is_action_just_pressed("melee"):
 			_start_melee()
 
@@ -1160,21 +1183,28 @@ func _update_reload() -> void:
 
 
 ## The left hand lets go of the weapon, which breaks off a reload, and comes
-## back once the grenade is on its way.
-func _start_throw() -> void:
-	if grenades <= 0 or _throw_left > 0.0 or _switch_left > 0.0 or _melee_left > 0.0:
+## back once the grenade, or with `tactical` what is on the second key, is on
+## its way.
+func _start_throw(tactical := false) -> void:
+	if (tacticals if tactical else grenades) <= 0 or _throw_left > 0.0 or _switch_left > 0.0 or _melee_left > 0.0:
 		return
 	_reload_left = 0.0
 	_stage = 0
 	_throw_left = THROW_TIME
 	_thrown = false
+	_throws_tactical = tactical
 	Sfx.play(&"pin", -4.0)
 
 
 func _release_grenade() -> void:
 	_thrown = true
-	grenades -= 1
-	grenades_changed.emit(grenades)
+	if _throws_tactical:
+		tacticals -= 1
+		tacticals_changed.emit(tacticals)
+	else:
+		grenades -= 1
+		grenades_changed.emit(grenades)
+	var kind := tactical_kind if _throws_tactical else grenade_kind
 	var eye := camera.global_position
 	var aim := camera.global_basis
 	# It leaves from the left hand, unless there is a wall where that is.
@@ -1182,13 +1212,13 @@ func _release_grenade() -> void:
 	var query := PhysicsRayQueryParameters3D.create(eye, eye + (from - eye) * 1.4, 1, _ours())
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		from = eye
-	var grenade: RigidBody3D = ARMORY.thrown(grenade_kind).instantiate()
+	var grenade: RigidBody3D = ARMORY.thrown(kind).instantiate()
 	get_tree().current_scene.add_child(grenade)
 	grenade.global_position = from
 	grenade.linear_velocity = player.velocity + (aim.y * 0.18 - aim.z).normalized() * THROW_SPEED
 	grenade.angular_velocity = aim * Vector3(-9.0, 0.0, randf_range(-3.0, 3.0))
 	grenade.thrower = Match.number(player) if Match.active else 0
-	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity, grenade_kind])
+	Net.player_did(&"threw", [from, grenade.linear_velocity, grenade.angular_velocity, kind])
 	Sfx.play(&"throw", -6.0)
 
 

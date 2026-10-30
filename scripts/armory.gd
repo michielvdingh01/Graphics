@@ -9,8 +9,9 @@ extends RefCounted
 ## <name>_held.scn).
 ##
 ## A pack is a line in assets/packs.json: the weapons on 1 and on, what bots
-## carry, and the grenades: how many, and which. Everybody in a match carries the pack of the
-## match; the route and the sandbox carry STANDARD. A pack that names a weapon
+## carry, the grenades and what goes on the second key: how many, and which.
+## Everybody in a match carries the pack of the match; the route and the
+## sandbox carry STANDARD. A pack that names a weapon
 ## that is not in ALL yet is not on offer.
 
 const ALL: Array[WeaponData] = [
@@ -46,6 +47,7 @@ const STANDARD := "standard"
 ## What a pack throws where it does not say, and where the scenes of what it
 ## can throw are: scenes/<name>.tscn, with scripts/grenade.gd.
 const GRENADE := "grenade"
+const TACTICAL := "smoke_grenade"
 const THROWN := "res://scenes/%s.tscn"
 ## The most weapons a pack has: one for each of the keys 1 to 5.
 const MOST := 5
@@ -138,7 +140,18 @@ static func grenade(pack: String) -> String:
 	return thrown if ResourceLoader.exists(THROWN % thrown) else GRENADE
 
 
-## The scene of what is thrown by the name grenade() gives.
+## How many a pack starts with of what goes on the second key.
+static func tacticals(pack: String) -> int:
+	return int(spec(pack).get("tacticals", 0))
+
+
+## The name of what goes on the second key: TACTICAL unless the pack says.
+static func tactical(pack: String) -> String:
+	var thrown := str(spec(pack).get("tactical", TACTICAL))
+	return thrown if ResourceLoader.exists(THROWN % thrown) else TACTICAL
+
+
+## The scene of what is thrown by the name grenade() or tactical() gives.
 static func thrown(grenade_name: String) -> PackedScene:
 	return load(THROWN % (grenade_name if ResourceLoader.exists(THROWN % grenade_name) else GRENADE))
 

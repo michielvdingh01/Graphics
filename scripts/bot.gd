@@ -490,6 +490,9 @@ func _look_around() -> void:
 			continue
 		if dark and distance > sight * DARK_SIGHT and distance > sight * lerpf(DARK_SIGHT, 1.0, land.light_at(other.body.global_position)):
 			continue
+		# Smoke hides whoever is behind it or in it, and blinds whoever is in it.
+		if Smoke.blocks(eye, head):
+			continue
 		# The head or the chest, with nothing of the level in between; who sits
 		# in a vehicle is seen in it, and it is the vehicle that is shot.
 		var seen := false

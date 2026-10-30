@@ -231,6 +231,7 @@ func _run() -> void:
 	_check("on normal two at a time", Match.may_fire(bots[0], me) and Match.may_fire(bots[1], me) and not Match.may_fire(bots[2], me))
 	Settings.difficulty = 2
 	_check("and on hard everybody who sees them", Match.may_fire(bots[2], me))
+	await _smoke_hides(bots[0], me)
 	# On easy it takes two shots of a marksman's rifle to the body, or one to
 	# the head.
 	Settings.difficulty = 0
@@ -1078,6 +1079,40 @@ func _check(label: String, ok: bool) -> void:
 
 func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds, true, true).timeout
+
+
+## A bot that sees `other` across the open does not with smoke between them or
+## around either of them, and does again once it is gone.
+func _smoke_hides(bot: RefCounted, other: RefCounted) -> void:
+	var space: PhysicsDirectSpaceState3D = other.body.get_world_3d().direct_space_state
+	var head: Vector3 = other.body.head.global_position
+	var stand := Vector3.ZERO
+	for spot: Vector3 in Match.arena.spots:
+		var eye := spot + Vector3.UP * 1.6
+		if spot.distance_to(other.body.global_position) > 12.0 and spot.distance_to(other.body.global_position) < 25.0 \
+				and space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, head, 1)).is_empty():
+			stand = spot
+			break
+	var body: CharacterBody3D = bot.body
+	var at_first := body.global_position
+	body.global_position = stand
+	body.look_at(Vector3(head.x, stand.y, head.z))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	bot.brain._look_around()
+	var saw: bool = bot.brain._target == other
+	var middle: Vector3 = stand.lerp(other.body.global_position, 0.5)
+	Smoke.billow(middle)
+	Fx.held = true
+	Fx.advance(5.0)
+	bot.brain._look_around()
+	var blind: bool = bot.brain._target == null
+	Fx.held = false
+	Fx.clear()
+	await _wait(0.1)
+	bot.brain._look_around()
+	_check("a bot sees across the open, not through smoke, and again once it has gone", stand != Vector3.ZERO and saw and blind and bot.brain._target == other)
+	body.global_position = at_first
 
 
 ## Waits until `done` holds, `seconds` at most.

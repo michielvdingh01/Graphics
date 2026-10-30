@@ -133,6 +133,7 @@ func _host() -> void:
 	var blasts := [0]
 	Blast.exploded.connect(func(_at: Vector3) -> void: blasts[0] += 1)
 	_check("a grenade the guest throws goes off here", await _until(func() -> bool: return blasts[0] >= 1, 40.0))
+	_check("and so does the cloud of its smoke grenade stand here", await _until(func() -> bool: return Smoke.count() >= 1, 15.0))
 	_check("the robot went for the guest", shooter._player == puppet or shooter.dead)
 	shooter.set_physics_process(false)
 
@@ -265,6 +266,11 @@ func _join() -> void:
 	await _wait(0.1)
 	Input.action_release("grenade")
 	_check("the guest's grenade goes off here too", await _until(func() -> bool: return blasts[0] >= 1, 10.0) and weapons.grenades == carried - 1)
+	var tins: int = weapons.tacticals
+	Input.action_press("tactical")
+	await _wait(0.1)
+	Input.action_release("tactical")
+	_check("its smoke grenade makes a cloud here too", await _until(func() -> bool: return Smoke.count() >= 1, 6.0) and tins > 0 and weapons.tacticals == tins - 1)
 	_check("a barrel the host sets off is gone here", await _until(func() -> bool: return blasts[0] >= 2 and tree.get_nodes_in_group("explosive").size() == barrels - 1, 15.0))
 	_check("a lamp and a crate the host breaks then break here too, in pieces", await _until(func() -> bool: return lamps[1].out and stacks[1].standing() == stacks[1].size() - 1, 10.0)
 		and STACK.pieces() > 0)

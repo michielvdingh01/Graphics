@@ -38,6 +38,9 @@ const ACCEL := 22.0
 const SIGHT_RANGE := 45.0
 const ALERT_RADIUS := 14.0
 const LOS_MASK := 0b011  # world + player
+## Seconds it goes on firing at where it last saw somebody who disappeared
+## into smoke, at the least and at the most.
+const FIRES_ON := Vector2(1.2, 2.6)
 const LAND := preload("res://scripts/land.gd")
 const RIG := preload("res://scripts/enemy_rig.gd")
 const HUMANOID := preload("res://scripts/humanoid_rig.gd")
@@ -200,6 +203,11 @@ var awareness := 0.0
 var _player: CharacterBody3D
 var _alerted := false
 var _has_los := false
+## Where it last saw the player, whether smoke has come between them since,
+## and the seconds it goes on firing at that spot.
+var _seen_at := Vector3.ZERO
+var _smoked := false
+var _fires_on := 0.0
 var _los_timer := 0.0
 var _repath_timer := 0.0
 var _strafe_dir := 1.0
@@ -642,7 +650,12 @@ func _physics_process(delta: float) -> void:
 		_los_timer -= delta
 		if _los_timer <= 0.0:
 			_los_timer = 0.15
-			_has_los = distance < SIGHT_RANGE and _ray_hits_player(eye, target)
+			_look_for_player(eye, target, distance)
+		_fires_on -= delta
+		if _smoked:
+			# All it has to go on is where it last saw the player.
+			target = _seen_at
+			distance = eye.distance_to(target)
 		if _watching and not _alerted:
 			_notice(delta, target - eye, distance)
 			if not _alerted:
@@ -936,7 +949,7 @@ func _chase(delta: float) -> Vector3:
 	_repath_timer -= delta
 	if _repath_timer <= 0.0:
 		_repath_timer = 0.3
-		agent.target_position = _player.global_position
+		agent.target_position = _seen_at if _smoked else _player.global_position
 	if agent.is_navigation_finished():
 		return Vector3.ZERO
 	var step := agent.get_next_path_position() - global_position
@@ -1150,6 +1163,24 @@ func _shoot(eye: Vector3, target: Vector3) -> void:
 		if hit.collider.has_method("take_damage"):
 			hit.collider.take_damage(damage if struck else hurts, end, direction)
 	Net.show(self, &"_show_shot", [end, struck])
+
+
+## Sees the player or does not. One that loses them to smoke, see Smoke.blocks(),
+## goes on for a moment firing at where it last saw them, and goes there after.
+func _look_for_player(eye: Vector3, target: Vector3, distance: float) -> void:
+	var clear := distance < SIGHT_RANGE and _ray_hits_player(eye, target)
+	if clear and Smoke.blocks(eye, target):
+		if not _smoked:
+			_fires_on = randf_range(FIRES_ON.x, FIRES_ON.y) if _has_los and _alerted and not melee else 0.0
+			if not _has_los:
+				_seen_at = target
+		_smoked = true
+		_has_los = _fires_on > 0.0
+		return
+	_smoked = false
+	_has_los = clear
+	if clear:
+		_seen_at = target
 
 
 func _ray_hits_player(from: Vector3, to: Vector3) -> bool:

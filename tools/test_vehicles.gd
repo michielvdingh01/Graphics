@@ -312,6 +312,9 @@ func _jeep() -> void:
 	# Passengers.
 	await _press("vehicle_seat")
 	check(player.seat == 1 and player.weapons.visible, "jeep: Q moves on to the next seat, where the weapons are out")
+	var tins: int = player.weapons.tacticals
+	await _press("tactical")
+	check(tins > 0 and player.weapons.tacticals == tins, "jeep: and throws no smoke from a seat")
 	check(jeep.driver() == null, "jeep: and then nobody drives")
 	await _press("use")
 
