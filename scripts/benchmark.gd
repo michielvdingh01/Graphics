@@ -41,6 +41,10 @@ extends Node
 ## view, six degrees wide, to show what the effects cost while they are all
 ## going off. --barrage=1 does the same with an explosion and its fire that
 ## many times a second, nine metres ahead of every view.
+## --smoke=12 stands the cloud of a smoke grenade on the floor that many metres
+## ahead of every view, grown and held still, and --smoke=0 under the view, to
+## measure it from outside and from inside; a second number is its age in
+## seconds.
 ## In a level on land --profile also takes away the trees and, in turn,
 ## each kind of mesh the builder lays in blocks: ground, strewn (grass),
 ## undergrowth, litter, beyond (the wood around the land), detail, trim.
@@ -106,6 +110,7 @@ var _blast := PackedFloat64Array()
 var _ignite := PackedFloat64Array()
 var _detonate := PackedFloat64Array()
 var _firefight := 0.0
+var _smoke := PackedFloat64Array()
 var _fire_due := 0.0
 var _barrage := 0.0
 var _blast_due := 0.0
@@ -160,6 +165,8 @@ func _ready() -> void:
 			_detonate = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--firefight="):
 			_firefight = arg.get_slice("=", 1).to_float()
+		elif arg.begins_with("--smoke="):
+			_smoke = arg.get_slice("=", 1).split_floats(",")
 		elif arg.begins_with("--barrage="):
 			_barrage = arg.get_slice("=", 1).to_float()
 		elif arg.begins_with("--only="):
@@ -228,7 +235,7 @@ func _run() -> void:
 		player.process_mode = Node.PROCESS_MODE_DISABLED
 		player.visible = not _weapon.is_empty()
 	# An effect is looked at with its clock stopped at the age that was asked for.
-	Fx.held = _hold >= 0.0 or not _shoot.is_empty()
+	Fx.held = _hold >= 0.0 or not _shoot.is_empty() or not _smoke.is_empty()
 	for entry in _spawn:
 		var numbers := entry.get_slice("@", 1).split_floats(",")
 		var node: Node3D = (load(entry.get_slice("@", 0)) as PackedScene).instantiate()
@@ -355,6 +362,15 @@ func _run() -> void:
 			if not _weapon.is_empty():
 				player.weapons.smoke(1.0)
 			Fx.advance(_shoot[0])
+		if not _smoke.is_empty():
+			await tree.physics_frame
+			await tree.physics_frame
+			Fx.clear()
+			var ahead := -view.global_basis.z
+			ahead = Vector3(ahead.x, 0.0, ahead.z).normalized() * _smoke[0]
+			var spot: Vector3 = view.global_position + ahead
+			Smoke.billow(Vector3(spot.x, Fx.floor_below(spot, 40.0), spot.z))
+			Fx.advance(_smoke[1] if _smoke.size() > 1 else 6.0)
 		var compiled := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW)
 		for i in _warmup_frames:
 			await tree.process_frame

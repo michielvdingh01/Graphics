@@ -71,6 +71,8 @@ var _flames: ArrayMesh
 ## has an instance uniform `amount`, below which a particle is left out.
 var _bursts: Array[Mesh] = []
 var _shell := SphereMesh.new()
+## What the cloud of a smoke grenade is drawn on: a ball, one in radius.
+var _standing := SphereMesh.new()
 var _tracer: ArrayMesh
 var _flame: ArrayMesh
 ## Surface -> one [albedo, normal, orm, emission] per variant of its hole.
@@ -149,6 +151,13 @@ var _blown := 0
 ## How far over an explosion its cloud of smoke hangs, in metres: where the
 ## light on it is looked for.
 const SMOKE_HEIGHT := 1.2
+## How much further than its fullest the cloud of a smoke grenade can reach.
+const SMOKE_CLOUD_BOX := 1.8
+## Its smoke is white where the rest is soot: how much of the light on smoke
+## it gets out of the sun, for it not to glow in a dim hall, and how much of
+## what the night sky is taken to give.
+const SMOKE_CLOUD_SHADE := 0.4
+const SMOKE_CLOUD_NIGHT := 0.05
 ## How bright the light of the sky makes smoke, against a lamp of energy 1
 ## that shines straight on it: a roof keeps half of it out.
 const SMOKE_SKY := 0.5
@@ -215,6 +224,7 @@ var _soot_marks: Array[Decal] = []
 ## from a mask. What follows from here to RAGGED says what it does with that
 ## mask and has to follow it: see shaders/wet_floor.gdshader.
 const WET_FLOOR := preload("res://shaders/wet_floor.gdshader")
+const SMOKE_TIN := preload("res://scenes/models/smoke_grenade.scn")
 ## How wide the shore of a puddle is, in what the mask is measured in.
 const SHORE := 0.035
 ## The scale at which the mask is read a second time, and how much of that
@@ -330,7 +340,15 @@ func _ready() -> void:
 	_shell.material = wave
 	_tracer = _burst_mesh(1, preload("res://shaders/tracer.gdshader"))
 	_flame = _flame_mesh()
-	_bursts = [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames]
+	var standing := ShaderMaterial.new()
+	standing.shader = preload("res://shaders/smoke_cloud.gdshader")
+	standing.set_shader_parameter(&"noise", _stacked(preload("res://assets/noise/smoke.res")))
+	_standing.radius = 1.0
+	_standing.height = 2.0
+	_standing.radial_segments = 24
+	_standing.rings = 12
+	_standing.material = standing
+	_bursts = [_sparks, _chips, _shards, _puffs, _smoke, _clouds, _flames, _standing]
 	_ready_glass()
 	_ready_burning()
 	_ready_splash()
@@ -628,6 +646,8 @@ func rehearse(extras: Array[MeshInstance3D] = []) -> void:
 		looks.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		looks.custom_aabb = AABB(Vector3.ONE * -REACH, Vector3.ONE * REACH * 2.0)
 		stage.add_child(looks)
+	# The tin of a smoke grenade, which no level has lying about.
+	stage.add_child(SMOKE_TIN.instantiate())
 	for extra in extras:
 		stage.add_child(extra)
 	add_child(stage)
@@ -1078,6 +1098,33 @@ func gun_smoke(position: Vector3, direction: Vector3, amount := 1.0) -> void:
 		{&"tint": Color(0.62, 0.62, 0.64, 0.42), &"speed": 0.9, &"spread": 0.3, &"size": Vector2(0.015, 0.17), &"life": 1.0, &"rise": 0.3, &"amount": lerpf(0.45, 1.0, amount)})
 
 
+## The cloud of a smoke grenade, which grows out of `position` on the floor and
+## stands there: scripts/smoke.gd keeps it and says what it is told in
+## `shape`. It is too wide to hang in one light: a shaft of sun on one side of
+## it does not light the rest, so it gets what five spots in it get together.
+func smoke_cloud(position: Vector3, shape: Dictionary) -> MeshInstance3D:
+	var out: float = shape[&"radius"]
+	var middle := position + Vector3.UP * SMOKE_HEIGHT
+	var spots: Array[Vector3] = [middle]
+	for side: Vector3 in [Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
+		spots.append(middle + side * out * 0.6)
+	var sun := _sun()
+	var sun_way := sun.global_basis.z if sun else Vector3.ZERO
+	var world := get_viewport().find_world_3d().environment
+	var night: bool = world != null and world.get_meta(&"night", false)
+	var key := Vector3.ZERO
+	var key_light := Vector3.ZERO
+	var fill := Vector3.ZERO
+	for spot in spots:
+		var light := smoke_light(spot)
+		var share := 1.0 if (light.key as Vector3).dot(sun_way) > 0.999 else SMOKE_CLOUD_SHADE
+		key += (light.key as Vector3) * (light.key_light as Vector3).length()
+		key_light += (light.key_light as Vector3) * share / spots.size()
+		fill += (light.fill as Vector3) * share * (SMOKE_CLOUD_NIGHT if night else 1.0) / spots.size()
+	var lit := {&"key": key.normalized() if key.length() > 0.0 else Vector3.UP, &"key_light": key_light, &"fill": fill}
+	return _burst(_standing, Transform3D(Basis(), position), shape[&"life"], shape.merged(lit), out * SMOKE_CLOUD_BOX)
+
+
 ## A puff of the smoke out of an engine that is hit, carried along `drift`:
 ## grey while it only smokes, black and thick as `thick` goes to 1, once it
 ## burns.
@@ -1091,6 +1138,18 @@ func engine_smoke(position: Vector3, drift: Vector3, thick := 0.0) -> void:
 func rocket_trail(position: Vector3, direction: Vector3) -> void:
 	_burst(_puffs, Transform3D(_up_along(-direction), position), 2.4,
 		{&"tint": Color(0.66, 0.66, 0.68, 0.5), &"speed": 0.35, &"spread": 0.5, &"size": Vector2(0.07, 0.55), &"life": 2.2, &"rise": 0.12, &"amount": 0.4})
+
+
+## The slices of `sheet`, square and one under the other, as a texture of
+## three dimensions: see tools/gen_smoke_noise.gd.
+func _stacked(sheet: Image) -> ImageTexture3D:
+	var across := sheet.get_width()
+	var slices: Array[Image] = []
+	for i in sheet.get_height() / across:
+		slices.append(sheet.get_region(Rect2i(0, i * across, across, across)))
+	var stacked := ImageTexture3D.new()
+	stacked.create(sheet.get_format(), across, across, slices.size(), false, slices)
+	return stacked
 
 
 ## Makes ready what a shot into a puddle throws up.
