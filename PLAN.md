@@ -5243,12 +5243,12 @@ Een update die opent maar nooit een eerste beeld haalt, laat `trying-<nummer>` a
 
 - `tools/test_updater.sh` (een minuut): een piepklein project met de echte `updater.gd` en de echte export-template, zonder venster, tegen een server hier. Zeventien controles slagen: niets nieuws, geen netwerk, ophalen en klaarzetten, overstappen bij de volgende start en met "Restart to update", een deel dat blijft hangen, een kapot deel, verder gaan met alleen het deel dat fout was, en een update die nooit een beeld haalde.
 - De echte app op ware grootte, zonder venster, tegen een lokale server: 1,4 GB opgehaald en uitgepakt in 11 seconden, handtekening geldig, en de geïnstalleerde app stapte in minder dan een seconde over op de nieuwe. Over internet hangt de duur af van de lijn.
+- Vanaf GitHub: op 30 oktober staat `build-202610301633` als release. Een oudere build haalde hem over https op, 1,4 GB in 82 seconden op deze lijn, handtekening geldig en zonder quarantainelabel, en de geïnstalleerde app stapte erop over. Dat was een testkopie zonder quarantaine, niet een app na "Open toch".
 - `tools/selftest.sh` en `tools/nettest.sh` slagen. De netwerktest op de echte geëxporteerde app: twee gelijke builds slagen, 33 controles aan elke kant. Een oudere build als gast tegen een nieuwere host stopt precies bij het binnenkomen. De tekst van de weigering ziet die test niet.
 
 **Niet getest**
 
 - **Met een venster.** Alles liep zonder venster, volgens de afspraak. Hoe de overstap eruitziet en of het spel daarna vooraan staat, heeft niemand gezien.
-- **Vanaf GitHub.** Ophalen over https met de doorverwijzing van GitHub is pas te zien als er een release staat.
 - **Na "Open toch".** Vanuit de terminal stopt macOS een app in quarantaine zonder dialoog (`Killed: 9`), dus de eerste start bij een vriend is hier niet na te spelen. Een app die het spel zelf ophaalt krijgt geen quarantainelabel, tenzij macOS dat bij een goedgekeurde app toch doet; dan start de update niet, valt het spel terug op de geïnstalleerde versie en werkt het niet bij. Dat zou de eerste echte update laten zien.
 - Twee keer op de app klikken terwijl de update draait: `open` zet het spel dan alleen vooraan. De code houdt daar rekening mee, de test kan het zonder venster niet zien.
 
