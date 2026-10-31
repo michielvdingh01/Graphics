@@ -5333,3 +5333,23 @@ Het staat los van de branch `killfeedback` (schedels, multikills, killstreaks), 
 | Uit een voertuig springen, de test | `tools/test_vehicles.sh --only=bail` |
 | De zon, voor en na | `assets/arenas/sheets/alps_zon.jpg` |
 | De teller, voor en na | `assets/arenas/sheets/kills_teller.jpg` |
+
+## Het bananengeweer
+
+Op Michiels vraag: de Needler uit Halo, maar met een tros bananen erop. Het idee is overgenomen (projectielen die hun doel zoeken, blijven steken en samen ontploffen), het model niet: het spel gaat via releases naar vrienden, dus dit is een eigen ontwerp. Een gedrongen werper van walnoot en messing met een klokmond, en op een messing zadel een tros bananen.
+
+- **Het wapen** (`weapons/banana_gun.tres`, `_banana_gun()` in `tools/models/weapons.gd`, 6 736 driehoeken met handen): een speciaal wapen op een rek, dus op 6, net als de minigun en de raketwerper. `SPECIALS` in `scripts/match.gd` heeft er een derde bij; een wedstrijd zet nu drie rekken uit. De plaats in de kast is de laatste; `Net.VERSION` is 18.
+- **De tros is het magazijn.** Zestien bananen, elk een eigen onderdeel `Round<n>` onder `Mag`, dus zestien schoten, en je ziet de tros slinken, de buitenste eerst. Twee trossen erbij (48 in totaal). Herladen neemt de tros er naar linksonder af, naar de schouder, en zet een volle terug. Zestien onderdelen zijn zestien tekenopdrachten extra in de hand, niet gemeten. Wie het wapen in handen van een ander ziet, ziet altijd een volle tros.
+- **De banaan** (`scripts/banana.gd`, `scenes/banana.tscn`): 34 m/s, draait om zijn lengte, zoekt elke 0,1 s tot 30 m vooruit in een kegel van 37° naar iets levends in het zicht en draait daar 4,5 rad/s naartoe. Na 2,2 s valt hij weg. Een treffer doet 14. Hij blijft 3 s steken; zes in hetzelfde doel gaan samen af (`Blast.explode`, straal 3,5 m, 110 schade), ook tegen jezelf als je te dichtbij staat.
+- **Bots** pakken het op zoals de andere speciale wapens. `blasts` in `scripts/weapon_data.gd` zegt dat het niet ontploft bij wat het raakt: een bot richt het dus op de borst en vuurt ook van dichtbij en vlak bij een muur.
+- **Geluid**: `banana_gun_shot` (de klap van het pompgeweer met de hoogte eraf en een holle val eronder) en `banana_stick`, plus variant `banana_gun_shot_b`, lager en ronder.
+- **`--give=banana_gun`** om het te proberen; `tools/selftest.sh --banana` voor alleen de test.
+- `_face()` is van `tools/models/prizes.gd` naar `tools/model_builder.gd` verhuisd, zodat de wapens hem ook kunnen gebruiken.
+- **Getest**: de hele selftest (626 controles, met de Alpen-bestanden uit de hoofdcheckout er tijdelijk bij), `tools/nettest.sh` en `tools/test_match.sh --specials` slagen. De selftest kijkt of elk schot één banaan van de tros haalt, of een banaan die 1,8 m naast een grunt op 12 m is gericht afbuigt en blijft steken (86 van 100 over), of de zesde de ontploffing geeft en de grunt dood is, en of herladen de hele tros terugzet.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het klinkt.** Gemaakt en niet gehoord: `banana_gun_shot` tegen `_b` is aan Michiel.
+- **Hoe het voelt en de balans.** 14 per banaan, zes voor de ontploffing, 420 per minuut en de zoekhoek zijn eerste gokken. Bots met dit wapen zijn niet in een hele wedstrijd bekeken.
+- **Richten** houdt het wapen rechtsonder in beeld, omdat de tros anders precies in het midden staat: je kijkt erlangs. Er is dus geen vizier; bij een wapen dat zelf zoekt vond ik dat goed, maar dat is mijn keuze.
+- **De banaan in de lucht en in een doel** heb ik niet in beeld gehad, alleen het wapen in rust, gericht en tijdens het herladen.

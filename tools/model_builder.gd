@@ -86,6 +86,16 @@ func _tri(st: SurfaceTool, p: Array, n: Array, uv: Array, edge: Array = []) -> v
 		st.add_vertex(_to_part * p[i])
 
 
+## A triangle that faces the way its normals point, whichever way round its
+## corners are given.
+func _face(st: SurfaceTool, points: Array, normals: Array, uvs: Array) -> void:
+	var facing: Vector3 = (points[1] - points[0]).cross(points[2] - points[0])
+	if facing.dot(normals[0] + normals[1] + normals[2]) >= 0.0:
+		_tri(st, points, normals, uvs)
+	else:
+		_tri(st, [points[0], points[2], points[1]], [normals[0], normals[2], normals[1]], [uvs[0], uvs[2], uvs[1]])
+
+
 func _collide(_shape: Shape3D, _xf: Transform3D, _made_of := "") -> void:
 	pass
 

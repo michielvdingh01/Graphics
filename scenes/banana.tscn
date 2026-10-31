@@ -1,0 +1,9 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/banana.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/models/banana_round.scn" id="2"]
+
+[node name="Banana" type="Node3D" groups=["banana"]]
+script = ExtResource("1")
+
+[node name="Model" parent="." instance=ExtResource("2")]

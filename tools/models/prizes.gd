@@ -341,16 +341,6 @@ func _banana_stand() -> void:
 		_plate("wood", Vector3(0, BOX.y + SLAT * 0.5, lerpf(-half.z + 0.034, half.z - 0.034, i / 4.0)), Vector3(BOX.x + 0.02, SLAT, 0.064))
 
 
-## A triangle that faces the way its normals point, whichever way round its
-## corners are given.
-func _face(st: SurfaceTool, points: Array, normals: Array, uvs: Array) -> void:
-	var facing: Vector3 = (points[1] - points[0]).cross(points[2] - points[0])
-	if facing.dot(normals[0] + normals[1] + normals[2]) >= 0.0:
-		_tri(st, points, normals, uvs)
-	else:
-		_tri(st, [points[0], points[2], points[1]], [normals[0], normals[2], normals[1]], [uvs[0], uvs[2], uvs[1]])
-
-
 ## A ribbon through `spine`, reaching `across` to either side of each point
 ## of it, with two faces.
 func _strip(st: SurfaceTool, spine: Array[Vector3], across: Array[Vector3]) -> void:
