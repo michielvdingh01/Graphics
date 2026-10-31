@@ -5530,3 +5530,35 @@ In de duinen, twintig tegen twintig, twee potjes per stand, eerste ronde: Normal
 - **Normal en Hard hebben nu hetzelfde team.** Het verschil zit in de tegenstanders en in wie de speciale wapens ophaalt.
 - **Bier is bij bots zwak** en het bananengeweer sterk (13 tegen minstens 38 kills). Dat is niet aangepast.
 - **Over het netwerk.** `tools/nettest.sh` draait, maar een potje met twee mensen op één kant tegen bots is niet apart gemeten.
+
+## Release 202610312008: multiplayer, banaan, Party en de laadfix
+
+Op 31 oktober 2026 op Michiels woord gebouwd en gepubliceerd als `build-202610312008`, vanaf commit `50213aa`, met `Net.VERSION` 22. Daarin alles uit "Alles op GitHub voor de test op de Air" en "Party anders, en een team dat op jou leunt". Het is de eerste release met wedstrijden over het netwerk en met de laadfix: de vorige was nog `build-202610301633`.
+
+**Getest op de trunk, zonder GPU** (load 2,5 tot 3, aan de lader, geen andere meting): selftest 634, `tools/nettest.sh` 69, `--match` 99, `--match --lan` 99, `tools/test_match.sh` 136, alles geslaagd.
+
+**Getest op de app uit de zip, met een lege thuismap:**
+
+- Drie kopieën in een wedstrijd over het echte adres van deze laptop: 99 controles, geen fout.
+- `--matchtest` op de geëxporteerde app: 136 controles, geen fout.
+- Een oudere build haalde deze release van een server hier op (12 s, bestanden van de schijf), de handtekening klopt, de oude app stopte en de nieuwe startte.
+- Via het echte laadscherm, elke run met een lege shadercache, door het pakket in de editor-binary:
+
+| Level | In beeld na (s, inclusief 3 s op het titelscherm) | Fps na 8 s |
+|---|---|---|
+| Dunes | 7,9 | 100 |
+| Alps | 19,4 | 94 |
+| Dunes at night | 8,4 | 105 |
+| Works, teamdeathmatch, Party | 10,9 | 104 |
+| Dunes, teamdeathmatch | 9,5 | 117 |
+| Powerhouse, capture the flag | 14,4 | 82 |
+
+Dit zijn eenmalige runs ter controle dat alles laadt, geen om en om gemeten fps.
+
+**Niet gezien:** twee echte machines, wifi, de netwerkvraag van macOS, en het loopt niet op een echte Air of op 8 GB geheugen. Een update met venster bij een vriend, na "Open toch", is ook nog nooit bekeken. Dat de vriend op de Air de update krijgt, staat of valt daarmee; anders is de installer de weg.
+
+**Een misser om niet te herhalen:** `tools/release.sh` draaide eerst per ongeluk in de hoofdcheckout, zonder `build/src`: 31 minuten importeren, 3% ver en 29 GB schijf. Die run is op PID gestopt en de `build/` weggehaald. Start het script met zijn volledige pad en kijk meteen of de export in `vriendenbuild` loopt.
+
+| Wat | Waar |
+|---|---|
+| De installer | `https://github.com/michielvdingh01/Graphics/releases/latest/download/GraphicsFPS.dmg` |
