@@ -59,7 +59,7 @@ auto_exposure_enabled = true
 auto_exposure_scale = 0.21
 auto_exposure_speed = 0.6
 auto_exposure_min_sensitivity = 120.0
-auto_exposure_max_sensitivity = 800.0
+auto_exposure_max_sensitivity = 300.0
 
 [sub_resource type="ShaderMaterial" id="post_mat"]
 shader = ExtResource("post")

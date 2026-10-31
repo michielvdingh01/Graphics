@@ -93,6 +93,14 @@ const FENCES := {"metal": &"fence_crash", "wood": &"fence_crash_wood"}
 ## Seconds after somebody has been run over before the same body can be run
 ## over again.
 const RUN_OVER_AGAIN := 0.8
+## Whoever gets out is not run down by what they got out of for this long, in
+## seconds: they land beside it, it rolls on, and it was not aimed at them.
+const LET_OUT := 2.0
+## Jumping out of it as it goes, in m/s: up to BAIL_FROM (29 km/h) one lands
+## running, and from there it costs more, up to all of a person's health at
+## BAIL_KILLS (100 km/h). Top speed in a jeep leaves one alive, just.
+const BAIL_FROM := 8.0
+const BAIL_KILLS := 28.0
 ## A wheeled vehicle turns no faster than this in radians a second unless
 ## its hand brake is on: it can be thrown into a slide, not spun like a top.
 const YAW_LIMIT := 2.0
@@ -548,6 +556,7 @@ func leave(body: Node3D) -> void:
 	remove_collision_exception_with(body)
 	if body is PhysicsBody3D:
 		(body as PhysicsBody3D).remove_collision_exception_with(self)
+	_run_over[body] = _clock + LET_OUT - RUN_OVER_AGAIN
 	if body.has_method("stand"):
 		body.stand(out, linear_velocity * 0.5)
 	_play(data.door_sound, seat_frame_local(seat).origin, -2.0)
@@ -1684,6 +1693,21 @@ func request_leave(body: Node3D) -> void:
 	leave(body)
 	if Net.active:
 		Net.ask(self, &"seat_left_asked", [Net.id()])
+
+
+## The player of this machine jumps out, of their own accord: what the ground
+## does to them goes by how fast this was going, see BAIL_FROM.
+func bail(body: Node3D) -> void:
+	var going := linear_velocity
+	request_leave(body)
+	if going.length() <= BAIL_FROM:
+		return
+	var harm := remap(going.length(), BAIL_FROM, BAIL_KILLS, 0.0, 100.0)
+	if Match.active and Match.plays(body):
+		Match.harm(Match.number(body), harm, body.global_position, -going.normalized())
+	else:
+		# Each machine keeps the health of its own player.
+		body.take_damage(harm, body.global_position, -going.normalized())
 
 
 ## On the host: `player` would like to sit in `seat`. Everybody is told so

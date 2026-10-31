@@ -301,7 +301,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		# In a game with others the host says who sits where: see
 		# request_seat() in scripts/vehicle.gd.
 		if riding:
-			riding.request_leave(self)
+			riding.bail(self)
 		else:
 			var near := VEHICLE.within_reach(self)
 			if near:
