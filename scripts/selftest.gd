@@ -129,7 +129,7 @@ func _run() -> void:
 	# everything but what can be shot to pieces, --scope everything but the
 	# stages of a sight, and --balance everything but the range every weapon
 	# is fired on, at every distance.
-	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--banana", _banana_gun, "banana gun"], ["--scope", _scope_stages, "scope"], ["--balance", _balance.bind(true), "balance"]]:
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--banana", _banana_gun, "banana gun"], ["--party", _party, "party"], ["--scope", _scope_stages, "scope"], ["--balance", _balance.bind(true), "balance"]]:
 		if only[0] not in OS.get_cmdline_user_args():
 			continue
 		await (only[1] as Callable).call()
@@ -145,11 +145,12 @@ func _run() -> void:
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
 		await _banana_gun()
+		await _party()
 		await _smoke()
 		await _scope_stages()
 		await _music_turns()
 		await _balance()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "banana gun", "smoke", "scope", "music", "balance"])
+		_ran(["handling", "fights", "supplies", "view", "breakables", "banana gun", "party", "smoke", "scope", "music", "balance"])
 
 	await _slip_past()
 	_ran(["slipping past"])
@@ -1095,6 +1096,75 @@ func _banana_gun() -> void:
 	await _wait(0.6)
 	player.health = player.MAX_HEALTH
 	_finished.append("banana gun")
+
+
+## The pack Party: what stands in the arena elsewhere is carried here like any
+## weapon, and what is thrown never runs out.
+func _party() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var carried: Array[WeaponData] = weapons.loadout.duplicate()
+	player.force_control = true
+	player.health = player.MAX_HEALTH
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	await _wait(0.3)
+	var spec: Array = ARMORY.spec("party").weapons
+	_check("Party is on offer, with four weapons and no stands", ARMORY.names().has("party") and ARMORY.weapons("party").size() == 4
+		and spec[3] == "beer" and (ARMORY.spec("party").specials as Array).is_empty())
+	weapons.equip(ARMORY.weapons("party"), ARMORY.grenades("party"), ARMORY.grenade("party"), ARMORY.tacticals("party"), ARMORY.tactical("party"))
+	await _wait(0.8)
+	_check("what the pack carries is nothing found in the arena", weapons.special() == null and weapons.current() == ARMORY.named("rocket_launcher"))
+	var kept: WeaponData = weapons.current()
+	weapons._mags[0] = 0
+	weapons._reserves[0] = 0
+	await _wait(0.8)
+	_check("fired empty, it stays in the pack", weapons.loadout.size() == 4 and weapons.current() == kept)
+	weapons.restock()
+	_check("and a new life fills it again", weapons._mags[0] == kept.mag_size)
+	var counter := []
+	var read_counter := func(_weapon_name: String, mag: int, reserve: int) -> void: counter.assign([mag, reserve])
+	weapons.ammo_changed.connect(read_counter)
+	weapons._switch_to(3)
+	await _wait(0.7)
+	weapons.ammo_changed.disconnect(read_counter)
+	_check("and the counter says it has no end", counter == [ARMORY.named("beer").mag_size, -1])
+	var beer: WeaponData = ARMORY.named("beer")
+	_check("the beer is on 4, and never short", weapons.current() == beer and weapons.ammo_lack() == 0.0)
+	# Somewhere with room: the way that is clear furthest, out of eight.
+	var space: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+	var eye: Vector3 = player.camera.global_position
+	var ahead := Vector3.ZERO
+	for i in 8:
+		var way := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 8.0)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + way * 12.0, 1)):
+			ahead = way
+			break
+	var dummy: CharacterBody3D = game.GRUNT.instantiate()
+	dummy.position = player.global_position + ahead * 8.0
+	game.add_child(dummy)
+	dummy.set_physics_process(false)
+	await _wait(0.2)
+	var full: float = dummy.health
+	await _aim(player, player.global_position, dummy.global_position + Vector3.UP * 1.3)
+	var left: int = weapons._mags[weapons._index]
+	Input.action_press("fire")
+	await _wait(1.0)
+	Input.action_release("fire")
+	var flown: int = tree.get_nodes_in_group("beer").size()
+	await _wait(1.0)
+	print("    beer: %d in the air after a second of throwing, the grunt 8 m off has %.0f of %.0f left" % [flown, dummy.health, full])
+	_check("a second of throwing costs nothing and hurts a little", weapons._mags[weapons._index] == left and dummy.health < full and dummy.health > full * 0.4)
+	_check("and every bottle breaks on what it meets", tree.get_nodes_in_group("beer").is_empty())
+	dummy.queue_free()
+	weapons.equip(carried, ARMORY.grenades(ARMORY.STANDARD))
+	await _wait(0.5)
+	player.health = player.MAX_HEALTH
+	_finished.append("party")
 
 
 ## A weapon loaded by a clip, the M1 Garand of 1944: with a round left in it

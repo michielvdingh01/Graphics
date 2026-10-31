@@ -197,9 +197,14 @@ func _run() -> void:
 		for end: int in arena.ends:
 			nearest = minf(nearest, one.global_position.distance_to(arena.spots[end]))
 		from_ends.append(snappedf(nearest, 0.1))
-	print("  the weapons of the arena: %s, %s m from the nearest end" % [stands.map(func(one: Node3D) -> String: return one.weapon.display_name), from_ends])
-	var places_apart: bool = stands.size() == 2 and stands[0].global_position.distance_to(stands[1].global_position) > 15.0
-	_check("the minigun and the rocket launcher stand apart, away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun and places_apart
+	print("  the weapons of the arena: %s, %s m from the nearest end, at %s" % [stands.map(func(one: Node3D) -> String: return one.weapon.display_name), from_ends, stands.map(func(one: Node3D) -> Vector3: return one.global_position)])
+	# The first two have the whole fair stretch of the arena to choose from; in
+	# a hall this size the third only has what is left of it.
+	var places_apart: bool = stands.size() == 3 and stands[0].global_position.distance_to(stands[1].global_position) > 15.0
+	for i in stands.size():
+		for j in i:
+			places_apart = places_apart and stands[i].global_position.distance_to(stands[j].global_position) > 8.0
+	_check("the minigun, the rocket launcher and the banana gun stand apart, away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun and places_apart
 		and from_ends.all(func(metres: float) -> bool: return metres > 15.0) and stands.all(func(one: Node3D) -> bool: return not one.is_up() and one.due() > 30.0))
 	var news := []
 	var listen := func(text: String) -> void: news.append(text)
@@ -494,12 +499,12 @@ func _run() -> void:
 	var pack_was: String = Settings.pack
 	var weapons_button: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Weapons"))[0]
 	var packs_seen := [weapons_button.text]
-	for i in 7:
+	for i in 8:
 		weapons_button.pressed.emit()
 		if not packs_seen.has(weapons_button.text):
 			packs_seen.append(weapons_button.text)
 	print("  the packs on the screen: %s" % [packs_seen])
-	_check("and another through the packs of weapons, all seven of them", packs_seen.size() == 7 and packs_seen.has("Weapons  ·  1944") and packs_seen.has("Weapons  ·  Pistols only")
+	_check("and another through the packs of weapons, all eight of them", packs_seen.size() == 8 and packs_seen.has("Weapons  ·  Party") and packs_seen.has("Weapons  ·  1944") and packs_seen.has("Weapons  ·  Pistols only")
 		and packs_seen.has("Weapons  ·  Silenced"))
 	Settings.pack = pack_was
 	Menu.MATCH_MENU.chosen.pack = pack_was

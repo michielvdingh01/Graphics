@@ -460,15 +460,16 @@ func hideouts(kinds: Array) -> PackedVector3Array:
 				best_score = score
 				best = spot
 		if best < 0 or best_score <= 0.0 and kind != Hideout.IN_THE_OPEN:
-			# Nothing of that kind: the most open spot there is, as far from
-			# the others as it can be.
+			# Nothing of that kind: as far from the others as it can be, up to
+			# AWAY, and of those the most open: distance counts for more than
+			# the share of the arena that sees it, or two end up on one spot.
 			best = -1
 			best_score = -INF
 			for spot: int in fair:
 				var apart := INF
 				for other in chosen:
 					apart = minf(apart, spots[spot].distance_to(other))
-				var score := _out_of_the_way(spot, Hideout.IN_THE_OPEN, ground) + minf(apart, AWAY) * 0.01
+				var score := _out_of_the_way(spot, Hideout.IN_THE_OPEN, ground) + minf(apart, AWAY) * 0.1
 				if best < 0 or score > best_score:
 					best_score = score
 					best = spot

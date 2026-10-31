@@ -412,6 +412,8 @@ func launched(from: Vector3, speed: Vector3, by := 0) -> void:
 	rocket.weapon = _weapon
 	get_tree().current_scene.add_child(rocket)
 	rocket.global_position = from
+	if not data.blasts:
+		return
 	# A blast of smoke out of the back of the tube.
 	var behind := -speed.normalized()
 	var back := from + behind * 1.3
