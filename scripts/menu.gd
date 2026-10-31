@@ -55,6 +55,9 @@ var _column := VBoxContainer.new()
 ## Where the widgets of the screen that is being put together go: the column,
 ## or a list in it that scrolls, see _list().
 var _into: Container = _column
+## The buttons of the two sides on the pause screen of a match, see
+## scripts/match_menu.gd.
+var _sides: Array[Button] = []
 var _title_camera: Camera3D
 var _time := 0.0
 ## What the end screen has to say about the run that just finished.
@@ -83,6 +86,7 @@ func _ready() -> void:
 	Net.entering.connect(_on_entering)
 	Net.left.connect(_on_left)
 	Net.found_changed.connect(_list_games)
+	Match.changed.connect(func() -> void: MATCH_MENU.show_sides(_sides))
 	Updater.changed.connect(_on_update)
 	_on_update()
 	if "--play" in OS.get_cmdline_user_args() or Sandbox.active or Match.active:

@@ -420,6 +420,14 @@ func _press(text: String) -> void:
 	_check("the menu has a button '%s'" % text, false)
 
 
+## True if the menu has a button that begins with `text`.
+func _has_button(text: String) -> bool:
+	for button: Button in Menu._column.find_children("*", "Button", true, false):
+		if button.text.begins_with(text) and not button.is_queued_for_deletion():
+			return true
+	return false
+
+
 ## The lines of the menu to type in, top to bottom.
 func _lines() -> Array[LineEdit]:
 	var lines: Array[LineEdit] = []
@@ -525,7 +533,7 @@ func _host_match() -> void:
 	await _wait(2.0)
 	var dropped := func() -> bool: return tree.get_nodes_in_group("stash").any(func(one: Node3D) -> bool: return one.dropped)
 	Match.harm(guest, 50.0, puppet.global_position, Vector3.FORWARD)
-	_check("the guest goes down with it, and it lies there", await _until(dropped, 5.0) and them.deaths == 2)
+	_check("the guest goes down with it, and it lies there", await _until(dropped, 5.0) and them.deaths == 3)
 	_check("and it is back up", await _until(func() -> bool: return them.out <= 0.0 and not puppet.dead, 8.0))
 	_check("the guest takes a cell, which is gone here as well", await _until(func() -> bool: return Match._cells[0].cell == null, 20.0))
 
@@ -657,11 +665,18 @@ func _join_match() -> void:
 	player.damaged.connect(func(_amount: float) -> void: hits[0] += 1)
 	_check("a bot hurts the guest", await _until(func() -> bool: return hits[0] > 0, 30.0))
 
-	# Over to the other side, by the pause screen.
+	# Asks for the other side on the pause screen, and goes over when it goes down.
 	var side: int = me.team
 	await _pause()
-	await _press("Change sides")
-	_check("the guest is on the other side", await _until(func() -> bool: return me.team != side, 5.0))
+	_check("the pause screen names both sides", _has_button("%s  ·  your team" % Match.side_name(side)) and _has_button("Join the %s" % Match.side_name(1 - side)))
+	await _press("Join the %s" % Match.side_name(1 - side))
+	_check("and says when the choice counts", _has_button("%s  ·  from your next death" % Match.side_name(1 - side)))
+	_check("the host hears of it", await _until(func() -> bool: return Match.side_wanted(me) == 1 - side, 3.0))
+	await _press("Resume")
+	await _wait(0.3)
+	_check("the guest stays on its side until then", me.team == side)
+	player.take_damage(player.health + 1.0)
+	_check("the guest is on the other side once it has gone down", await _until(func() -> bool: return me.team != side, 5.0))
 	_check("and can be walked through by its own, and not by the others", player.collision_layer & Match.SIDES[me.team] != 0 and player.collision_layer & Match.SIDES[1 - me.team] == 0 and player.team == me.team)
 	_check("is back at its new end", await _until(func() -> bool: return me.out <= 0.0, 5.0))
 	_check("the host is a friend now", host._label.get_meta(&"friend", false))
