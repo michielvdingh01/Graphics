@@ -52,6 +52,7 @@
 		"drive": {"source": "ual1", "clip": "Driving", "kind": "loop"},
 		"sit": {"source": "ual1", "clip": "Sitting_Idle", "kind": "loop"},
 		"walk": {"source": "ual1", "clip": "Walk", "kind": "gait"},
+		"crouch_walk": {"source": "ual1", "clip": "Crouch_Fwd", "kind": "gait"},
 		"trot": {"source": "ual1", "clip": "Walk", "with": "Jog_Fwd", "share": 0.35, "carried": 0.7, "cycle": 0.95, "kind": "gait"},
 		"jog": {"source": "ual1", "clip": "Jog_Fwd", "kind": "gait"},
 		"sprint": {"source": "ual1", "clip": "Sprint", "kind": "gait"},
@@ -88,7 +89,7 @@
 	},
 	"sets": {
 		"default": {"idle": "idle", "gaits": ["walk", "trot", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "strikes": ["club_slash", "club_swing"], "carry": "club_idle", "grip": "hand_hold", "voice": "human"},
-		"soldier": {"idle": "ready", "gaits": ["walk", "trot", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "strikes": ["club_slash", "club_swing"], "carry": "club_idle", "grip": "hand_hold", "voice": "human", "kneel": "kneel", "creep": 0.07},
+		"soldier": {"idle": "ready", "gaits": ["walk", "trot", "jog", "sprint"], "attacks": ["punch_jab", "punch_cross", "hook"], "fingers": "hand_fist", "strikes": ["club_slash", "club_swing"], "carry": "club_idle", "grip": "hand_hold", "voice": "human", "kneel": "kneel", "low": "crouch_walk", "creep": 0.07},
 		"zombie": {"idle": "zombie_idle", "gaits": ["zombie_walk", "zombie_trot", "jog"], "attacks": ["zombie_scratch"], "fingers": "hand_claw", "strikes": ["club_slash", "club_swing"], "carry": "club_idle", "grip": "hand_hold", "voice": "zombie"}
 	}
 }
