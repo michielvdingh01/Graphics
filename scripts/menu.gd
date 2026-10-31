@@ -64,6 +64,8 @@ var _end_run := {}
 var _hosting := false
 ## What the screen to play together has to say: how joining is going.
 var _together_note := ""
+## How the update of an installed game is going, see updater.gd.
+var _update_line := Label.new()
 
 
 func _ready() -> void:
@@ -78,6 +80,8 @@ func _ready() -> void:
 		_device = DEVICES.find("Controller")
 	Net.entering.connect(_on_entering)
 	Net.left.connect(_on_left)
+	Updater.changed.connect(_on_update)
+	_on_update()
 	if "--play" in OS.get_cmdline_user_args() or Sandbox.active or Match.active:
 		_show(Screen.NONE)
 	else:
@@ -177,6 +181,8 @@ func _show(screen: Screen) -> void:
 	match screen:
 		Screen.TITLE:
 			_heading(ProjectSettings.get_setting("application/config/name").to_upper(), 64)
+			if Updater.state == Updater.State.READY:
+				_button("Restart to update", Updater.restart)
 			var checkpoint := Save.checkpoint
 			if checkpoint:
 				var text := "Continue  ·  %s" % level_name(checkpoint.level)
@@ -368,6 +374,12 @@ func _leave_together() -> void:
 
 
 ## The host takes everybody to a level, this machine included.
+func _on_update() -> void:
+	_update_line.text = Updater.line()
+	if Updater.state == Updater.State.READY and _screen == Screen.TITLE:
+		_show(Screen.TITLE)
+
+
 func _on_entering(_scene: String) -> void:
 	_together_note = ""
 	_show(Screen.NONE)
@@ -479,6 +491,13 @@ func _build() -> void:
 	_column.custom_minimum_size.x = COLUMN_WIDTH
 	_column.add_theme_constant_override("separation", 8)
 	margin.add_child(_column)
+
+	_update_line.modulate.a = 0.6
+	_update_line.add_theme_font_size_override("font_size", 18)
+	_update_line.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_update_line.offset_left = 96
+	_update_line.offset_top = -48
+	_root.add_child(_update_line)
 
 
 func _theme() -> Theme:

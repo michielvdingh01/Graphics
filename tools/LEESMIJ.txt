@@ -1,19 +1,32 @@
 GRAPHICS FPS - samen spelen
 
-Starten
-  Windows: pak de zip uit en start GraphicsFPS.exe. Windows kent de maker
-  niet en waarschuwt: kies "Meer informatie" en dan "Toch uitvoeren".
-  Mac: pak de zip uit en open Graphics FPS. De Mac weigert dat de eerste
-  keer. Ga naar Systeeminstellingen > Privacy en beveiliging, scrol naar
-  beneden en kies "Open toch".
+Installeren op een Mac
+  Open GraphicsFPS.dmg en sleep Graphics FPS naar Applications. Start het
+  daarna vanuit Programma's. De Mac weigert dat de eerste keer, omdat de
+  maker niet bij Apple geregistreerd is: kies "Gereed", ga naar
+  Systeeminstellingen > Privacy en beveiliging, scrol naar beneden en kies
+  "Open toch". Dat hoeft maar een keer.
+
+Updates
+  Het spel kijkt bij elke start of er een nieuwe versie is en haalt die zelf
+  op; onder in het hoofdmenu staat hoe ver het is. Is hij binnen, kies dan
+  "Restart to update". Je kunt ondertussen gewoon spelen. Een update is zo
+  groot als het hele spel, anderhalve GB, en op je schijf neemt het spel
+  dan twee keer 2 GB in.
+
+Starten op Windows
+  Pak de zip uit en start GraphicsFPS.exe. Windows kent de maker niet en
+  waarschuwt: kies "Meer informatie" en dan "Toch uitvoeren". Op Windows
+  werkt het spel niet zelf bij.
 
 Meedoen met een spel
   Kies "Play together", vul het adres in dat je van de host hebt gekregen
   en kies "Join the game at that address".
+  Vraagt de Mac of het spel je lokale netwerk mag gebruiken, sta dat dan toe.
 
 Zelf een spel hosten
   Kies "Play together", dan "Host a game" en een level. Vraagt Windows of
-  het spel door de firewall mag, sta dat dan toe.
+  de Mac of het spel door de firewall mag, sta dat dan toe.
   - Op hetzelfde netwerk (dezelfde wifi): de anderen gebruiken het adres
     dat in je pauzemenu staat (Esc).
   - Via internet: laat je router UDP-poort 24565 doorsturen naar jouw
@@ -21,10 +34,16 @@ Zelf een spel hosten
   Wie later komt, kan er gewoon bij. Stopt de host, dan stopt het spel
   voor iedereen.
 
-Iedereen moet dezelfde versie van het spel hebben.
+Mac en Windows kunnen samen spelen. Iedereen moet wel dezelfde versie van
+het spel hebben: die staat onder in het hoofdmenu.
+
+Loopt het schokkerig
+  Het spel is zwaar. Zet onder Settings de Quality lager (Medium of Low),
+  of de Render scale omlaag.
 
 Besturing
   WASD lopen, Shift rennen, Ctrl of C bukken (rennend: slide), spatie
   springen. Linkermuisknop vuren, rechtermuisknop richten, R herladen,
-  G granaat, 1 tot 5 of het muiswiel voor een ander wapen, Esc het menu.
-  Een controller werkt ook.
+  G granaat, V slaan, 1 tot 5 of het muiswiel voor een ander wapen, Esc
+  het menu. Op een trackpad van een Mac richt je met Option ingedrukt.
+  Een controller werkt ook. Alles staat ook in het spel onder Controls.

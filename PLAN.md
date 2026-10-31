@@ -4005,6 +4005,53 @@ Op 17 oktober 2026 gevraagd: een nieuwe trailer van ongeveer 20 seconden, met in
 - De lucht boven de minigun is wit: hij kijkt naar het zuiden, in de zon. Naar het noorden was het licht vlak; ik koos de lange schaduwen.
 - De laptop stond op de accu (73 tot 60%); er draaide geen andere Godot. Voor beelden van Movie Maker maakt dat niets uit, alleen voor hoe lang het duurt.
 
+## Een build voor vrienden: Mac en Windows
+
+Op 15 oktober 2026 gevraagd: een actuele versie van het spel om naar vrienden met een MacBook te sturen, om samen spelen over het netwerk uit te proberen. Gebouwd op de branch `vriendenbuild`, vanaf de trunk op `8adccf2`. Wat op dat moment nog op `killfeedback`, `veldslag`, `wapenpakketten` en `duingrond` stond, zit er niet in.
+
+**Wat er is**
+
+- `tools/export.sh macos` bouwt alleen de Mac-zip, `tools/export.sh windows` alleen die voor Windows; zonder argument allebei, zoals eerst.
+- `tools/LEESMIJ.txt` zegt nu ook wat een Mac kan vragen bij samen spelen (apparaten in het lokale netwerk vinden, inkomende verbindingen accepteren) en waar je dat terugzet. En dat samen spelen de route door de levels is: een wedstrijd met bots speel je nog alleen (stap 4 van de wedstrijden).
+- `build/GraphicsFPS-macos.zip` in de worktree: 873 MB, uitgepakt een app van 1,3 GB, voor Intel en Apple Silicon, ad-hoc ondertekend. `VERSION` in `scripts/net.gd` is 9; wie host en wie meedoet, spelen deze zelfde build.
+
+**Wat het kostte**
+
+- 79 minuten, op lage prioriteit (`nice`) naast de tests van andere sessies, load 4 tot 7. Bijna alles daarvan was de eerste import in een nieuwe `build/src`: 374 bestanden opnieuw, ook als ETC2/ASTC, waarvan de 44 lightmaps (426 MB) een uur kostten, zo'n 6 MB per minuut. De vorige keer, met minder levels, was het 20 minuten voor beide builds.
+- `build/src` blijft in de worktree staan, met zijn importcache: een volgende export uit deze worktree hoeft alleen te importeren wat veranderd is. Hoe lang die dan duurt is niet gemeten.
+- Het pakket bevat alleen de texturen voor de desktop (288 keer S3TC, 36 keer BPTC, geen ETC2/ASTC). De ETC2/ASTC-import is er alleen om Godot voor Apple Silicon te laten exporteren.
+
+**Getest**
+
+- Uitgepakt zoals een vriend hem krijgt (`ditto -x -k`): `codesign --verify --deep --strict` geeft een geldige handtekening.
+- De gebouwde app zelf, zonder venster en in een eigen thuismap: de netwerktest (host en gast, elk 31 controles) en de wedstrijdtest slagen.
+- Op de GPU: een release-template kan niet zonder venster tekenen ("Embedded mode is not supported in release builds"), de debug-template ook niet. De editor kan het pakket van de build wel laden: `Godot --main-pack <pck> --embedded --debug ... res://scenes/dunes.tscn -- --play --snap=14`. Zo getekend zijn de fabriek en de duinen er met texturen, gebakken licht en HUD. Het is dezelfde engine, maar een andere binary dan vrienden krijgen. Het beeld komt in `benchmark/results/` van de map waarin je het start.
+- De export meldt dat `scenes/levels/canals_level.tscn` en `quay_level.tscn` ontbreken: die staan niet in git. De grachten staan niet in de levellijst, dus in het spel komt niemand ze tegen.
+
+**Niet beoordeeld**
+
+- Met twee Macs over een echt netwerk is het nog nooit gespeeld, en de release-app heeft hier nooit een venster geopend.
+- Of macOS bij deze app om het lokale netwerk vraagt: de app heeft geen `NSLocalNetworkUsageDescription` in zijn `Info.plist`. De LEESMIJ zegt wat je doet als het gebeurt.
+
+**17 oktober: opnieuw, en ook voor Windows**
+
+Op 17 oktober gevraagd: een nieuwe zip van de trunk, en kijken of vrienden met een Windows-laptop mee kunnen doen. De trunk van `fd79880` (`VERSION` 11, met de wapenpakketten, de veldslag en de trailer) is in `vriendenbuild` samengevoegd; alleen het einde van dit plan botste.
+
+- **Een vriend met Windows kon tot nu toe niet meedoen**: er was alleen een Mac-zip. `tools/export.sh` maakt ze nu allebei: `build/GraphicsFPS-windows.zip` (849 MB: `GraphicsFPS.exe`, 109 MB, en `GraphicsFPS.pck`, 1,2 GB) en `build/GraphicsFPS-macos.zip` (885 MB).
+- **Twee minuten voor beide**, waar de eerste Mac-export 79 minuten kostte: de importcache in `build/src` bleef staan. Er waren 70 bestanden nieuw te importeren (14 texturen, 66 geluiden), geen lightmaps.
+- **Het spel kent Windows al**: daar biedt het menu geen MetalFX en kiest het FSR waar het op een Mac MetalFX zou nemen (`scripts/settings.gd`, `scripts/menu.gd`).
+- `tools/LEESMIJ.txt` zegt nu ook: laat de `.pck` naast de `.exe` staan, Mac en Windows spelen samen met zips van dezelfde dag, wat je doet als het schokt (Quality of Render scale lager), en de slag op V en het richten met Option op een trackpad. Een nieuwe speler begint op High, in een venster, op 100%.
+
+**Getest op 17 oktober**
+
+- Beide zips uitgepakt zoals een vriend ze krijgt. De Mac-app is geldig ondertekend; `GraphicsFPS.exe` is een 64-bits Windows-programma (PE32+, x86-64).
+- De netwerktest, zonder venster en in een eigen thuismap, drie keer: twee keer de Mac-app, een Mac-app als host met als gast het Windows-pakket, en het Windows-pakket als host met de Mac-app als gast. Alle drie slagen ze (host 32, gast 31 controles). Het Windows-pakket draaide daarbij in de editor van deze Mac (`Godot --main-pack GraphicsFPS.pck`), niet in `GraphicsFPS.exe`. Wat het bewijst: de twee pakketten hebben dezelfde levels, dezelfde versie en dezelfde berichten over de lijn. De wedstrijdtest slaagt op de Mac-app.
+- Op de GPU, via de editor: de duinen uit het Mac-pakket en het fabrieksterrein uit het Windows-pakket, beide met texturen, licht en HUD.
+
+**Niet beoordeeld**
+
+- `GraphicsFPS.exe` heeft nog nooit gedraaid: hier is geen Windows, en geen Wine. Wat alleen Windows laat zien (de driver, D3D12 of Vulkan, de firewall, SmartScreen, hoe snel het loopt op een laptop zonder losse videokaart) is niet gezien. De Asus met NVIDIA kan het als eerste proberen.
+- Nog steeds niet met twee echte machines over een echt netwerk gespeeld.
 ## Voertuigen: rijden in de duinen
 
 Op 18 oktober 2026 gevraagd: met de legervoertuigen in de duinen kunnen rijden zoals in Battlefield, met passende geluiden voor het starten van de motor, optrekken, schakelen, remmen, uitstappen, botsen, een kapotte motor en een motor die ontploft; generiek, omdat er meer maps met voertuigen komen. Branch `voertuigen`. Michiel koos: de duinen op deze branch opnieuw bouwen (zodat een voertuig met zijn nummer en lading wegrijdt), de tank met koepel en kanon, eerst een CC0-pak zoeken voor de geluiden, en het moet werken in wedstrijden met bots en met passagiers. Over het netwerk en bots die zelf rijden komt later.
@@ -5174,3 +5221,49 @@ Gezien, op de GPU: de worp vanaf het titelscherm in de fabriek en de duinen, en 
 | De rookgranaat horen, met variant b of c | `tools/hear.py smoke`, `tools/hear.py smoke b`, `tools/hear.py smoke c` |
 | De wolk meten of bekijken, 14 m voor elk standpunt of van binnen | `tools/benchmark.sh --smoke=14`, `tools/benchmark.sh --smoke=0` |
 | De noise van de wolk opnieuw maken | `Godot --headless --path . --script tools/gen_smoke_noise.gd` |
+
+## Een installer en updates voor vrienden
+
+Op 30 oktober 2026 gevraagd: het spel over twee dagen met vrienden spelen die een MacBook hebben, met een installatiebestand, en het spel moet zelf updates kunnen vinden en installeren, op basis van GitHub. Gebouwd op de branch `vriendenbuild`.
+
+**Wat er nu is**
+
+- `tools/release.sh` maakt in `build/release` het installatiebestand `GraphicsFPS.dmg` (de app, een snelkoppeling naar Applications en de LEESMIJ), dezelfde app als zip in delen van 256 MB en `update-macos.json`, dat zegt wat die delen zijn. `tools/release.sh --publish` zet dat op GitHub als de nieuwste release. Dat kan los van het bouwen, zodat het installatiebestand eerst geprobeerd kan worden. De release blijft een concept tot alles er staat, dus een spel dat ondertussen kijkt, vindt de laatste complete versie.
+- Het spel kijkt bij elke start naar `update-macos.json` van de nieuwste release, op een vaste link. Alleen een geëxporteerde Mac-build doet dat, en alleen een met een nummer: `tools/export.sh` schrijft de tijd als `jjjjmmdduumm` in `res://build.json`. Een spel uit een checkout heeft nummer 0 en doet niets.
+- Is er iets nieuwers, dan haalt het spel dat op de achtergrond binnen, ook terwijl er gespeeld wordt; onder in het menu staat hoe ver het is. Elk deel wordt met zijn sha256 gecontroleerd. Een download die stilvalt, begint na 30 seconden opnieuw aan dat deel, en een afgebroken download gaat bij de volgende start verder met het deel dat ontbrak.
+- Gasten met een andere build worden door de host geweigerd met de vraag te herstarten. Een spel uit een checkout (nummer 0) speelt met iedereen, zodat Michiel vanuit de editor kan blijven hosten. `Net.VERSION` is daarvoor 17 geworden.
+
+**Waarom een update de hele app is**
+
+Het plan was een nieuwe `.pck` naast de oude app. Dat kan niet: de release-templates van Godot weigeren `--main-pack` ("compiled without support for path overrides"), en een pack alsnog laden met `load_resource_pack` werkt de instellingen, de autoloads en de toetsen niet bij. Daarom pakt het spel de hele app uit in `user://update/<nummer>/app`. De geïnstalleerde app wordt nooit aangeraakt, want macOS bewaakt wat in quarantaine stond en de app kan vanaf de schijfkopie of een verplaatste kopie draaien. Hij blijft de ingang: `Updater` is de eerste autoload, ziet de nieuwere app, opent die met `/usr/bin/open` en stopt zichzelf voor er iets anders geladen is. Dat is ook de reden dat er bij een start even een extra venster te zien kan zijn. `OS.create_process` kan hier niet: op een `.app` wacht dat op de hoofdthread op een antwoord dat op de hoofdthread komt, en meldt na twee seconden een fout terwijl de app wel start.
+
+Een update die opent maar nooit een eerste beeld haalt, laat `trying-<nummer>` achter en wordt daarna niet meer geopend of opgehaald. Zonder dat zou een slechte release niet te genezen zijn: hij haalt de volgende niet op, en opnieuw installeren helpt niet, want `user://update` wint.
+
+**Getest**
+
+- `tools/test_updater.sh` (een minuut): een piepklein project met de echte `updater.gd` en de echte export-template, zonder venster, tegen een server hier. Zeventien controles slagen: niets nieuws, geen netwerk, ophalen en klaarzetten, overstappen bij de volgende start en met "Restart to update", een deel dat blijft hangen, een kapot deel, verder gaan met alleen het deel dat fout was, en een update die nooit een beeld haalde.
+- De echte app op ware grootte, zonder venster, tegen een lokale server: 1,4 GB opgehaald en uitgepakt in 11 seconden, handtekening geldig, en de geïnstalleerde app stapte in minder dan een seconde over op de nieuwe. Over internet hangt de duur af van de lijn.
+- Vanaf GitHub: op 30 oktober staat `build-202610301633` als release. Een oudere build haalde hem over https op, 1,4 GB in 82 seconden op deze lijn, handtekening geldig en zonder quarantainelabel, en de geïnstalleerde app stapte erop over. Dat was een testkopie zonder quarantaine, niet een app na "Open toch".
+- `tools/selftest.sh` en `tools/nettest.sh` slagen. De netwerktest op de echte geëxporteerde app: twee gelijke builds slagen, 33 controles aan elke kant. Een oudere build als gast tegen een nieuwere host stopt precies bij het binnenkomen. De tekst van de weigering ziet die test niet.
+
+**Niet getest**
+
+- **Met een venster.** Alles liep zonder venster, volgens de afspraak. Hoe de overstap eruitziet en of het spel daarna vooraan staat, heeft niemand gezien.
+- **Na "Open toch".** Vanuit de terminal stopt macOS een app in quarantaine zonder dialoog (`Killed: 9`), dus de eerste start bij een vriend is hier niet na te spelen. Een app die het spel zelf ophaalt krijgt geen quarantainelabel, tenzij macOS dat bij een goedgekeurde app toch doet; dan start de update niet, valt het spel terug op de geïnstalleerde versie en werkt het niet bij. Dat zou de eerste echte update laten zien.
+- Twee keer op de app klikken terwijl de update draait: `open` zet het spel dan alleen vooraan. De code houdt daar rekening mee, de test kan het zonder venster niet zien.
+
+**Wat Michiel moet weten**
+
+- Zonder Apple Developer-account (99 dollar per jaar) weigert de Mac de eerste keer te openen: Systeeminstellingen > Privacy en beveiliging > "Open toch". Dat is eenmalig en staat in de LEESMIJ.
+- Een push bereikt niemand: pas `tools/release.sh` en `--publish` geven vrienden een nieuwe versie. Een release duurt 2 minuten als `build/src` er is.
+- Een update is 1,4 GB, en op de schijf van een vriend staat het spel dan twee keer, elk 2 GB.
+- De `.pck` is 1,97 GB, vlak onder de 2 GiB per bestand van GitHub. Daarom gaat de zip in delen en niet de pack zelf.
+- `scenes/levels` bevat bestanden van de Alpen die niet in git staan: een worktree zonder die kopie mist de Alpen. `tools/release.sh` weigert dan, en daarom kopieerde ik ze uit de hoofdcheckout.
+- Op 30 oktober verwijderde een opruimsessie deze worktree terwijl ik erin werkte, met `build/src`. De laatste build is teruggezet uit zijn delen, en het installatiebestand is daaruit opnieuw gemaakt. De cache wordt met een export opnieuw opgebouwd.
+- Samen spelen is nog steeds de route tegen robots. Een wedstrijd tegen elkaar kan alleen lokaal (stap 4 van de wedstrijden).
+
+| Wat | Commando |
+|---|---|
+| Een nieuwe versie bouwen en proberen | `tools/release.sh` |
+| Die aan iedereen geven | `tools/release.sh --publish` |
+| De updater testen | `tools/test_updater.sh` |
