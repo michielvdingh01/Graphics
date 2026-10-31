@@ -1039,13 +1039,16 @@ func errand(who: Entrant) -> Variant:
 
 ## Where the difficulty has it, sends the nearest bot of each side to every
 ## weapon of the arena that can be taken, as far as it is to walk: one bot to
-## one weapon. Without sides the nearest of all goes.
+## one weapon. Without sides the nearest of all goes. A side with a person on
+## it leaves that to them.
 func _send_fetchers() -> void:
 	_errands.clear()
 	if not rules.fetches:
 		return
 	for at in specials_up():
 		for side in ([0, 1] if mode.teams() else [-1]):
+			if side >= 0 and _has_person(side):
+				continue
 			var near: Array[Entrant] = []
 			for who: Entrant in entrants.values():
 				if who.brain and who.out <= 0.0 and (side < 0 or who.team == side) and who.brain.special() == null \

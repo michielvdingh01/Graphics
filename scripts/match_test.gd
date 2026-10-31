@@ -86,7 +86,7 @@ func _run() -> void:
 		caps.append([Settings.rules().regen_to, Settings.rules().hurts, int(Settings.rules().focus), Settings.rules().bots, Settings.rules().friends])
 	Settings.difficulty = 1
 	_check("the rules are those of a match, by the difficulty: health comes back to 100, 75 and 50", Settings.rules().drops == 0.0
-		and caps == [[100.0, 0.75, 1, "recruit", "recruit"], [75.0, 0.9, 2, "regular", "green"], [50.0, 1.0, 0, "hardened", "regular"]])
+		and caps == [[100.0, 0.75, 1, "recruit", "recruit"], [75.0, 0.9, 2, "regular", "green"], [50.0, 1.0, 0, "hardened", "green"]])
 	_check("and so is how good the bots are: slower, wider of the mark and firing shorter the easier it is", Match.bot_level().reaction == 0.55 and Match.bot_level().fov == 110.0
 		and Match.levels.recruit.reaction > Match.levels.hardened.reaction and Match.levels.recruit.wander > Match.levels.hardened.wander
 		and Match.levels.recruit.burst < Match.levels.hardened.burst and Match.levels.recruit.rest[0] > Match.levels.hardened.rest[1])
@@ -646,7 +646,7 @@ func _run() -> void:
 
 ## In the pack Party everybody carries beer and the banana gun, and the big guns
 ## stand out in the arena. Then what goes for any pack: from Normal on, those
-## on the side of a person play below those against them.
+## on the side of a person play below those against them, and do not fetch.
 func _party_and_friends() -> void:
 	var tree := get_tree()
 	_check("a match of Party opens", Match.open({"mode": "tdm", "level": "factory", "size": 3, "pack": "party"}) and Match.setup.pack == "party")
@@ -682,10 +682,16 @@ func _party_and_friends() -> void:
 	var normal: Array = of_level.call(1)
 	var hard: Array = of_level.call(2)
 	_check("on easy those on the player's side are as good as those against them", easy[0] == easy[1] and easy[1] == Match.levels.recruit)
-	_check("on normal a step below them, and on hard the same as those against them on normal", normal[1] == Match.levels.regular and normal[0] == Match.levels.green
-		and hard[1] == Match.levels.hardened and hard[0] == Match.levels.regular)
+	_check("on normal a step below them, and on hard two", normal[1] == Match.levels.regular and normal[0] == Match.levels.green
+		and hard[1] == Match.levels.hardened and hard[0] == Match.levels.green)
 	_check("a step that lies between what is there", Match.levels.green.reaction > Match.levels.regular.reaction and Match.levels.green.reaction < Match.levels.recruit.reaction
 		and Match.levels.green.wander > Match.levels.regular.wander and Match.levels.green.wander < Match.levels.recruit.wander)
+	for stand: Node3D in tree.get_nodes_in_group("stash"):
+		stand.come_in(0.0)
+	Settings.difficulty = 2
+	await _wait(Match.FETCH + 0.1)
+	var sent: Array = bots.filter(func(bot: RefCounted) -> bool: return Match.errand(bot) != null)
+	_check("on hard the other side is sent for the big guns, and the player's side is not", not sent.is_empty() and sent.all(func(bot: RefCounted) -> bool: return bot.team != me.team))
 	Settings.difficulty = 1
 	var team: int = me.team
 	Match.change_sides(me.id)
