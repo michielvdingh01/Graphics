@@ -191,6 +191,9 @@ class Viewmodel:
 	var muzzle: Node3D
 	var eject: Node3D
 	var mag: Node3D
+	## What is on show of what is left in the weapon, one to a round: the
+	## bananas on the banana gun, the last one fired first.
+	var rounds: Array[Node3D] = []
 	var action: Node3D
 	var pump: Node3D
 	var arm_l: Node3D
@@ -227,6 +230,10 @@ class Viewmodel:
 			locks_open = true
 		else:
 			action = scene.get_node_or_null("Bolt")
+		var round_on_show: Node3D = scene.find_child("Round0", true, false)
+		while round_on_show:
+			rounds.append(round_on_show)
+			round_on_show = scene.find_child("Round%d" % rounds.size(), true, false)
 		var hold: Node3D = scene.get_node_or_null("MagHold")
 		if hold:
 			mag_hold = hold.position
@@ -1486,7 +1493,9 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		turn.x -= 0.05 * back
 	if model.action:
 		model.action.position.z += model.travel * maxf(back, _locked)
-	if (data.projectile or data.en_bloc) and model.mag:
+	for i in model.rounds.size():
+		model.rounds[i].visible = i < _mags[_index] or (_reload_left > 0.0 and fraction > MAG_OUT)
+	if (data.projectile or data.en_bloc) and model.mag and model.rounds.is_empty():
 		# The round sticks out of the tube until it is fired, and the next is
 		# there once the reload has brought it; so does a clip, which flies
 		# out with its last round.

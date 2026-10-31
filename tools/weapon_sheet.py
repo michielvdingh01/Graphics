@@ -117,6 +117,8 @@ def shots(w, distance, aimed, moving):
     if per_shot <= 0.0:
         return None
     needed = math.ceil(HEALTH / per_shot - 1e-9)
+    if w["bunch"] > 0:
+        needed = min(needed, int(w["bunch"]))
     return needed if needed <= w["mag_size"] * 3 else None
 
 

@@ -56,6 +56,21 @@ const OCTAGON: Array[Vector2] = [
 ## How high the top of a rail on an AR-15 stands above its bore.
 const RAIL_TOP := 0.0307
 
+## A banana of the banana gun: its length along the curve, how thick it is at
+## its fullest, the angle of the curve it follows, how its thickness runs from
+## the stalk (0) to the tip (1), and how far its five ridges stand out.
+const BANANA_LENGTH := 0.2
+const BANANA_GIRTH := 0.0205
+const BANANA_ARC := 1.45
+const BANANA_TAPER: Array[Vector2] = [
+	Vector2(0.0, 0.3), Vector2(0.09, 0.3), Vector2(0.17, 0.72), Vector2(0.27, 0.97), Vector2(0.5, 1.0),
+	Vector2(0.76, 0.96), Vector2(0.9, 0.72), Vector2(0.96, 0.34), Vector2(0.985, 0.2), Vector2(1.0, 0.0),
+]
+const BANANA_RIDGE := 0.05
+## How many bananas there are in the outer and the inner row of the hand: one
+## to a shot, so 16 is the magazine of weapons/banana_gun.tres.
+const BUNCH_ROWS: Array[int] = [9, 7]
+
 
 ## The glove made last and whether it is a left hand, for _holds_also().
 var _worn: Node3D
@@ -100,6 +115,8 @@ func _describe() -> void:
 	_anti_materiel()
 	_garand()
 	_hand_cannon()
+	_banana_gun()
+	_banana_round()
 	# The standard five once more, each with a silencer.
 	_silenced = true
 	_rifle()
@@ -1637,6 +1654,120 @@ func _hand_cannon() -> void:
 	marker("Muzzle", Transform3D(Basis(), _at(0.168)))
 	marker("Eject", Transform3D(Basis(), _at(-0.012, 0.014, 0.016)))
 	marker("MagHold", Transform3D(Basis(), _at(-0.065, -0.17)))
+
+
+# --- The banana gun ------------------------------------------------------------
+
+
+## A squat launcher of walnut and brass with a bell at its muzzle, and on a
+## brass saddle on top of it a hand of bananas, which is what it fires. The
+## hand is the part Mag, taken off to the left by a reload; each banana on it is
+## a part Round<n> of its own that scripts/weapons.gd hides once it is fired,
+## the last number first.
+func _banana_gun() -> void:
+	model("banana_gun")
+	# The pot of the body, the bands round it and the barrel with its bell.
+	_turned(WALNUT, _at(-0.14), Vector3.FORWARD, PackedVector2Array([
+		Vector2(0.0, 0.0), Vector2(0.03, 0.0), Vector2(0.042, 0.03), Vector2(0.05, 0.09), Vector2(0.05, 0.17), Vector2(0.042, 0.235), Vector2(0.03, 0.27), Vector2(0.0, 0.27),
+	]), 28, true)
+	for ring: Vector2 in [Vector2(-0.112, 0.0425), Vector2(0.0, 0.0505), Vector2(0.094, 0.0435)]:
+		_bar(BRASS, _at(ring.x - 0.006), _at(ring.x + 0.006), ring.y, 28)
+	_turned(BRASS, _at(0.12), Vector3.FORWARD, PackedVector2Array([
+		Vector2(0.031, 0.0), Vector2(0.027, 0.02), Vector2(0.026, 0.17), Vector2(0.03, 0.2), Vector2(0.042, 0.235), Vector2(0.048, 0.243), Vector2(0.046, 0.247), Vector2(0.038, 0.235), Vector2(0.024, 0.195), Vector2(0.0, 0.195),
+	]), 28)
+	_bar(WALNUT, _at(0.14), _at(0.26), 0.031, 20)
+	_grip(GRIP)
+	_trigger_hand()
+
+	# The saddle the hand sits in, and the iron that clamps its crown.
+	_block(BRASS, _at(-0.075, 0.05), Vector3(0.09, 0.016, 0.13), 0.004)
+	for side: float in [-1.0, 1.0]:
+		_block(BRASS, _at(-0.09, 0.072, side * 0.04), Vector3(0.01, 0.05, 0.05), 0.003)
+	_ring(STEEL, _at(-0.09, 0.078), Vector3.FORWARD, 0.04, 0.0035)
+	# A plain post to aim by, on the bell.
+	_block(BRASS, _at(0.335, 0.052), Vector3(0.004, 0.02, 0.008), 0.001)
+
+	var crown := _at(-0.09, 0.066)
+	# Its Y points away from where a reload takes it: off to the left, down
+	# towards the shoulder, where the arm that takes it comes from.
+	var towards := Vector3(0.75, 0.25, -0.4).normalized()
+	var aside := towards.cross(Vector3.BACK).normalized()
+	part("Mag", Transform3D(Basis(aside, towards, aside.cross(towards)), crown))
+	_turned(WALNUT, crown + Vector3.BACK * 0.04 + Vector3.UP * 0.012, Vector3.FORWARD, PackedVector2Array([
+		Vector2(0.0, 0.0), Vector2(0.012, 0.0), Vector2(0.028, 0.022), Vector2(0.034, 0.06), Vector2(0.0, 0.06),
+	]), 16)
+	# Two rows side by side out of the crown, all curving up, as a hand of
+	# bananas grows; the outer ones are fired first.
+	var fan: Array[Vector3] = []
+	for row in BUNCH_ROWS.size():
+		var spread: float = [30.0, 22.0][row]
+		for i in BUNCH_ROWS[row]:
+			fan.append(Vector3(lerpf(-spread, spread, float(i) / (BUNCH_ROWS[row] - 1)), row, 0.0))
+	fan.sort_custom(func(a: Vector3, b: Vector3) -> bool: return absf(a.x) < absf(b.x))
+	for i in fan.size():
+		var yaw := deg_to_rad(fan[i].x)
+		var row := fan[i].y
+		var heading := Basis(Vector3.UP, -yaw) * Basis(Vector3.RIGHT, deg_to_rad(4.0 + 16.0 * row)) * (_at(1.0) - _at(0.0))
+		var stalk := crown + heading * 0.012 + _at(0.0, 0.004 + row * 0.024) - _at(0.0)
+		part("Round%d" % i, Transform3D(Basis(), stalk), "Mag")
+		var bend := Vector3.UP + Vector3.RIGHT * heading.x * 2.4
+		_banana(stalk, heading, (bend - heading * bend.dot(heading)).normalized())
+	part("Body")
+	_support_hand(0.2, 0.032)
+	# Reloading, the same hand takes the hand of bananas round its middle,
+	# well ahead of the eye.
+	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), _at(0.06, 0.1)), Vector2(0.04, 0.04), -104.0,
+		_at(-0.01, 0.08, -0.09), 0.028, 0.0, _at(-0.05, -0.25, -0.3))
+	marker("Muzzle", Transform3D(Basis(), _at(0.36)))
+	marker("MagHold", Transform3D(Basis(), _at(0.06, 0.1)))
+
+
+## A banana in flight, its tip along -Z: scenes/banana.tscn carries it.
+func _banana_round() -> void:
+	model("banana_round")
+	_banana(_at(-0.1), Vector3.FORWARD, Vector3.UP)
+
+
+## A banana from `stalk`, leaving it along `heading` and curving towards
+## `bend`, in the peel of the prize of that name: U along it from the stalk to
+## the tip, V once round it, see shaders/banana.gdshader.
+func _banana(stalk: Vector3, heading: Vector3, bend: Vector3) -> void:
+	var along_steps := 12
+	var round_steps := 10
+	var curve := BANANA_LENGTH / BANANA_ARC
+	var across := heading.cross(bend)
+	var rings: Array = []
+	var ways: Array = []
+	for i in along_steps + 1:
+		var along := float(i) / along_steps
+		var angle := along * BANANA_ARC
+		var heart := stalk + heading * sin(angle) * curve + bend * (1.0 - cos(angle)) * curve
+		var inward := bend * cos(angle) - heading * sin(angle)
+		var ring: Array[Vector3] = []
+		var way: Array[Vector3] = []
+		for j in round_steps + 1:
+			var turn := TAU * j / round_steps
+			var out := inward * cos(turn) + across * sin(turn)
+			ring.append(heart + out * _banana_girth(along) * (1.0 + BANANA_RIDGE * cos(turn * 5.0)))
+			way.append(out)
+		rings.append(ring)
+		ways.append(way)
+	var st := _tool("banana_peel", _part, stalk)
+	for i in along_steps:
+		for j in round_steps:
+			var uv := [Vector2(float(i) / along_steps, float(j) / round_steps), Vector2(float(i + 1) / along_steps, float(j) / round_steps),
+				Vector2(float(i + 1) / along_steps, float(j + 1) / round_steps), Vector2(float(i) / along_steps, float(j + 1) / round_steps)]
+			var corners := [rings[i][j], rings[i + 1][j], rings[i + 1][j + 1], rings[i][j + 1]]
+			var normals := [ways[i][j], ways[i + 1][j], ways[i + 1][j + 1], ways[i][j + 1]]
+			_face(st, [corners[0], corners[1], corners[2]], [normals[0], normals[1], normals[2]], [uv[0], uv[1], uv[2]])
+			_face(st, [corners[0], corners[2], corners[3]], [normals[0], normals[2], normals[3]], [uv[0], uv[2], uv[3]])
+
+
+func _banana_girth(along: float) -> float:
+	for i in BANANA_TAPER.size() - 1:
+		if along <= BANANA_TAPER[i + 1].x:
+			return BANANA_GIRTH * lerpf(BANANA_TAPER[i].y, BANANA_TAPER[i + 1].y, inverse_lerp(BANANA_TAPER[i].x, BANANA_TAPER[i + 1].x, along))
+	return 0.0
 
 
 # --- Shared pieces -------------------------------------------------------------

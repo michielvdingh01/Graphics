@@ -131,6 +131,11 @@ func _host() -> void:
 	var seen_at := puppet.global_position
 	var walked := await _until(func() -> bool: return puppet.global_position.distance_to(seen_at) > 2.0 and puppet.velocity.length() > 1.0, 20.0)
 	_check("the guest is seen walking", walked)
+	_check("the guest is seen to crouch, and to aim along the sights", await _until(func() -> bool:
+		return puppet._doing & Net.CROUCHED != 0 and puppet._doing & Net.AIMING != 0 and puppet._rig._crouching and puppet._rig._up_to == 1.0, 10.0))
+	_check("and shots go over who crouches", (puppet._collider.shape as CapsuleShape3D).height < 1.3)
+	_check("and to stand up again, weapon at the hip", await _until(func() -> bool:
+		return puppet._doing & Net.CROUCHED == 0 and not puppet._rig._crouching and puppet._rig._up_to < 1.0, 10.0))
 
 	# A robot in the lane for the guest to shoot.
 	var target: CharacterBody3D = game._robots.values()[0]
@@ -266,6 +271,12 @@ func _join() -> void:
 	Input.action_press("move_forward")
 	await _wait(1.5)
 	Input.action_release("move_forward")
+	# Down and along the sights, for the host to see.
+	Input.action_press("crouch")
+	Input.action_press("ads")
+	await _wait(2.0)
+	Input.action_release("crouch")
+	Input.action_release("ads")
 
 	# The robot the host puts in the lane.
 	var target: CharacterBody3D = game._robots.values()[0]

@@ -24,6 +24,10 @@ const CHARACTERS := 8
 ## The same soldiers in the uniform of the second side of a match, where
 ## there is one.
 const SECOND := "res://assets/characters/soldier_%02d_desert/soldier_%02d_desert.glb"
+## How far up it carries its weapon while its player does not aim along the
+## sights, and for how long after a shot it is up all the same, in seconds.
+const AT_THE_HIP := 0.32
+const UP_AFTER_A_SHOT := 0.5
 ## Seconds it is shown behind what was last heard of it, so that there is a
 ## report on either side of that moment to go between.
 const DELAY := 0.1
@@ -85,6 +89,8 @@ var deflected := false
 var _rig: Node3D
 var _weapon := 0
 var _doing := 0
+## Seconds left that its weapon is up for a shot it fired.
+var _shooting := 0.0
 ## What was heard of it of late: [seconds, position, yaw, pitch, velocity].
 var _reports: Array[Array] = []
 var _label := Label3D.new()
@@ -162,6 +168,8 @@ func _dress() -> void:
 	_barrels = rig.find_child("Barrels", true, false) as Node3D
 	if _barrels:
 		_barrels_rest = _barrels.transform
+	if _doing & Net.CROUCHED:
+		_duck(true)
 
 
 ## Becomes a robot of the route. Its weapon is its arm, whatever of the
@@ -243,10 +251,16 @@ func _process(delta: float) -> void:
 		var off := camera.global_position.distance_to(global_position)
 		_rig.every = 1 if off < POSED.x else 4 if not camera.is_position_in_frustum(global_position + Vector3.UP) else 2 if off < POSED.y else 3
 	# The weapon is on what its player looks at, and down while that one runs.
+	# A bot fights all the time; a player has it at the hip until they aim or
+	# fire.
+	_shooting = maxf(_shooting - delta, 0.0)
+	var looks_at := head.global_position - head.global_basis.z * 20.0
 	if _doing & Net.SPRINTING:
 		_rig.lower()
+	elif _rig is HUMANOID and id > 0 and not _doing & Net.AIMING and _shooting <= 0.0:
+		_rig.aim(looks_at, AT_THE_HIP)
 	else:
-		_rig.aim(head.global_position - head.global_basis.z * 20.0)
+		_rig.aim(looks_at)
 
 
 ## Where it looks in a vehicle, as its player looks: the vehicle has put it
@@ -342,6 +356,7 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 		return
 	var data: WeaponData = ARMORY.at(weapon)
 	_rig.fire()
+	_shooting = UP_AFTER_A_SHOT
 	var muzzle: Vector3 = _rig.muzzle()
 	# What a robot fires glows the colour it does on the route.
 	var robot := _rig is ROBOT
@@ -579,12 +594,11 @@ func rise(pose: Transform3D) -> void:
 	_dress()
 
 
-## What a bot is doing, the bits of net.gd: its brain says so, or the
-## machine of whoever it stands for. A bot that waits behind cover is seen
-## on one knee; somebody who plays is not, for a figure on one knee cannot
-## walk.
+## What it is doing, the bits of net.gd: the brain of a bot says so, or the
+## machine of whoever it stands for. Who crouches is seen on one knee, and
+## bent low as they walk.
 func act(doing: int) -> void:
-	if (doing ^ _doing) & Net.CROUCHED and id < 0:
+	if (doing ^ _doing) & Net.CROUCHED:
 		_duck(doing & Net.CROUCHED != 0)
 	_doing = doing
 

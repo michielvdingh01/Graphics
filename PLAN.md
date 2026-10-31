@@ -5334,6 +5334,60 @@ Het staat los van de branch `killfeedback` (schedels, multikills, killstreaks), 
 | De zon, voor en na | `assets/arenas/sheets/alps_zon.jpg` |
 | De teller, voor en na | `assets/arenas/sheets/kills_teller.jpg` |
 
+## Het bananengeweer
+
+Op Michiels vraag: de Needler uit Halo, maar met een tros bananen erop. Het idee is overgenomen (projectielen die hun doel zoeken, blijven steken en samen ontploffen), het model niet: het spel gaat via releases naar vrienden, dus dit is een eigen ontwerp. Een gedrongen werper van walnoot en messing met een klokmond, en op een messing zadel een tros bananen.
+
+- **Het wapen** (`weapons/banana_gun.tres`, `_banana_gun()` in `tools/models/weapons.gd`, 6 736 driehoeken met handen): een speciaal wapen op een rek, dus op 6, net als de minigun en de raketwerper. `SPECIALS` in `scripts/match.gd` heeft er een derde bij; een wedstrijd zet nu drie rekken uit. De plaats in de kast is de laatste; `Net.VERSION` is 18.
+- **De tros is het magazijn.** Zestien bananen, elk een eigen onderdeel `Round<n>` onder `Mag`, dus zestien schoten, en je ziet de tros slinken, de buitenste eerst. Twee trossen erbij (48 in totaal). Herladen neemt de tros er naar linksonder af, naar de schouder, en zet een volle terug. Zestien onderdelen zijn zestien tekenopdrachten extra in de hand, niet gemeten. Wie het wapen in handen van een ander ziet, ziet altijd een volle tros.
+- **De banaan** (`scripts/banana.gd`, `scenes/banana.tscn`): 34 m/s, draait om zijn lengte, zoekt elke 0,1 s tot 30 m vooruit in een kegel van 37° naar iets levends in het zicht en draait daar 4,5 rad/s naartoe. Na 2,2 s valt hij weg. Een treffer doet 14. Hij blijft 3 s steken; zes in hetzelfde doel gaan samen af (`Blast.explode`, straal 3,5 m, 110 schade), ook tegen jezelf als je te dichtbij staat.
+- **Bots** pakken het op zoals de andere speciale wapens. `blasts` in `scripts/weapon_data.gd` zegt dat het niet ontploft bij wat het raakt: een bot richt het dus op de borst en vuurt ook van dichtbij en vlak bij een muur.
+- **Geluid**: `banana_gun_shot` (de klap van het pompgeweer met de hoogte eraf en een holle val eronder) en `banana_stick`, plus variant `banana_gun_shot_b`, lager en ronder.
+- **`--give=banana_gun`** om het te proberen; `tools/selftest.sh --banana` voor alleen de test.
+- `_face()` is van `tools/models/prizes.gd` naar `tools/model_builder.gd` verhuisd, zodat de wapens hem ook kunnen gebruiken.
+- **Getest**: de hele selftest (626 controles, met de Alpen-bestanden uit de hoofdcheckout er tijdelijk bij), `tools/nettest.sh` en `tools/test_match.sh --specials` slagen. De selftest kijkt of elk schot één banaan van de tros haalt, of een banaan die 1,8 m naast een grunt op 12 m is gericht afbuigt en blijft steken (86 van 100 over), of de zesde de ontploffing geeft en de grunt dood is, en of herladen de hele tros terugzet.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het klinkt.** Gemaakt en niet gehoord: `banana_gun_shot` tegen `_b` is aan Michiel.
+- **Hoe het voelt en de balans.** 14 per banaan, zes voor de ontploffing, 420 per minuut en de zoekhoek zijn eerste gokken. Bots met dit wapen zijn niet in een hele wedstrijd bekeken.
+- **Richten** houdt het wapen rechtsonder in beeld, omdat de tros anders precies in het midden staat: je kijkt erlangs. Er is dus geen vizier; bij een wapen dat zelf zoekt vond ik dat goed, maar dat is mijn keuze.
+- **De banaan in de lucht en in een doel** heb ik niet in beeld gehad, alleen het wapen in rust, gericht en tijdens het herladen.
+
+## Bukken en richten bij een andere speler
+
+Op 31 oktober 2026 gevraagd: in multiplayer en co-op zie je het als een ander springt, maar niet als die bukt of richt. Op de branch `stances`.
+
+**Waarom het er niet was.** Bukken ging al over het net, maar `act()` in `scripts/puppet.gd` toonde het alleen bij bots: een figuur op één knie kon niet lopen. Richten ging helemaal niet over het net, en de andere speler hield zijn wapen altijd op het vizier, behalve bij sprinten.
+
+**Wat er nu is** (blad `assets/characters/sheets/houdingen_spelers.jpg`)
+
+- **Bukken:** stil zit de ander op één knie, net als een bot achter dekking. Zodra hij loopt, gaat hij op `Crouch_Fwd` uit `ual1.glb`: echt laag en gebogen (`crouch_walk` in `assets/animations/manifest.json`, `low` in de set `soldier`, opnieuw gebouwd in `moves.res`). De snelheid van de clip gaat mee met hoe hard hij loopt.
+- **De trefvorm bukt mee.** De botsvorm van zo'n speler stond rechtop, ook als hij op zijn eigen machine bukte: wie erop schoot, raakte de lucht boven hem. Nu is die 65 cm lager, net als op zijn eigen machine. Dat verandert de wedstrijd dus een beetje, niet alleen het beeld.
+- **Richten:** een nieuw bit `AIMING` gaat over het net (`Net.VERSION` van 18 naar 19, dus oude en nieuwe builds spelen niet samen). Wie niet richt, draagt zijn wapen laag aan de heup (`AT_THE_HIP` 0,32 van de weg omhoog); wie richt, heeft het aan het oog. Na een schot gaat het een halve seconde omhoog, ook vanaf de heup, want daar is de loop op het doel gericht. Bots vechten altijd en houden het wapen omhoog; aan hen is niets veranderd.
+- In een voertuig telt bukken niet mee: wie gebukt instapte, zat anders geknield op zijn stoel.
+
+De hoogte van de heup is mijn keuze. Op 0,62 was het verschil met het vizier op het blad nauwelijks te zien.
+
+**Getest**, 31 oktober 2026, naast twee andere sessies op de GPU, geen meting van de beeldsnelheid: er is geen duurdere shader bij, alleen één clip in de animatieboom.
+
+- `tools/nettest.sh`, met drie nieuwe controles: de gast bukt en richt, de host ziet het en de botsvorm wordt lager, en de gast staat weer op met het wapen aan de heup.
+- `tools/selftest.sh`, `tools/test_humanoid.sh` en `tools/test_sandbox.sh` slagen.
+- `tools/test_match.sh` faalt op één controle, op de trunk (`0610f47`) zonder deze branch net zo: "the minigun and the rocket launcher stand apart" verwacht twee wapenrekken, en de bananengun heeft er een derde bij gezet. De test is niet aangepast: `scripts/match_test.gd` is ook in bewerking op `lanparty`.
+
+**Niet getest of niet te beoordelen**
+
+- **In beweging heeft niemand het gezien.** Het blad toont stilstaande momenten. Of de overgang van knie naar hurkloop bij het aanzetten goed oogt, en of schuiven (sprinten en dan bukken) er als hurkloop goed uitziet, is alleen te beoordelen door te spelen.
+- **Twee echte machines.** De test draait twee keer op deze laptop, zonder GPU.
+- **Pistolen en de minigun** zijn niet op het blad bekeken; de heuphouding geldt daar ook.
+
+De sessie op `lanparty` werkt tegelijk in `scripts/net.gd` en `scripts/puppet.gd`, en zet `Net.VERSION` eveneens op 19. Bij het samenvoegen moet die dan op 20: de twee wijzigingen hebben elk hun eigen reden.
+
+| Wat | Commando of blad |
+|---|---|
+| De houdingen, voor en na | `assets/characters/sheets/houdingen_spelers.jpg` |
+| De test van samen spelen | `tools/nettest.sh` |
+
 ## Wedstrijden over het netwerk: stap 4, en een LAN-party
 
 Op 31 oktober 2026 gevraagd: team deathmatch en capture the banaan met vrienden, op hetzelfde netwerk, op een LAN-party bij Michiel thuis. Tot nu toe kon samen alleen de route: `Match.open()` verbrak elke verbinding. Dit is stap 4 uit "Wedstrijden: teams, bots en een buit". Gebouwd op de branch `lanparty`.
@@ -5352,7 +5406,7 @@ Op 31 oktober 2026 gevraagd: team deathmatch en capture the banaan met vrienden,
 - `Match` deed al veel via `Net.show()`. Wat nog ontbrak: mensen in de opstelling (`_line_up_people()`, `_embody()`, `dress_people()`), en dat iemand op een gast kan sterven: elke machine houdt de health van haar eigen speler bij en meldt `went_down`.
 - **Wat alleen op de host stond, staat nu overal.** De rekken, de cellen en de buit worden neergezet met `_show_out()`. Een spelsoort zegt zelf wat er op elke machine moet staan: `plan()`, `set_out()`, `how_it_stands()`, `stand_as()` en `watch()` in `scripts/modes/mode.gd`. Wie een wapen van een rek pakt, vraagt dat aan de host (`take_asked`), zodat twee tegelijk niet allebei winnen; een cel is op alle machines weg zodra hij op één gepakt is.
 - **De bots hoorden een gast niet schieten.** Dat loopt nu via de pop van die gast op de host.
-- `Net.VERSION` is 19, omdat `banaan` 18 gebruikt. Wie als tweede in de trunk komt, kijkt hier nog even naar.
+- `Net.VERSION` is 20: de trunk kwam intussen zelf op 19. Wie hierna iets over de lijn toevoegt, kijkt welk getal het is geworden.
 
 **Wat de test onderweg vond**
 

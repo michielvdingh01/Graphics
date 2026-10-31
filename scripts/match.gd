@@ -54,7 +54,7 @@ const STASH := preload("res://scripts/stash.gd")
 ## scripts/arena.gd finds them a spot.
 const ARENAS := "res://assets/arenas.json"
 ## The weapons of the arena where a pack does not say: assets/packs.json.
-const SPECIALS: Array[String] = ["minigun", "rocket_launcher"]
+const SPECIALS: Array[String] = ["minigun", "rocket_launcher", "banana_gun"]
 const PICKUP := preload("res://scripts/pickup.gd")
 const PRIZE := preload("res://scripts/prize.gd")
 ## What knows of the match in its turn is loaded once the game runs, not as
