@@ -26,6 +26,8 @@ extends Resource
 @export var reserve_ammo := 120
 ## Never runs out of reserve: what is always there to fall back on.
 @export var bottomless := false
+## Never runs out at all: a shot takes nothing from the magazine.
+@export var endless := false
 @export var reload_time := 1.8
 ## Loaded one round at a time, each taking `reload_time / mag_size`, instead
 ## of by the magazine; a shot interrupts it.
@@ -128,12 +130,12 @@ extends Resource
 @export var cooling := 0.25
 
 @export_group("Special")
-## In no pack: it lies in the arena (scripts/stash.gd) and is carried on a
-## key of its own, with what it held when it was found and nothing more. Once
-## it is empty it is thrown away.
+## It lies in the arena (scripts/stash.gd) and is carried on a key of its own,
+## with what it held when it was found and nothing more. Once it is empty it
+## is thrown away. A pack can carry it as well: there it is a weapon like any.
 @export var special := false
-## What it fires instead of bullets, a scene with scripts/rocket.gd or
-## scripts/banana.gd, and how
+## What it fires instead of bullets, a scene with scripts/rocket.gd,
+## scripts/banana.gd or scripts/beer.gd, and how
 ## fast that leaves the muzzle in m/s.
 @export var projectile: PackedScene
 @export var projectile_speed := 45.0
@@ -144,3 +146,8 @@ extends Resource
 ## has left to lose: tools/weapon_sheet.py counts no more shots than that. 0
 ## for what does not.
 @export var bunch := 0
+## Metres a second upwards on top of the aim, for what falls as it flies.
+@export var projectile_lift := 0.0
+## Goes by hand: at a shot what is in hand is gone, and the next comes up
+## before the following one.
+@export var by_hand := false

@@ -898,7 +898,7 @@ func _launch(eye: Vector3) -> void:
 	var angle := randf() * TAU
 	var direction := (aim * Vector3(cos(angle) * off, sin(angle) * off, -1.0)).normalized()
 	var from := eye + direction * 0.7
-	var speed := direction * _data.projectile_speed + _body.velocity * 0.3
+	var speed := direction * _data.projectile_speed + Vector3.UP * _data.projectile_lift + _body.velocity * 0.3
 	_body.launched(from, speed, me.id)
 	Net.tell(_body, &"launched", [from, speed])
 	Net.show(_body, &"fired", [me.weapon, PackedVector3Array()])

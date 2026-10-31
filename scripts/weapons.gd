@@ -85,6 +85,10 @@ const PUMP_TRAVEL := 0.075
 ## A magazine change, in fractions of the reload: when the magazine leaves,
 ## when the fresh one is home and when the bolt is let go.
 const MAG_OUT := 0.14
+## Of a weapon that goes by hand: the share of the time between two shots that
+## the hand is empty, and how far below it the next comes up from.
+const BY_HAND_GONE := 0.3
+const BY_HAND_DROP := 0.16
 const MAG_IN := 0.72
 const BOLT_RELEASE := 0.88
 const MAG_DROP := 0.32
@@ -307,6 +311,9 @@ var _switch_left := 0.0
 var _switch_total := 0.3
 ## The weapon in hand when the one from the arena was taken up, to go back to.
 var _special_from := 0
+## How many of the loadout came with the pack: what comes after those was
+## found in the arena, whatever kind of weapon it is.
+var _pack_size := 0
 ## Barrels that spin: how far up to speed they are, from 0 to 1, how far the
 ## rate of fire has come up to its full, and how far round they have turned.
 var _spin := 0.0
@@ -413,6 +420,7 @@ func equip(weapons: Array[WeaponData], grenade_count := Vector2i(2, 3), grenade 
 	_mags.clear()
 	_reserves.clear()
 	loadout = weapons.duplicate() if not weapons.is_empty() else ARMORY.weapons(ARMORY.STANDARD)
+	_pack_size = loadout.size()
 	for data in loadout:
 		_take_up(data, data.mag_size, _start_reserve(data))
 	_index = 0
@@ -461,7 +469,7 @@ func _take_up(data: WeaponData, mag: int, reserve: int) -> void:
 
 ## The weapon from the arena that is carried, null if none is.
 func special() -> WeaponData:
-	return loadout[-1] if not loadout.is_empty() and loadout[-1].special else null
+	return loadout[-1] if loadout.size() > _pack_size else null
 
 
 ## The rounds left in the weapon from the arena, magazine and reserve.
@@ -629,9 +637,8 @@ func preview(index: int, aim := 0.0, reload := 0.0, blow := 0.0) -> void:
 ## reserve of every weapon, the grenades and what is on the second key. What
 ## is over that is kept.
 func resupply() -> void:
-	for i in loadout.size():
-		if not loadout[i].special:
-			_reserves[i] = maxi(_reserves[i], _start_reserve(loadout[i]))
+	for i in _pack_size:
+		_reserves[i] = maxi(_reserves[i], _start_reserve(loadout[i]))
 	grenades = maxi(grenades, start_grenades)
 	grenades_changed.emit(grenades)
 	tacticals = maxi(tacticals, start_tacticals)
@@ -643,10 +650,9 @@ func resupply() -> void:
 ## with, the grenades and what is on the second key. For a fight that is
 ## fought again.
 func restock() -> void:
-	for i in loadout.size():
-		if not loadout[i].special:
-			_mags[i] = loadout[i].mag_size
-			_reserves[i] = _start_reserve(loadout[i])
+	for i in _pack_size:
+		_mags[i] = loadout[i].mag_size
+		_reserves[i] = _start_reserve(loadout[i])
 	grenades = start_grenades
 	grenades_changed.emit(grenades)
 	tacticals = start_tacticals
@@ -658,9 +664,9 @@ func restock() -> void:
 ## for the others. False if nothing of it fitted.
 func add_ammo() -> bool:
 	var took := false
-	for i in loadout.size():
+	for i in _pack_size:
 		var data := loadout[i]
-		if data.bottomless or data.special:
+		if data.bottomless:
 			continue
 		var rounds := ceili(data.mag_size * (CAN_MAGS if i == _pending else CAN_MAGS_OTHERS))
 		var fits := mini(rounds, data.reserve_ammo - _reserves[i])
@@ -674,8 +680,8 @@ func add_ammo() -> bool:
 
 ## True if a can of ammunition would not be wasted: some weapon has room.
 func ammo_room() -> bool:
-	for i in loadout.size():
-		if not loadout[i].bottomless and not loadout[i].special and _reserves[i] < loadout[i].reserve_ammo:
+	for i in _pack_size:
+		if not loadout[i].bottomless and _reserves[i] < loadout[i].reserve_ammo:
 			return true
 	return false
 
@@ -693,7 +699,7 @@ func add_grenade() -> bool:
 ## starts with or more, 1 with none. One that never runs out is never short.
 func ammo_lack() -> float:
 	var data := loadout[_pending]
-	if data.bottomless or data.special:
+	if data.bottomless or _pending >= _pack_size or data.reserve_ammo == 0:
 		return 0.0
 	return clampf(1.0 - float(_reserves[_pending]) / _start_reserve(data), 0.0, 1.0)
 
@@ -831,7 +837,8 @@ func _process(delta: float) -> void:
 
 
 func _fire(data: WeaponData) -> void:
-	_mags[_index] -= 1
+	if not data.endless:
+		_mags[_index] -= 1
 	_cooldown = 60.0 / data.rounds_per_minute
 	_since_shot = 0.0
 
@@ -911,7 +918,7 @@ func _fire(data: WeaponData) -> void:
 	_kick_view(data)
 	flash()
 	_heat = minf(_heat + SHOT_HEAT * (2.5 if data.pellets > 1 else 1.0), 1.0)
-	_smoke_due = true
+	_smoke_due = data.flash_size > 0.0
 	if model.pump:
 		_pump_stage = 0
 	else:
@@ -949,7 +956,7 @@ func _launch(data: WeaponData, origin: Vector3, spread: float) -> void:
 	if get_world_3d().direct_space_state.intersect_ray(query):
 		start = origin
 	var rocket: Node3D = data.projectile.instantiate()
-	rocket.velocity = direction * data.projectile_speed + player.velocity * 0.3
+	rocket.velocity = direction * data.projectile_speed + Vector3.UP * data.projectile_lift + player.velocity * 0.3
 	rocket.direct = data.damage
 	rocket.thrower = Match.number(player) if Match.active else 0
 	rocket.shooter = player
@@ -1027,7 +1034,7 @@ func _loop(player: AudioStreamPlayer, sound: StringName, on: bool, db: float, pi
 ## A weapon from the arena that has been fired empty is thrown away a moment
 ## later, and what was in hand before comes up again.
 func _throw_away_spent(data: WeaponData, delta: float) -> void:
-	if not data.special or _index != loadout.size() - 1 or _mags[_index] > 0 or _reserves[_index] > 0 or _reload_left > 0.0:
+	if special() == null or _index != loadout.size() - 1 or _mags[_index] > 0 or _reserves[_index] > 0 or _reload_left > 0.0:
 		_spent_for = 0.0
 		return
 	_spent_for += delta
@@ -1495,7 +1502,12 @@ func _animate_parts(model: Viewmodel, data: WeaponData, delta: float) -> Array[V
 		model.action.position.z += model.travel * maxf(back, _locked)
 	for i in model.rounds.size():
 		model.rounds[i].visible = i < _mags[_index] or (_reload_left > 0.0 and fraction > MAG_OUT)
-	if (data.projectile or data.en_bloc) and model.mag and model.rounds.is_empty():
+	if data.by_hand and model.mag:
+		# Gone with the throw; the next comes up into the hand.
+		var cycle := clampf(_since_shot * data.rounds_per_minute / 60.0, 0.0, 1.0)
+		model.mag.visible = cycle > BY_HAND_GONE
+		model.mag.position += Vector3.DOWN * BY_HAND_DROP * (1.0 - smoothstep(BY_HAND_GONE, 1.0, cycle))
+	elif (data.projectile or data.en_bloc) and model.mag and model.rounds.is_empty():
 		# The round sticks out of the tube until it is fired, and the next is
 		# there once the reload has brought it; so does a clip, which flies
 		# out with its last round.
