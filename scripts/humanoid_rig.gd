@@ -141,6 +141,8 @@ const SCREAM_DB := -3.0
 const GAIT := &"parameters/gait/blend_position"
 const PACE := &"parameters/pace/scale"
 const MOVE := &"parameters/move/blend_amount"
+const LOW := &"parameters/low/blend_amount"
+const LOW_PACE := &"parameters/low_pace/scale"
 const ACT_CLIP := &"parameters/act_clip/transition_request"
 const ACT_PACE := &"parameters/act_pace/scale"
 const ACT := &"parameters/act/request"
@@ -309,6 +311,8 @@ var _measured: Array[bool] = [false, false]
 var _aiming := false
 var _target := Vector3.ZERO
 var _raised := 0.0
+## How far aim() brings the weapon up: 1 to the sights.
+var _up_to := 1.0
 ## How far it carries its weapon across its chest, see PORT: 0 to 1.
 var _port := 0.0
 var _aim_yaw := 0.0
@@ -491,18 +495,21 @@ func set_glow(color: Color) -> void:
 		_glint.set_instance_shader_parameter(&"tint", Vector3(color.r, color.g, color.b))
 
 
-## Brings the weapon to bear on a point; lower() lets it hang again.
-func aim(target: Vector3) -> void:
+## Brings the weapon to bear on a point, `how_far` of the way from where it
+## hangs to the sights; lower() lets it hang again.
+func aim(target: Vector3, how_far := 1.0) -> void:
 	_aiming = true
 	_target = target
+	_up_to = how_far
 
 
 func lower() -> void:
 	_aiming = false
 
 
-## Goes down on one knee behind something low, or stands up again. Only a way
-## of moving with a "kneel" does; crouch_drop says how far.
+## Goes down on one knee behind something low, or stands up again, and walks
+## bent low if the way of moving has a "low" for it. Only a way of moving with
+## a "kneel" does; crouch_drop says how far.
 func crouch(on: bool) -> void:
 	_crouching = on and crouch_drop > 0.0
 
@@ -758,13 +765,16 @@ func _pose(delta: float) -> void:
 	if _panicking and can_process():
 		_wail(delta)
 	_thrown_up = lerpf(_thrown_up, 1.0 if _panicking else 0.0, 1.0 - exp(-9.0 * delta))
-	_raised = lerpf(_raised, 1.0 if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
+	_raised = lerpf(_raised, _up_to if _aiming else 0.0, 1.0 - exp(-9.0 * delta))
 	# Across the chest when it runs flat out, for as long as it does not aim.
 	var flat_out := smoothstep(FLAT_OUT.x, FLAT_OUT.y, speed) if _hold == Hold.SHOULDER else 0.0
 	_port = lerpf(_port, flat_out * (1.0 - _raised), 1.0 - exp(-7.0 * delta))
 	if crouch_drop > 0.0:
 		_kneel = move_toward(_kneel, 1.0 if _crouching else 0.0, delta / 0.35)
 		_tree.set(KNEEL, smoothstep(0.0, 1.0, _kneel))
+		if _set.has("low"):
+			_tree.set(LOW, moving)
+			_tree.set(LOW_PACE, minf(speed / float(_facts[_set.low].stride), TOP_PACE) * (-1.0 if _backward else 1.0))
 	# Feet apart as it comes to a stand with a weapon; at once into the
 	# stride of the clip as it sets off.
 	var stands := _hold != Hold.NONE and _moving < 0.05 and _kneel == 0.0
@@ -1616,7 +1626,7 @@ func _library() -> AnimationLibrary:
 ## a blow over that from the waist up, a flinch over that, and the fall
 ## over everything.
 func _blend_tree() -> AnimationNodeBlendTree:
-	var key: String = _set.idle + ("+" + _set.carry if _wielding else "") + ("+" + _set.kneel if _set.has("kneel") else "")
+	var key: String = _set.idle + ("+" + _set.carry if _wielding else "") + ("+" + _set.kneel if _set.has("kneel") else "") + ("+" + _set.low if _set.has("low") else "")
 	if _trees.has(key):
 		return _trees[key]
 	var tree := AnimationNodeBlendTree.new()
@@ -1651,7 +1661,17 @@ func _blend_tree() -> AnimationNodeBlendTree:
 		tree.add_node(&"kneel", kneel)
 		tree.add_node(&"kneel_clip", _clip(_set.kneel))
 		tree.connect_node(&"kneel", 0, below)
-		tree.connect_node(&"kneel", 1, &"kneel_clip")
+		if _set.has("low"):
+			# And on its feet again, bent low, as soon as it goes anywhere.
+			tree.add_node(&"low_clip", _clip(_set.low))
+			tree.add_node(&"low_pace", AnimationNodeTimeScale.new())
+			tree.connect_node(&"low_pace", 0, &"low_clip")
+			tree.add_node(&"low", AnimationNodeBlend2.new())
+			tree.connect_node(&"low", 0, &"kneel_clip")
+			tree.connect_node(&"low", 1, &"low_pace")
+			tree.connect_node(&"kneel", 1, &"low")
+		else:
+			tree.connect_node(&"kneel", 1, &"kneel_clip")
 		below = &"kneel"
 	if _wielding:
 		# What it strikes with it carries at the ready, whatever its legs do.
