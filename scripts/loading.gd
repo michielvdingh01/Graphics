@@ -152,7 +152,10 @@ func _load(run: int) -> void:
 	_alongside = _alongside_of(_scene)
 	if _threaded():
 		for path: String in [_scene] + _alongside:
-			if not _requested.has(path) and ResourceLoader.load_threaded_request(path, "", true) == OK:
+			# Without sub-threads: with them an exported game hung for good in
+			# the dunes, four times out of four, where a run from a checkout
+			# did not.
+			if not _requested.has(path) and ResourceLoader.load_threaded_request(path, "", false) == OK:
 				_requested[path] = true
 	_say("Loading", 0.0)
 	var level: PackedScene
