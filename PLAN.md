@@ -5555,7 +5555,7 @@ Op 31 oktober 2026 op Michiels woord gebouwd en gepubliceerd als `build-20261031
 
 Dit zijn eenmalige runs ter controle dat alles laadt, geen om en om gemeten fps.
 
-**Niet gezien:** twee echte machines, wifi, de netwerkvraag van macOS, en het loopt niet op een echte Air of op 8 GB geheugen. Een update met venster bij een vriend, na "Open toch", is ook nog nooit bekeken. Dat de vriend op de Air de update krijgt, staat of valt daarmee; anders is de installer de weg.
+**Niet gezien:** twee echte machines, wifi, de netwerkvraag van macOS en een run op een echte Air of op 8 GB geheugen. Ook een update met venster, na "Open toch", is nog nooit bekeken. Start het spel op de Air niet de nieuwe versie, dan is de installer de weg.
 
 **Een misser om niet te herhalen:** `tools/release.sh` draaide eerst per ongeluk in de hoofdcheckout, zonder `build/src`: 31 minuten importeren, 3% ver en 29 GB schijf. Die run is op PID gestopt en de `build/` weggehaald. Start het script met zijn volledige pad en kijk meteen of de export in `vriendenbuild` loopt.
 
