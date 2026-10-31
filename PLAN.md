@@ -5489,3 +5489,40 @@ Op 31 oktober 2026 vroeg Michiel om alles wat nog openstond te committen en te p
 **Getest**, op de samengevoegde trunk zonder GPU (load rond 3, op netstroom, geen andere meting): selftest 634, `tools/nettest.sh` 69, `tools/nettest.sh --match` 99, `tools/test_match.sh` 125, alles geslaagd.
 
 **Niet gezien:** twee echte machines, wifi, de netwerkvraag van macOS in een geëxporteerde build, en het spelen zelf. Een push bereikt een geïnstalleerd spel niet: daarvoor is een nieuwe release nodig (`tools/release.sh`, dan `--publish`).
+
+## Party anders, en een team dat op jou leunt
+
+Op 31 oktober 2026 gevraagd, na een paar potjes multiplayer: Party is te makkelijk, en ook met andere wapensets win je te snel, omdat je teamgenoten even sterk zijn als de tegenstanders. Op de branch `teambalans`.
+
+- **Party** (`assets/packs.json`): bier op 1, het bananengeweer op 2, verder geen wapens. De minigun en de raketwerper staan weer op hun eigen plekken in de arena (`"specials": ["minigun", "rocket_launcher"]`); het bananengeweer niet, want dat draagt iedereen al. De bots gooien bier of schieten bananen, om en om. Twee granaten en twee rookgranaten zijn gebleven, en de slag op V ook: dat las ik niet als wapens. `"grenades": 0, "tacticals": 0` haalt ze weg.
+- **Een fout hersteld**: een bot die een wapen met `special` als eigen wapen droeg, herlaadde nooit. Na zestien bananen stond hij dus zonder tot hij doodging (`_start_reload()` en `_fill()` in `scripts/bot.gd` keken naar `_data.special`, nu naar `special()`). Dat zat al in het vorige Party. De telling daar klopt dus niet meer.
+- **Teamgenoten zijn zwakker dan tegenstanders.** Michiels vermoeden klopte: alle bots hadden hetzelfde niveau. `assets/match.json` heeft per moeilijkheid naast `bots` nu `friends`, het niveau van bots met een mens op hun kant. Dat is alleen het niveau (`bot_level(who)` in `scripts/match.gd`), geen verborgen schade, dus ze doen hetzelfde als andere bots, alleen wat trager en slordiger. Nieuw is het niveau `green`, tussen Recruit en Regular in `assets/bots.json`.
+
+  | | Easy | Normal | Hard |
+  |---|---|---|---|
+  | Tegenstanders | Recruit | Regular | Hardened |
+  | Bots op jouw kant | Recruit | Green | Regular |
+
+- **Wie meedoet telt.** Het niveau hangt af van wie er nu op de kant staat: wie erbij komt, weggaat of van kant wisselt, verandert het binnen een tel. Staan er mensen aan beide kanten, dan zijn beide kanten zwakker, en is het dus weer gelijk. Bij ieder voor zich en bij een wedstrijd van alleen bots verandert er niets. Capture the flag volgt dezelfde regel, maar is niet apart gemeten.
+- **`Net.VERSION` is 22**, want wat iemand draagt in Party komt uit zijn eigen `packs.json`.
+- **Meten**: `tools/test_match.sh --sides --difficulty=1 --arena=works` speelt één teamdeathmatch uit terwijl de speler niets doet. Met `--stand-in` neemt een bot zijn plaats in, die zo goed is als de tegenstanders en wiens kant hem als mens telt. Daarvoor is `Match.stand_in` er, alleen voor de test.
+
+**Gemeten**, zonder GPU, 4× de klok, vier tegelijk, laptop aan de lader, load 2,5 tot 4, geen andere meting ernaast. Zes tegen zes, tot 50, standaardset. Fabriek, fabrieksterrein en centrale tellen even zwaar; de stand is de gemiddelde eindstand, jouw team eerst.
+
+| | Voor: niets doen | Nu: niets doen | Nu: invaller zo goed als de tegenstanders |
+|---|---|---|---|
+| Easy | 36 tegen 48, 1 van 9 gewonnen | ongewijzigd | niet gemeten |
+| Normal | 46 tegen 46, 4 van 9 | 33 tegen 50, 0 van 12 | 37 tegen 50, 0 van 12, zelf 24% van de kills |
+| Hard | 42 tegen 47, 2 van 9 | 23 tegen 50, 0 van 9 | 34 tegen 50, 0 van 9, zelf 26% van de kills |
+
+De verschillen tussen potjes zijn groot: op Normal zonder speler van 18 tot 42. Een eerste `green` was te zwak (20 tegen 50, harder dan Hard): de stap van Recruit naar Regular is veel groter dan die van Regular naar Hardened.
+
+In de duinen, twintig tegen twintig, twee potjes per stand: Normal 116 tegen 170, Hard 94 tegen 170. Party zonder speler, twee potjes per arena: fabriek op Normal 40 tegen 50 en op Hard 30 tegen 50, fabrieksterrein op Normal 41 tegen 45 (één gewonnen) en op Hard 35 tegen 50. Een botpotje Party op het fabrieksterrein, 240 s: bananengeweer 38 kills, ontploffingen 40 (grotendeels bananen, de telling scheidt ze niet van raketten), minigun 20, bier 13, slag 6, raketwerper 1. De minigun werd zes keer gepakt, de raketwerper drie keer.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het speelt.** Een mens is geen bot en geen invaller. Of je op Normal en Hard nu genoeg moet doen en nog kunt winnen, zegt alleen het spelen. Bijstellen kan in `assets/bots.json` bij `green` en in `friends` in `assets/match.json`.
+- **Hoe de teamgenoten eruitzien.** Ik heb niet gezien of Green en Regular naast je dom overkomen.
+- **Party op het fabrieksterrein** ligt het dichtst bij gelijk: zoekende bananen hangen minder af van hoe goed een bot richt. Twee potjes per stand is weinig.
+- **Bier is bij bots zwak** en het bananengeweer sterk (13 tegen minstens 38 kills). Dat is niet aangepast.
+- **Over het netwerk.** `tools/nettest.sh` draait, maar een potje met twee mensen op één kant tegen bots is niet apart gemeten.

@@ -67,11 +67,11 @@
 		},
 		"party": {
 			"title": "Party",
-			"about": "A rocket launcher, a minigun, bananas that find you, and all the beer you can throw.",
-			"weapons": ["rocket_launcher", "minigun", "banana_gun", "beer"],
-			"bots": ["banana_gun", "minigun", "beer", "rocket_launcher", "beer", "banana_gun"],
+			"about": "All the beer you can throw and bananas that find you. The big guns wait out on their stands.",
+			"weapons": ["beer", "banana_gun"],
+			"bots": ["beer", "banana_gun"],
 			"sidearm": "beer",
-			"specials": [],
+			"specials": ["minigun", "rocket_launcher"],
 			"grenades": 2,
 			"tacticals": 2
 		}

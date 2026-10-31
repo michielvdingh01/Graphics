@@ -13,9 +13,10 @@ extends Node
 ## points. It walks and runs as fast as the player. Its aim runs after the
 ## chest of its target and takes a moment to get there, and it does not fire
 ## on sight: how long that takes, how far its aim wanders and how wide it
-## looks is its level (assets/bots.json), which goes by the difficulty. So is
-## how long it keeps firing before it lets up, and at a person no more bots
-## fire at a time than the match allows.
+## looks is its level (assets/bots.json), which goes by the difficulty and by
+## whether it has a person on its side. So is how long it keeps firing before
+## it lets up, and at a person no more bots fire at a time than the match
+## allows.
 ## Whom it sees, its side knows of as well.
 ##
 ## A weapon of the arena (scripts/stash.gd) it takes up as it walks by one,
@@ -367,7 +368,7 @@ func _physics_process(delta: float) -> void:
 	_look -= delta
 	if _look <= 0.0:
 		_look = LOOK
-		_level = LEVEL.merged(Match.bot_level(), true)
+		_level = LEVEL.merged(Match.bot_level(me), true)
 		var camera := _body.get_viewport().get_camera_3d()
 		_far = camera != null and camera.global_position.distance_to(_body.global_position) > FAR_OFF
 		_look_around()
@@ -807,7 +808,7 @@ func _ready_to_fire(eye: Vector3) -> bool:
 
 
 func _start_reload() -> void:
-	if _data.special and _spare <= 0:
+	if special() and _spare <= 0:
 		return
 	_reload = _data.reload_time
 
@@ -815,7 +816,7 @@ func _start_reload() -> void:
 ## The magazine is full once a reload is done: its own weapon never runs
 ## out, a weapon of the arena has what it came with.
 func _fill() -> void:
-	if not _data.special:
+	if not special():
 		_mag = _data.mag_size
 		return
 	var rounds := mini(_data.mag_size - _mag, _spare)

@@ -47,6 +47,10 @@ func _run() -> void:
 			tree.quit(0)
 			return
 	var told := Array(OS.get_cmdline_user_args())
+	if "--sides" in told:
+		await _sides()
+		tree.quit(0)
+		return
 	if not told.any(func(arg: String) -> bool: return arg.begins_with("--match=")):
 		for arg in told:
 			if arg.begins_with("--pack="):
@@ -79,10 +83,10 @@ func _run() -> void:
 	var caps := []
 	for difficulty in 3:
 		Settings.difficulty = difficulty
-		caps.append([Settings.rules().regen_to, Settings.rules().hurts, int(Settings.rules().focus), Settings.rules().bots])
+		caps.append([Settings.rules().regen_to, Settings.rules().hurts, int(Settings.rules().focus), Settings.rules().bots, Settings.rules().friends])
 	Settings.difficulty = 1
 	_check("the rules are those of a match, by the difficulty: health comes back to 100, 75 and 50", Settings.rules().drops == 0.0
-		and caps == [[100.0, 0.75, 1, "recruit"], [75.0, 0.9, 2, "regular"], [50.0, 1.0, 0, "hardened"]])
+		and caps == [[100.0, 0.75, 1, "recruit", "recruit"], [75.0, 0.9, 2, "regular", "green"], [50.0, 1.0, 0, "hardened", "regular"]])
 	_check("and so is how good the bots are: slower, wider of the mark and firing shorter the easier it is", Match.bot_level().reaction == 0.55 and Match.bot_level().fov == 110.0
 		and Match.levels.recruit.reaction > Match.levels.hardened.reaction and Match.levels.recruit.wander > Match.levels.hardened.wander
 		and Match.levels.recruit.burst < Match.levels.hardened.burst and Match.levels.recruit.rest[0] > Match.levels.hardened.rest[1])
@@ -170,6 +174,7 @@ func _run() -> void:
 	_check("the player is one of four, each on a side of its own", me != null and me.body == player and Match.entrants.size() == 4
 		and Match.entrants.values().all(func(who: RefCounted) -> bool: return who == me or Match.mode.hostile(me, who)))
 	_check("and can be shot at like the others", Match.plays(player) and player.collision_layer & Match.SIDES[0] != 0 and Match.foes_of(player) == Match.SIDES[0])
+	_check("without sides nobody plays below the others", Match.entrants.values().all(func(who: RefCounted) -> bool: return who == me or Match.bot_level(who) == Match.bot_level()))
 	# The bots stand still for what follows.
 	for who: RefCounted in Match.entrants.values():
 		if who.brain:
@@ -282,6 +287,7 @@ func _run() -> void:
 	_check("health comes back to half on hard, three quarters on normal and all the way on easy", came_to == [50.0, 75.0, 100.0])
 	Settings.difficulty = 1
 	await _bots_and_specials()
+	await _party_and_friends()
 
 	# Against whoever the enemies were chosen to be.
 	Settings.enemy_theme = "zombies"
@@ -636,6 +642,57 @@ func _run() -> void:
 
 	print("MATCH TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
 	tree.quit(1 if _failures else 0)
+
+
+## In the pack Party everybody carries beer and the banana gun, and the big guns
+## stand out in the arena. Then what goes for any pack: from Normal on, those
+## on the side of a person play below those against them.
+func _party_and_friends() -> void:
+	var tree := get_tree()
+	_check("a match of Party opens", Match.open({"mode": "tdm", "level": "factory", "size": 3, "pack": "party"}) and Match.setup.pack == "party")
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 20.0)
+	var player: CharacterBody3D = tree.current_scene.player
+	var me: RefCounted = Match.me()
+	var beer: WeaponData = load("res://weapons/beer.tres")
+	var bananas: WeaponData = load("res://weapons/banana_gun.tres")
+	var armory: GDScript = load("res://scripts/armory.gd")
+	_check("the player has the beer on 1 and the banana gun on 2, and nothing more", player.weapons.loadout == [beer, bananas])
+	var bots: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot)
+	for bot: RefCounted in bots:
+		bot.brain.process_mode = Node.PROCESS_MODE_DISABLED
+	_check("the bots throw beer or fire bananas, some of each", bots.all(func(bot: RefCounted) -> bool: return armory.at(bot.weapon) in [beer, bananas])
+		and bots.any(func(bot: RefCounted) -> bool: return armory.at(bot.weapon) == beer) and bots.any(func(bot: RefCounted) -> bool: return armory.at(bot.weapon) == bananas))
+	var stands := tree.get_nodes_in_group("stash").map(func(stand: Node3D) -> String: return stand.weapon.resource_path.get_file().get_basename())
+	stands.sort()
+	_check("and the minigun and the rocket launcher stand out in the arena, not the banana gun", stands == ["minigun", "rocket_launcher"])
+	var banana_bot: RefCounted = bots.filter(func(bot: RefCounted) -> bool: return armory.at(bot.weapon) == bananas)[0]
+	banana_bot.brain._mag = 0
+	banana_bot.brain._start_reload()
+	var reloads: bool = banana_bot.brain._reload > 0.0
+	banana_bot.brain._fill()
+	_check("a bot whose bunch is gone puts on another, as with any weapon of its own", reloads and banana_bot.brain._mag == bananas.mag_size and banana_bot.brain.special() == null)
+
+	var friend: RefCounted = bots.filter(func(bot: RefCounted) -> bool: return bot.team == me.team)[0]
+	var foe: RefCounted = bots.filter(func(bot: RefCounted) -> bool: return bot.team != me.team)[0]
+	var of_level := func(difficulty: int) -> Array:
+		Settings.difficulty = difficulty
+		return [Match.bot_level(friend), Match.bot_level(foe)]
+	var easy: Array = of_level.call(0)
+	var normal: Array = of_level.call(1)
+	var hard: Array = of_level.call(2)
+	_check("on easy those on the player's side are as good as those against them", easy[0] == easy[1] and easy[1] == Match.levels.recruit)
+	_check("on normal a step below them, and on hard the same as those against them on normal", normal[1] == Match.levels.regular and normal[0] == Match.levels.green
+		and hard[1] == Match.levels.hardened and hard[0] == Match.levels.regular)
+	_check("a step that lies between what is there", Match.levels.green.reaction > Match.levels.regular.reaction and Match.levels.green.reaction < Match.levels.recruit.reaction
+		and Match.levels.green.wander > Match.levels.regular.wander and Match.levels.green.wander < Match.levels.recruit.wander)
+	Settings.difficulty = 1
+	var team: int = me.team
+	Match.change_sides(me.id)
+	var with_me: Array = bots.filter(func(bot: RefCounted) -> bool: return Match.entrants.has(bot.id) and bot.team == me.team)
+	var against: Array = bots.filter(func(bot: RefCounted) -> bool: return Match.entrants.has(bot.id) and bot.team != me.team)
+	_check("whoever changes sides takes the step with them", me.team != team and with_me.all(func(bot: RefCounted) -> bool: return Match.bot_level(bot) == Match.levels.green)
+		and against.all(func(bot: RefCounted) -> bool: return Match.bot_level(bot) == Match.levels.regular))
 
 
 ## With --soak=<seconds> and a --match= of its own: lets that match run for
@@ -1012,6 +1069,51 @@ func _pack_kills(pack: String) -> void:
 	var suspects := _print_kills(counted[0])
 	print("  %s" % _taken())
 	print("MATCH PACK %s: %s" % [pack, "no weapon takes more than twice its share of the kills" if suspects.is_empty() else "; ".join(suspects)])
+	Match.close()
+
+
+## Plays one team deathmatch to its end and says how it went, with the player
+## on the first side doing nothing at all: --difficulty=<0 to 2>, --arena=<level>,
+## --pack=<name>, --size=<a side>. With --stand-in a bot takes the player's place
+## and fights as well as those it is against, while its side goes on counting
+## it as a person: what somebody brings who is as good as the bots.
+func _sides() -> void:
+	var tree := get_tree()
+	var what := {"mode": "tdm", "level": "works"}
+	var stand_in := "--stand-in" in OS.get_cmdline_user_args()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--arena="):
+			what.level = arg.get_slice("=", 1)
+		elif arg.begins_with("--pack="):
+			what.pack = arg.get_slice("=", 1)
+		elif arg.begins_with("--size="):
+			what.size = arg.get_slice("=", 1).to_int()
+		elif arg.begins_with("--difficulty="):
+			Settings.difficulty = arg.get_slice("=", 1).to_int()
+	what.only_bots = stand_in
+	Settings.enemy_theme = "soldiers"
+	if not Match.open(what):
+		print("MATCH SIDES FAILED: no arena called %s" % what.level)
+		return
+	await tree.scene_changed
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 90.0)
+	if Match.state != Match.State.PLAYING:
+		print("MATCH SIDES FAILED: the match did not begin")
+		return
+	var hero: RefCounted = Match.me()
+	if stand_in:
+		hero = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team == 0)[0]
+		Match.stand_in = hero.id
+	Engine.time_scale = 4.0
+	var seconds := Match.left
+	await _until(func() -> bool: return Match.state != Match.State.PLAYING, 900.0)
+	Engine.time_scale = 1.0
+	var bots := 0
+	for who: RefCounted in Match.entrants.values():
+		if who.team == 0 and who != hero:
+			bots += who.kills
+	print("MATCH SIDES %s %s %s difficulty %d: %d to %d in %.0f s; the %s %d kills %d deaths, its bots %d kills" % [what.level, Match.setup.pack, "stand-in" if stand_in else "idle",
+		Settings.difficulty, Match.tally[0], Match.tally[1], seconds - Match.left, "stand-in" if stand_in else "player", hero.kills, hero.deaths, bots])
 	Match.close()
 
 

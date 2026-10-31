@@ -1098,8 +1098,8 @@ func _banana_gun() -> void:
 	_finished.append("banana gun")
 
 
-## The pack Party: what stands in the arena elsewhere is carried here like any
-## weapon, and what is thrown never runs out.
+## The pack Party: beer on 1, the banana gun on 2 and nothing else, though the
+## banana gun stands in the arena elsewhere; what is thrown never runs out.
 func _party() -> void:
 	var tree := get_tree()
 	var game := tree.current_scene
@@ -1113,28 +1113,30 @@ func _party() -> void:
 	for enemy in tree.get_nodes_in_group("enemy"):
 		enemy.queue_free()
 	await _wait(0.3)
-	var spec: Array = ARMORY.spec("party").weapons
-	_check("Party is on offer, with four weapons and no stands", ARMORY.names().has("party") and ARMORY.weapons("party").size() == 4
-		and spec[3] == "beer" and (ARMORY.spec("party").specials as Array).is_empty())
+	var beer: WeaponData = ARMORY.named("beer")
+	var bananas: WeaponData = ARMORY.named("banana_gun")
+	_check("Party is on offer: beer, the banana gun, and the big guns on their stands", ARMORY.names().has("party") and ARMORY.weapons("party") == [beer, bananas]
+		and ARMORY.spec("party").specials == ["minigun", "rocket_launcher"] and ARMORY.spec("party").bots == ["beer", "banana_gun"])
 	weapons.equip(ARMORY.weapons("party"), ARMORY.grenades("party"), ARMORY.grenade("party"), ARMORY.tacticals("party"), ARMORY.tactical("party"))
 	await _wait(0.8)
-	_check("what the pack carries is nothing found in the arena", weapons.special() == null and weapons.current() == ARMORY.named("rocket_launcher"))
-	var kept: WeaponData = weapons.current()
-	weapons._mags[0] = 0
-	weapons._reserves[0] = 0
+	_check("what the pack carries is nothing found in the arena", weapons.special() == null and weapons.current() == beer)
+	weapons._switch_to(1)
 	await _wait(0.8)
-	_check("fired empty, it stays in the pack", weapons.loadout.size() == 4 and weapons.current() == kept)
+	var kept: WeaponData = weapons.current()
+	weapons._mags[1] = 0
+	weapons._reserves[1] = 0
+	await _wait(0.8)
+	_check("fired empty, the banana gun stays in the pack", weapons.loadout.size() == 2 and kept == bananas and weapons.special() == null)
 	weapons.restock()
-	_check("and a new life fills it again", weapons._mags[0] == kept.mag_size)
+	_check("and a new life fills it again", weapons._mags[1] == kept.mag_size)
 	var counter := []
 	var read_counter := func(_weapon_name: String, mag: int, reserve: int) -> void: counter.assign([mag, reserve])
 	weapons.ammo_changed.connect(read_counter)
-	weapons._switch_to(3)
+	weapons._switch_to(0)
 	await _wait(0.7)
 	weapons.ammo_changed.disconnect(read_counter)
-	_check("and the counter says it has no end", counter == [ARMORY.named("beer").mag_size, -1])
-	var beer: WeaponData = ARMORY.named("beer")
-	_check("the beer is on 4, and never short", weapons.current() == beer and weapons.ammo_lack() == 0.0)
+	_check("and the counter says it has no end", counter == [beer.mag_size, -1])
+	_check("the beer is on 1, and never short", weapons.current() == beer and weapons.ammo_lack() == 0.0)
 	# Somewhere with room: the way that is clear furthest, out of eight.
 	var space: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
 	var eye: Vector3 = player.camera.global_position

@@ -163,8 +163,9 @@ var mode: RefCounted
 ## far health comes back by itself (`regen_to`) and after how long without a
 ## hit (`regen_after`), what is left of what a bot does to a person (`hurts`),
 ## how many bots fire at one person at a time (`focus`, 0 for as many as see
-## them), how good the bots are (`bots`) and whether the nearest bot of a side
-## goes to fetch a weapon of the arena once it is there (`fetches`).
+## them), how good the bots are (`bots`), and those who have a person on their
+## side (`friends`), and whether the nearest bot of a side goes to fetch a
+## weapon of the arena once it is there (`fetches`).
 var rules: Dictionary:
 	get:
 		var difficulty: int = setup.get("difficulty", Settings.difficulty) if Net.is_guest() else Settings.difficulty
@@ -189,6 +190,9 @@ var pack_in_play := ""
 ## name of the weapon, who took it, whether that was a bot, and the seconds
 ## into the match.
 var takes: Array[Dictionary] = []
+## For the test: the number of a bot that plays as if it were a person, see
+## bot_level().
+var stand_in := 0
 
 var _game: Node3D
 var _rules: Array[Dictionary] = []
@@ -243,6 +247,7 @@ func _ready() -> void:
 		one.merge({"regen_to": 100.0, "hurts": 1.0, "focus": 0, "bots": "regular", "fetches": false})
 		if by_difficulty is Array and i < by_difficulty.size() and by_difficulty[i] is Dictionary:
 			one.merge(by_difficulty[i], true)
+		one.merge({"friends": one.bots})
 		_rules.append(one)
 	if parsed is Dictionary and parsed.get("cells") is Dictionary:
 		_cell_numbers = parsed.cells
@@ -490,10 +495,24 @@ func title() -> String:
 	return str(mode.numbers.title) if active else ""
 
 
-## How good the bots are at the difficulty that is set: {reaction, wander,
-## aim_time, fov}, see scripts/bot.gd.
-func bot_level() -> Dictionary:
+## How good the bot `who` is at the difficulty that is set: {reaction, wander,
+## aim_time, fov}, see scripts/bot.gd. Without `who`, a bot with no person on
+## its side. One that has a person on its side is on its `friends` level, and
+## leaves it to them to tip the scale: with nobody who plays well that side
+## loses. It goes by whoever is on the side now, so a bot takes the other level
+## as soon as somebody comes in, goes or changes sides.
+func bot_level(who: Entrant = null) -> Dictionary:
+	if who and who.id != stand_in and mode.teams() and _has_person(who.team):
+		return levels.get(rules.friends, {})
 	return levels.get(rules.bots, {})
+
+
+## True if somebody on `side` is a person.
+func _has_person(side: int) -> bool:
+	for other: Entrant in entrants.values():
+		if other.team == side and (not other.bot or other.id == stand_in):
+			return true
+	return false
 
 
 ## The entrant of this machine's player; null if that one only looks on.
@@ -1431,6 +1450,7 @@ func _move_bots(states: Array, seconds: float) -> void:
 func _forget() -> void:
 	entrants.clear()
 	tally = [0, 0]
+	stand_in = 0
 	arena = null
 	_game = null
 	_cells.clear()
