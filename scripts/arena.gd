@@ -198,14 +198,17 @@ func survey(game: Node3D) -> bool:
 
 
 ## Where the level says its two sides begin, as assets/arenas.json has it
-## under "ends", or nothing.
+## under "ends", or that of the level it is like, or nothing.
 func _said_ends(game: Node3D) -> PackedVector3Array:
 	var level := game.scene_file_path.get_file().get_basename()
 	var path := "res://assets/arenas.json"
 	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	var ends_said := PackedVector3Array()
-	if said is Dictionary and (said as Dictionary).get(level) is Dictionary:
-		for end: Variant in (said[level] as Dictionary).get("ends", []):
+	var own: Variant = said.get(level) if said is Dictionary else null
+	if own is Dictionary and own.has("like"):
+		own = said.get(str(own.like))
+	if own is Dictionary:
+		for end: Variant in own.get("ends", []):
 			ends_said.append(Vector3(end[0], end[1], end[2]))
 	return ends_said
 

@@ -705,20 +705,24 @@ func _pose(delta: float) -> void:
 	# How fast and which way the body is going, as the skeleton sees it: in
 	# hip heights per second, so that a tall character takes longer steps.
 	var to_model := _skeleton.global_basis.inverse()
-	var motion := to_model * _body.velocity if _body else Vector3.ZERO
+	# In a vehicle the body goes and the legs do not, and no foot is held on
+	# the ground going by.
+	var seated: bool = _body != null and _body.get(&"riding") != null
+	var going: Vector3 = _body.velocity if _body and not seated else Vector3.ZERO
+	var motion := to_model * going
 	var speed := Vector2(motion.x, motion.z).length() / _hip_height
 	if _body:
 		var fade := exp(-4.0 * delta)
 		var step := _body.global_position - _was_at
 		# Put down somewhere else: that is not walking.
 		if step.length() > 1.0:
-			step = _body.velocity * delta
+			step = going * delta
 		_went = _went * fade + step
-		_due = _due * fade + _body.velocity * delta
+		_due = _due * fade + going * delta
 		_was_at = _body.global_position
 		# Over the ground: up a stair it goes further than its speed says.
 		var short := Vector2(_went.x - _due.x, _went.z - _due.z).length()
-		_on_the_spot = _due.length() > 0.15 and short > 0.5 * _due.length()
+		_on_the_spot = seated or (_due.length() > 0.15 and short > 0.5 * _due.length())
 	var facing := _aim_yaw * _raised
 	var want := facing + float(STANCE[_hold])
 	if speed > STILL:

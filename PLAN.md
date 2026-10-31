@@ -5562,3 +5562,41 @@ Dit zijn eenmalige runs ter controle dat alles laadt, geen om en om gemeten fps.
 | Wat | Waar |
 |---|---|
 | De installer | `https://github.com/michielvdingh01/Graphics/releases/latest/download/GraphicsFPS.dmg` |
+
+## Duinen: bases bij de voertuigen, en stil zitten als passagier
+
+Op 31 oktober 2026 twee punten van Michiel na het spelen. In capture the flag in de duinen begin je soms helemaal achter in het complex, ver van een auto en van de vijand. En als passagier in de jeep van een teamgenoot beweegt het beeld alsof je rent.
+
+**De bases in de duinen** (`assets/arenas.json`, `_said_ends()` in `scripts/arena.gd`). De twee uiteinden van een arena waren hier de twee verste plekken: (317, 7) aan het eind van de steeg achter het complex en (317, 218) in de noordoosthoek. Daar stonden de buit en daar kwam je terug.
+
+| | Voor | Na |
+|---|---|---|
+| Blauw | steeg achter het complex (317, 7) | voertuigpark, voor de loods (99, 29) |
+| Oranje | noordoosthoek (317, 218) | motor pool (197, 127) |
+| Lopen naar de eerste jeep, blauw / oranje | 184 / 151 m | 17 / 14 m |
+| Jeeps binnen 30 m lopen, blauw / oranje | 0 / 0 | 2 / 3 |
+| Lopen tussen de bases | 618 m | 209 m, een halve minuut sprinten |
+| Doden in 60 s, zes tegen zes, alleen bots | 1 | 21 en 23 |
+| Dichtste afstand tussen twee vijanden | 35 m | 6 en 2 m |
+
+- Blauw heeft ook twee vrachtwagens en een tank bij de hand (en de tank onder het zeil, op 25 m), oranje drie vrachtwagens binnen 30 m. De derde jeep van blauw staat op 50 m lopen, aan de oostkant van het park. De drie tanks van het laager liggen tussen de bases in.
+- De nacht speelt op dezelfde plekken: `_said_ends()` volgt nu `"like"`. Tot nu toe keek het alleen naar het level zelf.
+- `ends` geldt voor elke spelsoort. Ook teamdeathmatch en de twintig per kant beginnen dus hier in plaats van 618 m uit elkaar; terugkomen gaat daar zoals eerst bij het front. Dat is mijn keuze: één paar bases is eenvoudiger dan een uitzondering voor CTF, en een eerste gevecht na een minuut lopen was ook daar niet beter.
+- **Wat ik niet kon beoordelen.** Blauw zit achter een muur met één poort (x = 69), oranje staat open op het land. De muur maakt de vlag van blauw makkelijker te verdedigen en de vlucht ermee smaller; of dat eerlijk speelt, blijkt pas bij spelen. De minigun blijft op zijn plek, en die staat nu 155 m lopen van blauw en 76 m van oranje; de raketwerper 146 en 133 m, het bananengeweer 121 en 103 m. Geen van de drie is verplaatst.
+
+**Stil zitten als passagier** (`scripts/player.gd`, `scripts/weapons.gd`, `scripts/humanoid_rig.gd`). Wie meerijdt, krijgt de snelheid van het voertuig als `velocity`, en `is_on_floor()` blijft staan op wat het was op het moment van instappen, omdat een rijdend voertuig de speler niet meer via `move_and_slide()` beweegt. Stapte je vanaf de grond in, dan liep alles wat naar die twee kijkt gewoon door op de snelheid van de jeep.
+
+- `_walk()` telt in een voertuig niet meer: geen wiebelend beeld en wapen, en ook geen voetstappen en voetafdrukken onder het rijden. Dat gold ook voor de bestuurder.
+- Het wapen hangt in een voertuig niet meer achter de snelheid aan. Keek je opzij, dan kantelde het anders mee met de rijrichting: 3,4 graden bij 20 m/s.
+- Voor de anderen rende een passagier op zijn stoel: `humanoid_rig.gd` gaf de benen de snelheid van de jeep. In een voertuig staan de benen nu stil en wordt geen voet op de grond vastgehouden.
+- Meedraaien met het voertuig deed `ride()` al goed. Dat is niet veranderd.
+- Blijft zoals het was: de spreiding van een wapen telt de snelheid van het voertuig mee, dus schieten uit een rijdende jeep is onnauwkeuriger en het dradenkruis is wijder. Dat is spelregel, geen beeld. Ook kantelt het beeld van een passagier niet mee met de hobbels.
+
+**Getest**, zonder GPU tenzij anders genoemd:
+
+- `tools/selftest.sh` (634 controles) en `tools/test_match.sh` (138) slagen. Nieuw in de wedstrijdtest: elke kant begint in de duinen bij minstens drie voertuigen binnen 30 m, de bases liggen 150 tot 300 m lopen uit elkaar, en de nacht neemt dezelfde plekken.
+- `tools/nettest.sh --ride`: de beide kanten van de zijspan in de Alpen. Nieuw: de passagier houdt zijn pas en bob op nul en het wapen sleept niet na, gezien vanaf de gast én vanaf de host; de ander ziet de benen stilstaan. Op dezelfde test met de drie scripts uit de trunk falen deze drie controles, dus de oorzaak klopt. Een jeep is niet apart getest; het is dezelfde code voor elke stoel.
+- `tools/test_match.sh --match=ctf:dunes:6 --only-bots --soak=60`, één keer voor en twee keer na, met de laptop op een belasting van 3 tot 6: de cijfers in de tabel. Een bot liep vast: 0 voor, 3 en 0 na. Geen noodspawns.
+- Met GPU, in het spel met `--match=ctf:dunes:2`: `assets/arenas/sheets/duinen_bases.jpg`, de oude plek en de twee nieuwe, elk één beeld. Op die beelden zijn geen fps gemeten; dit verandert niets aan wat er getekend wordt.
+
+**Niet bekeken:** het rijden zelf met het oog, en twee machines echt naast elkaar. Niemand reed nog de jeep uit de loods en door de poort naar het andere kamp.

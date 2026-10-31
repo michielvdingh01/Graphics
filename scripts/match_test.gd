@@ -603,6 +603,17 @@ func _run() -> void:
 	var minigun_stand: Array = tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.weapon.resource_path.ends_with("minigun.tres"))
 	_check("there the minigun stands where assets/arenas.json says, and not where it is worked out", minigun_stand.size() == 1
 		and minigun_stand[0].global_position.distance_to(Vector3(said_spot[0], said_spot[1], said_spot[2])) < 0.01)
+	var dunes: RefCounted = Match.arena
+	var cars: Array = tree.get_nodes_in_group("vehicle")
+	var cars_by_end: Array = dunes.ends.map(func(end: int) -> int:
+		return cars.filter(func(car: Node3D) -> bool: return dunes.spots[end].distance_to(car.global_position) < 30.0).size())
+	var between: float = dunes.walk(dunes.spots[dunes.ends[0]], dunes.spots[dunes.ends[1]])
+	print("  the ends of the dunes: %s vehicles within 30 m, %.0f m to walk apart" % [cars_by_end, between])
+	_check("there each side begins by its vehicles, half a minute's run from the other", cars_by_end.all(func(count: int) -> bool: return count >= 3) and between > 150.0 and between < 300.0)
+	var night := Node3D.new()
+	night.scene_file_path = "res://scenes/dunes_night.tscn"
+	_check("and by night where it does by day", dunes._said_ends(night).size() == 2)
+	night.free()
 	var board: PackedStringArray = Match._hud._table()
 	_check("the table under Tab has a column for each side", board.size() == 2 and board[0].count("\n") == 20 and board[1].count("\n") == 20)
 	# Who comes back: how far the nearest enemy and the nearest friend are, and

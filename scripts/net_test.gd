@@ -852,6 +852,7 @@ func _host_ride() -> void:
 	print("  the motorcycle went %.1f m, at %.1f m/s at the end" % [bike.global_position.distance_to(from), bike.speed])
 	_check("rides off with the guest in the sidecar", bike.global_position.distance_to(from) > 8.0 and bike.occupants[1] == puppet)
 	_check("the guest is carried along", puppet.global_position.distance_to(bike.seat_frame(1).origin) < 1.2)
+	_check("and is seen sitting still, not running in the sidecar", puppet._rig._moving < 0.05)
 	_check("the guest gets out again", await _until(func() -> bool: return bike.occupants[1] == null and puppet.riding == null, 30.0))
 	await _wait(0.5)
 	bike.take_damage(150.0, bike.global_position, Vector3.FORWARD)
@@ -865,7 +866,10 @@ func _host_ride() -> void:
 	bike.request_seat(player, 1)
 	_check("the host gets into the sidecar", await _until(func() -> bool: return bike.occupants[1] == player and player.riding == bike, 5.0))
 	var still := bike.global_position
+	var stride_in: float = player.stride()
 	_check("and is carried off as the guest rides", await _until(func() -> bool: return bike.global_position.distance_to(still) > 8.0, 30.0))
+	_check("sitting still: the view does not walk and the weapon does not trail", player.bob_weight() < 0.01 and player.stride() == stride_in
+		and player.weapons._trail.length() < 1.0)
 	print("  seen here, the guest's motorcycle went %.1f m; the eyes of the host are %.2f m from those of the sidecar" % [bike.global_position.distance_to(still), (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin)])
 	_check("with the eyes where the sidecar has them", (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin) < 0.3)
 	await _until(func() -> bool: return bike.speed < 1.0, 15.0)
@@ -906,7 +910,10 @@ func _join_ride() -> void:
 	bike.request_seat(player, 1)
 	_check("gets into the sidecar when the host says so", await _until(func() -> bool: return bike.occupants[1] == player and player.riding == bike, 5.0))
 	var from := bike.global_position
+	var stride_in: float = player.stride()
 	_check("is carried along as the host rides off", await _until(func() -> bool: return bike.global_position.distance_to(from) > 8.0, 20.0))
+	_check("sitting still: the view does not walk and the weapon does not trail", player.bob_weight() < 0.01 and player.stride() == stride_in
+		and player.weapons._trail.length() < 1.0)
 	print("  seen here, the motorcycle went %.1f m; the player is %.2f m from the eyes of the sidecar" % [bike.global_position.distance_to(from), (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin)])
 	_check("with the eyes where the sidecar has them", (player.global_position + Vector3.UP * player._eye_height).distance_to(bike.eye_frame(1).origin) < 0.3)
 	await _until(func() -> bool: return bike.speed < 1.0, 10.0)

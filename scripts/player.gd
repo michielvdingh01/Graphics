@@ -207,8 +207,8 @@ func stride() -> float:
 	return _stride
 
 
-## How much of a walk there is to show: 0 standing still, in the air, sliding
-## or dead, 1 at walking speed and BOB_SPRINT at a sprint. It gets there over
+## How much of a walk there is to show: 0 standing still, in the air, sliding,
+## in a vehicle or dead, 1 at walking speed and BOB_SPRINT at a sprint. It gets there over
 ## a few tenths of a second, so that what goes by it never snaps.
 func bob_weight() -> float:
 	return _bob_weight
@@ -594,7 +594,7 @@ func _leave_print() -> void:
 ## that began again from nothing with every first step would be a jolt.
 func _walk(delta: float) -> float:
 	var speed := Vector2(velocity.x, velocity.z).length()
-	var walking := not dead and not _sliding and is_on_floor()
+	var walking := not dead and not _sliding and not riding and is_on_floor()
 	if walking:
 		var foot := floorf(_stride)
 		_stride += speed * delta / STEP_DISTANCE

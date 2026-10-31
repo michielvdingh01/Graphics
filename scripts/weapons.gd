@@ -1411,8 +1411,8 @@ func _carry(aim: float, delta: float) -> Array[Vector3]:
 	turn += Vector3(-sway.y, -sway.x, sway.x * SWAY_BANK)
 
 	# Its own weight against the carrier's: setting off, stopping, a strafe, a
-	# jump and a fall.
-	var moving: Vector3 = player.global_basis.inverse() * player.velocity
+	# jump and a fall. Whoever rides sits still in their seat.
+	var moving: Vector3 = Vector3.ZERO if player.riding else player.global_basis.inverse() * player.velocity
 	_trail = _trail.lerp(moving, 1.0 - exp(-TRAIL_RATE * delta))
 	var behind := (moving - _trail).limit_length(TRAIL_MAX)
 	var rise := clampf(_trail.y, -RISE_MAX, RISE_MAX)
