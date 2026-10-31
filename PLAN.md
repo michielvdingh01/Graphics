@@ -5616,3 +5616,13 @@ Op 31 oktober 2026 gevraagd, na het eerste potje op twee laptops: "Change sides"
 **Getest**, zonder GPU, op netstroom en daarna op de accu, load 4 tot 8 met een tweede sessie die testte en Michiel die speelde: selftest 634, `tools/nettest.sh` 69, `--match` 103, `--match --lan` 103, `tools/test_match.sh` 138, alles geslaagd. Op de GPU één run als host: beeld van het pauzescherm, alles past op 1920×1080, en na een dood stond de speler echt bij de Ravens.
 
 **Niet gezien:** twee echte machines met deze build, en de tabel onder Tab op beeld. Capture the flag volgt dezelfde weg, maar de wissel daar is niet apart getest.
+
+## Release 202610312237: Wolves en Ravens
+
+Op 31 oktober 2026 op Michiels woord gemerged en gepubliceerd als `build-202610312237`, vanaf commit `d478066`, met `Net.VERSION` 23. Daarin "Teams met een naam" en "Duinen: bases bij de voertuigen, en stil zitten als passagier".
+
+**Getest op de trunk, zonder GPU** (op de accu, load rond 2): selftest 634, `tools/nettest.sh` 69, `--match` 103, `--match --lan` 103, `tools/test_match.sh` 140, `tools/test_vehicles.sh` 167, alles geslaagd.
+
+**Getest op de app uit de zip, met een lege thuismap:** drie kopieën over het echte adres 103, `--matchtest` 140, en Dunes, Alps, Dunes at night, Party in Works, een wedstrijd in de Dunes en capture the flag in Powerhouse kwamen allemaal in beeld, in 8 tot 19 seconden. `build-202610312008` werkte zichzelf naar deze build bij (van een server hier, zonder venster): de handtekening klopt en de nieuwe app startte.
+
+**Niet gezien:** deze build op twee echte machines en de update met venster op de Air.
