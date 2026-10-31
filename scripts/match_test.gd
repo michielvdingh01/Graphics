@@ -197,9 +197,14 @@ func _run() -> void:
 		for end: int in arena.ends:
 			nearest = minf(nearest, one.global_position.distance_to(arena.spots[end]))
 		from_ends.append(snappedf(nearest, 0.1))
-	print("  the weapons of the arena: %s, %s m from the nearest end" % [stands.map(func(one: Node3D) -> String: return one.weapon.display_name), from_ends])
-	var places_apart: bool = stands.size() == 2 and stands[0].global_position.distance_to(stands[1].global_position) > 15.0
-	_check("the minigun and the rocket launcher stand apart, away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun and places_apart
+	print("  the weapons of the arena: %s, %s m from the nearest end, at %s" % [stands.map(func(one: Node3D) -> String: return one.weapon.display_name), from_ends, stands.map(func(one: Node3D) -> Vector3: return one.global_position)])
+	# The first two have the whole fair stretch of the arena to choose from; in
+	# a hall this size the third only has what is left of it.
+	var places_apart: bool = stands.size() == 3 and stands[0].global_position.distance_to(stands[1].global_position) > 15.0
+	for i in stands.size():
+		for j in i:
+			places_apart = places_apart and stands[i].global_position.distance_to(stands[j].global_position) > 8.0
+	_check("the minigun, the rocket launcher and the banana gun stand apart, away from both ends, and are not there yet at the start", stand != null and stand.weapon == minigun and places_apart
 		and from_ends.all(func(metres: float) -> bool: return metres > 15.0) and stands.all(func(one: Node3D) -> bool: return not one.is_up() and one.due() > 30.0))
 	var news := []
 	var listen := func(text: String) -> void: news.append(text)
@@ -454,7 +459,7 @@ func _run() -> void:
 
 	# What the menu offers, and leaving.
 	Menu._show(Menu.Screen.MATCH)
-	var buttons := Menu._column.find_children("*", "Button", true, false).filter(func(button: Button) -> bool: return not button.is_queued_for_deletion())
+	var buttons := _shown_buttons()
 	var offered := buttons.map(func(button: Button) -> String: return button.text)
 	_check("the menu has a screen for it", offered.has("Start") and offered.any(func(text: String) -> bool: return text.begins_with("Kind")))
 	var kind: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Kind"))[0]
@@ -1131,4 +1136,11 @@ func _until(done: Callable, seconds: float) -> void:
 ## and not those of the screen it showed before, which are only taken away
 ## at the end of the frame.
 func _shown_buttons() -> Array:
-	return Menu._column.find_children("*", "Button", true, false).filter(func(button: Button) -> bool: return not button.is_queued_for_deletion() and not button.get_parent().is_queued_for_deletion())
+	var found := []
+	for child: Node in Menu._column.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		if child is Button:
+			found.append(child)
+		found.append_array(child.find_children("*", "Button", true, false))
+	return found
