@@ -129,7 +129,7 @@ func _run() -> void:
 	# everything but what can be shot to pieces, --scope everything but the
 	# stages of a sight, and --balance everything but the range every weapon
 	# is fired on, at every distance.
-	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--scope", _scope_stages, "scope"], ["--balance", _balance.bind(true), "balance"]]:
+	for only: Array in [["--view", _view, "view"], ["--breaks", _breakables, "breakables"], ["--banana", _banana_gun, "banana gun"], ["--scope", _scope_stages, "scope"], ["--balance", _balance.bind(true), "balance"]]:
 		if only[0] not in OS.get_cmdline_user_args():
 			continue
 		await (only[1] as Callable).call()
@@ -144,11 +144,12 @@ func _run() -> void:
 		await _view()
 		# Last, since it breaks what the parts before it fight behind.
 		await _breakables()
+		await _banana_gun()
 		await _smoke()
 		await _scope_stages()
 		await _music_turns()
 		await _balance()
-		_ran(["handling", "fights", "supplies", "view", "breakables", "smoke", "scope", "music", "balance"])
+		_ran(["handling", "fights", "supplies", "view", "breakables", "banana gun", "smoke", "scope", "music", "balance"])
 
 	await _slip_past()
 	_ran(["slipping past"])
@@ -1019,6 +1020,81 @@ func _minigun(weapons: Node3D) -> void:
 	await _wait(1.0)
 	await _clip(weapons)
 	await _rocket_launcher(weapons)
+
+
+## The banana gun: a banana fired past a grunt turns after it and sticks; the
+## sixth sets them all off; the hand of bananas on the gun goes down round by
+## round and a reload puts it back.
+func _banana_gun() -> void:
+	var tree := get_tree()
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	var weapons: Node3D = player.weapons
+	var gun: WeaponData = ARMORY.named("banana_gun")
+	var blasts := []
+	var note := func(at: Vector3) -> void: blasts.append(at)
+	Blast.exploded.connect(note)
+	player.force_control = true
+	player.health = player.MAX_HEALTH
+	for zone: RefCounted in game.zones:
+		zone.area.set_deferred("monitoring", false)
+	for enemy in tree.get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	await _wait(0.3)
+	weapons.take_special(gun, gun.mag_size + gun.reserve_ammo, true)
+	await _wait(gun.switch_time + 0.2)
+	var model: RefCounted = weapons._models[weapons._index]
+	_check("the banana gun shows a banana for each of its %d rounds" % gun.mag_size, weapons.current() == gun and model.rounds.size() == gun.mag_size
+		and model.rounds.all(func(banana: Node3D) -> bool: return banana.visible))
+	# Somewhere with room: the way that is clear furthest, out of eight.
+	var space: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+	var eye: Vector3 = player.camera.global_position
+	var ahead := Vector3.ZERO
+	for i in 8:
+		var way := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 8.0)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + way * 15.0, 1)):
+			ahead = way
+			break
+	_check("there is room to try it", ahead != Vector3.ZERO)
+	var dummy: CharacterBody3D = game.GRUNT.instantiate()
+	dummy.position = player.global_position + ahead * 12.0
+	game.add_child(dummy)
+	dummy.set_physics_process(false)
+	await _wait(0.2)
+	var full: float = dummy.health
+	var spot: Vector3 = dummy.global_position
+	# Aimed 1.8 m beside the grunt, too far for what spread a banana leaves with.
+	await _aim(player, player.global_position, dummy.global_position + Vector3.UP * 1.1 + ahead.cross(Vector3.UP) * 1.8)
+	var left: int = weapons._mags[weapons._index]
+	var fire_one := func() -> void:
+		Input.action_press("fire")
+		await _wait(0.05)
+		Input.action_release("fire")
+		await _wait(60.0 / gun.rounds_per_minute + 0.05)
+	await fire_one.call()
+	_check("a shot is one banana off the gun", weapons._mags[weapons._index] == left - 1 and not model.rounds[left - 1].visible and model.rounds[left - 2].visible)
+	await _wait(0.8)
+	var stuck := dummy.get_children().filter(func(child: Node) -> bool: return child.is_in_group(&"banana"))
+	print("    banana gun: aimed 1.8 m beside a grunt 12 m off, %d stuck in it, %.0f of %.0f health left" % [stuck.size(), dummy.health, full])
+	_check("it turns after a grunt it was not aimed at, sticks and hurts it", stuck.size() == 1 and dummy.health == full - gun.damage)
+	for i in 5:
+		await fire_one.call()
+	await _wait(0.8)
+	print("    banana gun: blasts %s, the grunt %s" % [blasts, "dead" if not is_instance_valid(dummy) or dummy.dead else "alive"])
+	_check("the sixth sets them all off, and that is the end of the grunt", blasts.any(func(at: Vector3) -> bool: return at.distance_to(spot) < 2.0)
+		and (not is_instance_valid(dummy) or dummy.dead))
+	await _wait(0.2)
+	Input.action_press("reload")
+	await _wait(0.1)
+	Input.action_release("reload")
+	await _wait(gun.reload_time + 0.2)
+	_check("a reload puts the whole hand back", weapons._mags[weapons._index] == gun.mag_size
+		and model.rounds.all(func(banana: Node3D) -> bool: return banana.visible))
+	Blast.exploded.disconnect(note)
+	weapons.drop_special()
+	await _wait(0.6)
+	player.health = player.MAX_HEALTH
+	_finished.append("banana gun")
 
 
 ## A weapon loaded by a clip, the M1 Garand of 1944: with a round left in it

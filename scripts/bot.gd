@@ -387,7 +387,7 @@ func _physics_process(delta: float) -> void:
 	if _target and not (Match.mode.hurries(me) and eye.distance_to(_target.body.head.global_position) > CORNERED):
 		_seen += delta
 		var at: Vector3 = _target.body.head.global_position - Vector3.UP * CHEST
-		if _data.projectile:
+		if _data.projectile and _data.blasts:
 			# A rocket at the feet: one that misses still goes off by them.
 			at = _target.body.global_position + Vector3.UP * FEET
 		var distance := eye.distance_to(at)
@@ -551,7 +551,7 @@ func _fight(delta: float, distance: float) -> Vector3:
 		return _advance(_target.body.global_position, WALK, delta)
 	_holding = 0.0
 	_bounding = false
-	if _data.projectile and distance < CLOSE_ROCKET + 2.0:
+	if _data.projectile and _data.blasts and distance < CLOSE_ROCKET + 2.0:
 		# Too near for a rocket: it backs away.
 		var away: Vector3 = _body.global_position - _target.body.global_position
 		away.y = 0.0
@@ -797,7 +797,7 @@ func _spin_barrels(delta: float, wants: bool) -> void:
 ## True if a shot now does no harm to itself: a rocket goes nowhere near a
 ## wall or an enemy closer than CLOSE_ROCKET.
 func _ready_to_fire(eye: Vector3) -> bool:
-	if not _data.projectile:
+	if not _data.projectile or not _data.blasts:
 		return true
 	if _body.global_position.distance_to(_target.body.global_position) < CLOSE_ROCKET:
 		return false
