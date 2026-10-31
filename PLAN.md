@@ -5428,7 +5428,7 @@ Op 31 oktober 2026 gevraagd: team deathmatch en capture the banaan met vrienden,
 - `Match` deed al veel via `Net.show()`. Wat nog ontbrak: mensen in de opstelling (`_line_up_people()`, `_embody()`, `dress_people()`), en dat iemand op een gast kan sterven: elke machine houdt de health van haar eigen speler bij en meldt `went_down`.
 - **Wat alleen op de host stond, staat nu overal.** De rekken, de cellen en de buit worden neergezet met `_show_out()`. Een spelsoort zegt zelf wat er op elke machine moet staan: `plan()`, `set_out()`, `how_it_stands()`, `stand_as()` en `watch()` in `scripts/modes/mode.gd`. Wie een wapen van een rek pakt, vraagt dat aan de host (`take_asked`), zodat twee tegelijk niet allebei winnen; een cel is op alle machines weg zodra hij op één gepakt is.
 - **De bots hoorden een gast niet schieten.** Dat loopt nu via de pop van die gast op de host.
-- `Net.VERSION` is 20: de trunk kwam intussen zelf op 19. Wie hierna iets over de lijn toevoegt, kijkt welk getal het is geworden.
+- `Net.VERSION` is 21. De trunk ging onder het bouwen twee keer omhoog, naar 19 en 20, en beide keren stond hier hetzelfde getal: dan meldt `git merge` geen conflict, terwijl twee verschillende spellen zo samen zouden mogen spelen. Kijk er na een merge met de hand naar.
 
 **Wat de test onderweg vond**
 
@@ -5439,7 +5439,9 @@ Op 31 oktober 2026 gevraagd: team deathmatch en capture the banaan met vrienden,
 
 `tools/nettest.sh --match` start het spel drie keer, zonder venster, via het menu, in de fabriek (99 controles, 2,5 minuut). Een gast neemt de plek van een bot; host en gast schieten elkaar met echte schoten neer, op de telling van beiden; een bot raakt de gast; de gast wisselt van kant via het pauzemenu, pakt een wapen van een rek, valt ermee en het ligt op beide machines; hij pakt een cel. Dan capture the banaan: de gast neemt de banaan, een derde komt binnen via de lijst terwijl hij hem draagt en vindt alles zo, en gaat weer weg, waarna een bot zijn plek inneemt. De gast scoort, valt met de banaan, de wedstrijd eindigt, de host start de volgende met een buit die alleen hij heeft, dan ieder voor zich zonder bots. Als de host weggaat, staat de gast weer op het titelscherm.
 
-`tools/nettest.sh --match --lan` doet hetzelfde over het echte adres van de Mac (192.168.178.99) in plaats van 127.0.0.1, met het roepen over dat netwerk: de derde vond de host zo. Een losse proef in de duinen (niet in de test): de gast stapt in een jeep, de host ziet hem rijden, wie erin sneuvelt is eruit en de stoel is vrij, de host stapt daarna zelf in.
+`tools/nettest.sh --match --lan` doet hetzelfde over het echte adres van de Mac in plaats van 127.0.0.1, met het roepen over dat netwerk: de derde vond de host zo. Beide draaiden naast de selftests van twee andere sessies, op load 4 tot 10, op netstroom, nooit op de GPU. De rest slaagt ook, met de trunk van 31 oktober erin: zie de eindstand hieronder. Een losse proef in de duinen (niet in de test): de gast stapt in een jeep, de host ziet hem rijden, wie erin sneuvelt is eruit en de stoel is vrij, de host stapt daarna zelf in.
+
+**Eindstand**, met de trunk tot en met `8bd1510` erin: selftest 634, `tools/nettest.sh` 69, `--match` 99, `--match --lan` 99, `tools/test_match.sh` 125, personages 58, sandbox 30, alles geslaagd. De Alpen staan niet in git: voor de selftest zijn `scenes/levels/alps*` uit de hoofdcheckout gekloond, en die zijn niet gecommit.
 
 Wat een speler ziet is alleen van de drie menuschermen bekeken: "Multiplayer", "Play together" en het pauzemenu van de host. Geen beeld gemeten: een gast tekent wat de host tekent, zonder de breinen van de bots.
 
