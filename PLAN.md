@@ -5365,7 +5365,7 @@ Op Michiels vraag een zevende wapenset: de raketwerper, de minigun, het bananeng
 - **Geluid**: `beer_throw` (de zwiep van een granaat, sneller en korter) en `beer_smash` (brekend glas met iets nats eronder).
 - **Een fout van het bananengeweer hersteld**: wie een banaan van iemand anders zag, kreeg ook de rook en de flits van een raket achter het wapen (`scripts/puppet.gd`). Dat gebeurt nu alleen bij wat ontploft.
 - **Een fout van het derde rek hersteld**: sinds het bananengeweer stonden de minigun en het bananengeweer in de fabriek op dezelfde plek. Was er geen plek van de gevraagde soort meer, dan telde in `Arena.hideouts()` hoe open een plek ligt zwaarder dan de afstand tot de andere rekken. Nu gaat afstand voor, tot `AWAY`. De fabriek heeft te weinig plekken die voor beide kanten even ver lopen: daar staan de drie rekken 17, 13 en 9 m uit elkaar, en verder kan niet zonder een kant voor te trekken. De wedstrijdtest eist 15 m tussen de eerste twee en 8 m tussen elk paar. Dat de bij het bananengeweer gedraaide `--specials` dit niet zag: die slaat dit deel over.
-- **`Net.VERSION` is 19.** Het bier heeft de laatste plaats in de kast.
+- **`Net.VERSION` is 20**, één hoger dan `stances`, dat ook op 19 uitkwam. Het bier heeft de laatste plaats in de kast.
 - **Proberen**: `--pack=party`; `tools/selftest.sh --party` voor alleen de test.
 - **Getest**: de hele selftest (634 controles, met de Alpen-bestanden uit de hoofdcheckout er tijdelijk bij), `tools/nettest.sh` en de hele `tools/test_match.sh` (125 controles) slagen.
 - **Gemeten**: een wedstrijd van alleen bots (`tools/test_match.sh --pack=party --seconds=240`, twee keer). Bij de tweede: bananengeweer 50 kills (33% van de bots), minigun 18 (17%), bier 17 (33%), raketwerper 5 (17%). Geen wapen haalt het dubbele van zijn deel. Eén seconde gooien doet op 8 m 48 van de 100.
@@ -5375,3 +5375,37 @@ Op Michiels vraag een zevende wapenset: de raketwerper, de minigun, het bananeng
 - **Hoe het klinkt.** Gemaakt en niet gehoord: `tools/hear.py beer_throw 360` en `tools/hear.py takes beer_smash 2`.
 - **De worp in beweging.** Ik heb de fles in de hand in beeld gehad, niet de worp, de volgende fles die opkomt of het breken.
 - **De balans.** 8 per treffer is weinig per fles maar 48 per seconde, meer dan het klinkt. Bots raken vaker dan een speler bij beweging, en het bananengeweer haalt in deze wedstrijd de meeste kills: zes in één doel is mogelijk te weinig. Beide zijn eerste gokken.
+
+## Bukken en richten bij een andere speler
+
+Op 31 oktober 2026 gevraagd: in multiplayer en co-op zie je het als een ander springt, maar niet als die bukt of richt. Op de branch `stances`.
+
+**Waarom het er niet was.** Bukken ging al over het net, maar `act()` in `scripts/puppet.gd` toonde het alleen bij bots: een figuur op één knie kon niet lopen. Richten ging helemaal niet over het net, en de andere speler hield zijn wapen altijd op het vizier, behalve bij sprinten.
+
+**Wat er nu is** (blad `assets/characters/sheets/houdingen_spelers.jpg`)
+
+- **Bukken:** stil zit de ander op één knie, net als een bot achter dekking. Zodra hij loopt, gaat hij op `Crouch_Fwd` uit `ual1.glb`: echt laag en gebogen (`crouch_walk` in `assets/animations/manifest.json`, `low` in de set `soldier`, opnieuw gebouwd in `moves.res`). De snelheid van de clip gaat mee met hoe hard hij loopt.
+- **De trefvorm bukt mee.** De botsvorm van zo'n speler stond rechtop, ook als hij op zijn eigen machine bukte: wie erop schoot, raakte de lucht boven hem. Nu is die 65 cm lager, net als op zijn eigen machine. Dat verandert de wedstrijd dus een beetje, niet alleen het beeld.
+- **Richten:** een nieuw bit `AIMING` gaat over het net (`Net.VERSION` van 18 naar 19, dus oude en nieuwe builds spelen niet samen). Wie niet richt, draagt zijn wapen laag aan de heup (`AT_THE_HIP` 0,32 van de weg omhoog); wie richt, heeft het aan het oog. Na een schot gaat het een halve seconde omhoog, ook vanaf de heup, want daar is de loop op het doel gericht. Bots vechten altijd en houden het wapen omhoog; aan hen is niets veranderd.
+- In een voertuig telt bukken niet mee: wie gebukt instapte, zat anders geknield op zijn stoel.
+
+De hoogte van de heup is mijn keuze. Op 0,62 was het verschil met het vizier op het blad nauwelijks te zien.
+
+**Getest**, 31 oktober 2026, naast twee andere sessies op de GPU, geen meting van de beeldsnelheid: er is geen duurdere shader bij, alleen één clip in de animatieboom.
+
+- `tools/nettest.sh`, met drie nieuwe controles: de gast bukt en richt, de host ziet het en de botsvorm wordt lager, en de gast staat weer op met het wapen aan de heup.
+- `tools/selftest.sh`, `tools/test_humanoid.sh` en `tools/test_sandbox.sh` slagen.
+- `tools/test_match.sh` faalt op één controle, op de trunk (`0610f47`) zonder deze branch net zo: "the minigun and the rocket launcher stand apart" verwacht twee wapenrekken, en de bananengun heeft er een derde bij gezet. De test is niet aangepast: `scripts/match_test.gd` is ook in bewerking op `lanparty`.
+
+**Niet getest of niet te beoordelen**
+
+- **In beweging heeft niemand het gezien.** Het blad toont stilstaande momenten. Of de overgang van knie naar hurkloop bij het aanzetten goed oogt, en of schuiven (sprinten en dan bukken) er als hurkloop goed uitziet, is alleen te beoordelen door te spelen.
+- **Twee echte machines.** De test draait twee keer op deze laptop, zonder GPU.
+- **Pistolen en de minigun** zijn niet op het blad bekeken; de heuphouding geldt daar ook.
+
+De sessie op `lanparty` werkt tegelijk in `scripts/net.gd` en `scripts/puppet.gd`, en zet `Net.VERSION` eveneens op 19. Bij het samenvoegen moet die dan op 20: de twee wijzigingen hebben elk hun eigen reden.
+
+| Wat | Commando of blad |
+|---|---|
+| De houdingen, voor en na | `assets/characters/sheets/houdingen_spelers.jpg` |
+| De test van samen spelen | `tools/nettest.sh` |

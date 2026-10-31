@@ -31,7 +31,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 19
+const VERSION := 20
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -49,8 +49,8 @@ const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
 
 ## Bits of what a player is doing, as they go over the wire. SPINNING is the
 ## barrels of a weapon that spin, and above HEAT is how hot it is, from 0 to
-## HOTTEST: see heat_bits().
-enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4, SPINNING = 8 }
+## HOTTEST: see heat_bits(). AIMING is along the sights, and lies above that.
+enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4, SPINNING = 8, AIMING = 256 }
 const HEAT := 4
 const HOTTEST := 15
 
@@ -449,10 +449,12 @@ func _physics_process(delta: float) -> void:
 	_since_tick = 0.0
 	var player: CharacterBody3D = game.player
 	var doing := 0
-	if player.is_crouched():
+	if player.is_crouched() and player.riding == null:
 		doing |= CROUCHED
 	if player.is_sprinting():
 		doing |= SPRINTING
+	if player.weapons.ads_blend > 0.5:
+		doing |= AIMING
 	if player.dead:
 		doing |= DEAD
 	_state.rpc(player.global_position, player.rotation.y, player.head.rotation.x, player.velocity, doing, player.weapons.ARMORY.index(player.weapons.current()))
