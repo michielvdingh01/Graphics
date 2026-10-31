@@ -5474,3 +5474,18 @@ Wat een speler ziet is alleen van de drie menuschermen bekeken: "Multiplayer", "
 | Wat | Commando |
 |---|---|
 | Een wedstrijd met drie machines testen (2,5 minuut), of over het echte netwerk | `tools/nettest.sh --match`, `tools/nettest.sh --match --lan` |
+
+## Alles op GitHub voor de test op de Air
+
+Op 31 oktober 2026 vroeg Michiel om alles wat nog openstond te committen en te pushen, zodat de MacBook Air multiplayer, het bananengeweer, bukken en richten en het pakket Party kan testen.
+
+- **In de trunk gevoegd:** `lanparty` (`Net.VERSION` 21, met de hand nagekeken) en de laadfix van `vriendenbuild` (a483502). In `PLAN.md` staat "Dunes liep vast in de export" nu bij de installer, waar het hoort.
+- **De Alpen staan nu in git** (`scenes/levels/alps_*`, 218 bestanden, 60 MB). Alps staat in het levelmenu en werkte in een verse kloon niet. Dat gaat tegen de regel dat alleen de agent van "Kit-ruimtes" levels commit; Michiel vroeg om alles, en zonder deze bestanden is de checkout van GitHub niet compleet. Wat hierboven staat over de Alpen die niet in git staan, geldt vanaf hier niet meer.
+- **Een worktree met een ongevolgde kopie van de Alpen** weigert de trunk binnen te halen tot die kopie weg is: `git clean -f scenes/levels/alps_*`, en daarna mergen. Dat gold op 31 oktober voor `lanparty`, `speelpunten3`, `stances` en `vriendenbuild`.
+- **Bewust niet meegenomen:** `scenes/levels/canals_*`, `scenes/levels/quay_*` en hun `.lmbake`. Die moeten volgens "De grachten" uit git blijven voor het werk van de ASUS, ze staan niet in het levelmenu, en `tools/build_level.sh canals` en `quay` maken ze zo opnieuw.
+- **Ook meegenomen:** zeven `.import`-bestanden die de editor op 13 en 14 oktober bijstelde (VRAM-compressie en normal maps voor varen, struik en takken en het camouflagenet) en drie `.uid`-bestanden van gereedschap.
+- **Oudere branches blijven buiten de trunk:** `killfeedback`, `kijkerlod`, `claude/loving-perlman-68b699`, `duingrond` en `alpen-bomen`. Die horen niet bij de vier onderdelen van deze test.
+
+**Getest**, op de samengevoegde trunk zonder GPU (load rond 3, op netstroom, geen andere meting): selftest 634, `tools/nettest.sh` 69, `tools/nettest.sh --match` 99, `tools/test_match.sh` 125, alles geslaagd.
+
+**Niet gezien:** twee echte machines, wifi, de netwerkvraag van macOS in een geëxporteerde build, en het spelen zelf. Een push bereikt een geïnstalleerd spel niet: daarvoor is een nieuwe release nodig (`tools/release.sh`, dan `--publish`).

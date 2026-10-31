@@ -12,8 +12,8 @@
 # a draft until every file is up: a game that looks at the latest release in
 # the meantime still finds the last whole one. It needs no commit on GitHub.
 #
-# Run this in a checkout that has every level: the files of the Alps are not in
-# git, so a fresh worktree lacks them, see the check below.
+# Run this in a checkout that has every level: one from before the files of the
+# Alps came into git lacks them, see the check below.
 REPO=michielvdingh01/Graphics
 # Godot checks one part at a time, and GitHub takes nothing above 2 GiB.
 PART_MB=256
