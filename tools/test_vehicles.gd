@@ -10,7 +10,8 @@ extends SceneTree
 ##
 ##   tools/test_vehicles.sh             all of it
 ##   tools/test_vehicles.sh --only=jeep one part: jeep, truck, tank, motorcycle,
-##                                      fence, hills, wear, run_over, dunes, gate, match
+##                                      fence, hills, wear, run_over, bail, dunes,
+##                                      gate, match
 
 const LIMIT := 600.0
 ## Loaded once the game runs, not as this is read: the autoloads they name
@@ -46,7 +47,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--only="):
 			only = argument.trim_prefix("--only=")
-	for part: String in ["jeep", "fence", "truck", "tank", "motorcycle", "hills", "wear", "run_over", "dunes", "gate", "match"]:
+	for part: String in ["jeep", "fence", "truck", "tank", "motorcycle", "hills", "wear", "run_over", "bail", "dunes", "gate", "match"]:
 		if only == "" or only == part:
 			print("-- ", part)
 			await call("_" + part)
@@ -540,6 +541,33 @@ func _run_over() -> void:
 	await _press("use")
 
 
+## Whoever jumps out as it goes lands beside it: the vehicle they left does
+## not run them down, and what it costs goes by how fast it went. Each row is
+## a kind, the speed in m/s and the seat they jump from.
+func _bail() -> void:
+	for jump: Array in [["jeep", 6.0, 0], ["truck", 6.0, 0], ["tank", 9.0, 0], ["motorcycle", 18.0, 0], ["jeep", 12.0, 1]]:
+		var vehicle := await _yard(jump[0])
+		vehicle.request_seat(player, 0)
+		await seconds(vehicle.data.start_time + 0.3)
+		Input.action_press("move_forward")
+		var waited := 0.0
+		while vehicle.speed < jump[1] and waited < 20.0:
+			await frames(3)
+			waited += 0.05
+		Input.action_release("move_forward")
+		if jump[2] > 0:
+			await _press("vehicle_seat")
+		var fast: float = vehicle.linear_velocity.length()
+		var title := "bail: out of the %s at %.0f km/h" % [jump[0], fast * 3.6]
+		await _press("use")
+		await seconds(vehicle.LET_OUT - vehicle.RUN_OVER_AGAIN)
+		var due := maxf(remap(fast, vehicle.BAIL_FROM, vehicle.BAIL_KILLS, 0.0, 100.0), 0.0)
+		check(player.riding == null and not player.dead, "%s lives" % title)
+		check(absf(100.0 - player.health - due) < 3.0, "%s, %.0f health is lost for it (%.0f left)" % [title, due, player.health])
+		await seconds(vehicle.RUN_OVER_AGAIN + 0.1)
+		check(vehicle._clock - float(vehicle._run_over.get(player, -INF)) > vehicle.RUN_OVER_AGAIN, "bail: and after that it can run them down like anybody")
+
+
 ## Every vehicle of the dunes stands on its wheels, and the one under a
 ## sheet in the shed is part of the level.
 func _dunes() -> void:
@@ -800,7 +828,13 @@ func _match() -> void:
 	check(not by_car.is_empty(), "match: a bot in the way is run over, and the kill is the player's, run over (%.0f km/h)" % (jeep.speed * 3.6))
 	if by_car.is_empty():
 		print("    felled %s; the victim %d has %.0f health, out %.1f, safe %.1f, at %s; the jeep at %s, the spot %s; player riding %s dead %s" % [felled, victim.id, victim.health, victim.out, victim.safe, victim.body.global_position, jeep.global_position, spot, player.riding, player.dead])
+	# Jumping out of it costs the same in a match.
+	player.invulnerable = false
+	jeep.linear_velocity = -jeep.global_basis.z * 18.0
+	var left: float = player.health
 	await _press("use")
+	check(player.riding == null and player.health < left and player.health > left - 60.0, "match: whoever jumps out at speed is hurt and lives (%.0f left)" % player.health)
+	player.invulnerable = true
 	# A tank that goes up is back where it stood.
 	tank.comes_back_after = 2.0
 	var stood: Transform3D = tank.spawn

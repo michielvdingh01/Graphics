@@ -8,6 +8,11 @@ const WEAPONS := preload("res://scripts/weapons.gd")
 ## The player's side and the other: told apart by more than red and green.
 const OURS := Color(0.35, 0.65, 1.0)
 const THEIRS := Color(1.0, 0.62, 0.25)
+## A kill of the player's on their own count: it jumps to this size and this
+## colour, and is back in this many seconds.
+const COUNTED_SIZE := 1.45
+const COUNTED := Color(1.0, 0.82, 0.3)
+const COUNTED_TIME := 1.0
 ## How many lines of who brought whom down there are at most, and the
 ## seconds one stays.
 const LINES := 5
@@ -22,6 +27,9 @@ const ROOM := 440.0
 var _ours := Label.new()
 var _theirs := Label.new()
 var _middle := Label.new()
+## The player's own kills: the score at the top is that of the side.
+var _mine := Label.new()
+var _counted: Tween
 var _feed := Label.new()
 var _centre := Label.new()
 var _status := Label.new()
@@ -50,14 +58,21 @@ func _ready() -> void:
 		top.add_child(label)
 	_ours.modulate = OURS
 	_theirs.modulate = THEIRS
+	_mine.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
+	_mine.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_mine.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_mine.add_theme_font_size_override("font_size", 32)
+	_mine.add_theme_constant_override("outline_size", 7)
+	_mine.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	add_child(_mine)
 	_feed.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
 	_feed.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_feed.add_theme_font_size_override("font_size", 18)
 	_feed.add_theme_constant_override("outline_size", 5)
 	_feed.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
-	# Under where the HUD of the game counts the player's kills.
-	_feed.position.y += 80
+	# Under the player's own kills.
+	_feed.position.y += 56
 	add_child(_feed)
 	_centre.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	_centre.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -88,7 +103,7 @@ func _ready() -> void:
 		column.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_board.add_child(column)
-	for control: Control in [top, _ours, _middle, _theirs, _feed, _centre, _board]:
+	for control: Control in [top, _ours, _middle, _theirs, _mine, _feed, _centre, _board]:
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Match.felled.connect(_on_felled)
 	Match.said.connect(_say)
@@ -115,6 +130,9 @@ func _process(delta: float) -> void:
 
 	var me: RefCounted = Match.me()
 	var over: bool = Match.state == Match.State.OVER
+	_mine.visible = me != null
+	if me:
+		_mine.text = "KILLS %d" % me.kills
 	_status.text = Match.mode.status(me)
 	var text := ""
 	if over:
@@ -153,8 +171,23 @@ func _on_felled(by: int, fallen: int, weapon: int, head: bool) -> void:
 	if with and killer:
 		text += "   (%s%s)" % [with, ", head" if head else ""]
 	_say(text)
+	if killer and killer == Match.me():
+		_count_kill()
 	if fallen == Net.id():
 		_by = "%s, %s" % [killer.title, with] if killer and with else killer.title if killer else ""
+
+
+## The player's count jumps, from its right edge, so that it is seen go up
+## without being looked at.
+func _count_kill() -> void:
+	_mine.pivot_offset = Vector2(_mine.size.x, _mine.size.y * 0.5)
+	_mine.scale = Vector2.ONE * COUNTED_SIZE
+	_mine.modulate = COUNTED
+	if _counted:
+		_counted.kill()
+	_counted = create_tween().set_parallel().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_counted.tween_property(_mine, "scale", Vector2.ONE, COUNTED_TIME)
+	_counted.tween_property(_mine, "modulate", Color.WHITE, COUNTED_TIME)
 
 
 func _say(text: String) -> void:

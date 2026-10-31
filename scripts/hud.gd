@@ -364,6 +364,8 @@ func _watch(half_height: float) -> void:
 func _process(delta: float) -> void:
 	_fps_label.visible = Settings.show_fps
 	_fps_label.text = "%d fps" % Engine.get_frames_per_second()
+	# A match counts them itself, see scripts/match_hud.gd.
+	_kills_label.visible = not Match.active
 	if _player == null:
 		return
 	var weapons: Node3D = _player.weapons

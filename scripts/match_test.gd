@@ -177,6 +177,10 @@ func _run() -> void:
 	var target: RefCounted = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.bot)[0]
 	_check("a shot of the player's that kills counts for the player", Match.hit(player, target.body, 500.0, target.body.global_position + Vector3.UP, Vector3.FORWARD, 0, true)
 		and me.kills == 1 and target.deaths == 1 and target.out > 0.0 and target.body.dead and game.kills == 1)
+	_check("the player sees their own count go up, in the gold of a kill", Match._hud._mine.scale.x > 1.0 and Match._hud._mine.modulate == Match._hud.COUNTED)
+	await tree.process_frame
+	await tree.process_frame
+	_check("and it says how many", Match._hud._mine.text == "KILLS 1")
 	_check("and leaves a can of ammunition", tree.get_nodes_in_group("pickup").filter(func(pickup: Node) -> bool: return pickup.kind == pickup.Kind.AMMO).size() == 1)
 	await _wait(float(Match.mode.numbers.respawn) + 0.3)
 	_check("the bot is back, as good as new and somewhere else", target.out <= 0.0 and not target.body.dead and target.health == Match.MAX_HEALTH and target.body.visible)

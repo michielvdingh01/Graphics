@@ -5267,3 +5267,69 @@ Een update die opent maar nooit een eerste beeld haalt, laat `trying-<nummer>` a
 | Een nieuwe versie bouwen en proberen | `tools/release.sh` |
 | Die aan iedereen geven | `tools/release.sh --publish` |
 | De updater testen | `tools/test_updater.sh` |
+
+## Uit een rijdend voertuig springen, de zon in de Alpen en de eigen kills
+
+Op 31 oktober 2026 gevraagd, na het spelen: te snel dood als je uit een rijdend voertuig springt, het knijpen tegen de zon in de Alpen een slagje minder, en in multiplayer beter kunnen zien hoeveel kills je hebt. Op de branch `speelpunten3`.
+
+**Uit een rijdend voertuig springen** (`scripts/vehicle.gd`, `tools/test_vehicles.sh --only=bail`)
+
+Er was geen valschade: het eigen voertuig reed de speler aan. Wie uitstapt staat naast de romp, in het vak van `_run_over_people()`, en de auto die net verlaten werd telde hem als iemand op de weg. Vanaf 3 tot 3,5 m/s was dat de hele aanrijschade, in één klap.
+
+- **Wat je net verliet rijdt je niet aan:** 2 seconden lang (`LET_OUT`). Daarna kan het weer, als bij ieder ander.
+- **De grond kost wat, naar de snelheid:** tot 8 m/s (29 km/h) land je rennend en is er niets aan de hand; daarna loopt het recht op tot alle levenspunten op 28 m/s (100 km/h, `BAIL_FROM`, `BAIL_KILLS`). Dat telt alleen als je zelf springt (`bail()`), niet bij een uitstapje doordat je sterft of het voertuig ontploft. Bots betalen niets. De getallen zijn mijn keuze.
+
+Gemeten op de vloer van de test, in levenspunten van de 100:
+
+| Snelheid | Jeep en motor, voor | Lorry, voor | Tank, voor | Alle vier, na |
+|---|---|---|---|---|
+| 11 km/h | 0, motor 37 | 29 | 72 | 0 |
+| 17 km/h | 52 | 79 | 141 | 0 |
+| 22 km/h | 88 | 129 | 209 | 0 |
+| 33 km/h | 162, dood | 230, dood | 342, dood | 5 |
+| 43 km/h | 235, dood | 330, dood | | 20 |
+| 65 km/h | 382, dood | 517, dood | | 50 |
+| 94 km/h, topsnelheid jeep (uitgerekend) | | | | 90 |
+
+**De zon in de Alpen** (`scenes/alps.tscn`, blad `assets/arenas/sheets/alps_zon.jpg`)
+
+Het knijpen is de automatische belichting uit "Een oog dat zich aanpast": de Alpen zijn het enige level met `CameraAttributesPractical`. Met de zon in beeld stijgt de gemiddelde helderheid en gaat de rest van het beeld omlaag. `auto_exposure_max_sensitivity` is het plafond daarvan, en dat ging van 800 naar 300. Het wordt alleen bereikt als er zon in beeld is.
+
+Op de spawn, 1920×1080, gemiddelde grijswaarde van de onderste 40% van het beeld, één meting per stand, bij de zelfde stand van de zon:
+
+| Plafond | Zon in beeld | Zon opzij | Zon in de rug |
+|---|---|---|---|
+| 800 (was) | 0,052 | 0,172 | 0,177 |
+| 600 | 0,052 | 0,173 | 0,177 |
+| 450 | 0,061 | 0,172 | 0,177 |
+| 340 | 0,081 | 0,172 | 0,177 |
+| **300 (nu)** | **0,090** | **0,172** | **0,176** |
+| 260 | 0,103 | 0,172 | 0,176 |
+| 200 | 0,129 | 0,173 | 0,177 |
+
+Zon opzij en in de rug veranderen niet. De bomen blijven silhouet tegen de zon; de wei is weer te lezen. Boven 450 doet het plafond niets, omdat de meter daar niet komt. Het bos is niet opnieuw bekeken: daar gaat de ondergrens over, en die bleef staan.
+
+**De eigen kills in een wedstrijd** (`scripts/match_hud.gd`, blad `assets/arenas/sheets/kills_teller.jpg`)
+
+De grote cijfers bovenaan zijn in team deathmatch en capture the flag de stand van de kant. De eigen kills stonden alleen als klein, half doorzichtig "Kills 0" rechtsboven, tussen de rest van de HUD van de route. Nu staat er in een wedstrijd rechtsboven `KILLS 7`, wit met een rand en twee keer zo groot. Bij een eigen kill springt het 1,45 keer zo groot op en goud, en zakt in een seconde terug, zodat je het ziet zonder ernaar te kijken. Het komt uit de telling van `Match` (`me.kills`), dus elke machine ziet zijn eigen getal. De killfeed staat er 24 pixels hoger onder. Toeschouwers van een wedstrijd zonder eigen speler zien niets, en de route en samen de route spelen houden het kleine label.
+
+Het staat los van de branch `killfeedback` (schedels, multikills, killstreaks), die nog niet in de trunk zit en dezelfde `match_hud.gd` raakt: die zegt dát je een kill hebt, deze hoeveel.
+
+**Getest**, 31 oktober 2026, laptop aan de lader van 96 W op volle accu, load 5 tot 12 door de eigen tests naast elkaar, geen andere run op de GPU.
+
+- `tools/test_vehicles.sh` met het nieuwe onderdeel `bail`: per soort voertuig, ook vanaf de bijrijdersstoel, en in een wedstrijd.
+- `tools/test_match.sh`, met twee nieuwe controles op de teller.
+- `tools/selftest.sh` en `tools/nettest.sh`.
+
+**Niet getest of niet te beoordelen**
+
+- **Gespeeld is niets.** Of 29 km/h de goede grens is en of de teller groot genoeg is op 3456×2160, is aan Michiel. Het opspringen is alleen als stilstaand beeld gezien.
+- **Springen als gast in een spel over het netwerk** draait geen test: de kosten gaan op een gast via `Match.harm` of de eigen `take_damage`, langs dezelfde weg als ander letsel.
+- **De belichting is op één plek gemeten**, op de spawn. Sneeuw en zon elders kunnen anders uitvallen; het plafond kan het beeld daar alleen lichter maken dan het was.
+- De bestanden van de Alpen staan niet in git. Voor de bladen zijn ze uit de hoofdcheckout gekloond; ze zijn niet gecommit.
+
+| Wat | Commando of blad |
+|---|---|
+| Uit een voertuig springen, de test | `tools/test_vehicles.sh --only=bail` |
+| De zon, voor en na | `assets/arenas/sheets/alps_zon.jpg` |
+| De teller, voor en na | `assets/arenas/sheets/kills_teller.jpg` |
