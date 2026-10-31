@@ -92,7 +92,7 @@ func set_out(stands: Array) -> void:
 ## Says over the prize of `side` whose it is, to this machine's player.
 func _mark(side: int, mine: int) -> void:
 	var label := _labels[side]
-	label.text = "YOURS" if side == mine and host.me() else "THEIRS" if host.me() else "SIDE %d" % (side + 1)
+	label.text = "YOURS" if side == mine and host.me() else "THEIRS" if host.me() else host.side_name(side).to_upper()
 	label.modulate = MARK_OURS if side == mine else MARK_THEIRS
 
 
@@ -203,7 +203,7 @@ func status(me: RefCounted) -> String:
 		var prize := prizes[side]
 		if not is_instance_valid(prize):
 			continue
-		var whose := ("YOUR %s" if side == me.team else "THEIR %s") if me else "SIDE %d'S %%s" % (side + 1)
+		var whose := ("YOUR %s" if side == me.team else "THEIR %s") if me else "%s' %%s" % host.side_name(side).to_upper()
 		var how := "at home"
 		if prize.state == CARRIED:
 			var carrier: RefCounted = host.entrants.get(host.number(prize.carrier))

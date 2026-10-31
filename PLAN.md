@@ -5600,3 +5600,19 @@ Op 31 oktober 2026 twee punten van Michiel na het spelen. In capture the flag in
 - Met GPU, in het spel met `--match=ctf:dunes:2`: `assets/arenas/sheets/duinen_bases.jpg`, de oude plek en de twee nieuwe, elk één beeld. Op die beelden zijn geen fps gemeten; dit verandert niets aan wat er getekend wordt.
 
 **Niet bekeken:** het rijden zelf met het oog, en twee machines echt naast elkaar. Niemand reed nog de jeep uit de loods en door de poort naar het andere kamp.
+
+## Teams met een naam, en zelf kiezen bij welk team je hoort
+
+Op 31 oktober 2026 gevraagd, na het eerste potje op twee laptops: "Change sides" deed niet wat Michiel verwachtte, hij wilde bij zijn vriend in het team komen. Zijn voorstel: de teams een eigen naam geven en laten kiezen, met ingang van de volgende dood of een nieuw potje. Op de branch `teamkeuze`.
+
+- **De teams heten de Wolves en de Ravens** (`"sides"` in `assets/match.json`, `Match.side_name()`). Dieren in plaats van rood en blauw, omdat de kleuren in het spel van de kijker afhangen: wat voor jou "ons" is, is voor de ander "zij". De namen zijn mijn keuze. Ze staan in de tabel onder Tab (`WOLVES  ·  YOU   12`), in de melding bij de start ("You play for the Wolves") en bij de prijzen voor wie alleen kijkt. Bij capture the flag blijft boven de prijzen YOURS en THEIRS staan.
+- **In het pauzemenu staan beide teams**: `Wolves  ·  your team` en `Join the Ravens`. Na de klik staat er `Ravens  ·  from your next death or a new match`, en een klik op je eigen team trekt de keuze weer in. Het scherm sluit niet, zodat je ziet dat de keuze is aangekomen; de knoppen volgen de wedstrijd als je team wisselt terwijl het open is.
+- **Wanneer het ingaat.** Wie al dood is, gaat over bij het terugkomen; wie leeft, bij de eerstvolgende dood. Een bot van het andere team komt de andere kant op, zoals bij "Change sides", liefst een die zelf al neer ligt. Staat er geen bot, dan wordt het ene team groter.
+- **De keuze blijft staan bij een nieuw potje** (`Match.picked`, leeg zodra de wedstrijd sluit). Dat was de andere fout: zonder keuze deelt `_line_up_people()` de mensen om en om in, dus wie gewisseld was, stond bij "Start the match again" weer waar hij begon.
+- **`Net.VERSION` is 23**: `change_sides` is `choose_side` geworden, dus een oude en een nieuwe build begrijpen elkaar niet.
+
+**Wat er bij hem misging weet ik niet zeker.** De oude knop deed niets als je op dat moment dood was, zonder melding, en de netwerktest riep hem aan zonder echte klik. In een echt netwerkpotje met muisklikken op de nieuwe knop werkten 25 van de 26 klikken: 24 van de 24 op steeds een vers pauzescherm, en van de twee eerste runs miste de allereerste klik. Die heb ik niet kunnen herhalen en niet kunnen verklaren. Er ligt niets over het menu heen en het pauzescherm wordt niet tussendoor opnieuw opgebouwd. Mist een klik nu, dan is dat te zien: de tekst verandert niet.
+
+**Getest**, zonder GPU, op netstroom en daarna op de accu, load 4 tot 8 met een tweede sessie die testte en Michiel die speelde: selftest 634, `tools/nettest.sh` 69, `--match` 103, `--match --lan` 103, `tools/test_match.sh` 138, alles geslaagd. Op de GPU één run als host: beeld van het pauzescherm, alles past op 1920×1080, en na een dood stond de speler echt bij de Ravens.
+
+**Niet gezien:** twee echte machines met deze build, en de tabel onder Tab op beeld. Capture the flag volgt dezelfde weg, maar de wissel daar is niet apart getest.

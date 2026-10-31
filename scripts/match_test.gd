@@ -705,7 +705,11 @@ func _party_and_friends() -> void:
 	_check("on hard the other side is sent for the big guns, and the player's side is not", not sent.is_empty() and sent.all(func(bot: RefCounted) -> bool: return bot.team != me.team))
 	Settings.difficulty = 1
 	var team: int = me.team
-	Match.change_sides(me.id)
+	Match.choose_side(me.id, 1 - team)
+	_check("a choice of side waits for the next time the player goes down", me.team == team and Match.side_wanted(me) == 1 - team)
+	Match._go_where_wanted(me)
+	var coming: Array = Match._line_up_people().filter(func(line: Array) -> bool: return line[0] == me.id)
+	_check("and it stays when the match starts again", coming[0][2] == me.team)
 	var with_me: Array = bots.filter(func(bot: RefCounted) -> bool: return Match.entrants.has(bot.id) and bot.team == me.team)
 	var against: Array = bots.filter(func(bot: RefCounted) -> bool: return Match.entrants.has(bot.id) and bot.team != me.team)
 	_check("whoever changes sides takes the step with them", me.team != team and with_me.all(func(bot: RefCounted) -> bool: return Match.bot_level(bot) == Match.levels.green)

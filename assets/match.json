@@ -1,4 +1,5 @@
 {
+	"sides": ["Wolves", "Ravens"],
 	"rules": {
 		"regen_after": 5.0,
 		"safe": 1.5,

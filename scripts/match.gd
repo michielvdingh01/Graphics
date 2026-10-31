@@ -193,9 +193,14 @@ var takes: Array[Dictionary] = []
 ## For the test: the number of a bot that plays as if it were a person, see
 ## bot_level().
 var stand_in := 0
+## The side a person asked to be on, by number. It stays when the match starts
+## again: see choose_side().
+var picked := {}
 
 var _game: Node3D
 var _rules: Array[Dictionary] = []
+## What the two sides are called: assets/match.json.
+var _side_names: Array = ["Wolves", "Ravens"]
 ## Where a cell that mends lies in the arena: {at, cell, due}, the cell that
 ## lies there now and the clock at which the next one does.
 var _cells: Array[Dictionary] = []
@@ -255,6 +260,8 @@ func _ready() -> void:
 		_special_numbers.merge(parsed.specials, true)
 	if parsed is Dictionary and parsed.get("arenas") is Dictionary:
 		_arenas = parsed.arenas
+	if parsed is Dictionary and parsed.get("sides") is Array and parsed.sides.size() == 2:
+		_side_names = parsed.sides
 	var bots: Variant = JSON.parse_string(FileAccess.get_file_as_string(BOTS)) if FileAccess.file_exists(BOTS) else null
 	if bots is Dictionary and bots.get("levels") is Dictionary:
 		levels = bots.levels
@@ -373,6 +380,7 @@ func close() -> void:
 		return
 	active = false
 	state = State.NONE
+	picked.clear()
 	_forget()
 	Save.set_aside(false)
 	changed.emit()
@@ -488,6 +496,16 @@ func _arena_numbers(level: String) -> Dictionary:
 ## they are where there are sides, twice that where everybody is on their own.
 func _share(kind: String) -> int:
 	return 1 if not MODES.has(kind) or (MODES[kind].new() as RefCounted).teams() else 2
+
+
+## What `side` is called: "Wolves".
+func side_name(side: int) -> String:
+	return str(_side_names[side])
+
+
+## The side `who` is on or asked to be on.
+func side_wanted(who: Entrant) -> int:
+	return picked.get(who.id, who.team)
 
 
 ## What the match is called, for a heading: "Team deathmatch".
@@ -780,6 +798,7 @@ func _physics_process(delta: float) -> void:
 		if who.out > 0.0:
 			who.out -= delta
 			if who.out <= 0.0:
+				_go_where_wanted(who)
 				_bring_back(who)
 		elif who.bot and who.unhurt > float(rules.regen_after) and who.health < float(rules.regen_to):
 			# As far as a person's does, and no further.
@@ -858,6 +877,9 @@ func _show_begin(seconds: float) -> void:
 	_clock = 0.0
 	state = State.PLAYING
 	began.emit()
+	var own := me()
+	if own and mode.teams():
+		say("You play for the %s" % side_name(own.team))
 	changed.emit()
 
 
@@ -874,7 +896,8 @@ func _line_up_people() -> Array:
 	var count: int = mode.head_count(setup.size)
 	var seated := {}
 	for i in people.size():
-		var wanted: int = (i % 2 if setup.apart else 0) if mode.teams() else -1
+		var dealt: int = i % 2 if setup.apart else 0
+		var wanted: int = picked.get(people[i], dealt) if mode.teams() else -1
 		var side := wanted
 		var at := count + i
 		for place in count:
@@ -1248,6 +1271,7 @@ func _show_gone(id: int) -> void:
 	if who == null:
 		return
 	entrants.erase(id)
+	picked.erase(id)
 	_errands.erase(id)
 	if who.bot and is_instance_valid(who.body):
 		who.body.queue_free()
@@ -1276,39 +1300,56 @@ func person_left(person: int) -> void:
 		(entrants[line[0]] as Entrant).out = BACK_SOON
 
 
-## This machine's player goes over to the other side.
-func change_my_side() -> void:
-	Net.ask(self, &"change_sides", [Net.id()])
+## This machine's player asks to be on `side`.
+func choose_my_side(side: int) -> void:
+	picked[Net.id()] = side
+	changed.emit()
+	Net.ask(self, &"choose_side", [Net.id(), side])
 
 
-## `person` goes over to the other side, in the place of a bot of it if there
-## is one, who comes over the other way. Both are back a moment later at
-## their new end, and what they carried stays behind.
-func change_sides(person: int) -> void:
-	var who: Entrant = entrants.get(person)
-	if who == null or not mode.teams() or state != State.PLAYING or who.out > 0.0:
+## `person` asks to be on `side`: they go over the next time they go down, or
+## when the match starts again if that comes first, see _go_where_wanted() and
+## _line_up_people(). Asking for the side they are on takes it back.
+func choose_side(person: int, side: int) -> void:
+	if entrants.has(person) and mode.teams() and (side == 0 or side == 1):
+		Net.show(self, &"_show_chosen", [person, side])
+
+
+func _show_chosen(person: int, side: int) -> void:
+	picked[person] = side
+	changed.emit()
+
+
+## `who` is about to come back: if they asked for the other side they go over
+## now, in the place of a bot of it if there is one. That bot comes over the
+## other way, one who is down if there is one, or it is at its new end a moment
+## later.
+func _go_where_wanted(who: Entrant) -> void:
+	if who.bot or not mode.teams() or side_wanted(who) == who.team:
 		return
 	var bot: Entrant = null
 	for other: Entrant in entrants.values():
 		if other.bot and other.team != who.team and (bot == null or other.out > bot.out):
 			bot = other
-	mode.fell(who)
 	if bot:
 		mode.fell(bot)
-	Net.show(self, &"_show_change", [person, bot.id if bot else 0])
+	Net.show(self, &"_show_change", [who.id, bot.id if bot else 0])
 
 
 func _show_change(person: int, bot: int) -> void:
-	say("%s changed sides" % (entrants[person] as Entrant).title)
-	for id: int in [person, bot]:
-		var who: Entrant = entrants.get(id)
-		if who:
-			who.team = 1 - who.team
-			who.out = BACK_SOON
+	var who: Entrant = entrants.get(person)
+	if who == null:
+		return
+	who.team = 1 - who.team
+	say("%s joined the %s" % [who.title, side_name(who.team)])
+	var other: Entrant = entrants.get(bot)
+	if other:
+		other.team = 1 - other.team
+		other.out = maxf(other.out, BACK_SOON)
 	# Who is a friend of this machine's player may be everybody else by now.
-	for who: Entrant in entrants.values():
-		if is_instance_valid(who.body):
-			_take_side(who)
+	for each: Entrant in entrants.values():
+		if is_instance_valid(each.body):
+			_take_side(each)
 	mode.sides_changed()
 	changed.emit()
 

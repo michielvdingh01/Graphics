@@ -38,7 +38,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 22
+const VERSION := 23
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -55,7 +55,7 @@ const CALL_SIGN := "graphics-fps"
 ## (scripts/vehicle.gd), of a match (scripts/match.gd) and of a weapon of the
 ## arena on its stand (scripts/stash.gd).
 const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm", &"seat_asked", &"seat_left_asked", &"worn_by", &"struck_by",
-	&"went_down", &"lay_down", &"spent", &"cell_taken", &"change_sides", &"take_asked"]
+	&"went_down", &"lay_down", &"spent", &"cell_taken", &"choose_side", &"take_asked"]
 ## What the machine that runs a vehicle may have the others do to it, see
 ## vehicle_did().
 const VEHICLE_DEEDS: Array[StringName] = [&"_fired_here"]

@@ -143,12 +143,33 @@ static func build(menu: Node) -> void:
 		_focus(menu, prize)
 
 
-## What the pause screen has to offer in a match that others play in: the
-## other side for whoever is on one, and for the host what is played once the
+## Says on the button of either side what it comes to, for the player of this
+## machine. The buttons follow the match, in which a side may change while the
+## pause screen is open; they are gone once it is.
+static func show_sides(buttons: Array[Button]) -> void:
+	var me: RefCounted = Match.me()
+	if me == null or buttons.is_empty() or not is_instance_valid(buttons[0]):
+		return
+	for side in buttons.size():
+		var title: String = Match.side_name(side)
+		if side == me.team:
+			buttons[side].text = "%s  ·  your team" % title
+		elif side == Match.side_wanted(me):
+			buttons[side].text = "%s  ·  from your next death or a new match" % title
+		else:
+			buttons[side].text = "Join the %s" % title
+
+
+## What the pause screen has to offer in a match that others play in: a choice
+## of sides for whoever is on one, and for the host what is played once the
 ## match starts again.
 static func together(menu: Node) -> void:
 	if Match.mode.teams() and Match.me():
-		menu._button("Change sides", menu._then_resume.bind(Match.change_my_side))
+		var sides: Array[Button] = []
+		for side in 2:
+			sides.append(menu._button("", Match.choose_my_side.bind(side)))
+		menu._sides = sides
+		show_sides(sides)
 	if not Net.is_host():
 		return
 	var kinds: Array = Match.kinds.keys()

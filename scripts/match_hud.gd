@@ -225,7 +225,7 @@ func _table() -> PackedStringArray:
 				rows.clear()
 			last = who.team
 			var ours: bool = me != null and me.team == who.team
-			rows.append("%s%s   %d" % ["" if rows.is_empty() else "\n", "YOUR SIDE" if ours else "THE OTHER SIDE" if me else "SIDE %d" % (who.team + 1), Match.tally[who.team]])
+			rows.append("%s%s%s   %d" % ["" if rows.is_empty() else "\n", Match.side_name(who.team).to_upper(), "  ·  YOU" if ours else "", Match.tally[who.team]])
 		rows.append("%s %-12s %3d kills  %3d deaths" % ["▸" if who == me else "  ", who.title, who.kills, who.deaths])
 	columns.append("\n".join(rows))
 	return columns
