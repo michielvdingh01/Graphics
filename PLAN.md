@@ -5267,3 +5267,13 @@ Een update die opent maar nooit een eerste beeld haalt, laat `trying-<nummer>` a
 | Een nieuwe versie bouwen en proberen | `tools/release.sh` |
 | Die aan iedereen geven | `tools/release.sh --publish` |
 | De updater testen | `tools/test_updater.sh` |
+
+**Dunes liep vast in de export**
+
+Op 31 oktober 2026 meldde Michiel dat de Dunes op een MacBook Air M1 bij 36% bleven staan, ruim twintig minuten, drie keer. Het lag niet aan de Air. De build `202610301633` liep hier ook vast: vier van de vier keer, met een lege thuismap, door het echte laadscherm, op wisselende plekken tussen 20% en 53%. Vanuit een checkout gebeurde dat in die ene run niet, en daarom was het niet eerder opgevallen.
+
+- **Wat er gebeurt:** een deadlock, geen traag laden. `sample` laat de hoofdthread en vijf van de tien werkthreads zien die allemaal op een `std::recursive_mutex` wachten, en twee werkthreads die niet verder komen. De Godot van de release heeft geen symbolen, dus welke lock het is weet ik niet. De laatste regels van `--verbose` zijn texturen en meshes die door elkaar geladen worden, geen vaste plek.
+- **De oplossing:** `load_threaded_request(path, "", false)` in `scripts/loading.gd`, dus zonder sub-threads. Dat was vier van de vier keer goed in de oude build, om en om gemeten met de hang.
+- **Getest op de nieuwe build, elke run met een lege thuismap:** 28 van de 28 runs komen in het level: Dunes, Dunes at night, Alps, Works, Powerhouse, Depot, Factory en wedstrijden in de Dunes en Works. Twaalf daarvan met een pool die echt op 8 of 4 threads stond, zoals een Air er 8 heeft; `sample` bevestigt 8 werkthreads. Mijn eerste poging om dat met een `override.cfg` te doen werkte niet (`pool -1`), die zestien runs tellen dus alleen voor 10 threads. De selftest slaagt; één keer viel de controle "and is lowest as the foot comes down" om, terwijl er tegelijk een GPU-reeks liep, en daarna niet meer in drie losse runs en een hele selftest op een rustiger laptop.
+- **Wat het kost:** de Dunes komen nu in 8 tot 10 seconden in beeld met een lege shadercache, in de export. De balk staat daarbij een paar seconden stil op 36%: dat is de normale plek, de ring blijft draaien. Hoe lang het op de Air duurt, is hier niet te zien.
+- **Niet gedaan:** niet gemeten op een echte Air, en niet op een Air met 8 GB. Het vastlopen is daar niet nagespeeld, alleen hier.
