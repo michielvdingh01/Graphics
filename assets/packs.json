@@ -1,5 +1,5 @@
 {
-	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start; grenade: what is thrown, a scene in scenes/ (grenade unless the pack says). tacticals: how many there are of what goes on the second key; tactical: what that is, a scene in scenes/ too (smoke_grenade unless the pack says). A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox, unless a level says otherwise (metadata/pack on its scene: the dunes by night carry the silenced pack).",
+	"_doc": "The packs of weapons a match is played with, see scripts/armory.gd. weapons: what everybody carries, on 1 and on, by the names of their files in weapons/. bots: what the bots of a side carry, in the order they join it; far: the same where the ends of the arena are more than 300 m apart to walk. sidearm: the weapon that is drawn when a magazine runs dry, which tools/weapon_sheet.py does not weigh as a weapon of its own. grenades: how many there are at the start; grenade: what is thrown, a scene in scenes/ (grenade unless the pack says). tacticals: how many there are of what goes on the second key; tactical: what that is, a scene in scenes/ too (smoke_grenade unless the pack says). specials: the weapons of the arena that are set out on their stands, the minigun, the rocket launcher and the banana gun unless the pack says. A pack that names a weapon that is not built yet is not on offer. The standard pack is also what is carried on the route and in the sandbox, unless a level says otherwise (metadata/pack on its scene: the dunes by night carry the silenced pack).",
 	"packs": {
 		"standard": {
 			"title": "Standard",
@@ -64,6 +64,16 @@
 			"bots": ["colt", "hand_cannon", "pistol", "machine_pistol", "revolver", "hand_cannon"],
 			"grenades": 1,
 			"tacticals": 1
+		},
+		"party": {
+			"title": "Party",
+			"about": "A rocket launcher, a minigun, bananas that find you, and all the beer you can throw.",
+			"weapons": ["rocket_launcher", "minigun", "banana_gun", "beer"],
+			"bots": ["banana_gun", "minigun", "beer", "rocket_launcher", "beer", "banana_gun"],
+			"sidearm": "beer",
+			"specials": [],
+			"grenades": 2,
+			"tacticals": 2
 		}
 	}
 }

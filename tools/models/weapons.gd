@@ -67,6 +67,8 @@ const BANANA_TAPER: Array[Vector2] = [
 	Vector2(0.76, 0.96), Vector2(0.9, 0.72), Vector2(0.96, 0.34), Vector2(0.985, 0.2), Vector2(1.0, 0.0),
 ]
 const BANANA_RIDGE := 0.05
+## How thick a bottle of beer is round its middle.
+const BEER_BELLY := 0.031
 ## How many bananas there are in the outer and the inner row of the hand: one
 ## to a shot, so 16 is the magazine of weapons/banana_gun.tres.
 const BUNCH_ROWS: Array[int] = [9, 7]
@@ -117,6 +119,8 @@ func _describe() -> void:
 	_hand_cannon()
 	_banana_gun()
 	_banana_round()
+	_beer()
+	_beer_bottle()
 	# The standard five once more, each with a silencer.
 	_silenced = true
 	_rifle()
@@ -1768,6 +1772,49 @@ func _banana_girth(along: float) -> float:
 		if along <= BANANA_TAPER[i + 1].x:
 			return BANANA_GIRTH * lerpf(BANANA_TAPER[i].y, BANANA_TAPER[i + 1].y, inverse_lerp(BANANA_TAPER[i].x, BANANA_TAPER[i + 1].x, along))
 	return 0.0
+
+
+# --- The beer -----------------------------------------------------------------
+
+
+## A bottle of beer in the right hand, held round its middle, neck forward,
+## the left hand free: the part Mag, which scripts/weapons.gd takes away at a
+## throw and brings up again. There is one bottle more in the hand every time.
+func _beer() -> void:
+	model("beer")
+	var grip := Vector3(0, 0.96, -0.28)
+	var around := Transform3D(Basis(Vector3.RIGHT, grip, Vector3.RIGHT.cross(grip)), _at(-0.079, -0.1))
+	part("Mag", around)
+	_bottle(around.origin - grip * 0.1, grip)
+	var elbow := _at(-0.42, -0.27, 0.13)
+	var index := [_at(-0.04, -0.1, 0.03), _at(-0.015, -0.1, 0.012), _at(-0.012, -0.1, -0.012), _at(-0.03, -0.1, -0.03)]
+	part("ArmR", Transform3D(Basis(), _at(-0.165, -0.125, 0.05)))
+	if _gloved():
+		_glove(around, Vector2(BEER_BELLY, BEER_BELLY), false, 28.0, _at(-0.2, -0.17, 0.02), 0.03, 0.0, elbow,
+			[_at(-0.115, -0.07, 0.0), _at(-0.1, -0.055, -0.03), _at(-0.07, -0.05, -0.036), _at(-0.04, -0.05, -0.03)], index)
+	else:
+		_hand(around, Vector2(BEER_BELLY, BEER_BELLY), -25, -1, _at(-0.165, -0.125, 0.05), elbow,
+			[_at(-0.115, -0.07, 0.0), _at(-0.1, -0.055, -0.03), _at(-0.07, -0.05, -0.036), _at(-0.04, -0.05, -0.03)], index)
+	part("Body")
+	marker("Muzzle", Transform3D(Basis(), _at(-0.04, 0.03)))
+
+
+## A bottle in flight, about its middle and along Y: scenes/beer.tscn carries it.
+func _beer_bottle() -> void:
+	model("beer_bottle")
+	_bottle(Vector3.DOWN * 0.125, Vector3.UP)
+
+
+## A brown bottle from its foot at `foot` up along `up`, 25 cm tall, with a
+## plain paper label, a band of red and a cap. No brewery's.
+func _bottle(foot: Vector3, up: Vector3) -> void:
+	_turned("beer_glass", foot, up, PackedVector2Array([
+		Vector2(0.0, 0.0), Vector2(BEER_BELLY - 0.003, 0.0), Vector2(BEER_BELLY, 0.005), Vector2(BEER_BELLY, 0.13), Vector2(0.027, 0.155),
+		Vector2(0.016, 0.18), Vector2(0.0125, 0.205), Vector2(0.0125, 0.238), Vector2(0.0145, 0.24), Vector2(0.0145, 0.246), Vector2(0.0, 0.246),
+	]), 20, true)
+	_turned("beer_label", foot + up * 0.03, up, PackedVector2Array([Vector2(BEER_BELLY + 0.0004, 0.0), Vector2(BEER_BELLY + 0.0004, 0.085)]), 20)
+	_turned("enamel_red", foot + up * 0.058, up, PackedVector2Array([Vector2(BEER_BELLY + 0.0007, 0.0), Vector2(BEER_BELLY + 0.0007, 0.024)]), 20)
+	_turned("beer_cap", foot + up * 0.242, up, PackedVector2Array([Vector2(0.0, 0.009), Vector2(0.0135, 0.009), Vector2(0.0155, 0.0075), Vector2(0.016, 0.0), Vector2(0.0, 0.0)]), 14)
 
 
 # --- Shared pieces -------------------------------------------------------------

@@ -5353,3 +5353,25 @@ Op Michiels vraag: de Needler uit Halo, maar met een tros bananen erop. Het idee
 - **Hoe het voelt en de balans.** 14 per banaan, zes voor de ontploffing, 420 per minuut en de zoekhoek zijn eerste gokken. Bots met dit wapen zijn niet in een hele wedstrijd bekeken.
 - **Richten** houdt het wapen rechtsonder in beeld, omdat de tros anders precies in het midden staat: je kijkt erlangs. Er is dus geen vizier; bij een wapen dat zelf zoekt vond ik dat goed, maar dat is mijn keuze.
 - **De banaan in de lucht en in een doel** heb ik niet in beeld gehad, alleen het wapen in rust, gericht en tijdens het herladen.
+
+## Het pakket Party, en bier
+
+Op Michiels vraag een zevende wapenset: de raketwerper, de minigun, het bananengeweer en, als vierde, een flesje bier om mee te gooien.
+
+- **Party** (`assets/packs.json`): raketwerper op 1, minigun op 2, bananengeweer op 3, bier op 4. Geen rekken (`"specials": []`), want iedereen draagt ze al. Bier is het wapen om op terug te vallen (`sidearm`).
+- **Een wapen van het rek in een pakket.** `special` zegt nog steeds waar een wapen op een rek staat, maar wat je gevonden hebt is nu wat na het pakket komt (`_pack_size` in `scripts/weapons.gd`). In Party wordt een leeg wapen dus niet weggegooid, en een nieuw leven vult het weer. Een raketwerper krijgt raketten uit een blik; de minigun heeft geen reserve en is na 450 kogels leeg tot je opnieuw begint.
+- **Het bier** (`weapons/beer.tres`, `_beer()` in `tools/models/weapons.gd`, 524 driehoeken, `scripts/beer.gd`): een bruine fles in de rechterhand, met een eigen etiket van papier en een rode band, geen merk. 360 worpen per minuut, automatisch, 8 per treffer, en het raakt nooit op: `endless` in de wapendata, dus niets gaat van de teller af en die zegt 24 / ∞. Tot 30 m bereik. De fles vliegt 26 m/s in een lichte boog (valt 6 m/s²), draait over de kop en breekt op wat hij raakt, met glas en een plens. Een worp maakt geen flits, geen rook en wordt door wachters niet gehoord.
+- **`by_hand`** in de wapendata: bij een worp is de fles uit de hand, de volgende komt van onderen op. **`projectile_lift`**: wat er bij het gooien aan omhoog bij komt.
+- **Geluid**: `beer_throw` (de zwiep van een granaat, sneller en korter) en `beer_smash` (brekend glas met iets nats eronder).
+- **Een fout van het bananengeweer hersteld**: wie een banaan van iemand anders zag, kreeg ook de rook en de flits van een raket achter het wapen (`scripts/puppet.gd`). Dat gebeurt nu alleen bij wat ontploft.
+- **Een fout van het derde rek hersteld**: sinds het bananengeweer stonden de minigun en het bananengeweer in de fabriek op dezelfde plek. Was er geen plek van de gevraagde soort meer, dan telde in `Arena.hideouts()` hoe open een plek ligt zwaarder dan de afstand tot de andere rekken. Nu gaat afstand voor, tot `AWAY`. De fabriek heeft te weinig plekken die voor beide kanten even ver lopen: daar staan de drie rekken 17, 13 en 9 m uit elkaar, en verder kan niet zonder een kant voor te trekken. De wedstrijdtest eist 15 m tussen de eerste twee en 8 m tussen elk paar. Dat de bij het bananengeweer gedraaide `--specials` dit niet zag: die slaat dit deel over.
+- **`Net.VERSION` is 19.** Het bier heeft de laatste plaats in de kast.
+- **Proberen**: `--pack=party`; `tools/selftest.sh --party` voor alleen de test.
+- **Getest**: de hele selftest (634 controles, met de Alpen-bestanden uit de hoofdcheckout er tijdelijk bij), `tools/nettest.sh` en de hele `tools/test_match.sh` (125 controles) slagen.
+- **Gemeten**: een wedstrijd van alleen bots (`tools/test_match.sh --pack=party --seconds=240`, twee keer). Bij de tweede: bananengeweer 50 kills (33% van de bots), minigun 18 (17%), bier 17 (33%), raketwerper 5 (17%). Geen wapen haalt het dubbele van zijn deel. Eén seconde gooien doet op 8 m 48 van de 100.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het klinkt.** Gemaakt en niet gehoord: `tools/hear.py beer_throw 360` en `tools/hear.py takes beer_smash 2`.
+- **De worp in beweging.** Ik heb de fles in de hand in beeld gehad, niet de worp, de volgende fles die opkomt of het breken.
+- **De balans.** 8 per treffer is weinig per fles maar 48 per seconde, meer dan het klinkt. Bots raken vaker dan een speler bij beweging, en het bananengeweer haalt in deze wedstrijd de meeste kills: zes in één doel is mogelijk te weinig. Beide zijn eerste gokken.
