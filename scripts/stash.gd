@@ -9,7 +9,8 @@ extends Node3D
 ## when it is back. Whoever goes down with it leaves it where they fell: a
 ## second one of these, `dropped`, with what was left in it, that lies there
 ## for LIES seconds and then lets its stand know. scripts/match.gd sets them
-## out and keeps them going.
+## out and keeps them going. In a match every machine has them, and the host
+## says who took one and when one is back.
 
 ## Somebody took it up; `dropped` is what they carried before and let go of,
 ## [weapon, rounds] or [].
@@ -23,6 +24,8 @@ const TAKE := 1.2
 const TAKE_UP := 1.6
 ## Seconds a weapon that was dropped lies where it fell.
 const LIES := 20.0
+## Seconds between two times a guest asks the host for it.
+const ASK_AGAIN := 0.25
 ## Seconds its name is seen through walls once it is there.
 const TOLD := 5.0
 ## How far a count over an empty stand is seen, in metres.
@@ -40,11 +43,13 @@ var dropped := false
 ## is gone that the stand has it there again.
 var stand: Node3D
 var back := 90.0
+## Seconds that one that was dropped has been lying there.
+var age := 0.0
 
 ## Seconds until it is there; 0 while it is, and INF while it is carried.
 var _due := 0.0
-var _age := 0.0
 var _told := 0.0
+var _asked := 0.0
 var _model: Node3D
 var _label := Label3D.new()
 var _light := OmniLight3D.new()
@@ -94,9 +99,16 @@ func come_in(seconds: float) -> void:
 
 
 ## The weapon that was taken from here is fired empty or lost: it is back in
-## `seconds`.
+## `seconds`, on every machine.
 func release(seconds: float) -> void:
-	come_in(seconds)
+	Net.show(self, &"come_in", [seconds])
+
+
+## How it stands on the host, for a machine that has only just come in:
+## `seconds` as due() says.
+func net_restore(seconds: float) -> void:
+	_due = seconds
+	_show(_due <= 0.0)
 
 
 func is_up() -> bool:
@@ -109,10 +121,11 @@ func due() -> float:
 
 
 func _physics_process(delta: float) -> void:
+	_asked -= delta
 	if dropped:
-		_age += delta
-		visible = _age < LIES - 4.0 or fmod(_age * 3.0, 1.0) < 0.65
-		if _age >= LIES:
+		age += delta
+		visible = age < LIES - 4.0 or fmod(age * 3.0, 1.0) < 0.65
+		if age >= LIES:
 			if is_instance_valid(stand):
 				stand.release(back)
 			queue_free()
@@ -154,6 +167,30 @@ func _takers() -> Array[Node3D]:
 
 
 func _take(body: Node3D) -> void:
+	if not Match.active:
+		_taken_by(body)
+	elif not Net.is_guest():
+		take_asked(Match.number(body))
+	elif _asked <= 0.0:
+		_asked = ASK_AGAIN
+		Net.ask(self, &"take_asked", [Match.number(body)])
+
+
+## Whoever has the number `id` in the match reaches for it: on the host,
+## where two who reach at once are told apart.
+func take_asked(id: int) -> void:
+	var who: RefCounted = Match.entrants.get(id)
+	if who and who.out <= 0.0 and is_up():
+		Net.show(self, &"_show_taken", [id])
+
+
+func _show_taken(id: int) -> void:
+	var who: RefCounted = Match.entrants.get(id)
+	if who and is_instance_valid(who.body):
+		_taken_by(who.body)
+
+
+func _taken_by(body: Node3D) -> void:
 	var before: Array = Match.arm(body, weapon, rounds) if Match.active else body.weapons.take_special(weapon, rounds)
 	if body.has_method("has_control"):
 		Sfx.play(&"pickup_ammo", -4.0)

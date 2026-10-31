@@ -142,7 +142,7 @@ func _process(delta: float) -> void:
 			text = "VICTORY" if Match.mode.is_winner(me, Match.won) else "DEFEAT"
 		else:
 			text = "OVER"
-		text += "\n\nEnter  again      Esc  menu"
+		text += "\n\nThe host starts the next one      Esc  menu" if Net.is_guest() else "\n\nEnter  again      Esc  menu"
 	elif me and me.out > 0.0:
 		text = "%sBack in %d" % ["Brought down by %s\n" % _by if _by else "", ceili(me.out)]
 	_centre.text = text

@@ -167,6 +167,10 @@ var _fov_punch := 0.0
 
 
 func _ready() -> void:
+	# The shape would be that of the scene, and stay as small as whoever died
+	# in the last level left it: the next would stand in the floor.
+	collision.shape = capsule.duplicate()
+	capsule = collision.shape
 	_fov = camera.fov
 	if not Menu.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

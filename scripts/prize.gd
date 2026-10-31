@@ -55,6 +55,8 @@ const BACK_DROP := 0.22
 const REACH := 1.0
 ## The layer of what can touch it, the players, and that of the level.
 const PLAYERS := 2
+## The most a file of a made prize may be to be sent to a guest.
+const MOST_BYTES := 8_000_000
 const WORLD := 1
 ## The light around it where it stands or lies, as a pickup has: enough to
 ## find it by in a dark hall.
@@ -145,6 +147,34 @@ static func _all() -> Dictionary:
 				continue
 			_prizes[made_name] = entry
 	return _prizes
+
+
+## The files of the prize `of` if it was made on this machine, by their names,
+## for a guest that does not have it: what there is to show, and nothing else.
+static func files_of(of: String) -> Dictionary:
+	var found := {}
+	if not made(of):
+		return found
+	var entry := spec(of)
+	for file: String in ["prize.json", str(entry.get("model", ""))]:
+		var bytes := FileAccess.get_file_as_bytes("%s/%s" % [entry.folder, file])
+		if bytes.is_empty() or bytes.size() > MOST_BYTES:
+			return {}
+		found[file] = bytes
+	return found
+
+
+## Keeps a prize that was sent by the host, as a prize made here, unless there
+## is one by that name already.
+static func take_in(of: String, files: Dictionary) -> void:
+	if of != of.validate_filename() or files.size() > 2 or spec(of):
+		return
+	var folder := "%s/%s" % [_made_folder(), of]
+	DirAccess.make_dir_recursive_absolute(folder)
+	for file: String in files:
+		if file == file.validate_filename() and files[file] is PackedByteArray:
+			FileAccess.open("%s/%s" % [folder, file], FileAccess.WRITE).store_buffer(files[file])
+	reread()
 
 
 ## Where the made prizes are read from: user://prizes/; while one of the
@@ -263,6 +293,13 @@ func drop(at := Vector3.INF) -> void:
 		at = carrier.global_position if is_instance_valid(carrier) and carrier.is_inside_tree() else where()
 	_dismount()
 	_lay(at, facing)
+
+
+## Lies at `at`, as it has for `seconds`: how it stands on the host, for a
+## machine that has only just come in.
+func lie_at(at: Vector3, seconds: float) -> void:
+	_lay(at, 0.0)
+	down_for = seconds
 
 
 ## Back to its stand, from wherever it is.

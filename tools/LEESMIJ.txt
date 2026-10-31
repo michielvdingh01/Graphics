@@ -20,11 +20,22 @@ Starten op Windows
   werkt het spel niet zelf bij.
 
 Meedoen met een spel
-  Kies "Play together", vul het adres in dat je van de host hebt gekregen
-  en kies "Join the game at that address".
+  Kies "Play together". Zit je op hetzelfde netwerk als de host, dan staat
+  zijn spel daar vanzelf in de lijst: kies "Join ...". Staat het er niet in,
+  vul dan het adres in dat je van de host hebt gekregen en kies "Join the
+  game at that address".
   Vraagt de Mac of het spel je lokale netwerk mag gebruiken, sta dat dan toe.
 
-Zelf een spel hosten
+Samen een wedstrijd spelen
+  Kies "Multiplayer", kies team deathmatch, ieder voor zich of capture the
+  flag (bij "Prize" kies je de banaan) en zet "Friends on your network" op
+  "Can join". Daaronder kies je of vrienden tegen elkaar spelen of samen tegen
+  bots, en of er bots bijkomen. Kies dan "Start". De anderen doen mee zoals
+  hierboven staat, ook als de wedstrijd al loopt: ze nemen de plek van een bot
+  over. In het pauzemenu (Esc) kan iedereen "Change sides" kiezen, en kiest
+  de host een andere spelsoort of arena voor de volgende start.
+
+Zelf de route hosten
   Kies "Play together", dan "Host a game" en een level. Vraagt Windows of
   de Mac of het spel door de firewall mag, sta dat dan toe.
   - Op hetzelfde netwerk (dezelfde wifi): de anderen gebruiken het adres

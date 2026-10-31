@@ -5333,3 +5333,56 @@ Het staat los van de branch `killfeedback` (schedels, multikills, killstreaks), 
 | Uit een voertuig springen, de test | `tools/test_vehicles.sh --only=bail` |
 | De zon, voor en na | `assets/arenas/sheets/alps_zon.jpg` |
 | De teller, voor en na | `assets/arenas/sheets/kills_teller.jpg` |
+
+## Wedstrijden over het netwerk: stap 4, en een LAN-party
+
+Op 31 oktober 2026 gevraagd: team deathmatch en capture the banaan met vrienden, op hetzelfde netwerk, op een LAN-party bij Michiel thuis. Tot nu toe kon samen alleen de route: `Match.open()` verbrak elke verbinding. Dit is stap 4 uit "Wedstrijden: teams, bots en een buit". Gebouwd op de branch `lanparty`.
+
+**Wat er staat**
+
+- **Een wedstrijd openzetten.** "Multiplayer" heeft een regel "Friends on your network": op "Can join" komen er drie regels bij: je naam, "Friends play" (tegen elkaar, of samen tegen de bots) en "Bots" (de lege plaatsen vullen, of geen). Alle drie de spelsoorten doen mee, in elke arena.
+- **Vinden zonder adres.** Een host roept elke seconde over het netwerk wat er gespeeld wordt (UDP-poort 24566). "Play together" laat zien wat het hoort: "Join Michiel · Capture the flag, Works · 3 playing", en een spel van een andere versie staat er grijs bij. "Multiplayer" heeft een knop "Join a game on your network" naar dat scherm. Het adres intypen kan nog steeds, en is nodig waar een router zulke berichten tegenhoudt, zoals een gastennetwerk.
+- **Binnenkomen wanneer je wilt.** De host wacht bij de start tot 15 seconden op wie nog laadt. Wie later komt, krijgt de stand: de opstelling, de telling, de klok, de rekken, de cellen en waar de buit is, en neemt de plek van een bot over op de kant met de minste mensen. Wie weggaat, laat zijn plek aan een nieuwe bot; wat hij droeg gaat terug.
+- **Tijdens het spelen.** In het pauzemenu heeft iedereen "Change sides" (je ruilt met een bot van de andere kant, of schuift door als er geen bots zijn), en de host "Kind" en "Arena" voor de volgende start. "Start the match again" en Enter na afloop zijn van de host, en nemen iedereen mee.
+- **Een eigen buit gaat mee.** Kiest de host een buit die op zijn machine gemaakt is, dan krijgt elke gast `prize.json` en het model voordat hij het level laadt (`_send_prize()` in `scripts/net.gd`), en houdt die in zijn eigen `user://prizes/`. Hooguit 8 MB per bestand; een gast die al een buit met die naam heeft, houdt de zijne.
+- **De moeilijkheid van de host geldt voor iedereen** in een wedstrijd: tot hoever health terugkomt, hoe hard een bot raakt. Op de route blijft het zoals het was.
+
+**Hoe het werkt**
+
+- `Match` deed al veel via `Net.show()`. Wat nog ontbrak: mensen in de opstelling (`_line_up_people()`, `_embody()`, `dress_people()`), en dat iemand op een gast kan sterven: elke machine houdt de health van haar eigen speler bij en meldt `went_down`.
+- **Wat alleen op de host stond, staat nu overal.** De rekken, de cellen en de buit worden neergezet met `_show_out()`. Een spelsoort zegt zelf wat er op elke machine moet staan: `plan()`, `set_out()`, `how_it_stands()`, `stand_as()` en `watch()` in `scripts/modes/mode.gd`. Wie een wapen van een rek pakt, vraagt dat aan de host (`take_asked`), zodat twee tegelijk niet allebei winnen; een cel is op alle machines weg zodra hij op één gepakt is.
+- **De bots hoorden een gast niet schieten.** Dat loopt nu via de pop van die gast op de host.
+- `Net.VERSION` is 19, omdat `banaan` 18 gebruikt. Wie als tweede in de trunk komt, kijkt hier nog even naar.
+
+**Wat de test onderweg vond**
+
+- **Wie stierf, stond na een herstart 35 cm door de vloer.** Wie doodgaat, zakt in elkaar, en die kortere botsvorm hoort bij de scène: het volgende level begon met een te korte vorm. Het oog en de treffer zaten daardoor te laag, en in de test vloog een heel magazijn eroverheen. Dat gold ook voor alleen spelen. `scripts/player.gd` maakt nu een eigen vorm.
+- Bij het zoeken naar die fout is ook het netwerk nagemeten: de meldingen van de gast kwamen 0,01 s na elkaar binnen en ENet hield niets in, met de laptop op load 5 tot 10.
+
+**Getest**
+
+`tools/nettest.sh --match` start het spel drie keer, zonder venster, via het menu, in de fabriek (99 controles, 2,5 minuut). Een gast neemt de plek van een bot; host en gast schieten elkaar met echte schoten neer, op de telling van beiden; een bot raakt de gast; de gast wisselt van kant via het pauzemenu, pakt een wapen van een rek, valt ermee en het ligt op beide machines; hij pakt een cel. Dan capture the banaan: de gast neemt de banaan, een derde komt binnen via de lijst terwijl hij hem draagt en vindt alles zo, en gaat weer weg, waarna een bot zijn plek inneemt. De gast scoort, valt met de banaan, de wedstrijd eindigt, de host start de volgende met een buit die alleen hij heeft, dan ieder voor zich zonder bots. Als de host weggaat, staat de gast weer op het titelscherm.
+
+`tools/nettest.sh --match --lan` doet hetzelfde over het echte adres van de Mac (192.168.178.99) in plaats van 127.0.0.1, met het roepen over dat netwerk: de derde vond de host zo. Een losse proef in de duinen (niet in de test): de gast stapt in een jeep, de host ziet hem rijden, wie erin sneuvelt is eruit en de stoel is vrij, de host stapt daarna zelf in.
+
+Wat een speler ziet is alleen van de drie menuschermen bekeken: "Multiplayer", "Play together" en het pauzemenu van de host. Geen beeld gemeten: een gast tekent wat de host tekent, zonder de breinen van de bots.
+
+**Wat het kost.** De plaats van de bots gaat twintig keer per seconde naar elke gast: 890 bytes voor twaalf figuren, 18 kB/s per gast, en 3,1 kB voor veertig, 62 kB/s. Dat laatste past niet in één pakket en wordt in stukken verstuurd.
+
+**Wat ik niet kon beoordelen**
+
+- **Twee echte machines.** Alles draaide op één Mac. Hoe wifi van 30 tot 100 ms voelt, en of een router of de vraag van macOS om "lokaal netwerk" het roepen tegenhoudt, is niet gezien. Dan werkt het adres nog: dat staat in het pauzemenu van de host.
+- **Schutter tegen schutter.** Wie schiet, beslist op zijn eigen beeld of het raak was; wie met 50 ms vertraging om een hoek rent, kan dus nog worden geraakt. Goed onder vrienden, niet gespeeld.
+- **Hoe het speelt.** Geen van deze dingen is met de hand gespeeld. Bots tegen meerdere mensen tegelijk zijn niet afgesteld.
+- **De Windows-build** heeft nog steeds nooit gedraaid.
+- **Vrienden hebben een nieuwe release nodig.** Een oudere build ziet de host als "another version".
+
+**Mijn keuzes, om om te gooien**
+
+- Vrienden spelen standaard tegen elkaar, om en om over de twee kanten, en bots vullen de rest aan.
+- Wie een andere spelsoort of arena kiest in het pauzemenu, krijgt de gebruikelijke grootte daarvan, zoals op het wedstrijdscherm: zes per kant in capture the flag, twintig in de duinen.
+- De spelsoort heet nog gewoon "Capture the flag", ook met de banaan.
+
+| Wat | Commando |
+|---|---|
+| Een wedstrijd met drie machines testen (2,5 minuut), of over het echte netwerk | `tools/nettest.sh --match`, `tools/nettest.sh --match --lan` |

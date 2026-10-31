@@ -51,22 +51,33 @@ var _labels: Array[Label3D] = [null, null]
 
 func begin() -> void:
 	var arena: RefCounted = host.arena
+	for side in 2:
+		_spots[side] = arena.around(side, BASE.x, BASE.y)
+		_posts[side] = arena.around(side, POST.x, POST.y)
+
+
+## Where the two stands are.
+func plan() -> Array:
+	var arena: RefCounted = host.arena
+	return [arena.spots[arena.ends[0]], arena.spots[arena.ends[1]]]
+
+
+func set_out(stands: Array) -> void:
 	var mine: int = host.me().team if host.me() else 0
 	for side in 2:
 		var prize: Node3D = (load(PRIZE) as PackedScene).instantiate()
 		prize.kind = str(host.setup.get("prize", "flag"))
+		# One made on the host, that never reached this machine.
+		if prize.spec(prize.kind).is_empty():
+			prize.kind = "flag"
 		prize.team = side
 		prize.tint = OURS if side == mine else THEIRS
 		prize.name = "Prize%d" % side
-		prize.position = arena.spots[arena.ends[side]]
+		prize.position = stands[side]
 		host.level().add_child(prize)
 		prizes[side] = prize
-		_spots[side] = arena.around(side, BASE.x, BASE.y)
-		_posts[side] = arena.around(side, POST.x, POST.y)
 		# Where it is can be read through walls, in the colour of its side.
 		var label := Label3D.new()
-		label.text = "YOURS" if side == mine and host.me() else "THEIRS" if host.me() else "SIDE %d" % (side + 1)
-		label.modulate = MARK_OURS if side == mine else MARK_THEIRS
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.no_depth_test = true
 		label.fixed_size = true
@@ -75,6 +86,50 @@ func begin() -> void:
 		label.outline_size = 10
 		prize.add_child(label)
 		_labels[side] = label
+		_mark(side, mine)
+
+
+## Says over the prize of `side` whose it is, to this machine's player.
+func _mark(side: int, mine: int) -> void:
+	var label := _labels[side]
+	label.text = "YOURS" if side == mine and host.me() else "THEIRS" if host.me() else "SIDE %d" % (side + 1)
+	label.modulate = MARK_OURS if side == mine else MARK_THEIRS
+
+
+func sides_changed() -> void:
+	var mine: int = host.me().team if host.me() else 0
+	for side in 2:
+		if is_instance_valid(prizes[side]):
+			prizes[side].dress(side, OURS if side == mine else THEIRS)
+			_mark(side, mine)
+
+
+func watch() -> void:
+	for side in 2:
+		if is_instance_valid(prizes[side]):
+			_labels[side].global_position = prizes[side].where() + Vector3.UP * 2.3
+
+
+## For either side where its prize is, who has it and how long it has lain.
+func how_it_stands() -> Array:
+	var how := []
+	for side in 2:
+		var prize := prizes[side]
+		if is_instance_valid(prize):
+			how.append([prize.state, host.number(prize.carrier), prize.where(), prize.down_for])
+	return how
+
+
+func stand_as(how: Array) -> void:
+	for side in mini(how.size(), 2):
+		var prize := prizes[side]
+		var line: Array = how[side]
+		if line[0] == DOWN:
+			prize.lie_at(line[2], line[3])
+		elif line[0] == CARRIED:
+			var who: RefCounted = host.entrants.get(line[1])
+			if who and is_instance_valid(who.body):
+				prize.take(who.body)
 
 
 func tick(_delta: float) -> void:
@@ -82,7 +137,6 @@ func tick(_delta: float) -> void:
 		var prize := prizes[side]
 		if not is_instance_valid(prize):
 			continue
-		_labels[side].global_position = prize.where() + Vector3.UP * 2.3
 		if prize.state == DOWN and prize.down_for > float(numbers.get("returns", 20.0)):
 			host.show_mode(&"_show_prize", [side, "home", 0])
 		# Whoever stands on it or at the stand is asked again each time: what
@@ -101,7 +155,7 @@ func count(_killer: RefCounted, _fallen: RefCounted, _tally: Array[int]) -> void
 func fell(who: RefCounted) -> void:
 	var side := carried_by(who)
 	if side >= 0:
-		host.show_mode(&"_show_prize", [side, "drop", who.id])
+		host.show_mode(&"_show_prize", [side, "drop", who.id, who.body.global_position])
 
 
 func come_back(who: RefCounted, foes: PackedVector3Array, friends: PackedVector3Array, watchers: PackedVector3Array) -> Transform3D:
@@ -188,8 +242,8 @@ func _reach(side: int, body: Node3D) -> void:
 
 
 ## What happens to the prize of `side`, on every machine: `who` takes it,
-## drops it, brings it home (0 if it went by itself) or scores with it.
-func _show_prize(side: int, what: String, id: int) -> void:
+## drops it at `at`, brings it home (0 if it went by itself) or scores with it.
+func _show_prize(side: int, what: String, id: int, at := Vector3.INF) -> void:
 	var prize := prizes[side]
 	var who: RefCounted = host.entrants.get(id)
 	if not is_instance_valid(prize):
@@ -201,7 +255,7 @@ func _show_prize(side: int, what: String, id: int) -> void:
 				prize.take(who.body)
 				host.say("%s has %s" % [name, prize.the()], &"pickup_grenade")
 		"drop":
-			prize.drop()
+			prize.drop(at)
 			host.say("%s dropped %s" % [name, prize.the()], &"")
 		"home":
 			prize.send_home()

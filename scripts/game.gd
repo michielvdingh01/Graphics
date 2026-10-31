@@ -522,7 +522,8 @@ func _physics_process(delta: float) -> void:
 	if Net.active and not Net.is_guest():
 		_tell_robots(delta)
 		_check_exit()
-		_check_wipe()
+		if not Match.active:
+			_check_wipe()
 
 
 ## The player who has fallen out of the level dies, and is back where a
@@ -886,6 +887,8 @@ func _meet() -> void:
 		puppet.position = start.origin
 		add_child(puppet)
 		puppets[other] = puppet
+	if Match.active:
+		Match.dress_people()
 
 
 ## Where the robots are that are up and about, for the guests to show.
@@ -943,7 +946,7 @@ func net_snapshot() -> Dictionary:
 			fallen.append(number)
 	var started: Array[int] = []
 	for i in zones.size():
-		if zones[i].started:
+		if zones[i].started and not Match.active:
 			started.append(i)
 	var blown: Array[NodePath] = []
 	for path in _explosives:
@@ -957,7 +960,8 @@ func net_snapshot() -> Dictionary:
 		if state:
 			broken.append(i)
 			broken.append(state)
-	return {"fallen": fallen, "started": started, "blown": blown, "broken": broken, "checkpoint": _checkpoint, "kills": kills, "robots": _robot_states()}
+	return {"fallen": fallen, "started": started, "blown": blown, "broken": broken, "checkpoint": _checkpoint, "kills": kills, "robots": _robot_states(),
+		"match": Match.net_snapshot() if Match.active else {}}
 
 
 ## Brings a level that has just been loaded to how the host's stands.
@@ -975,9 +979,12 @@ func net_restore(state: Dictionary) -> void:
 		if broken[i] < _breakables.size():
 			_breakables[broken[i]].net_restore(broken[i + 1])
 	_checkpoint = state.checkpoint
-	kills = state.kills
-	kills_changed.emit(kills)
+	if not Match.active:
+		kills = state.kills
+		kills_changed.emit(kills)
 	_move_robots(state.robots, true)
 	_update_objective()
 	if _exit_due():
 		_open_exit(false)
+	if Match.active:
+		Match.net_restore(state.match)

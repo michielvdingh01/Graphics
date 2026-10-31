@@ -11,6 +11,14 @@ extends Node
 ## starts again for both, whoever leaves is gone for the other, and whoever
 ## comes back to a level that is past a checkpoint finds it so. Neither can
 ## ask the other how far it is, so each waits for what it should get to see.
+##
+## With --match, tools/nettest.sh starts it three times, for a match in the
+## factory, opened from the menu as a player opens one. A guest takes the place
+## of a bot; the two shoot each other down, on the counts of both; a bot hurts
+## the guest; the guest changes sides, takes up a weapon of the arena and
+## drops it, and takes a cell. Then the host has capture the banana played,
+## and a third comes in by the list of games on the network while the guest
+## runs off with the banana: it finds all of that so, and leaves again.
 
 const FACTORY := "res://scenes/factory.tscn"
 ## The level with motorcycles that two ride one of, see _host_ride().
@@ -26,6 +34,10 @@ const PORT := 24599
 const PORTS := 400
 ## The file the host writes once the guest may join, see _join().
 const READY := "nettest_ready"
+## The same for the third of a match, see _late_match().
+const READY_LATE := "nettest_ready_late"
+## The prize made on the host in a match, that the guest does not have.
+const BOX := "test_box"
 const STACK := preload("res://scripts/stack.gd")
 
 ## True for a run of this test. The menu stays on for it, unlike for the
@@ -55,13 +67,15 @@ func _ready() -> void:
 func _run() -> void:
 	var tree := get_tree()
 	# A script error would otherwise leave the run hanging forever.
-	tree.create_timer(200.0, true, true).timeout.connect(
+	tree.create_timer(360.0 if _role.ends_with("match") else 200.0, true, true).timeout.connect(
 		func() -> void:
 			print("NETTEST %s FAILED (timed out)" % _role)
 			tree.quit(1)
 	)
 	Net.port = _port
-	Net.bind = "127.0.0.1"
+	# With --lan over the network this machine is on, not over its own loop.
+	Net.bind = "*" if "--lan" in OS.get_cmdline_user_args() else "127.0.0.1"
+	Net.call_port = _port + 1
 	await _wait(0.5)
 	_check("the game opens on its title screen", Menu.at_title() and tree.paused)
 	if _role == "host":
@@ -70,6 +84,12 @@ func _run() -> void:
 		await _host_ride()
 	elif _role == "join_ride":
 		await _join_ride()
+	elif _role == "host_match":
+		await _host_match()
+	elif _role == "join_match":
+		await _join_match()
+	elif _role == "late_match":
+		await _late_match()
 	else:
 		await _join()
 	print("NETTEST %s %s" % [_role, "PASSED" if _failures == 0 else "FAILED (%d)" % _failures])
@@ -415,6 +435,373 @@ func _act(action: String) -> void:
 	key.action = action
 	key.pressed = true
 	Input.parse_input_event(key)
+
+
+# --- A match together (tools/nettest.sh --match) ----------------------------------
+
+
+## The host of a match: see the top of this file.
+func _host_match() -> void:
+	var tree := get_tree()
+	Settings.enemy_theme = "soldiers"
+	Settings.prize = "banana"
+	Net.player_name = "Host"
+	await _press("Multiplayer")
+	await _press("Arena")
+	await _press("Arena")
+	await _press("Players a side")
+	await _press("Players a side")
+	await _press("Friends on your network")
+	await _press("Start")
+	_check("opens a match to the network from the menu", Net.active and Net.is_host() and Match.setup.open and await _until(_match_on.bind(FACTORY, "tdm"), 60.0))
+	_check("two a side, the host and three bots", Match.entrants.size() == 4 and Match.me() != null and Match.setup.size == 2)
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	_hold_bots(true)
+	var lone_bots := _bots().size()
+	var stands := tree.get_nodes_in_group("stash")
+	FileAccess.open(SelfTest.own_file(READY), FileAccess.WRITE).store_string(_role)
+
+	_check("the guest walks in", await _until(func() -> bool: return Net.players.size() == 2 and Net.present.size() == 2 and game.puppets.size() == 1, 60.0))
+	var guest: int = game.puppets.keys()[0]
+	var puppet: CharacterBody3D = game.puppets[guest]
+	_check("and is in the match", await _until(func() -> bool: return Match.entrants.has(guest) and Match.entrants[guest].body == puppet, 5.0))
+	var them: RefCounted = Match.entrants[guest]
+	_check("on the other side, in the place of a bot", them.team != Match.me().team and Match.entrants.size() == 4 and _bots().size() == lone_bots - 1)
+	_check("as a soldier of that side", await _until(func() -> bool: return puppet.visible and puppet._rig != null and puppet.team == them.team, 8.0))
+	_hold_bots(true)
+
+	# The guest shoots the host down, with what it has in hand.
+	player.global_position = RANGE_TARGET
+	player.velocity = Vector3.ZERO
+	_check("the guest shoots the host down", await _until(func() -> bool: return player.dead, 30.0))
+	_check("which counts for the guest's side", await _until(func() -> bool: return Match.tally[them.team] == 1 and them.kills == 1 and Match.me().deaths == 1, 3.0))
+	_check("and the host is back a moment later", await _until(func() -> bool: return not player.dead, 8.0))
+
+	# And the other way round.
+	_check("the guest stands in the lane", await _until(func() -> bool: return puppet.global_position.distance_to(RANGE_TARGET) < 1.0, 20.0))
+	_face(player, RANGE_TARGET)
+	await _wait(0.3)
+	Input.action_press("fire")
+	var shot := await _until(func() -> bool: return them.deaths == 1, 12.0)
+	Input.action_release("fire")
+	_check("the host shoots the guest down", shot and Match.me().kills == 1 and Match.tally[Match.me().team] == 1)
+	_check("the guest comes back", await _until(func() -> bool: return them.out <= 0.0 and not puppet.dead, 8.0))
+
+	# A bot that stands in front of the guest does what bots do.
+	player.health = 1e6
+	await _wait(2.0)
+	var bot: RefCounted = null
+	for one: RefCounted in _bots():
+		if one.team != them.team:
+			bot = one
+	bot.body.global_position = puppet.global_position + Vector3(4, 0, 0)
+	bot.brain.set_physics_process(true)
+	var side: int = them.team
+	_check("the guest changes sides from the pause screen", await _until(func() -> bool: return them.team != side, 40.0))
+	_hold_bots(true)
+	_check("and a bot comes over the other way", _sides() == [2, 2])
+	_check("the host marks the guest as a friend now", puppet._label.get_meta(&"friend", false) and puppet.team == them.team)
+	_check("both are back", await _until(func() -> bool: return them.out <= 0.0 and _bots().all(func(one: RefCounted) -> bool: return one.out <= 0.0), 5.0))
+
+	# A weapon of the arena comes up on all machines at once.
+	var stand: Node3D = stands[0]
+	stand.release(0.0)
+	_check("the guest takes the weapon of the arena up", await _until(func() -> bool: return not stand.is_up() and stand.due() == INF, 15.0))
+	_check("and it is seen in the hands of its puppet", await _until(func() -> bool: return puppet.ARMORY.at(puppet.weapon_in_hand()).special, 5.0))
+	# Whoever goes down with it leaves it where they fell.
+	await _wait(2.0)
+	var dropped := func() -> bool: return tree.get_nodes_in_group("stash").any(func(one: Node3D) -> bool: return one.dropped)
+	Match.harm(guest, 50.0, puppet.global_position, Vector3.FORWARD)
+	_check("the guest goes down with it, and it lies there", await _until(dropped, 5.0) and them.deaths == 2)
+	_check("and it is back up", await _until(func() -> bool: return them.out <= 0.0 and not puppet.dead, 8.0))
+	_check("the guest takes a cell, which is gone here as well", await _until(func() -> bool: return Match._cells[0].cell == null, 20.0))
+
+	# Capture the banana, chosen on the pause screen.
+	await _wait(1.0)
+	await _pause()
+	await _press("Kind")
+	await _press("Kind")
+	await _press("Start the match again")
+	_check("capture the banana opens for both, the guest in the level first", await _until(_match_on.bind(FACTORY, "ctf"), 60.0))
+	game = tree.current_scene
+	player = game.player
+	player.force_control = true
+	player.health = 1e6
+	_hold_bots(true)
+	_check("the guest is in it", await _until(func() -> bool: return Net.present.size() == 2 and game.puppets.size() == 1 and Match.entrants.has(guest) and Match.entrants[guest].body != null, 30.0))
+	them = Match.entrants[guest]
+	puppet = them.body
+	_check("six a side now, as capture the flag usually is", Match.entrants.size() == 12 and Match.setup.size == 6)
+	_check("the prize is a banana", Match.mode.prizes[0].kind == "banana")
+	FileAccess.open(SelfTest.own_file(READY_LATE), FileAccess.WRITE).store_string(_role)
+	var theirs: Node3D = Match.mode.prizes[1 - them.team]
+	_check("the guest takes the other side's prize", await _until(func() -> bool: return theirs.state == 1 and theirs.carrier == puppet, 30.0))
+
+	_check("a third walks in", await _until(func() -> bool: return Net.players.size() == 3 and Net.present.size() == 3 and _people() == 3, 60.0))
+	_hold_bots(true)
+	_check("in the place of a bot", Match.entrants.size() == 12 and _bots().size() == 9)
+	_check("and leaves again, and a bot takes over", await _until(func() -> bool: return Net.players.size() == 2 and _people() == 2 and Match.entrants.size() == 12, 30.0))
+	_hold_bots(true)
+	_check("the guest brings it home", await _until(func() -> bool: return Match.tally[them.team] == 1 and theirs.state == 0, 30.0))
+
+	# It goes down with whoever carries it, where they fall.
+	_check("the guest takes it again", await _until(func() -> bool: return theirs.state == 1 and theirs.carrier == puppet, 30.0))
+	await _wait(2.0)
+	Match.harm(guest, 50.0, puppet.global_position, Vector3.FORWARD)
+	_check("and drops it going down", await _until(func() -> bool: return theirs.state == 2, 5.0))
+
+	# The end, and the next one: with a prize that only this machine has.
+	Net.show(Match, &"_show_end", [them.team])
+	await _wait(1.0)
+	_make_box()
+	Match.setup.prize = BOX
+	Match.again()
+	_check("the next match opens, for both", await _until(_match_on.bind(FACTORY, "ctf"), 60.0) and Match.tally == [0, 0])
+	game = tree.current_scene
+	_check("the guest is in that as well", await _until(func() -> bool: return Net.present.size() == 2 and Match.entrants.has(guest), 30.0))
+	_check("the prize that was made here is the prize", Match.mode.prizes[0].kind == BOX)
+	await _wait(3.0)
+	var folder: String = Match.PRIZE._made_folder()
+	# Everybody for themselves, and no bots at all.
+	Match.setup.bots = false
+	Match.upcoming = {"mode": "ffa"}
+	Match.again()
+	_check("free for all opens for both, with nobody but the two", await _until(_match_on.bind(FACTORY, "ffa"), 60.0) and await _until(func() -> bool: return Net.present.size() == 2 and Match.entrants.size() == 2, 30.0))
+	game = tree.current_scene
+	player = game.player
+	player.force_control = true
+	_check("the two are on their own", await _until(func() -> bool: return Match.entrants.has(guest) and is_instance_valid(Match.entrants[guest].body), 5.0) and Match.mode.hostile(Match.me(), Match.entrants[guest]))
+	them = Match.entrants[guest]
+	puppet = them.body
+	_check("the guest stands in the lane again", await _until(func() -> bool: return puppet.global_position.distance_to(RANGE_TARGET) < 1.0, 20.0))
+	_face(player, RANGE_TARGET)
+	await _wait(0.3)
+	Input.action_press("fire")
+	var felled := await _until(func() -> bool: return them.deaths == 1, 12.0)
+	Input.action_release("fire")
+	_check("the host shoots the guest down, for a point of its own", felled and Match.me().kills == 1 and them.kills == 0)
+	await _wait(1.0)
+	DirAccess.remove_absolute("%s/%s/model.glb" % [folder, BOX])
+	DirAccess.remove_absolute("%s/%s/prize.json" % [folder, BOX])
+	DirAccess.remove_absolute("%s/%s" % [folder, BOX])
+
+
+## The guest of a match: see the top of this file.
+func _join_match() -> void:
+	var tree := get_tree()
+	Net.player_name = "Guest"
+	await _press("Play together")
+	_type(1, "127.0.0.1:%d" % _port)
+	var since := int(Time.get_unix_time_from_system()) - 1
+	var ready := func() -> bool: return FileAccess.file_exists(SelfTest.own_file(READY)) and FileAccess.get_modified_time(SelfTest.own_file(READY)) >= since
+	_check("the match is open", await _until(ready, 60.0))
+	for attempt in 6:
+		if Net.active:
+			break
+		if not Net.is_joining():
+			await _press("Join the game")
+		await _wait(1.0)
+	_check("joins, and is let into the match", await _until(_match_on.bind(FACTORY, "tdm"), 60.0) and Net.is_guest())
+	_check("and sits it out behind nothing", not Menu.is_open() and not tree.paused)
+	if not Net.active:
+		return
+	_check("it knows who is in it", await _until(func() -> bool: return Match.entrants.size() == 4 and Match.me() != null, 5.0))
+	var game := tree.current_scene
+	var player: CharacterBody3D = game.player
+	player.force_control = true
+	var me: RefCounted = Match.me()
+	var host: CharacterBody3D = game.puppets.get(1)
+	_check("the host stands there as a soldier of the other side", host != null and await _until(func() -> bool: return host.visible and host._rig != null and host.team != me.team, 8.0))
+	_check("the bots are there, and stand where the host has them", await _until(func() -> bool: return _bots().size() == 2 and _bots().all(func(one: RefCounted) -> bool: return one.body.visible), 8.0))
+	_check("and the clock runs", Match.left > 0.0 and Match.left <= float(Match.mode.numbers.minutes) * 60.0)
+	_check("the stands and the cells are here too", tree.get_nodes_in_group("stash").size() >= 2 and not Match._cells.is_empty())
+
+	# Shoots the host down, on the host's word.
+	_check("the host stands in the lane", await _until(func() -> bool: return host.global_position.distance_to(RANGE_TARGET) < 1.0, 20.0))
+	_face(player, RANGE_TARGET)
+	await _wait(0.3)
+	Input.action_press("fire")
+	var shot := await _until(func() -> bool: return me.kills == 1, 12.0)
+	Input.action_release("fire")
+	_check("the guest brings the host down", shot and Match.tally[me.team] == 1 and game.kills == 1)
+	await _wait(0.2)
+	_check("and sees its own count go up", Match._hud._mine.text == "KILLS 1")
+
+	# Stands in the lane for the host to do the same.
+	_check("the host is back", await _until(func() -> bool: return not host.dead, 8.0))
+	player.global_position = RANGE_TARGET
+	player.velocity = Vector3.ZERO
+	_check("the host brings the guest down", await _until(func() -> bool: return player.dead, 30.0))
+	_check("the guest is told so, and how long it takes", await _until(func() -> bool: return me.deaths == 1 and me.out > 0.0, 3.0))
+	_check("and is back, as good as new", await _until(func() -> bool: return not player.dead and player.health == player.MAX_HEALTH, 8.0))
+	_check("somewhere else", player.global_position.distance_to(RANGE_TARGET) > 2.0)
+
+	# A bot comes up to it and fires.
+	player.global_position = RANGE_TARGET
+	player.velocity = Vector3.ZERO
+	player.health = 1e6
+	var hits := [0]
+	player.damaged.connect(func(_amount: float) -> void: hits[0] += 1)
+	_check("a bot hurts the guest", await _until(func() -> bool: return hits[0] > 0, 30.0))
+
+	# Over to the other side, by the pause screen.
+	var side: int = me.team
+	await _pause()
+	await _press("Change sides")
+	_check("the guest is on the other side", await _until(func() -> bool: return me.team != side, 5.0))
+	_check("and can be walked through by its own, and not by the others", player.collision_layer & Match.SIDES[me.team] != 0 and player.collision_layer & Match.SIDES[1 - me.team] == 0 and player.team == me.team)
+	_check("is back at its new end", await _until(func() -> bool: return me.out <= 0.0, 5.0))
+	_check("the host is a friend now", host._label.get_meta(&"friend", false))
+
+	# Takes up a weapon of the arena as it comes up.
+	var stands: Array = tree.get_nodes_in_group("stash")
+	var up := func() -> Array: return stands.filter(func(one: Node3D) -> bool: return one.is_up())
+	_check("a weapon of the arena comes up", await _until(func() -> bool: return not up.call().is_empty(), 15.0))
+	var stand: Node3D = up.call()[0]
+	player.global_position = stand.global_position
+	player.velocity = Vector3.ZERO
+	var weapons: Node3D = player.weapons
+	_check("the guest takes it up", await _until(func() -> bool: return weapons.current().special, 5.0))
+	_check("and it is gone from its stand", not stand.is_up())
+	player.health = 1.0
+	var lying := func() -> Array: return tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.dropped)
+	_check("the guest goes down with it, and it lies there", await _until(func() -> bool: return lying.call().size() == 1, 8.0) and player.dead and not weapons.current().special)
+	_check("and is back", await _until(func() -> bool: return not player.dead, 8.0))
+
+	# A cell, on the host's count too.
+	var cell: Dictionary = Match._cells[0]
+	_check("a cell lies there", await _until(func() -> bool: return is_instance_valid(cell.cell), 5.0))
+	player.health = 10.0
+	player.global_position = cell.at
+	player.velocity = Vector3.ZERO
+	_check("the guest takes it", await _until(func() -> bool: return cell.cell == null or not is_instance_valid(cell.cell), 10.0) and player.health > 10.0)
+
+	# Capture the banana, for which the host brings everybody along.
+	_check("the host has capture the banana played", await _until(_match_on.bind(FACTORY, "ctf"), 60.0))
+	game = tree.current_scene
+	player = game.player
+	player.force_control = true
+	player.health = 1e6
+	_check("it has a place in that", await _until(func() -> bool: return Match.me() != null, 5.0))
+	me = Match.me()
+	_check("both prizes stand here, bananas", Match.mode.prizes.all(func(one: Node3D) -> bool: return is_instance_valid(one) and one.kind == "banana"))
+	_check("in the colours of whose they are", Match.mode._labels[me.team].text == "YOURS" and Match.mode._labels[1 - me.team].text == "THEIRS")
+	await _wait(1.0)
+	var theirs: Node3D = Match.mode.prizes[1 - me.team]
+	var home: Node3D = Match.mode.prizes[me.team]
+	var away: Vector3 = theirs.global_position
+	player.global_position = away
+	player.velocity = Vector3.ZERO
+	_check("the guest has the banana", await _until(func() -> bool: return theirs.state == 1 and theirs.carrier == player, 10.0))
+	var says: String = Match.mode.status(me)
+	_check("and the screen says so", says.contains("bring it home"))
+	# It waits for the third to come and go, and holds on to it meanwhile.
+	_check("a third comes in", await _until(func() -> bool: return Net.players.size() == 3, 60.0))
+	_check("and goes", await _until(func() -> bool: return Net.players.size() == 2 and Match.entrants.size() == 12, 40.0))
+	player.global_position = home.global_position
+	player.velocity = Vector3.ZERO
+	_check("the guest brings it home and scores", await _until(func() -> bool: return Match.tally[me.team] == 1 and theirs.state == 0, 10.0))
+	await _wait(0.5)
+	player.global_position = away
+	player.velocity = Vector3.ZERO
+	_check("takes it again", await _until(func() -> bool: return theirs.state == 1 and theirs.carrier == player, 10.0))
+	player.health = 1.0
+	_check("and goes down with it", await _until(func() -> bool: return theirs.state == 2 and player.dead, 8.0))
+	_check("it lies where the guest fell", theirs.where().distance_to(away) < 2.0)
+
+	_check("the match ends", await _until(func() -> bool: return Match.state == Match.State.OVER, 10.0))
+	await _wait(0.2)
+	_check("it says the host starts the next one", Match._hud._centre.text.contains("The host starts the next one"))
+	_check("and the next one opens, from the start", await _until(func() -> bool: return Match.state != Match.State.OVER, 20.0) and await _until(_match_on.bind(FACTORY, "ctf"), 60.0) and Match.tally == [0, 0])
+	_check("with the prize made on the host, which it now has as well", Match.PRIZE.made(BOX) and Match.mode.prizes[0].kind == BOX)
+	_check("free for all, the two of them, and the host brings the guest down", await _until(_match_on.bind(FACTORY, "ffa"), 60.0) and await _until(func() -> bool: return Match.entrants.size() == 2 and Match.me() != null, 30.0))
+	game = tree.current_scene
+	player = game.player
+	player.force_control = true
+	player.global_position = RANGE_TARGET
+	player.velocity = Vector3.ZERO
+	await _wait(0.5)
+	_check("on its feet, though it was down as the match before ended", absf(player.global_position.y - RANGE_TARGET.y) < 0.05)
+	_check("which counts for the host alone", await _until(func() -> bool: return Match.me() != null and Match.me().deaths == 1, 30.0) and Match.me().kills == 0)
+	_check("and when the host has gone, so has the match", await _until(func() -> bool: return not Net.active, 40.0) and not Match.active and Menu.at_title())
+
+
+## The third of a match, who comes in by the list of games on the network
+## while the guest runs off with the banana.
+func _late_match() -> void:
+	var tree := get_tree()
+	Net.player_name = "Late"
+	var since := int(Time.get_unix_time_from_system()) - 1
+	var ready := func() -> bool: return FileAccess.file_exists(SelfTest.own_file(READY_LATE)) and FileAccess.get_modified_time(SelfTest.own_file(READY_LATE)) >= since
+	_check("capture the banana is on", await _until(ready, 200.0))
+	await _press("Multiplayer")
+	await _press("Join a game on your network")
+	_check("finds the game on the network", await _until(func() -> bool: return not Net.found.is_empty(), 8.0))
+	var heard: Dictionary = Net.found.values()[0] if not Net.found.is_empty() else {}
+	_check("and hears what it is", heard.get("name") == "Host" and str(heard.get("what")) == "Capture the flag, Factory" and heard.get("people") == 2 and heard.get("fits", false))
+	# The guest has to have the banana first: it holds on to it for this.
+	await _wait(6.0)
+	await _wait(0.2)
+	await _press("Join Host")
+	_check("joins it from the list, and is let into the match", await _until(_match_on.bind(FACTORY, "ctf"), 60.0) and Net.is_guest())
+	if not Net.active:
+		return
+	_check("and has a place in it", await _until(func() -> bool: return Match.me() != null and Match.entrants.size() == 12, 5.0))
+	var carried := func() -> bool: return Match.mode.prizes.any(func(one: Node3D) -> bool: return one.state == 1)
+	_check("finds the banana on the guest's back", await _until(carried, 15.0))
+	_check("the stands, the cells and the clock as they are", tree.get_nodes_in_group("stash").size() >= 2 and not Match._cells.is_empty() and Match.left < float(Match.mode.numbers.minutes) * 60.0)
+	_check("the people there are soldiers, standing", await _until(func() -> bool: return tree.current_scene.puppets.size() == 2 and tree.current_scene.puppets.values().all(func(one: Node3D) -> bool: return one.visible), 8.0))
+	await _wait(1.0)
+	await _pause()
+	await _press("Leave the match")
+	await _wait(1.0)
+	_check("leaves again, for the title screen", not Net.active and not Match.active and Menu.at_title())
+
+
+func _match_on(level: String, kind: String) -> bool:
+	return _in_level(level) and Match.active and Match.setup.mode == kind and Match.playing() and not Loading.busy()
+
+
+func _bots() -> Array:
+	return Match.entrants.values().filter(func(one: RefCounted) -> bool: return one.bot)
+
+
+func _people() -> int:
+	return Match.entrants.size() - _bots().size()
+
+
+## How many there are on either side.
+func _sides() -> Array:
+	var sides := [0, 0]
+	for one: RefCounted in Match.entrants.values():
+		sides[one.team] += 1
+	return sides
+
+
+## Has the bots stand still, or not.
+func _hold_bots(still: bool) -> void:
+	for one: RefCounted in _bots():
+		if one.brain:
+			one.brain.set_physics_process(not still)
+
+
+## Makes a prize on this machine, of a box, as a made prize is on disk.
+func _make_box() -> void:
+	var folder: String = "%s/%s" % [Match.PRIZE._made_folder(), BOX]
+	DirAccess.make_dir_recursive_absolute(folder)
+	FileAccess.open(folder + "/prize.json", FileAccess.WRITE).store_string(JSON.stringify({"name": "Test box", "model": "model.glb"}))
+	var whole := Node3D.new()
+	var box := MeshInstance3D.new()
+	box.mesh = BoxMesh.new()
+	whole.add_child(box)
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	document.append_from_scene(whole, state)
+	document.write_to_filesystem(state, folder + "/model.glb")
+	whole.free()
+	Match.PRIZE.reread()
 
 
 # --- Riding together (tools/nettest.sh --ride) ------------------------------------

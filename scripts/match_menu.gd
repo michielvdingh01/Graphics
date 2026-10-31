@@ -4,7 +4,8 @@ extends RefCounted
 ## It is put together out of the widgets of scripts/menu.gd, which shows it.
 ## Bots fill every place that is not the player's. How many there can be is
 ## the arena's to say: in the dunes twenty a side, and that many unless fewer
-## are chosen.
+## are chosen. Opened to the network, friends can come in: on either side or
+## all on one against the bots, and with bots between them or without.
 
 ## The levels there are to play in: the name of each as Match.open() takes it.
 const ARENAS: Array[String] = ["works", "powerhouse", "factory", "depot", "dunes", "dunes_night", "alps"]
@@ -25,7 +26,9 @@ const BIG: Array[int] = [16, 20, 24, 30, 40]
 
 ## What was chosen last, for as long as the game runs. The prize and the pack
 ## are kept after that: they are settings, see Settings.prize and Settings.pack.
-static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag", "pack": "standard"}
+static var chosen := {"mode": "tdm", "level": "works", "size": 0, "prize": "flag", "pack": "standard", "open": false, "bots": true, "apart": true}
+## What went wrong the last time the match was to start.
+static var trouble := ""
 ## Whether the screen is the list of prizes to choose from, and whether it
 ## was that a moment ago, so that the focus goes back to where it was.
 static var picking := false
@@ -47,7 +50,10 @@ static func build(menu: Node) -> void:
 	if not kinds.has(chosen.mode):
 		chosen.mode = kinds[0]
 	menu._heading("Multiplayer", 44)
-	menu._note("A match against bots, with bots on your side.\nNothing here is saved.")
+	menu._note("A match against bots, with bots on your side, and with friends\non your network if you open it to them. Nothing here is saved.")
+	if trouble:
+		menu._note(trouble)
+	menu._list()
 	var kind: Button = menu._button("", func() -> void: pass)
 	var arena: Button = menu._button("", func() -> void: pass)
 	var size: Button = menu._button("", func() -> void: pass)
@@ -55,6 +61,10 @@ static func build(menu: Node) -> void:
 	var pack: Button = menu._button("", func() -> void: pass)
 	var enemies: Button = menu._button("", func() -> void: pass)
 	var difficulty: Button = menu._button("", func() -> void: pass)
+	var open: Button = menu._button("", func() -> void: pass)
+	var people: Button = menu._button("", func() -> void: pass)
+	var bots: Button = menu._button("", func() -> void: pass)
+	var title: Control = menu._field("Your name", Net.player_name, func(text: String) -> void: Net.player_name = text)
 	# Who there is to play against: the robots, and every theme that has
 	# people in it.
 	var themes: Array[String] = ["soldiers"]
@@ -75,6 +85,12 @@ static func build(menu: Node) -> void:
 		pack.tooltip_text = str(ARMORY.spec(chosen.pack).get("about", ""))
 		enemies.text = "Against  ·  %s" % themes[maxi(themes.find(Settings.enemy_theme), 0)].capitalize()
 		difficulty.text = "Difficulty  ·  %s" % Settings.DIFFICULTY_NAMES[clampi(Settings.difficulty, 0, Settings.DIFFICULTY_NAMES.size() - 1)]
+		open.text = "Friends on your network  ·  %s" % ("Can join" if chosen.open else "No")
+		title.visible = chosen.open
+		bots.visible = chosen.open
+		bots.text = "Bots  ·  %s" % ("Fill the empty places" if chosen.bots else "None")
+		people.visible = chosen.open and teams and chosen.bots
+		people.text = "Friends play  ·  %s" % ("Against each other" if chosen.apart else "Together against the bots")
 	kind.pressed.connect(func() -> void:
 		chosen.mode = kinds[(kinds.find(chosen.mode) + 1) % kinds.size()]
 		chosen.size = 0
@@ -103,14 +119,54 @@ static func build(menu: Node) -> void:
 	difficulty.pressed.connect(func() -> void:
 		Settings.put("difficulty", (Settings.difficulty + 1) % Settings.DIFFICULTY_NAMES.size())
 		refresh.call())
+	open.pressed.connect(func() -> void:
+		chosen.open = not chosen.open
+		refresh.call())
+	people.pressed.connect(func() -> void:
+		chosen.apart = not chosen.apart
+		refresh.call())
+	bots.pressed.connect(func() -> void:
+		chosen.bots = not chosen.bots
+		refresh.call())
 	refresh.call()
+	menu._into = menu._column
 	menu._button("Start", func() -> void:
+		trouble = ""
 		menu._show(menu.Screen.NONE)
-		Match.open(chosen))
+		if not Match.open(chosen):
+			trouble = "Port %d is taken. Is a game being hosted on this computer already?" % Net.port
+			menu._show(menu.Screen.MATCH))
+	menu._button("Join a game on your network", menu._show.bind(menu.Screen.TOGETHER))
 	menu._button("Back", menu._show.bind(menu.Screen.TITLE))
 	if _picked_one:
 		_picked_one = false
 		_focus(menu, prize)
+
+
+## What the pause screen has to offer in a match that others play in: the
+## other side for whoever is on one, and for the host what is played once the
+## match starts again.
+static func together(menu: Node) -> void:
+	if Match.mode.teams() and Match.me():
+		menu._button("Change sides", menu._then_resume.bind(Match.change_my_side))
+	if not Net.is_host():
+		return
+	var kinds: Array = Match.kinds.keys()
+	var kind: Button = menu._button("", func() -> void: pass)
+	var arena: Button = menu._button("", func() -> void: pass)
+	var refresh := func() -> void:
+		var next: String = Match.upcoming.get("mode", Match.setup.mode)
+		var where: String = Match.upcoming.get("level", Match.setup.level)
+		var later := "  (once the match starts again)"
+		kind.text = "Kind  ·  %s%s" % [Match.kinds[next].title, "" if next == Match.setup.mode else later]
+		arena.text = "Arena  ·  %s%s" % [where.capitalize(), "" if where == Match.setup.level else later]
+	kind.pressed.connect(func() -> void:
+		Match.upcoming.mode = kinds[(kinds.find(Match.upcoming.get("mode", Match.setup.mode)) + 1) % kinds.size()]
+		refresh.call())
+	arena.pressed.connect(func() -> void:
+		Match.upcoming.level = ARENAS[(ARENAS.find(Match.upcoming.get("level", Match.setup.level)) + 1) % ARENAS.size()]
+		refresh.call())
+	refresh.call()
 
 
 ## How many a side, or in all, there is to choose from between `least` and

@@ -26,8 +26,39 @@ func begin() -> void:
 	pass
 
 
+## What every machine needs to know to set the level out for this kind, once
+## begin() has run on the host: what set_out() is given there.
+func plan() -> Array:
+	return []
+
+
+## Sets out on this machine what the kind has in the level.
+func set_out(_plan: Array) -> void:
+	pass
+
+
 ## Called every step of the physics while the match is played, on the host.
 func tick(_delta: float) -> void:
+	pass
+
+
+## The same on every machine, for what is there to be seen.
+func watch() -> void:
+	pass
+
+
+## How what the kind has in the level stands, for somebody who comes in, and
+## has it stand so on the machine that did.
+func how_it_stands() -> Array:
+	return []
+
+
+func stand_as(_how: Array) -> void:
+	pass
+
+
+## Somebody went over to the other side, which can be this machine's player.
+func sides_changed() -> void:
 	pass
 
 

@@ -27,7 +27,7 @@ const FADE := 0.35
 const BAKE_WAIT := 3.0
 const SETTLE_FRAMES := 8
 ## How long it waits at most for a match to begin once the level is baked.
-const MATCH_WAIT := 10.0
+const MATCH_WAIT := 20.0
 ## Where the bar is once the files are read, once the level is built and once
 ## its ways are found: roughly how the time goes in the dunes.
 const READ := 0.6
@@ -204,9 +204,10 @@ func _load(run: int) -> void:
 				# selftest does: that is not this screen's to wait for.
 				break
 			waited += get_process_delta_time()
-	if Match.active and not Net.is_guest():
+	if Match.active:
 		# A match begins a moment later: the arena is read from the navmesh,
 		# in the dunes in one frame of a second, and everybody is stood in it.
+		# A host waits for those who are still loading, and a guest for the host.
 		_say("Setting up the match", FOUND)
 		waited = 0.0
 		while Match.active and Match.state == Match.State.LOADING and waited < MATCH_WAIT:

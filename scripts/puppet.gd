@@ -379,6 +379,9 @@ func fired(weapon: int, ends: PackedVector3Array) -> void:
 	if Match.active and not ends.is_empty():
 		# Whoever it was meant for hears it go by.
 		Sfx.passing(muzzle, ends[0])
+	if Match.active and id > 0:
+		# On the host the bots hear somebody else's player as well.
+		Match.fired(self, muzzle, data.flash_size * WEAPONS.HEARD)
 	get_tree().call_group(&"watch", &"hears", muzzle, data.flash_size * WEAPONS.HEARD)
 
 
@@ -404,6 +407,11 @@ func launched(from: Vector3, speed: Vector3, by := 0) -> void:
 		Fx.gun_smoke(back, behind, 1.0)
 		Fx.rocket_trail(back + behind * 0.4, -behind)
 		Fx.flash(back, Color(1.0, 0.7, 0.4), 3.0, 4.0, 0.08)
+
+
+## The place in the armory of what it has in its hands.
+func weapon_in_hand() -> int:
+	return _weapon
 
 
 ## A weapon of another place in the armory is in its hands from now on: a
@@ -510,6 +518,8 @@ func hurt(amount: float, at := Vector3.INF, direction := Vector3.ZERO) -> void:
 ## own are marked and named through walls. `weapon` is what a bot carries, and
 ## `look` who it is if not a soldier.
 func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1, look := {}) -> void:
+	# Somebody else going over leaves most as they are: a figure takes a moment.
+	var same := side == team and look == _look
 	team = side
 	_look = look
 	_layer = LAYER | layers
@@ -521,7 +531,8 @@ func enlist(side: int, layers: int, foes: int, friend: bool, weapon := -1, look 
 	_label.modulate = FRIEND
 	_label.no_depth_test = friend
 	_label.set_meta(&"friend", friend)
-	_dress()
+	if not same:
+		_dress()
 
 
 ## True if a shot that landed at `at` is one to the head.

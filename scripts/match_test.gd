@@ -218,7 +218,7 @@ func _run() -> void:
 	var lying := tree.get_nodes_in_group("stash").filter(func(one: Node3D) -> bool: return one.dropped)
 	_check("going down the player leaves it where they fell, with all that was left in it", player.weapons.special() == null and lying.size() == 1
 		and Vector2(lying[0].global_position.x - went_down_at.x, lying[0].global_position.z - went_down_at.z).length() < 0.5 and lying[0].rounds == minigun.mag_size)
-	lying[0]._age = lying[0].LIES - 0.1
+	lying[0].age = lying[0].LIES - 0.1
 	await _wait(0.3)
 	_check("left lying, it goes, and its stand has it back a while later", not is_instance_valid(lying[0]) and stand.due() > 60.0 and stand.due() < INF)
 	await _wait(float(Match.mode.numbers.respawn))
@@ -454,9 +454,9 @@ func _run() -> void:
 
 	# What the menu offers, and leaving.
 	Menu._show(Menu.Screen.MATCH)
-	var offered := Menu._column.get_children().filter(func(control: Node) -> bool: return control is Button).map(func(button: Button) -> String: return button.text)
+	var buttons := Menu._column.find_children("*", "Button", true, false).filter(func(button: Button) -> bool: return not button.is_queued_for_deletion())
+	var offered := buttons.map(func(button: Button) -> String: return button.text)
 	_check("the menu has a screen for it", offered.has("Start") and offered.any(func(text: String) -> bool: return text.begins_with("Kind")))
-	var buttons := Menu._column.get_children().filter(func(control: Node) -> bool: return control is Button)
 	var kind: Button = buttons.filter(func(button: Button) -> bool: return button.text.begins_with("Kind"))[0]
 	var was := kind.text
 	var kinds_seen := [was]

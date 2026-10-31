@@ -64,6 +64,8 @@ var _end_run := {}
 var _hosting := false
 ## What the screen to play together has to say: how joining is going.
 var _together_note := ""
+## Where that screen has the games on this network, once it is on show.
+var _games: VBoxContainer
 ## How the update of an installed game is going, see updater.gd.
 var _update_line := Label.new()
 
@@ -80,6 +82,7 @@ func _ready() -> void:
 		_device = DEVICES.find("Controller")
 	Net.entering.connect(_on_entering)
 	Net.left.connect(_on_left)
+	Net.found_changed.connect(_list_games)
 	Updater.changed.connect(_on_update)
 	_on_update()
 	if "--play" in OS.get_cmdline_user_args() or Sandbox.active or Match.active:
@@ -165,6 +168,7 @@ func _show(screen: Screen) -> void:
 	_screen = screen
 	_score()
 	_into = _column
+	Net.listen(screen == Screen.TOGETHER)
 	for child in _column.get_children():
 		child.queue_free()
 	_root.visible = screen != Screen.NONE
@@ -206,6 +210,10 @@ func _show(screen: Screen) -> void:
 			_heading("Play together", 44)
 			_field("Your name", Net.player_name, func(text: String) -> void: Net.player_name = text)
 			_button("Host a game", _choose_level.bind(true))
+			_games = VBoxContainer.new()
+			_games.add_theme_constant_override("separation", _column.get_theme_constant("separation"))
+			_into.add_child(_games)
+			_list_games()
 			_field("Address", Net.address, func(text: String) -> void: Net.address = text)
 			_button("Join the game at that address", _join)
 			if _together_note:
@@ -227,9 +235,12 @@ func _show(screen: Screen) -> void:
 			if Sandbox.active:
 				_sandbox()
 			elif Match.active:
-				# With another pack chosen in the settings, it says which.
-				var other: String = "" if Match.setup.pack == Match.pack_in_play else "  ·  %s" % MATCH_MENU.ARMORY.title(Match.setup.pack)
-				_button("Start the match again" + other, _then_resume.bind(Match.again))
+				if not Net.is_guest():
+					# With another pack chosen in the settings, it says which.
+					var other: String = "" if Match.setup.pack == Match.pack_in_play else "  ·  %s" % MATCH_MENU.ARMORY.title(Match.setup.pack)
+					_button("Start the match again" + other, _then_resume.bind(Match.again))
+				if Net.active:
+					MATCH_MENU.together(self)
 			elif Net.is_host():
 				_button("Restart from checkpoint", _play.bind(get_tree().current_scene.scene_file_path, false))
 			_button("Controls", _show.bind(Screen.CONTROLS))
@@ -245,7 +256,7 @@ func _show(screen: Screen) -> void:
 			# than 1080: they scroll, between a heading and a way back that
 			# stay where they are.
 			_list()
-			if Match.active:
+			if Match.active and not Net.is_guest():
 				_pack_choice()
 			_choice("Difficulty", "difficulty", Settings.DIFFICULTY_NAMES)
 			_choice("Quality", "quality", Settings.QUALITY_NAMES)
@@ -367,6 +378,28 @@ func _join() -> void:
 	_show(Screen.TOGETHER)
 
 
+## The games heard on this network, each a button to join it by.
+func _list_games() -> void:
+	if not is_instance_valid(_games):
+		return
+	for child in _games.get_children():
+		child.queue_free()
+	var into := _into
+	_into = _games
+	if Net.found.is_empty():
+		_note("No games found on your network yet.")
+	for where: String in Net.found:
+		var game: Dictionary = Net.found[where]
+		var button := _button("Join %s  ·  %s  ·  %d playing%s" % [game.name, game.what, game.people, "" if game.fits else "  ·  another version"], _join_at.bind(where))
+		button.disabled = not game.fits
+	_into = into
+
+
+func _join_at(where: String) -> void:
+	Net.address = where
+	_join()
+
+
 func _leave_together() -> void:
 	Net.leave()
 	_together_note = ""
@@ -404,7 +437,7 @@ func _company() -> String:
 	var text := "With %s." % ", ".join(names) if names else "Nobody else is here yet."
 	if Net.is_host():
 		var addresses := Net.local_addresses()
-		text += "\nOn your own network others join at %s." % (" or ".join(addresses) if addresses else "this computer's address")
+		text += "\nOn your own network others find this game under Play together, or join at %s." % (" or ".join(addresses) if addresses else "this computer's address")
 		text += "\nFrom elsewhere: forward UDP port %d on your router to this\ncomputer and give them your public address." % Net.port
 	return text
 
@@ -542,7 +575,7 @@ func _note(text: String) -> Label:
 
 
 ## A line to type in; `changed` is given the text as it is typed.
-func _field(label: String, text: String, changed: Callable) -> void:
+func _field(label: String, text: String, changed: Callable) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var caption := Label.new()
 	caption.text = label
@@ -557,6 +590,7 @@ func _field(label: String, text: String, changed: Callable) -> void:
 	line.focus_exited.connect(func() -> void: caption.modulate = Color.WHITE)
 	row.add_child(line)
 	_into.add_child(row)
+	return row
 
 
 ## Starts a list in the column that scrolls where the screen is too low to

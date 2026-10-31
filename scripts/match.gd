@@ -20,8 +20,14 @@ extends Node
 ## The rules of a kind of match are a file in scripts/modes/, its numbers are
 ## in assets/match.json, and where to come back is up to scripts/arena.gd.
 ## What is decided, the host decides, and what there is to see of it are the
-## _show_ functions, as everywhere (see net.gd). For now a match is played on
-## one machine: over the wire it is not there yet.
+## _show_ functions, as everywhere (see net.gd).
+##
+## Friends play along over the network if the host opens the match to it
+## (`open` in what open() takes): they find it by the menu or its address and
+## take the place of a bot. Who comes in while it is played is told how it
+## stands (net_snapshot()), and whoever goes leaves their place to a bot.
+## Each machine keeps the health of its own player and says when that goes
+## down; everybody plays by the difficulty of the host.
 ##
 ## Nothing of it is saved: what the game had saved is set aside for as long
 ## as a match is open.
@@ -50,6 +56,7 @@ const ARENAS := "res://assets/arenas.json"
 ## The weapons of the arena where a pack does not say: assets/packs.json.
 const SPECIALS: Array[String] = ["minigun", "rocket_launcher"]
 const PICKUP := preload("res://scripts/pickup.gd")
+const PRIZE := preload("res://scripts/prize.gd")
 ## What knows of the match in its turn is loaded once the game runs, not as
 ## this is read: the brain of a bot, its body and what is on screen.
 const BOT := "res://scripts/bot.gd"
@@ -102,6 +109,11 @@ const TICK := 0.05
 ## the nearest as the crow flies are asked how far it is to walk.
 const FETCH := 1.0
 const FETCH_ASKED := 4
+## Seconds the host waits, the arena ready, for those who are still loading
+## their level; whoever is later than that comes in as latecomers do.
+const WAIT_FOR_ALL := 15.0
+## Seconds until somebody is in the level who came in or changed sides.
+const BACK_SOON := 0.5
 
 
 ## Somebody who plays.
@@ -125,6 +137,9 @@ class Entrant:
 	var out := 0.0
 	var safe := 0.0
 	var unhurt := 0.0
+	## Which of those against this machine's player it is, -1 if it is not:
+	## see _look().
+	var cast := -1
 	## Who hit it last: [number, weapon, head, the clock then].
 	var blame: Array = []
 	## The bots that are firing at it, a person: the clock at which each
@@ -135,9 +150,11 @@ class Entrant:
 ## True while the game is a match.
 var active := false
 var state := State.NONE
-## What is played: {mode, level, scene, size, only_bots}, and the kinds there
-## are with their numbers.
+## What is played: {mode, level, scene, size, only_bots, prize, pack, open,
+## bots, apart}, and the kinds there are with their numbers.
 var setup := {}
+## What the host has chosen for the next start: {mode, level}, see again().
+var upcoming := {}
 var kinds := {}
 ## The rules of the kind that is played.
 var mode: RefCounted
@@ -150,7 +167,8 @@ var mode: RefCounted
 ## goes to fetch a weapon of the arena once it is there (`fetches`).
 var rules: Dictionary:
 	get:
-		return _rules[clampi(Settings.difficulty, 0, _rules.size() - 1)]
+		var difficulty: int = setup.get("difficulty", Settings.difficulty) if Net.is_guest() else Settings.difficulty
+		return _rules[clampi(difficulty, 0, _rules.size() - 1)]
 ## How good a bot can be, by the name of its level: see assets/bots.json.
 var levels := {}
 ## Everybody who plays, by number.
@@ -193,6 +211,14 @@ var _baked := false
 var _corner := Vector3.ZERO
 var _clock := 0.0
 var _tick := 0.0
+## Seconds the host has been waiting for those still loading their level.
+var _waited := 0.0
+## How many of those against this machine's player have been given a look.
+var _cast := 0
+## What everybody was told to set out, see _show_out(), and how many weapons
+## of the arena have been dropped since.
+var _out := []
+var _lying := 0
 var _hud: CanvasLayer
 ## The bots that are sent to fetch a weapon of the arena, by number: where it
 ## lies. And the seconds until the next look for who that is.
@@ -259,8 +285,44 @@ func open(what: Dictionary) -> bool:
 	close()
 	Sandbox.close()
 	Net.leave()
+	_take_up(what)
+	Save.set_aside(true)
+	if setup.open and Net.host_game() != OK:
+		close()
+		return false
+	# As the game starts its first level is still on its way in: that one
+	# sends the player on if it is the wrong one, see arrive().
+	var scene_now := get_tree().current_scene
+	if scene_now and scene_now.is_node_ready():
+		_go()
+	return true
+
+
+## A match this machine was called into by its host: `what` is as for_guests()
+## gives it.
+func enter(what: Dictionary) -> void:
+	close()
+	Sandbox.close()
+	_take_up(what)
+	Save.set_aside(true)
+
+
+## What a guest is told of the match that is played.
+func for_guests() -> Dictionary:
+	var told := setup.duplicate()
+	told.difficulty = Settings.difficulty
+	return told
+
+
+## Takes `what` up as the match that is played, of a kind and in a level that
+## are known to be there.
+func _take_up(what: Dictionary) -> void:
+	var kind := str(what.get("mode", "tdm"))
+	var level := str(what.get("level", "works"))
+	var scene := str(what.get("scene", level if level.begins_with("res://") else SCENE % level))
 	active = true
 	state = State.LOADING
+	upcoming = {}
 	mode = MODES[kind].new()
 	mode.numbers = kinds[kind]
 	mode.host = self
@@ -282,14 +344,21 @@ func open(what: Dictionary) -> bool:
 		"only_bots": bool(what.get("only_bots", false)),
 		"prize": str(what.get("prize", "flag")),
 		"pack": str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
+		"open": bool(what.get("open", false)),
+		"bots": bool(what.get("bots", true)),
+		"apart": bool(what.get("apart", true)),
 	}
-	Save.set_aside(true)
-	# As the game starts its first level is still on its way in: that one
-	# sends the player on if it is the wrong one, see arrive().
-	var scene_now := get_tree().current_scene
-	if scene_now and scene_now.is_node_ready():
-		Loading.go(scene)
-	return true
+	if what.has("difficulty"):
+		setup.difficulty = int(what.difficulty)
+	pack_in_play = setup.pack
+
+
+## To the level of the match, everybody who is in it with this machine.
+func _go() -> void:
+	if Net.active:
+		Net.load_level(setup.scene)
+	else:
+		Loading.go(setup.scene)
 
 
 ## Leaves the match: what was saved is back. Where the player goes from here
@@ -304,11 +373,22 @@ func close() -> void:
 	changed.emit()
 
 
-## Plays it again, in a level that is as it was.
+## Plays it again, in a level that is as it was: everybody's, if others play
+## along, and what the host has chosen for it since.
 func again() -> void:
-	if active and _game:
-		state = State.LOADING
-		_forget()
+	if not active or _game == null or Net.is_guest():
+		return
+	state = State.LOADING
+	_forget()
+	if not upcoming.is_empty():
+		var next := setup.duplicate()
+		next.merge(upcoming, true)
+		next.erase("scene")
+		next.erase("size")
+		_take_up(next)
+	if Net.active:
+		Net.load_level(setup.scene)
+	else:
 		Loading.again()
 
 
@@ -316,7 +396,8 @@ func again() -> void:
 ## player is sent on to the level that is.
 func arrive(game: Node3D) -> void:
 	if game.scene_file_path != setup.scene:
-		Loading.go.call_deferred(setup.scene)
+		if not Net.is_guest():
+			Loading.go.call_deferred(setup.scene)
 		return
 	_forget()
 	_game = game
@@ -466,7 +547,7 @@ func hit(by: Node, target: Object, amount: float, at: Vector3, direction: Vector
 	if plays(target):
 		return harm(number(target), amount, at, direction, number(by), weapon, head)
 	if target.has_method("struck_by"):
-		target.struck_by(number(by))
+		Net.ask(target, &"struck_by", [number(by)])
 	return Net.damage(target, amount, at, direction)
 
 
@@ -546,8 +627,15 @@ func fired(body: Node, at: Vector3, reach: float) -> void:
 
 
 func _on_player_died() -> void:
-	var who := me()
-	if who and who.out <= 0.0 and not Net.is_guest():
+	if me():
+		Net.ask(self, &"went_down", [Net.id()])
+
+
+## The player of the machine of `person` has died there: each machine keeps
+## the health of its own.
+func went_down(person: int) -> void:
+	var who: Entrant = entrants.get(person)
+	if who and who.out <= 0.0 and state == State.PLAYING:
 		_fell(who, Vector3.ZERO)
 
 
@@ -578,16 +666,17 @@ func _show_fall(by: int, fallen: int, weapon: int, head: bool, push: Vector3) ->
 	if killer == who:
 		killer = null
 	who.deaths += 1
+	who.out = float(mode.numbers.respawn)
 	if killer:
 		killer.kills += 1
 	mode.count(killer, who, tally)
-	if who.bot:
+	if who.bot and is_instance_valid(who.body):
 		who.body.fall(push * 3.0)
 	if _game and killer and killer.body == _game.player:
 		# What the HUD of the route counts is the player's own.
 		_game.kills = killer.kills
 		_game.kills_changed.emit(killer.kills)
-	if _game:
+	if _game and is_instance_valid(who.body):
 		# Whoever goes down leaves a can of ammunition, for a while, and the
 		# weapon of the arena if they had it.
 		var can: Node3D = _game.leave(PICKUP.Kind.AMMO, who.body.global_position + Vector3.UP * 0.9)
@@ -605,7 +694,7 @@ func _bring_back(who: Entrant) -> void:
 	# Enemies who are people see further: see Arena.WATCHED_FROM.
 	var watchers := PackedVector3Array()
 	for other: Entrant in entrants.values():
-		if other == who or other.out > 0.0:
+		if other == who or other.out > 0.0 or not is_instance_valid(other.body):
 			continue
 		if mode.hostile(who, other):
 			foes.append(other.body.global_position)
@@ -624,7 +713,7 @@ func _show_back(id: int, pose: Transform3D) -> void:
 	who.safe = float(rules.safe)
 	who.health = MAX_HEALTH
 	who.unhurt = 0.0
-	if who.bot:
+	if who.bot and is_instance_valid(who.body):
 		who.body.rise(pose)
 		if who.brain:
 			who.brain.begin()
@@ -645,7 +734,10 @@ func _show_end(winner: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not active or _game == null or Net.is_guest():
+	if not active or _game == null:
+		return
+	if Net.is_guest():
+		_follow(delta)
 		return
 	if state == State.LOADING:
 		# The navmesh is baked a moment after the level loads, and the arena
@@ -654,8 +746,9 @@ func _physics_process(delta: float) -> void:
 		# The server takes a frame or more to take a navmesh over, and may
 		# still have that of the level before. Before its first turn it
 		# cannot be asked anything.
+		_waited += delta
 		var map := _game.get_world_3d().navigation_map
-		if _baked and NavigationServer3D.map_get_iteration_id(map) > 0 and NavigationServer3D.map_get_closest_point(map, _corner).distance_to(_corner) < 0.5:
+		if _baked and NavigationServer3D.map_get_iteration_id(map) > 0 and NavigationServer3D.map_get_closest_point(map, _corner).distance_to(_corner) < 0.5 and _all_here():
 			_begin()
 		return
 	if state != State.PLAYING:
@@ -678,6 +771,7 @@ func _physics_process(delta: float) -> void:
 		_fetch = FETCH
 		_send_fetchers()
 	mode.tick(delta)
+	mode.watch()
 	_tick -= delta
 	if _tick <= 0.0:
 		_tick = TICK
@@ -685,6 +779,25 @@ func _physics_process(delta: float) -> void:
 	if left <= 0.0:
 		left = 0.0
 		Net.show(self, &"_show_end", [mode.winner(entrants.values(), tally, true)])
+
+
+## What a guest keeps up itself between what the host says: the clock, and
+## the seconds on what it shows.
+func _follow(delta: float) -> void:
+	if state != State.PLAYING:
+		return
+	_clock += delta
+	left = maxf(left - delta, 0.0)
+	for who: Entrant in entrants.values():
+		who.safe = maxf(who.safe - delta, 0.0)
+		who.out = maxf(who.out - delta, 0.0)
+	_tend_cells()
+	mode.watch()
+
+
+## True once nobody is still loading the level, or it has been long enough.
+func _all_here() -> bool:
+	return not Net.active or Net.present.size() >= Net.players.size() or _waited > WAIT_FOR_ALL
 
 
 func _on_baked() -> void:
@@ -704,22 +817,10 @@ func _begin() -> void:
 		push_warning("%s has no floor to play a match on" % setup.scene)
 		state = State.OVER
 		return
-	var roster := []
-	var count: int = mode.head_count(setup.size)
-	var named := 0
-	for place in count:
-		var side: int = mode.side(place)
-		if place == 0 and not setup.only_bots:
-			roster.append([Net.id(), Net.player_name, side, -1])
-		else:
-			# A bot has the number of its place, below nought.
-			var arms := ARMORY.bots(setup.pack, arena.length() > FAR)
-			@warning_ignore("integer_division")
-			var arm: int = arms[(place / (2 if mode.teams() else 1)) % arms.size()]
-			roster.append([-(place + 1), NAMES[named % NAMES.size()], side, arm])
-			named += 1
-	Net.show(self, &"_show_roster", [roster])
+	Net.show(self, &"_show_roster", [_line_up_people()])
 	mode.begin()
+	var spots_for_cells := clampi(roundi(float(arena.spots.size()) / float(_cell_numbers.get("spots_for_one", 250))), 1, int(_cell_numbers.get("most", 4)))
+	Net.show(self, &"_show_out", [mode.plan(), Array(arena.caches(spots_for_cells)), _choose_stands()])
 	# Where they start: a side at its end, or everybody as far apart as can be.
 	var lines := {}
 	for who: Entrant in entrants.values():
@@ -729,29 +830,75 @@ func _begin() -> void:
 			lines[side] = arena.line_up(side, members.size())
 		Net.show(self, &"_show_back", [who.id, (lines[side] as Array).pop_back()])
 		who.safe = 0.0
-	left = float(mode.numbers.minutes) * 60.0
+	Net.show(self, &"_show_begin", [float(mode.numbers.minutes) * 60.0])
+
+
+## The match is on, from here on, on every machine.
+func _show_begin(seconds: float) -> void:
+	left = seconds
 	_clock = 0.0
-	_cells.clear()
-	var cells := clampi(roundi(float(arena.spots.size()) / float(_cell_numbers.get("spots_for_one", 250))), 1, int(_cell_numbers.get("most", 4)))
-	for at: Vector3 in arena.caches(cells):
-		_cells.append({"at": at, "cell": null, "due": 0.0})
-	_set_out_specials()
 	state = State.PLAYING
 	began.emit()
 	changed.emit()
 
 
-## Sets out the weapons of the arena of the pack on their stands, each on a
-## spot of another kind of out of the way (Arena.hideouts()), or where the
-## level says in ARENAS. They are there a while after the start.
-func _set_out_specials() -> void:
+## Who plays: everybody who is in the level, and with bots a bot in every
+## place that is left. The people take the first places of their side, spread
+## over the two sides or all on the first as `apart` has it, and more people
+## than there are places play as well. See _show_roster().
+func _line_up_people() -> Array:
+	var people: Array = []
+	if not setup.only_bots:
+		people = Net.present.keys() if Net.active else [Net.id()]
+		people.sort()
+	var roster := []
+	var count: int = mode.head_count(setup.size)
+	var seated := {}
+	for i in people.size():
+		var wanted: int = (i % 2 if setup.apart else 0) if mode.teams() else -1
+		var side := wanted
+		var at := count + i
+		for place in count:
+			if not seated.has(place) and (wanted < 0 or mode.side(place) == wanted):
+				at = place
+				break
+		seated[at] = true
+		if not mode.teams():
+			side = mode.side(at)
+		roster.append([people[i], _name_of(people[i]), side, -1])
+	if not setup.bots:
+		return roster
+	var named := 0
+	for place in count:
+		if not seated.has(place):
+			roster.append(_bot_line(place, mode.side(place), NAMES[named % NAMES.size()]))
+			named += 1
+	return roster
+
+
+func _name_of(person: int) -> String:
+	return str(Net.players[person].name) if Net.players.has(person) else Net.player_name
+
+
+## The line of the roster for a bot in `place`: a bot has the number of its
+## place, below nought.
+func _bot_line(place: int, side: int, title: String) -> Array:
+	var arms := ARMORY.bots(setup.pack, arena.length() > FAR)
+	@warning_ignore("integer_division")
+	return [-(place + 1), title, side, arms[(place / (2 if mode.teams() else 1)) % arms.size()]]
+
+
+## The weapons of the arena of the pack, each on a spot of another kind of out
+## of the way (Arena.hideouts()), or where the level says in ARENAS: [the
+## weapon, where] for each, for _show_out().
+func _choose_stands() -> Array:
 	var weapons: Array[WeaponData] = []
 	for weapon_name: Variant in ARMORY.spec(setup.pack).get("specials", SPECIALS):
 		var data := ARMORY.named(str(weapon_name))
 		if data and data.special:
 			weapons.append(data)
 	if weapons.is_empty():
-		return
+		return []
 	var kinds := [ARENA.Hideout.OFF_THE_WAY, ARENA.Hideout.UP, ARENA.Hideout.IN_THE_OPEN]
 	var spots: PackedVector3Array = arena.hideouts(kinds.slice(0, weapons.size()))
 	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(ARENAS)) if FileAccess.file_exists(ARENAS) else null
@@ -759,26 +906,43 @@ func _set_out_specials() -> void:
 	if own.has("like"):
 		own = said.get(str(own.like), {})
 	var placed: Dictionary = own.get("specials", {})
+	var stands := []
 	for i in mini(weapons.size(), spots.size()):
-		var data := weapons[i]
+		var at: Variant = placed.get(weapons[i].resource_path.get_file().get_basename())
+		stands.append([ARMORY.index(weapons[i]), Vector3(at[0], at[1], at[2]) if at is Array and at.size() == 3 else spots[i]])
+	return stands
+
+
+## Sets out on every machine what is in the level for everybody: what the
+## kind of match has there (`plan`, see mode.gd), the cells that mend at
+## `cells`, and the weapons of the arena on their stands, there a while after
+## the start.
+func _show_out(plan: Array, cells: Array, stands: Array) -> void:
+	_out = [plan, cells, stands]
+	mode.set_out(plan)
+	_cells.clear()
+	for at: Vector3 in cells:
+		_cells.append({"at": at, "cell": null, "due": 0.0})
+	var looks: Array[MeshInstance3D] = []
+	for line: Array in stands:
+		var data := ARMORY.at(line[0])
 		var stand: Node3D = STASH.new()
+		stand.name = "Stand%d" % line[0]
 		stand.weapon = data
 		stand.back = float(_special_numbers.back)
 		_game.add_child(stand)
-		var at: Variant = placed.get(data.resource_path.get_file().get_basename())
-		stand.global_position = Vector3(at[0], at[1], at[2]) if at is Array and at.size() == 3 else spots[i]
+		stand.global_position = line[1]
 		stand.come_in(float(_special_numbers.first))
 		stand.taken.connect(_on_special_taken.bind(stand))
 		stand.arrived.connect(func() -> void: say("%s is up" % data.display_name, &"pickup_grenade"))
 		_stands[data] = stand
+		looks.append_array(STASH.looks(data))
 	var weapons_in_hand: Node3D = _game.player.weapons
 	if not weapons_in_hand.special_spent.is_connected(special_spent):
 		weapons_in_hand.special_spent.connect(special_spent)
 	# Drawn once now, rather than the first time one comes into view.
-	var looks: Array[MeshInstance3D] = []
-	for data in weapons:
-		looks.append_array(STASH.looks(data))
-	Fx.rehearse(looks)
+	if not stands.is_empty():
+		Fx.rehearse(looks)
 
 
 ## Somebody took a weapon of the arena up, from its stand or from where it
@@ -795,7 +959,11 @@ func _on_special_taken(by: Node3D, dropped: Array, from: Node3D) -> void:
 
 ## A weapon of the arena was fired empty: its stand has it back in a while.
 func special_spent(data: WeaponData) -> void:
-	var stand: Node3D = _stands.get(data)
+	Net.ask(self, &"spent", [ARMORY.index(data)])
+
+
+func spent(weapon: int) -> void:
+	var stand: Node3D = _stands.get(ARMORY.at(weapon))
 	if is_instance_valid(stand):
 		stand.release(float(_special_numbers.back))
 
@@ -882,20 +1050,31 @@ func _send_fetchers() -> void:
 func _lay_down(dropped: Array, at: Vector3) -> void:
 	if dropped.is_empty() or _game == null:
 		return
-	var data: WeaponData = dropped[0]
-	var stand: Node3D = _stands.get(data)
-	if int(dropped[1]) <= 0:
-		if is_instance_valid(stand):
-			stand.release(float(_special_numbers.back))
+	Net.ask(self, &"lay_down", [ARMORY.index(dropped[0]), int(dropped[1]), at])
+
+
+func lay_down(weapon: int, rounds: int, at: Vector3) -> void:
+	if rounds <= 0:
+		spent(weapon)
+		return
+	_lying += 1
+	Net.show(self, &"_show_lying", ["Lying%d" % _lying, weapon, rounds, Vector3(at.x, Fx.floor_below(at + Vector3.UP * 0.5), at.z), 0.0])
+
+
+## A weapon of the arena lies at `at`, as it has for `age` seconds.
+func _show_lying(title: String, weapon: int, rounds: int, at: Vector3, age: float) -> void:
+	if _game == null:
 		return
 	var lying: Node3D = STASH.new()
-	lying.weapon = data
-	lying.rounds = int(dropped[1])
+	lying.name = title
+	lying.weapon = ARMORY.at(weapon)
+	lying.rounds = rounds
 	lying.dropped = true
-	lying.stand = stand
+	lying.stand = _stands.get(lying.weapon)
 	lying.back = float(_special_numbers.back)
+	lying.age = age
 	_game.add_child(lying)
-	lying.global_position = Vector3(at.x, Fx.floor_below(at + Vector3.UP * 0.5), at.z)
+	lying.global_position = at
 	lying.taken.connect(_on_special_taken.bind(lying))
 
 
@@ -912,45 +1091,260 @@ func _show_roster(roster: Array) -> void:
 	entrants.clear()
 	tally = [0, 0]
 	stuck = 0
+	_cast = 0
 	for line: Array in roster:
-		var who := Entrant.new()
-		who.id = line[0]
-		who.title = line[1]
-		who.team = line[2]
-		who.bot = who.id < 0
-		who.weapon = maxi(line[3], 0)
-		entrants[who.id] = who
-	var own := me()
-	var cast := 0
+		_note_down(line)
 	for who: Entrant in entrants.values():
-		if who.bot:
-			var puppet: CharacterBody3D = (load(PUPPET) as PackedScene).instantiate()
-			puppet.id = who.id
-			puppet.title = who.title
-			puppet.name = "Bot%d" % -who.id
-			puppet.driven = not Net.is_guest()
-			_game.add_child(puppet)
-			# Whoever is against the player is who the enemies were chosen to
-			# be; with nobody playing, that is the second side.
-			var look := {}
-			if (mode.hostile(own, who) if own else who.team == 1 or not mode.teams()):
-				look = _look(cast)
-				cast += 1
-			puppet.enlist(who.team if mode.teams() else absi(who.id) % 2, _layers(who), _foes(who), own != null and not mode.hostile(own, who), who.weapon, look)
-			who.body = puppet
-			if puppet.driven:
-				who.brain = (load(BOT) as GDScript).new()
-				who.brain.me = who
-				puppet.add_child(who.brain)
-		elif who.id == Net.id():
-			who.body = _game.player
-			_game.player.team = who.team
-			_game.player.collision_layer |= _layers(who)
-			_game.player.collision_mask |= _foes(who)
+		_embody(who)
+	changed.emit()
+
+
+func _note_down(line: Array) -> Entrant:
+	var who := Entrant.new()
+	who.id = line[0]
+	who.title = line[1]
+	who.team = line[2]
+	who.bot = who.id < 0
+	who.weapon = maxi(line[3], 0)
+	entrants[who.id] = who
+	return who
+
+
+## Gives `who` their body in the level: a bot gets one here; somebody else's
+## player has theirs once its machine is in the level, see dress_people().
+func _embody(who: Entrant) -> void:
+	if who.bot:
+		var puppet: CharacterBody3D = (load(PUPPET) as PackedScene).instantiate()
+		puppet.id = who.id
+		puppet.title = who.title
+		puppet.name = "Bot%d" % -who.id
+		puppet.driven = not Net.is_guest()
+		_game.add_child(puppet)
+		who.body = puppet
+		if puppet.driven:
+			who.brain = (load(BOT) as GDScript).new()
+			who.brain.me = who
+			puppet.add_child(who.brain)
+	else:
+		who.body = _game.player if who.id == Net.id() else _game.puppets.get(who.id)
+	if who.body:
+		who.body.set_meta(&"entrant", who.id)
+		_take_side(who)
+
+
+## Everybody who plays and has a body by now has it: for a puppet that has
+## only just come in, see game.gd.
+func dress_people() -> void:
+	if _game == null:
+		return
+	for who: Entrant in entrants.values():
+		if not who.bot and not is_instance_valid(who.body):
+			_embody(who)
+
+
+## Has the body of `who` on the side that they are on: as a side to walk into
+## and be shot on, and in what a figure wears and what stands over it.
+func _take_side(who: Entrant) -> void:
+	if who.body == _game.player:
+		var every_side: int = SIDES[0] | SIDES[1]
+		_game.player.team = who.team
+		_game.player.collision_layer = (_game.player.collision_layer & ~every_side) | _layers(who)
+		_game.player.collision_mask = (_game.player.collision_mask & ~every_side) | _foes(who)
+		return
+	var own := me()
+	var look := {}
+	# Whoever is against the player is who the enemies were chosen to be; with
+	# nobody playing, that is the second side. People are soldiers.
+	if who.bot and (mode.hostile(own, who) if own else who.team == 1 or not mode.teams()):
+		if who.cast < 0:
+			who.cast = _cast
+			_cast += 1
+		look = _look(who.cast)
+	who.body.enlist(who.team if mode.teams() else absi(who.id) % 2, _layers(who), _foes(who), own != null and not mode.hostile(own, who), who.weapon if who.bot else -1, look)
+
+
+# --- Who comes and who goes ---------------------------------------------------
+
+
+## `person` is in the level, on the host. In a match that is on they come in
+## where a side is short of people, and a bot makes way there.
+func admit(person: int) -> void:
+	if state == State.LOADING or state == State.NONE or entrants.has(person):
+		return
+	var side := _side_for_newcomer()
+	var bot: Entrant = null
+	for other: Entrant in entrants.values():
+		if other.bot and (not mode.teams() or other.team == side):
+			bot = other
+	if bot:
+		_let_go(bot)
+		if not mode.teams():
+			side = bot.team
+	Net.show(self, &"_show_joined", [[person, _name_of(person), side, -1], 0.0])
+	(entrants[person] as Entrant).out = BACK_SOON
+
+
+## The side with the fewest people, and of two alike the one with the fewest
+## in all. Without sides the next number.
+func _side_for_newcomer() -> int:
+	if not mode.teams():
+		var last := -1
+		for other: Entrant in entrants.values():
+			last = maxi(last, other.team)
+		return last + 1
+	if not setup.apart:
+		return 0
+	var people: Array[int] = [0, 0]
+	var all: Array[int] = [0, 0]
+	for other: Entrant in entrants.values():
+		all[other.team] += 1
+		if not other.bot:
+			people[other.team] += 1
+	if people[0] != people[1]:
+		return 0 if people[0] < people[1] else 1
+	return 0 if all[0] <= all[1] else 1
+
+
+func _show_joined(line: Array, out: float) -> void:
+	var who := _note_down(line)
+	who.out = out
+	if _game:
+		_embody(who)
+	changed.emit()
+
+
+## A bot leaves the match: it lets go of what it had.
+func _let_go(bot: Entrant) -> void:
+	mode.fell(bot)
+	if bot.brain and is_instance_valid(bot.body):
+		_lay_down(bot.brain.drop_special(), bot.body.global_position)
+	Net.show(self, &"_show_gone", [bot.id])
+
+
+func _show_gone(id: int) -> void:
+	var who: Entrant = entrants.get(id)
+	if who == null:
+		return
+	entrants.erase(id)
+	_errands.erase(id)
+	if who.bot and is_instance_valid(who.body):
+		who.body.queue_free()
+	changed.emit()
+
+
+## `person` has gone, on the host: what they had goes back, and a bot takes
+## over their place if there are bots.
+func person_left(person: int) -> void:
+	var who: Entrant = entrants.get(person)
+	if who == null:
+		return
+	if is_instance_valid(who.body):
+		mode.fell(who)
+		var held: WeaponData = ARMORY.at(who.body.weapon_in_hand())
+		if held.special:
+			spent(ARMORY.index(held))
+	var side := who.team
+	Net.show(self, &"_show_gone", [person])
+	if setup.bots and state == State.PLAYING:
+		var place := 0
+		for other: Entrant in entrants.values():
+			place = maxi(place, -other.id)
+		var line := _bot_line(place, side, NAMES[place % NAMES.size()])
+		Net.show(self, &"_show_joined", [line, BACK_SOON])
+		(entrants[line[0]] as Entrant).out = BACK_SOON
+
+
+## This machine's player goes over to the other side.
+func change_my_side() -> void:
+	Net.ask(self, &"change_sides", [Net.id()])
+
+
+## `person` goes over to the other side, in the place of a bot of it if there
+## is one, who comes over the other way. Both are back a moment later at
+## their new end, and what they carried stays behind.
+func change_sides(person: int) -> void:
+	var who: Entrant = entrants.get(person)
+	if who == null or not mode.teams() or state != State.PLAYING or who.out > 0.0:
+		return
+	var bot: Entrant = null
+	for other: Entrant in entrants.values():
+		if other.bot and other.team != who.team and (bot == null or other.out > bot.out):
+			bot = other
+	mode.fell(who)
+	if bot:
+		mode.fell(bot)
+	Net.show(self, &"_show_change", [person, bot.id if bot else 0])
+
+
+func _show_change(person: int, bot: int) -> void:
+	say("%s changed sides" % (entrants[person] as Entrant).title)
+	for id: int in [person, bot]:
+		var who: Entrant = entrants.get(id)
+		if who:
+			who.team = 1 - who.team
+			who.out = BACK_SOON
+	# Who is a friend of this machine's player may be everybody else by now.
+	for who: Entrant in entrants.values():
+		if is_instance_valid(who.body):
+			_take_side(who)
+	mode.sides_changed()
+	changed.emit()
+
+
+# --- Whoever comes in later ---------------------------------------------------
+
+
+## How the match stands, for somebody who comes in while it is played. The
+## bots are told where they are by what follows: see _tell_bots().
+func net_snapshot() -> Dictionary:
+	var roster := []
+	var scores := []
+	for who: Entrant in entrants.values():
+		roster.append([who.id, who.title, who.team, who.weapon if who.bot else -1])
+		scores.append([who.id, who.kills, who.deaths, who.out])
+	var stands := []
+	var lying := []
+	for stand: Node3D in get_tree().get_nodes_in_group("stash"):
+		if stand.is_queued_for_deletion():
+			continue
+		if stand.dropped:
+			lying.append([stand.name, ARMORY.index(stand.weapon), stand.rounds, stand.global_position, stand.age])
 		else:
-			who.body = _game.puppets.get(who.id)
-		if who.body:
-			who.body.set_meta(&"entrant", who.id)
+			stands.append([ARMORY.index(stand.weapon), stand.due()])
+	var cells := []
+	for cell in _cells:
+		cells.append(maxf(float(cell.due) - _clock, 0.0))
+	return {"state": state, "won": won, "left": left, "clock": _clock, "tally": Array(tally), "roster": roster, "scores": scores, "out": _out,
+		"stands": stands, "lying": lying, "cells": cells, "mode": mode.how_it_stands()}
+
+
+## Brings the match on this machine to how it stands on the host's.
+func net_restore(told: Dictionary) -> void:
+	if int(told.state) == State.LOADING or _game == null:
+		return
+	_show_roster(told.roster)
+	for line: Array in told.scores:
+		var who: Entrant = entrants.get(line[0])
+		who.kills = line[1]
+		who.deaths = line[2]
+		who.out = line[3]
+	tally = [told.tally[0], told.tally[1]]
+	_clock = told.clock
+	if not (told.out as Array).is_empty():
+		_show_out(told.out[0], told.out[1], told.out[2])
+	for line: Array in told.stands:
+		var stand: Node3D = _stands.get(ARMORY.at(line[0]))
+		if is_instance_valid(stand):
+			stand.net_restore(line[1])
+	for line: Array in told.lying:
+		_show_lying(line[0], line[1], line[2], line[3], line[4])
+	for i in mini(_cells.size(), (told.cells as Array).size()):
+		_cells[i].due = _clock + float(told.cells[i])
+	mode.stand_as(told.mode)
+	left = told.left
+	won = told.won
+	state = told.state
+	began.emit()
 	changed.emit()
 
 
@@ -983,7 +1377,23 @@ func _tend_cells() -> void:
 		elif _clock >= float(cell.due):
 			var made: Node3D = _game.leave(PICKUP.Kind.HEALTH, (cell.at as Vector3) + Vector3.UP * 0.9)
 			made.stays = true
+			made.taken.connect(func(_kind: int) -> void: Net.ask(self, &"cell_taken", [_cells.find(cell)]))
 			cell.cell = made
+
+
+## The cell at place `i` was taken on a machine: it is gone on all of them.
+func cell_taken(i: int) -> void:
+	Net.show(self, &"_show_cell_taken", [i])
+
+
+func _show_cell_taken(i: int) -> void:
+	if i < 0 or i >= _cells.size():
+		return
+	var cell: Dictionary = _cells[i]
+	if is_instance_valid(cell.cell):
+		cell.cell.queue_free()
+	cell.cell = null
+	cell.due = _clock + float(_cell_numbers.get("back", 45.0))
 
 
 ## The layers an entrant is on, and those of who is against it. Without
@@ -1005,10 +1415,12 @@ func _tell_bots() -> void:
 		if who.brain:
 			states.append(who.id)
 			states.append_array(who.brain.net_state())
-	Net.tell(self, &"_move_bots", [states], false)
+	Net.tell(self, &"_move_bots", [states, left], false)
 
 
-func _move_bots(states: Array) -> void:
+## Where the bots are on the host, and what is on its clock.
+func _move_bots(states: Array, seconds: float) -> void:
+	left = seconds
 	for i in range(0, states.size(), 7):
 		var who: Entrant = entrants.get(states[i])
 		if who and is_instance_valid(who.body):
@@ -1026,12 +1438,14 @@ func _forget() -> void:
 	_errands.clear()
 	takes.clear()
 	_baked = false
+	_waited = 0.0
+	_out = []
 	left = 0.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Enter, and not whatever accepts in a menu: the space bar does, and jumps.
 	var key := event as InputEventKey
-	if state == State.OVER and key and key.pressed and not key.echo and (key.physical_keycode == KEY_ENTER or key.physical_keycode == KEY_KP_ENTER):
+	if state == State.OVER and not Net.is_guest() and key and key.pressed and not key.echo and (key.physical_keycode == KEY_ENTER or key.physical_keycode == KEY_KP_ENTER):
 		get_viewport().set_input_as_handled()
 		again()

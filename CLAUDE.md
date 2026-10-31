@@ -50,7 +50,7 @@ git ls-files -z | while IFS= read -r -d '' f; do if [ -f "$M/$f" ] && cmp -s "$M
 |---|---|
 | De hele selftest (5 minuten) | `tools/selftest.sh` |
 | Alleen gevechten, routes, beeld of wat stuk kan, of één level | `tools/selftest.sh --fights`, `--routes`, `--view`, `--breaks`, `--level=<level>` |
-| Samen spelen, personages, de sandbox | `tools/nettest.sh`, `tools/test_humanoid.sh`, `tools/test_sandbox.sh` |
+| Samen spelen, een wedstrijd met drie machines, personages, de sandbox | `tools/nettest.sh`, `tools/nettest.sh --match`, `tools/test_humanoid.sh`, `tools/test_sandbox.sh` |
 | Een wedstrijd van alleen bots, of twaalf een minuut lang | `tools/test_match.sh`, `tools/test_match.sh --match=tdm:works:6 --only-bots --soak=60` |
 | Vaste standpunten meten, of alleen de beelden | `tools/benchmark.sh [--scene=res://scenes/<level>.tscn]`, `tools/shots.sh` |
 | Een level zone voor zone, met keurmerk en contactblad | `tools/zone_sheet.py <level>` |

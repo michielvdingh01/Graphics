@@ -12,6 +12,11 @@ extends Node
 ## Playing alone is the same thing with nobody else there: is_host() holds,
 ## show() runs here and that is all.
 ##
+## A match is played the same way (scripts/match.gd): the host runs the bots,
+## the clock and the score, and tells whoever comes in how things stand. A
+## game calls out over the network every second, so that somebody on the same
+## network finds it without having to know its address: see listen().
+##
 ## Everything goes through this node, which is there on every machine whatever
 ## level is loaded, and is addressed to a node by its path. A level therefore
 ## has to give whatever it makes at run time the same name everywhere.
@@ -25,21 +30,32 @@ signal entering(scene: String)
 signal left(reason: String)
 ## A line for the HUD: who came and who went.
 signal said(text: String)
+## The games heard on this network are others than they were: see `found`.
+signal found_changed
 
 ## UDP port a host listens on, which is the one to forward to it on a router.
 const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 17
+const VERSION := 19
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
 const JOIN_TIME := 8.0
 const CONFIG := "user://net.cfg"
-## What a guest may have the host do to a node, see ask(): the last three
-## are a vehicle's, see scripts/vehicle.gd.
-const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm", &"seat_asked", &"seat_left_asked", &"worn_by"]
+## UDP port a game calls out on, and the seconds between two calls. A game not
+## heard for a few of those has gone.
+const CALL_PORT := 24566
+const CALL_EVERY := 1.0
+const CALL_LASTS := 3.5
+## What a call starts with: anything else on that port is not a game of ours.
+const CALL_SIGN := "graphics-fps"
+## What a guest may have the host do to a node, see ask(): those of a vehicle
+## (scripts/vehicle.gd), of a match (scripts/match.gd) and of a weapon of the
+## arena on its stand (scripts/stash.gd).
+const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm", &"seat_asked", &"seat_left_asked", &"worn_by", &"struck_by",
+	&"went_down", &"lay_down", &"spent", &"cell_taken", &"change_sides", &"take_asked"]
 ## What the machine that runs a vehicle may have the others do to it, see
 ## vehicle_did().
 const VEHICLE_DEEDS: Array[StringName] = [&"_fired_here"]
@@ -72,6 +88,11 @@ var address := "127.0.0.1"
 ## The test of playing together listens to this machine only.
 var port := PORT
 var bind := "*"
+## The port games call out on: the test of playing together has one of its own.
+var call_port := CALL_PORT
+## The games heard on this network while listen() is on, by where to join
+## them: {name, what, people, fits}, with `fits` false for another version.
+var found := {}
 ## The level on this machine, once it is ready for the others.
 var game: Node
 
@@ -83,6 +104,15 @@ var _waiting: Array[int] = []
 var _since_tick := 0.0
 ## The enemies this machine had chosen for itself, to go back to.
 var _own_theme := ""
+## What calls out for this game, and the seconds until it does again.
+var _caller: PacketPeerUDP
+var _next_call := 0.0
+## What listens for the calls of others, and the seconds each game on it was
+## last heard, by where to join it.
+var _ear: PacketPeerUDP
+var _heard := {}
+## The made prizes each guest has been sent, by guest: see _send_prize().
+var _sent := {}
 
 
 func _ready() -> void:
@@ -115,6 +145,16 @@ func is_guest() -> bool:
 
 func id() -> int:
 	return multiplayer.get_unique_id()
+
+
+func _process(delta: float) -> void:
+	if _caller:
+		_next_call -= delta
+		if _next_call <= 0.0:
+			_next_call = CALL_EVERY
+			_call_out()
+	if _ear:
+		_listen_in(delta)
 
 
 ## Where this machine's player comes in a row of everybody in the game, for
@@ -158,6 +198,7 @@ func host_game() -> Error:
 	active = true
 	players = {1: {"name": player_name}}
 	_remember()
+	_start_calling()
 	changed.emit()
 	return OK
 
@@ -197,6 +238,7 @@ func is_joining() -> bool:
 
 ## Back to playing alone. A host takes its game with it.
 func leave() -> void:
+	_stop_calling()
 	if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -209,6 +251,7 @@ func leave() -> void:
 	players = {}
 	present = {}
 	_waiting.clear()
+	_sent.clear()
 	session = NOBODY.duplicate()
 	if was:
 		changed.emit()
@@ -218,13 +261,14 @@ func leave() -> void:
 func load_level(scene: String, at := "", kills := 0, fallen := []) -> void:
 	if not active or not multiplayer.is_server():
 		return
-	session = {"level": scene, "at": at, "kills": kills, "fallen": fallen, "theme": Settings.enemy_theme, "match": Match.setup if Match.active else {}}
+	session = {"level": scene, "at": at, "kills": kills, "fallen": fallen, "theme": Settings.enemy_theme, "match": Match.for_guests() if Match.active else {}}
 	present = {}
 	_waiting.clear()
 	game = null
 	_tell_roster()
 	for guest: int in players:
 		if guest != 1:
+			_send_prize(guest)
 			_enter.rpc_id(guest, session)
 	entering.emit(scene)
 	Loading.go(scene)
@@ -271,6 +315,7 @@ func _hello(version: int, build: int, title: String) -> void:
 	said.emit("%s joined" % players[guest].name)
 	_tell_roster()
 	if session.level:
+		_send_prize(guest)
 		_enter.rpc_id(guest, session)
 
 
@@ -286,6 +331,9 @@ func _on_peer_disconnected(peer: int) -> void:
 	players.erase(peer)
 	present.erase(peer)
 	_waiting.erase(peer)
+	_sent.erase(peer)
+	if Match.active:
+		Match.person_left(peer)
 	_tell_roster()
 
 
@@ -324,6 +372,10 @@ func _enter(what: Dictionary) -> void:
 	if _own_theme == "":
 		_own_theme = Settings.enemy_theme
 	Settings.enemy_theme = session.theme
+	if session.match:
+		Match.enter(session.match)
+	else:
+		Match.close()
 	entering.emit(session.level)
 	Loading.go(session.level)
 
@@ -343,6 +395,8 @@ func _arrived(level: String) -> void:
 
 ## Tells a guest how the level stands; from here on it hears what happens.
 func _admit(guest: int) -> void:
+	if Match.active:
+		Match.admit(guest)
 	_restore.rpc_id(guest, game.net_snapshot())
 	present[guest] = true
 
@@ -355,6 +409,7 @@ func _restore(state: Dictionary) -> void:
 
 func _end(reason: String) -> void:
 	leave()
+	Match.close()
 	left.emit(reason)
 
 
@@ -365,6 +420,114 @@ func _remember() -> void:
 	file.set_value("net", "name", player_name)
 	file.set_value("net", "address", address)
 	file.save(CONFIG)
+
+
+## Sends `guest` the prize of the match if it was made on this machine, once:
+## without it that guest would have nothing to show. It goes before the word
+## to come in, on the same channel, so it is there when the match opens.
+func _send_prize(guest: int) -> void:
+	var title := str(session.match.get("prize", ""))
+	var files: Dictionary = Match.PRIZE.files_of(title) if session.match else {}
+	if files.is_empty() or _sent.get(guest, []).has(title):
+		return
+	if not _sent.has(guest):
+		_sent[guest] = []
+	_sent[guest].append(title)
+	_prize.rpc_id(guest, title, files)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _prize(title: String, files: Dictionary) -> void:
+	Match.PRIZE.take_in(title, files)
+
+
+# --- Finding a game on this network --------------------------------------------
+
+
+## Starts calling out, to everybody on the networks this machine is on.
+func _start_calling() -> void:
+	_stop_calling()
+	_caller = PacketPeerUDP.new()
+	_caller.set_broadcast_enabled(true)
+	# An address of the old kind, or the call goes out on a socket that cannot
+	# reach everybody.
+	if _caller.bind(0, "127.0.0.1" if bind != "*" else "0.0.0.0") != OK:
+		_caller = null
+	_next_call = 0.0
+
+
+func _stop_calling() -> void:
+	if _caller:
+		_caller.close()
+	_caller = null
+
+
+## Where a call goes: all of this network, and for a machine on more than one
+## each of them by name, since the first only leaves by the main one. This
+## takes a network to be of the usual size; on another the address still works.
+func _call_addresses() -> PackedStringArray:
+	if bind != "*":
+		return PackedStringArray([bind])
+	var addresses := PackedStringArray(["255.255.255.255"])
+	for own in local_addresses():
+		addresses.append(own.substr(0, own.rfind(".")) + ".255")
+	return addresses
+
+
+## Says what is played here, and how many are in it.
+func _call_out() -> void:
+	var what := "Waiting for the host"
+	if session.level:
+		what = str(session.level).get_file().get_basename().capitalize()
+		if Match.active:
+			what = "%s, %s" % [Match.title(), what]
+	var words := JSON.stringify({"sign": CALL_SIGN, "version": VERSION, "build": Updater.build, "name": player_name, "port": port, "what": what, "people": players.size()}).to_utf8_buffer()
+	for where in _call_addresses():
+		_caller.set_dest_address(where, call_port)
+		_caller.put_packet(words)
+
+
+## Listens for the games on this network for as long as `on`: `found` has them.
+func listen(on: bool) -> void:
+	if on == (_ear != null):
+		return
+	if _ear:
+		_ear.close()
+		_ear = null
+	_heard.clear()
+	if not found.is_empty():
+		found.clear()
+		found_changed.emit()
+	if on:
+		_ear = PacketPeerUDP.new()
+		_ear.set_broadcast_enabled(true)
+		if _ear.bind(call_port, "0.0.0.0") != OK:
+			_ear = null
+
+
+func _listen_in(delta: float) -> void:
+	var news := false
+	while _ear.get_available_packet_count() > 0:
+		var words := _ear.get_packet()
+		var where := _ear.get_packet_ip()
+		var call: Variant = JSON.parse_string(words.get_string_from_utf8())
+		if call is Dictionary and call.get("sign") == CALL_SIGN and where:
+			var at_port := int(call.get("port", PORT))
+			var address_of := where if at_port == PORT else "%s:%d" % [where, at_port]
+			var fits: bool = int(call.get("version", 0)) == VERSION and (not int(call.get("build", 0)) or not Updater.build or int(call.build) == Updater.build)
+			var game_there := {"name": str(call.get("name", "Player")).left(24), "what": str(call.get("what", "")).left(60), "people": int(call.get("people", 1)), "fits": fits}
+			_heard[address_of] = 0.0
+			if found.get(address_of) != game_there:
+				found[address_of] = game_there
+				news = true
+	for where: String in _heard.keys():
+		_heard[where] += delta
+		if _heard[where] > CALL_LASTS:
+			_heard.erase(where)
+			found.erase(where)
+			news = true
+	if news:
+		found_changed.emit()
 
 
 # --- The world: the host's word ------------------------------------------------
