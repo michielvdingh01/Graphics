@@ -70,13 +70,13 @@ func _goods(_game: Node) -> void:
 		_check("%s is on sale" % id, goods.first_of(id) >= 0)
 	# A bottle of soda.
 	var bottle: int = goods.first_of("fizz_2l")
-	var at: Vector3 = goods.middle_of(bottle)
+	var at: Vector3 = goods.middle_of(bottle) - Vector3.BACK * goods.SHOT_INTO
 	goods.take_damage(30.0, at, Vector3.BACK)
 	_check("a shot takes what it hits", goods.gone(bottle))
 	var after_one: int = goods.left()
 	_check("and only what is around it", whole - after_one < 40 and whole - after_one >= 1)
 	var wine: int = goods.first_of("red_wine")
-	goods.take_damage(50.0, goods.middle_of(wine), Vector3.BACK)
+	goods.take_damage(50.0, goods.middle_of(wine) - Vector3.BACK * goods.SHOT_INTO, Vector3.BACK)
 	_check("a bottle of wine goes as well", goods.gone(wine))
 	await _wait(2.5)
 	_check("what flew has come to rest", goods._flying.is_empty())
@@ -85,8 +85,18 @@ func _goods(_game: Node) -> void:
 	_check("a pallet has something that stands on something", low >= 0)
 	if low >= 0:
 		var above: PackedInt32Array = goods._on[low]
-		goods.take_damage(90.0, goods.middle_of(low), Vector3.BACK)
+		goods.take_damage(90.0, goods.middle_of(low) - Vector3.BACK * goods.SHOT_INTO, Vector3.BACK)
 		_check("what stood on what went comes down", above.size() > 0 and goods.gone(above[0]))
+	# As a real shot gets there: from the middle of an aisle, on the layers a
+	# weapon looks on.
+	var eye := Vector3(30.0, 1.1, -0.04)
+	var ray := PhysicsRayQueryParameters3D.create(eye, eye + Vector3(0, 0, -5), 0b100101)
+	var hit: Dictionary = goods.get_world_3d().direct_space_state.intersect_ray(ray)
+	_check("a shot along an aisle lands on what is on the shelf", not hit.is_empty() and hit.collider == goods)
+	if hit:
+		var shelf: int = goods.left()
+		goods.take_damage(30.0, hit.position, Vector3.FORWARD)
+		_check("and takes something off it", goods.left() < shelf)
 	var before: int = goods.left()
 	var in_aisle: Vector3 = goods.middle_of(goods.first_of("frosty"))
 	goods.take_blast(120.0, in_aisle, Vector3.UP)
