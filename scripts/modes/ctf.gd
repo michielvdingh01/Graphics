@@ -37,9 +37,15 @@ const JOBS: Array[int] = [FETCH, GUARD, FETCH, ROAM, FETCH, GUARD]
 ## And in metres, for an arena as long as the Alps.
 const BASE := Vector2(0.2, 0.45)
 const BASE_MOST := Vector2(45.0, 110.0)
+## And at least this many metres nearer to the other stand, to walk, than one's
+## own stand is: whoever comes back on the far side of it has a long way to
+## anywhere, in the dunes all the way from the edge of the map.
+const FORWARD := 10.0
 ## If nothing on that ground is safe it is anywhere on a side's own half, but
-## no nearer to the stand than this, in metres to walk.
+## no nearer to the stand than CLEAR and no further behind it than BEHIND, in
+## metres to walk: in a small arena that little is what is out of sight.
 const CLEAR := 6.0
+const BEHIND := 25.0
 ## How far from the stand a guard keeps, in metres to walk.
 const POST := Vector2(4.0, 12.0)
 ## How near somebody has to stand to a prize or a stand to touch it, in
@@ -61,8 +67,8 @@ func begin() -> void:
 	var arena: RefCounted = host.arena
 	var base := ground(arena.length())
 	for side in 2:
-		_spots[side] = arena.around(side, base.x, base.y)
-		_halves[side] = arena.around(side, CLEAR, arena.length() * 0.5)
+		_spots[side] = arena.forward(side, base.x, base.y, FORWARD)
+		_halves[side] = arena.forward(side, CLEAR, arena.length() * 0.5, -BEHIND)
 		_posts[side] = arena.around(side, POST.x, POST.y)
 
 
