@@ -405,8 +405,7 @@ func _run() -> void:
 	_check("and whoever waited at the stand with the other one scores", Match.tally == [1, 0] and prizes[1].state == rules.HOME and Match.state == Match.State.PLAYING)
 	rules.numbers.returns = 20.0
 	await _wait(float(rules.numbers.respawn) + 0.3)
-	var home: Vector3 = ctf_arena.spots[ctf_arena.ends[0]]
-	_check("whoever went down comes back on the ground of their own base", runner.out <= 0.0 and runner.body.global_position.distance_to(home) < 26.0 and runner.body.global_position.distance_to(home) > 3.0)
+	_check("whoever went down comes back on the ground of their own base", runner.out <= 0.0 and Array(rules._spots[0]).any(func(spot: int) -> bool: return ctf_arena.spots[spot].distance_to(runner.body.global_position) < 3.0))
 	# Bots play it out among themselves.
 	for who: RefCounted in Match.entrants.values():
 		who.brain.process_mode = Node.PROCESS_MODE_INHERIT
@@ -649,6 +648,21 @@ func _run() -> void:
 			_middle_of(comebacks.map(func(one: Vector3) -> float: return one.y)), _middle_of(comebacks.map(func(one: Vector3) -> float: return one.z))])
 	_check("there, whoever comes back does so near the fight and near a friend: no enemy within twelve metres, half within ninety, a friend within twenty-five",
 		comebacks.size() >= 10 and comebacks[0].x >= 12.0 and middle.x < 90.0 and _middle_of(comebacks.map(func(one: Vector3) -> float: return one.y)) < 25.0)
+	# Capture the flag there: somebody stands at the stand of a side, and that
+	# side comes back around it, not on top of them and not all on one spot.
+	var ground: Vector2 = Match.MODES.ctf.ground(dunes.length())
+	var dunes_stand: Vector3 = dunes.spots[dunes.ends[0]]
+	var at_stand := PackedVector3Array([dunes_stand + Vector3(2.0, 0.0, 0.0)])
+	var by_stand := PackedVector3Array([dunes_stand + Vector3(0.0, 0.0, 12.0)])
+	var around_stand: PackedVector3Array = []
+	for i in 12:
+		around_stand.append((dunes.pick(at_stand, by_stand, dunes.around(0, ground.x, ground.y)) as Transform3D).origin)
+	print("  around a stand in the dunes: %s" % _came_back(around_stand, dunes_stand))
+	var from_stand: Array = Array(around_stand).map(func(at: Vector3) -> float: return at.distance_to(dunes_stand))
+	var from_last := []
+	for i in range(1, around_stand.size()):
+		from_last.append(around_stand[i].distance_to(around_stand[i - 1]))
+	_check("in capture the flag whoever comes back does so well away from their stand, and not where the one before did", ground.x > 35.0 and from_stand.min() > 25.0 and _middle_of(from_last) > 30.0)
 	Match.close()
 
 	print("MATCH TEST %s" % ("PASSED" if _failures == 0 else "FAILED (%d)" % _failures))
@@ -740,6 +754,11 @@ func _soak(seconds: float) -> void:
 	var nearest := INF
 	var walked := 0.0
 	var stood := {}
+	# Who is out now, and where those of either side came back since.
+	var gone := {}
+	var backs: Array[PackedVector3Array] = [PackedVector3Array(), PackedVector3Array()]
+	# How many stood within 30 m of their own stand, added up over all looks.
+	var at_stand := 0
 	# With the player in it: they stand where they were put and cannot die,
 	# and what the bots do to them is added up, at the difficulty asked for
 	# with --difficulty=<0 to 2>.
@@ -765,7 +784,14 @@ func _soak(seconds: float) -> void:
 		for who: RefCounted in Match.entrants.values():
 			if who.out > 0.0:
 				stood.erase(who.id)
+				gone[who.id] = true
 				continue
+			if gone.has(who.id):
+				gone.erase(who.id)
+				if Match.setup.mode == "ctf":
+					backs[who.team].append(who.body.global_position)
+			if Match.setup.mode == "ctf" and who.body.global_position.distance_to(arena.spots[arena.ends[who.team]]) < 30.0:
+				at_stand += 1
 			if stood.has(who.id):
 				walked += who.body.global_position.distance_to(stood[who.id])
 			stood[who.id] = who.body.global_position
@@ -789,6 +815,10 @@ func _soak(seconds: float) -> void:
 		print("  on %s the player, standing still, was hit %d times for %.0f in all, %.1f a second; the quickest hundred took %s" % [Settings.DIFFICULTY_NAMES[Settings.difficulty].to_lower(), hits.size(), total, total / seconds, "%.1f s" % quickest if quickest < INF else "longer than there was"])
 	if not news.is_empty():
 		print("  the score is %d : %d; what was said of the prizes, and how often: %s" % [Match.tally[0], Match.tally[1], news])
+	if Match.setup.mode == "ctf":
+		print("  of a side, %.1f stood within 30 m of their own stand on average" % (at_stand / (seconds * 2.0) / 2.0))
+		for side in 2:
+			print("  side %d: %s" % [side, _came_back(backs[side], arena.spots[arena.ends[side]])])
 	print("  %s" % _taken())
 	_print_kills(counted[0])
 	physics.sort()
@@ -801,6 +831,27 @@ func _soak(seconds: float) -> void:
 	print("MATCH SOAK %s in %s, %d playing, %.0f s in %.0f s: %d deaths, %d times nowhere was safe, %d times a bot got stuck; a physics step took %.2f ms on average, %.2f ms at the 95th of a hundred and %.2f ms at worst, %d steps a second"
 		% [Match.setup.mode, Match.setup.level, Match.entrants.size(), seconds, (Time.get_ticks_msec() - began) / 1000.0, deaths, Match.arena.emergencies, Match.stuck,
 			mean, physics[int(physics.size() * 0.95)], physics[-1], Engine.physics_ticks_per_second])
+
+
+## Where those of a side came back around their stand at `home`, in the order
+## they did: how far from it, how far from whoever came back before them, and
+## how they are shared out over eight directions around it.
+func _came_back(backs: PackedVector3Array, home: Vector3) -> String:
+	if backs.is_empty():
+		return "nobody came back"
+	var from_home := []
+	var from_last := []
+	var ways: Array[int] = []
+	ways.resize(8)
+	for i in backs.size():
+		var off := backs[i] - home
+		from_home.append(off.length())
+		if i > 0:
+			from_last.append(backs[i].distance_to(backs[i - 1]))
+		ways[posmod(roundi(atan2(off.z, off.x) / TAU * 8.0), 8)] += 1
+	var near: int = from_home.filter(func(gap: float) -> bool: return gap < 30.0).size()
+	return "%d came back, %.0f m from their stand at the least, %.0f m in the middle and %.0f m at most, %d within 30 m; %.0f m from the one before in the middle; by direction %s" \
+		% [backs.size(), from_home.min(), _middle_of(from_home), from_home.max(), near, _middle_of(from_last) if not from_last.is_empty() else 0.0, ways]
 
 
 ## Bots and the weapons of the arena: they take one up by walking past it,
