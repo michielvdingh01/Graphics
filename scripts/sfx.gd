@@ -103,7 +103,7 @@ const FAR := 24.0
 ## a space (hall, room or yard), unless one of these words is in its name.
 const BED := "ambience_"
 const SPOT := "_spot"
-const BEDS := {"boiler": &"boiler", "turbine": &"turbine"}
+const BEDS := {"boiler": &"boiler", "turbine": &"turbine", "shop": &"shop"}
 ## How loud the bed of a space in sight is on its doorstep, against standing
 ## in it, and how many dB it loses with every metre from there.
 const NEXT_DOOR_DB := -8.0
@@ -302,6 +302,14 @@ func _survey(scene: Node) -> void:
 			"bed": bed,
 			"sees": zone.get_meta(&"sees", PackedStringArray()),
 		})
+
+
+## From now on the room called `zone` has this bed: for a shop that has lost its
+## power, and with it its hum and its people.
+func change_bed(zone: String, bed: StringName) -> void:
+	for room: Dictionary in _rooms:
+		if room.name == zone:
+			room.bed = bed
 
 
 ## The reverb of a space with walls and a roof, as a row of SPACES. `metres`

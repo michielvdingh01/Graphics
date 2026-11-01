@@ -29,6 +29,7 @@ const LEVELS: Array[Dictionary] = [
 	# exit leads where that of the dunes does. It follows the dunes.
 	{"name": "Dunes at night", "scene": "res://scenes/dunes_night.tscn", "music": LEVEL_MUSIC, "variant": true},
 	{"name": "Alps", "scene": "res://scenes/alps.tscn", "music": LEVEL_MUSIC},
+	{"name": "Supermarket", "scene": "res://scenes/supermarket.tscn", "music": LEVEL_MUSIC},
 ]
 ## What the controls screen can be read for. A trackpad gets its own sheet: it
 ## cannot hold a right click and click at once, and its scroll is not a wheel.
@@ -773,6 +774,7 @@ func _controls() -> void:
 		["Grenade", "G", "G", "Y"],
 		["Smoke grenade", "Q", "Q", "D-pad left"],
 		["Melee", "V", "V", "Click right stick"],
+		["Flashlight, once you have one", "F", "F", "-"],
 		["Switch weapon", "1 to 5, or scroll", "1 to 5", "LB and RB"],
 		["Pause", "Esc", "Esc", "Start"],
 	]

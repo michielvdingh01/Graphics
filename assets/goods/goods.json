@@ -1,0 +1,2524 @@
+{
+	"across": 16,
+	"stuff": {
+		"pop": "a plastic bottle full of drink: it bursts, and falls whole",
+		"glass": "glass: it shatters, also when it only falls",
+		"can": "a can: holed by a shot, it falls whole and rolls",
+		"card": "cardboard: torn by a shot, it falls whole",
+		"bag": "a bag: it pops",
+		"jug": "a jug: it splits and spills a lot",
+		"soft": "soft: bread and paper, it tears",
+		"produce": "what grows: it bursts into lumps",
+		"meat": "meat: it bursts into lumps",
+		"cheese": "cheese: it comes apart in lumps"
+	},
+	"products": {
+		"fizz_2l": {
+			"cell": 0,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#1c0a06"
+		},
+		"fizz_12": {
+			"cell": 1,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#1c0a06"
+		},
+		"fizz_can": {
+			"cell": 2,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#1c0a06"
+		},
+		"dietfizz_2l": {
+			"cell": 3,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#23120a"
+		},
+		"dietfizz_12": {
+			"cell": 4,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#23120a"
+		},
+		"dietfizz_can": {
+			"cell": 5,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#23120a"
+		},
+		"zap_2l": {
+			"cell": 6,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#c5e6b0"
+		},
+		"zap_12": {
+			"cell": 7,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c5e6b0"
+		},
+		"zap_can": {
+			"cell": 8,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#c5e6b0"
+		},
+		"burst_2l": {
+			"cell": 9,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#f08c1c"
+		},
+		"burst_12": {
+			"cell": 10,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f08c1c"
+		},
+		"burst_can": {
+			"cell": 11,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#f08c1c"
+		},
+		"barrel_2l": {
+			"cell": 12,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#2a1206"
+		},
+		"barrel_12": {
+			"cell": 13,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#2a1206"
+		},
+		"barrel_can": {
+			"cell": 14,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#2a1206"
+		},
+		"gush_2l": {
+			"cell": 15,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#3a0f52"
+		},
+		"gush_12": {
+			"cell": 16,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#3a0f52"
+		},
+		"gush_can": {
+			"cell": 17,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#3a0f52"
+		},
+		"bomb_2l": {
+			"cell": 18,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#5a0a18"
+		},
+		"bomb_12": {
+			"cell": 19,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#5a0a18"
+		},
+		"bomb_can": {
+			"cell": 20,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#5a0a18"
+		},
+		"doc_2l": {
+			"cell": 21,
+			"shape": "bottle",
+			"size": [
+				0.112,
+				0.312,
+				0.112
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#301008"
+		},
+		"doc_12": {
+			"cell": 22,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.125,
+				0.21
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#301008"
+		},
+		"doc_can": {
+			"cell": 23,
+			"shape": "can",
+			"size": [
+				0.066,
+				0.122,
+				0.066
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#301008"
+		},
+		"spring_case": {
+			"cell": 24,
+			"shape": "box",
+			"size": [
+				0.4,
+				0.22,
+				0.27
+			],
+			"stuff": "card",
+			"shiny": 0.5
+		},
+		"spring_bottle": {
+			"cell": 25,
+			"shape": "bottle",
+			"size": [
+				0.066,
+				0.205,
+				0.066
+			],
+			"stuff": "pop",
+			"shiny": 0.85,
+			"liquid": "#bcd8e8"
+		},
+		"spring_gallon": {
+			"cell": 26,
+			"shape": "jug",
+			"size": [
+				0.155,
+				0.255,
+				0.155
+			],
+			"stuff": "jug",
+			"shiny": 0.7,
+			"liquid": "#bcd8e8"
+		},
+		"bolt_red": {
+			"cell": 27,
+			"shape": "bottle",
+			"size": [
+				0.078,
+				0.22,
+				0.078
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#d81e2c"
+		},
+		"bolt_blue": {
+			"cell": 28,
+			"shape": "bottle",
+			"size": [
+				0.078,
+				0.22,
+				0.078
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#1e6cd8"
+		},
+		"bolt_lime": {
+			"cell": 29,
+			"shape": "bottle",
+			"size": [
+				0.078,
+				0.22,
+				0.078
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#74d01e"
+		},
+		"bolt_orange": {
+			"cell": 30,
+			"shape": "bottle",
+			"size": [
+				0.078,
+				0.22,
+				0.078
+			],
+			"stuff": "pop",
+			"shiny": 0.75,
+			"liquid": "#f49a14"
+		},
+		"volt_can": {
+			"cell": 31,
+			"shape": "can",
+			"size": [
+				0.058,
+				0.155,
+				0.058
+			],
+			"stuff": "can",
+			"shiny": 0.8,
+			"liquid": "#d0e040"
+		},
+		"oj_carton": {
+			"cell": 32,
+			"shape": "box",
+			"size": [
+				0.095,
+				0.25,
+				0.095
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f4a020"
+		},
+		"apple_juice": {
+			"cell": 33,
+			"shape": "jug",
+			"size": [
+				0.13,
+				0.24,
+				0.13
+			],
+			"stuff": "jug",
+			"shiny": 0.7,
+			"liquid": "#c88a28"
+		},
+		"grape_juice": {
+			"cell": 34,
+			"shape": "jug",
+			"size": [
+				0.13,
+				0.24,
+				0.13
+			],
+			"stuff": "jug",
+			"shiny": 0.7,
+			"liquid": "#3a0f52"
+		},
+		"hawk_six": {
+			"cell": 35,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.15,
+				0.135
+			],
+			"stuff": "glass",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"hawk_case": {
+			"cell": 36,
+			"shape": "box",
+			"size": [
+				0.4,
+				0.19,
+				0.27
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"hawk_bottle": {
+			"cell": 37,
+			"shape": "wine",
+			"size": [
+				0.062,
+				0.23,
+				0.062
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#c88a28"
+		},
+		"river_six": {
+			"cell": 38,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.15,
+				0.135
+			],
+			"stuff": "glass",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"river_case": {
+			"cell": 39,
+			"shape": "box",
+			"size": [
+				0.4,
+				0.19,
+				0.27
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"river_bottle": {
+			"cell": 40,
+			"shape": "wine",
+			"size": [
+				0.062,
+				0.23,
+				0.062
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#c88a28"
+		},
+		"peak_six": {
+			"cell": 41,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.15,
+				0.135
+			],
+			"stuff": "glass",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"peak_case": {
+			"cell": 42,
+			"shape": "box",
+			"size": [
+				0.4,
+				0.19,
+				0.27
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"peak_bottle": {
+			"cell": 43,
+			"shape": "wine",
+			"size": [
+				0.062,
+				0.23,
+				0.062
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#c88a28"
+		},
+		"stone_six": {
+			"cell": 44,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.15,
+				0.135
+			],
+			"stuff": "glass",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"stone_case": {
+			"cell": 45,
+			"shape": "box",
+			"size": [
+				0.4,
+				0.19,
+				0.27
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c88a28"
+		},
+		"stone_bottle": {
+			"cell": 46,
+			"shape": "wine",
+			"size": [
+				0.062,
+				0.23,
+				0.062
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#c88a28"
+		},
+		"red_wine": {
+			"cell": 47,
+			"shape": "wine",
+			"size": [
+				0.076,
+				0.3,
+				0.076
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#4a0612"
+		},
+		"rose_wine": {
+			"cell": 48,
+			"shape": "wine",
+			"size": [
+				0.076,
+				0.3,
+				0.076
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#e88a90"
+		},
+		"white_wine": {
+			"cell": 49,
+			"shape": "wine",
+			"size": [
+				0.076,
+				0.3,
+				0.076
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#d8cc80"
+		},
+		"crunchers": {
+			"cell": 50,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#e8c060"
+		},
+		"crunchers_bbq": {
+			"cell": 51,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#c88030"
+		},
+		"ridge": {
+			"cell": 52,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#e8d090"
+		},
+		"tortilla": {
+			"cell": 53,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#e8b040"
+		},
+		"cheezy": {
+			"cell": 54,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#f08a1a"
+		},
+		"pretzel": {
+			"cell": 55,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#a8682a"
+		},
+		"popped": {
+			"cell": 56,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#f4e8b0"
+		},
+		"gummy": {
+			"cell": 57,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#e0408a"
+		},
+		"corn_candy": {
+			"cell": 58,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.28,
+				0.075
+			],
+			"stuff": "bag",
+			"shiny": 0.7,
+			"liquid": "#f49a14"
+		},
+		"frosty": {
+			"cell": 59,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e8d090"
+		},
+		"choco": {
+			"cell": 60,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#3a1c08"
+		},
+		"honey": {
+			"cell": 61,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#d8a040"
+		},
+		"flakers": {
+			"cell": 62,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e8c060"
+		},
+		"rings": {
+			"cell": 63,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e86a9a"
+		},
+		"bran": {
+			"cell": 64,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#6a4420"
+		},
+		"moons": {
+			"cell": 65,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f0e8d0"
+		},
+		"squares": {
+			"cell": 66,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.3,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c8944a"
+		},
+		"oatmeal": {
+			"cell": 67,
+			"shape": "can",
+			"size": [
+				0.125,
+				0.18,
+				0.125
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#d8c090"
+		},
+		"pancake": {
+			"cell": 68,
+			"shape": "box",
+			"size": [
+				0.16,
+				0.25,
+				0.07
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f0e0b0"
+		},
+		"syrup": {
+			"cell": 69,
+			"shape": "bottle",
+			"size": [
+				0.075,
+				0.21,
+				0.075
+			],
+			"stuff": "pop",
+			"shiny": 0.8,
+			"liquid": "#5a2406"
+		},
+		"soup_chicken": {
+			"cell": 70,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#d8b860"
+		},
+		"soup_tomato": {
+			"cell": 71,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#c02010"
+		},
+		"corn_can": {
+			"cell": 72,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#e8c840"
+		},
+		"beans_can": {
+			"cell": 73,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#5a8a30"
+		},
+		"peas_can": {
+			"cell": 74,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#70a030"
+		},
+		"baked_can": {
+			"cell": 75,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#8a3a12"
+		},
+		"chili_can": {
+			"cell": 76,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#7a2a10"
+		},
+		"peach_can": {
+			"cell": 77,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.102,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#f4b050"
+		},
+		"tuna_can": {
+			"cell": 78,
+			"shape": "can",
+			"size": [
+				0.085,
+				0.04,
+				0.085
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#c8b890"
+		},
+		"spaghetti": {
+			"cell": 79,
+			"shape": "box",
+			"size": [
+				0.075,
+				0.27,
+				0.035
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e8d090"
+		},
+		"penne": {
+			"cell": 80,
+			"shape": "box",
+			"size": [
+				0.13,
+				0.2,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e8d090"
+		},
+		"mac": {
+			"cell": 81,
+			"shape": "box",
+			"size": [
+				0.16,
+				0.11,
+				0.04
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f4a020"
+		},
+		"rice": {
+			"cell": 82,
+			"shape": "box",
+			"size": [
+				0.13,
+				0.2,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f0ead8"
+		},
+		"marinara": {
+			"cell": 83,
+			"shape": "jar",
+			"size": [
+				0.08,
+				0.125,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#a81c0e"
+		},
+		"pickles": {
+			"cell": 84,
+			"shape": "jar",
+			"size": [
+				0.08,
+				0.125,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#a8b870"
+		},
+		"peanut": {
+			"cell": 85,
+			"shape": "jar",
+			"size": [
+				0.08,
+				0.125,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#b8742a"
+		},
+		"jelly": {
+			"cell": 86,
+			"shape": "jar",
+			"size": [
+				0.08,
+				0.125,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#4a0a4a"
+		},
+		"salsa": {
+			"cell": 87,
+			"shape": "jar",
+			"size": [
+				0.08,
+				0.125,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#c0401a"
+		},
+		"ketchup": {
+			"cell": 88,
+			"shape": "bottle",
+			"size": [
+				0.08,
+				0.235,
+				0.08
+			],
+			"stuff": "pop",
+			"shiny": 0.8,
+			"liquid": "#a8100c"
+		},
+		"mustard": {
+			"cell": 89,
+			"shape": "bottle",
+			"size": [
+				0.07,
+				0.2,
+				0.07
+			],
+			"stuff": "pop",
+			"shiny": 0.7,
+			"liquid": "#e0b40c"
+		},
+		"mayo": {
+			"cell": 90,
+			"shape": "jar",
+			"size": [
+				0.1,
+				0.15,
+				0.1
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#f4eed8"
+		},
+		"bbq": {
+			"cell": 91,
+			"shape": "bottle",
+			"size": [
+				0.08,
+				0.21,
+				0.08
+			],
+			"stuff": "pop",
+			"shiny": 0.8,
+			"liquid": "#4a1608"
+		},
+		"ranch": {
+			"cell": 92,
+			"shape": "bottle",
+			"size": [
+				0.075,
+				0.2,
+				0.075
+			],
+			"stuff": "pop",
+			"shiny": 0.7,
+			"liquid": "#f0ead8"
+		},
+		"oil": {
+			"cell": 93,
+			"shape": "bottle",
+			"size": [
+				0.09,
+				0.3,
+				0.09
+			],
+			"stuff": "pop",
+			"shiny": 0.85,
+			"liquid": "#d8b01a"
+		},
+		"olive": {
+			"cell": 94,
+			"shape": "wine",
+			"size": [
+				0.07,
+				0.28,
+				0.07
+			],
+			"stuff": "glass",
+			"shiny": 0.85,
+			"liquid": "#6a7a1a"
+		},
+		"flour": {
+			"cell": 95,
+			"shape": "box",
+			"size": [
+				0.17,
+				0.3,
+				0.1
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f4f0e4"
+		},
+		"sugar": {
+			"cell": 96,
+			"shape": "box",
+			"size": [
+				0.15,
+				0.24,
+				0.09
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f8f8f4"
+		},
+		"cakemix": {
+			"cell": 97,
+			"shape": "box",
+			"size": [
+				0.14,
+				0.2,
+				0.05
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#5a2c10"
+		},
+		"salt": {
+			"cell": 98,
+			"shape": "can",
+			"size": [
+				0.09,
+				0.14,
+				0.09
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f8f8f4"
+		},
+		"spice": {
+			"cell": 99,
+			"shape": "jar",
+			"size": [
+				0.045,
+				0.1,
+				0.045
+			],
+			"stuff": "glass",
+			"shiny": 0.8,
+			"liquid": "#a8341a"
+		},
+		"coffee_can": {
+			"cell": 100,
+			"shape": "can",
+			"size": [
+				0.15,
+				0.17,
+				0.15
+			],
+			"stuff": "can",
+			"shiny": 0.6,
+			"liquid": "#2a1408"
+		},
+		"coffee_bag": {
+			"cell": 101,
+			"shape": "bag",
+			"size": [
+				0.12,
+				0.2,
+				0.07
+			],
+			"stuff": "bag",
+			"shiny": 0.6,
+			"liquid": "#2a1408"
+		},
+		"tea": {
+			"cell": 102,
+			"shape": "box",
+			"size": [
+				0.14,
+				0.08,
+				0.07
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#6a3c18"
+		},
+		"cookies": {
+			"cell": 103,
+			"shape": "box",
+			"size": [
+				0.21,
+				0.07,
+				0.11
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#2a1408"
+		},
+		"chips_ahoy": {
+			"cell": 104,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.19,
+				0.07
+			],
+			"stuff": "bag",
+			"shiny": 0.5,
+			"liquid": "#8c5a2c"
+		},
+		"chocbar": {
+			"cell": 105,
+			"shape": "box",
+			"size": [
+				0.1,
+				0.035,
+				0.02
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#3a1c08"
+		},
+		"tp": {
+			"cell": 106,
+			"shape": "box",
+			"size": [
+				0.42,
+				0.24,
+				0.31
+			],
+			"stuff": "soft",
+			"shiny": 0.5,
+			"liquid": "#f8f8f4"
+		},
+		"towels": {
+			"cell": 107,
+			"shape": "box",
+			"size": [
+				0.29,
+				0.28,
+				0.2
+			],
+			"stuff": "soft",
+			"shiny": 0.5,
+			"liquid": "#f8f8f4"
+		},
+		"trashbags": {
+			"cell": 108,
+			"shape": "box",
+			"size": [
+				0.27,
+				0.13,
+				0.13
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#1a1a1a"
+		},
+		"foil": {
+			"cell": 109,
+			"shape": "box",
+			"size": [
+				0.32,
+				0.06,
+				0.06
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c8ccd0"
+		},
+		"wash": {
+			"cell": 110,
+			"shape": "jug",
+			"size": [
+				0.17,
+				0.3,
+				0.12
+			],
+			"stuff": "jug",
+			"shiny": 0.6,
+			"liquid": "#3a8ad0"
+		},
+		"wash2": {
+			"cell": 111,
+			"shape": "jug",
+			"size": [
+				0.17,
+				0.3,
+				0.12
+			],
+			"stuff": "jug",
+			"shiny": 0.6,
+			"liquid": "#f49a14"
+		},
+		"softener": {
+			"cell": 112,
+			"shape": "jug",
+			"size": [
+				0.17,
+				0.3,
+				0.12
+			],
+			"stuff": "jug",
+			"shiny": 0.6,
+			"liquid": "#e8a0d0"
+		},
+		"bleach": {
+			"cell": 113,
+			"shape": "jug",
+			"size": [
+				0.17,
+				0.3,
+				0.12
+			],
+			"stuff": "jug",
+			"shiny": 0.6,
+			"liquid": "#e8e8dc"
+		},
+		"dish": {
+			"cell": 114,
+			"shape": "bottle",
+			"size": [
+				0.08,
+				0.24,
+				0.05
+			],
+			"stuff": "pop",
+			"shiny": 0.7,
+			"liquid": "#1c8a4a"
+		},
+		"spray": {
+			"cell": 115,
+			"shape": "bottle",
+			"size": [
+				0.09,
+				0.27,
+				0.06
+			],
+			"stuff": "pop",
+			"shiny": 0.7,
+			"liquid": "#40a0e0"
+		},
+		"shampoo": {
+			"cell": 116,
+			"shape": "bottle",
+			"size": [
+				0.07,
+				0.21,
+				0.045
+			],
+			"stuff": "pop",
+			"shiny": 0.7,
+			"liquid": "#b89ae0"
+		},
+		"toothpaste": {
+			"cell": 117,
+			"shape": "box",
+			"size": [
+				0.19,
+				0.05,
+				0.05
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e8f4f8"
+		},
+		"vitamins": {
+			"cell": 118,
+			"shape": "jar",
+			"size": [
+				0.07,
+				0.12,
+				0.07
+			],
+			"stuff": "pop",
+			"shiny": 0.7,
+			"liquid": "#e8761a"
+		},
+		"diapers": {
+			"cell": 119,
+			"shape": "box",
+			"size": [
+				0.38,
+				0.27,
+				0.2
+			],
+			"stuff": "soft",
+			"shiny": 0.5,
+			"liquid": "#f8f8f4"
+		},
+		"dogfood": {
+			"cell": 120,
+			"shape": "box",
+			"size": [
+				0.4,
+				0.6,
+				0.14
+			],
+			"stuff": "soft",
+			"shiny": 0.5,
+			"liquid": "#6a3c18"
+		},
+		"catfood": {
+			"cell": 121,
+			"shape": "can",
+			"size": [
+				0.075,
+				0.04,
+				0.075
+			],
+			"stuff": "can",
+			"shiny": 0.7,
+			"liquid": "#a87050"
+		},
+		"litter": {
+			"cell": 122,
+			"shape": "box",
+			"size": [
+				0.3,
+				0.4,
+				0.14
+			],
+			"stuff": "soft",
+			"shiny": 0.5,
+			"liquid": "#b8b4a8"
+		},
+		"batteries": {
+			"cell": 123,
+			"shape": "box",
+			"size": [
+				0.12,
+				0.18,
+				0.02
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#3a3a3a"
+		},
+		"bulbs": {
+			"cell": 124,
+			"shape": "box",
+			"size": [
+				0.08,
+				0.13,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.5,
+			"liquid": "#f8f8f4"
+		},
+		"charcoal": {
+			"cell": 125,
+			"shape": "box",
+			"size": [
+				0.34,
+				0.46,
+				0.13
+			],
+			"stuff": "soft",
+			"shiny": 0.5,
+			"liquid": "#1a1a1a"
+		},
+		"motoroil": {
+			"cell": 126,
+			"shape": "bottle",
+			"size": [
+				0.1,
+				0.22,
+				0.06
+			],
+			"stuff": "pop",
+			"shiny": 0.5,
+			"liquid": "#2a1c08"
+		},
+		"candle": {
+			"cell": 127,
+			"shape": "jar",
+			"size": [
+				0.08,
+				0.1,
+				0.08
+			],
+			"stuff": "glass",
+			"shiny": 0.7,
+			"liquid": "#d8a0c0"
+		},
+		"tape": {
+			"cell": 128,
+			"shape": "box",
+			"size": [
+				0.06,
+				0.06,
+				0.12
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#90949a"
+		},
+		"pizza_a": {
+			"cell": 129,
+			"shape": "box",
+			"size": [
+				0.29,
+				0.045,
+				0.29
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c02010"
+		},
+		"pizza_b": {
+			"cell": 130,
+			"shape": "box",
+			"size": [
+				0.29,
+				0.045,
+				0.29
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c02010"
+		},
+		"dinner": {
+			"cell": 131,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.05,
+				0.16
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#c8a060"
+		},
+		"waffles": {
+			"cell": 132,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.16,
+				0.05
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#d8a040"
+		},
+		"popsicle": {
+			"cell": 133,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.08,
+				0.14
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#e0267a"
+		},
+		"fries": {
+			"cell": 134,
+			"shape": "bag",
+			"size": [
+				0.24,
+				0.32,
+				0.07
+			],
+			"stuff": "bag",
+			"shiny": 0.5,
+			"liquid": "#f0d080"
+		},
+		"frozen_peas": {
+			"cell": 135,
+			"shape": "bag",
+			"size": [
+				0.18,
+				0.25,
+				0.05
+			],
+			"stuff": "bag",
+			"shiny": 0.5,
+			"liquid": "#70a030"
+		},
+		"icecream_vanilla": {
+			"cell": 136,
+			"shape": "tub",
+			"size": [
+				0.15,
+				0.12,
+				0.15
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f6ecc8"
+		},
+		"icecream_choc": {
+			"cell": 137,
+			"shape": "tub",
+			"size": [
+				0.15,
+				0.12,
+				0.15
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#5a2c10"
+		},
+		"icecream_straw": {
+			"cell": 138,
+			"shape": "tub",
+			"size": [
+				0.15,
+				0.12,
+				0.15
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f0a0b8"
+		},
+		"icecream_mint": {
+			"cell": 139,
+			"shape": "tub",
+			"size": [
+				0.15,
+				0.12,
+				0.15
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#a8e0c0"
+		},
+		"milk_whole": {
+			"cell": 140,
+			"shape": "jug",
+			"size": [
+				0.155,
+				0.255,
+				0.155
+			],
+			"stuff": "jug",
+			"shiny": 0.5,
+			"liquid": "#f4f4ee"
+		},
+		"milk_two": {
+			"cell": 141,
+			"shape": "jug",
+			"size": [
+				0.155,
+				0.255,
+				0.155
+			],
+			"stuff": "jug",
+			"shiny": 0.5,
+			"liquid": "#f4f4ee"
+		},
+		"milk_skim": {
+			"cell": 142,
+			"shape": "jug",
+			"size": [
+				0.155,
+				0.255,
+				0.155
+			],
+			"stuff": "jug",
+			"shiny": 0.5,
+			"liquid": "#f4f4ee"
+		},
+		"milk_choc": {
+			"cell": 143,
+			"shape": "jug",
+			"size": [
+				0.13,
+				0.2,
+				0.13
+			],
+			"stuff": "jug",
+			"shiny": 0.5,
+			"liquid": "#7a4a2a"
+		},
+		"eggs": {
+			"cell": 144,
+			"shape": "box",
+			"size": [
+				0.3,
+				0.07,
+				0.11
+			],
+			"stuff": "glass",
+			"shiny": 0.5,
+			"liquid": "#f0c030"
+		},
+		"butter": {
+			"cell": 145,
+			"shape": "box",
+			"size": [
+				0.13,
+				0.065,
+				0.065
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f6e68a"
+		},
+		"yogurt_straw": {
+			"cell": 146,
+			"shape": "tub",
+			"size": [
+				0.08,
+				0.09,
+				0.08
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f4f0e4"
+		},
+		"yogurt_peach": {
+			"cell": 147,
+			"shape": "tub",
+			"size": [
+				0.08,
+				0.09,
+				0.08
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f4f0e4"
+		},
+		"yogurt_blue": {
+			"cell": 148,
+			"shape": "tub",
+			"size": [
+				0.08,
+				0.09,
+				0.08
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f4f0e4"
+		},
+		"yogurt_plain": {
+			"cell": 149,
+			"shape": "tub",
+			"size": [
+				0.08,
+				0.09,
+				0.08
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f4f0e4"
+		},
+		"sourcream": {
+			"cell": 150,
+			"shape": "tub",
+			"size": [
+				0.11,
+				0.08,
+				0.11
+			],
+			"stuff": "bag",
+			"shiny": 0.4,
+			"liquid": "#f4f4ee"
+		},
+		"shredded": {
+			"cell": 151,
+			"shape": "bag",
+			"size": [
+				0.17,
+				0.22,
+				0.04
+			],
+			"stuff": "bag",
+			"shiny": 0.5,
+			"liquid": "#f0b030"
+		},
+		"cheddar_block": {
+			"cell": 152,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.05,
+				0.08
+			],
+			"stuff": "cheese",
+			"shiny": 0.3,
+			"liquid": "#f0a020"
+		},
+		"wheel_gouda": {
+			"cell": 153,
+			"shape": "wheel",
+			"size": [
+				0.34,
+				0.1,
+				0.34
+			],
+			"stuff": "cheese",
+			"shiny": 0.45,
+			"liquid": "#f0c040"
+		},
+		"wheel_red": {
+			"cell": 154,
+			"shape": "wheel",
+			"size": [
+				0.26,
+				0.09,
+				0.26
+			],
+			"stuff": "cheese",
+			"shiny": 0.6,
+			"liquid": "#f4d870"
+		},
+		"wheel_black": {
+			"cell": 155,
+			"shape": "wheel",
+			"size": [
+				0.3,
+				0.11,
+				0.3
+			],
+			"stuff": "cheese",
+			"shiny": 0.55,
+			"liquid": "#f4e090"
+		},
+		"wedge_swiss": {
+			"cell": 156,
+			"shape": "wedge",
+			"size": [
+				0.18,
+				0.08,
+				0.14
+			],
+			"stuff": "cheese",
+			"shiny": 0.3,
+			"liquid": "#f4dc7a"
+		},
+		"wedge_blue": {
+			"cell": 157,
+			"shape": "wedge",
+			"size": [
+				0.16,
+				0.07,
+				0.12
+			],
+			"stuff": "cheese",
+			"shiny": 0.25,
+			"liquid": "#e8e8d8"
+		},
+		"wedge_parm": {
+			"cell": 158,
+			"shape": "wedge",
+			"size": [
+				0.15,
+				0.09,
+				0.12
+			],
+			"stuff": "cheese",
+			"shiny": 0.2,
+			"liquid": "#ecd890"
+		},
+		"brie": {
+			"cell": 159,
+			"shape": "wheel",
+			"size": [
+				0.2,
+				0.04,
+				0.2
+			],
+			"stuff": "cheese",
+			"shiny": 0.2,
+			"liquid": "#f4ead0"
+		},
+		"ribeye": {
+			"cell": 160,
+			"shape": "tray",
+			"size": [
+				0.21,
+				0.05,
+				0.15
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#6a0a0e"
+		},
+		"ground": {
+			"cell": 161,
+			"shape": "tray",
+			"size": [
+				0.21,
+				0.05,
+				0.15
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#6a0a0e"
+		},
+		"chicken": {
+			"cell": 162,
+			"shape": "tray",
+			"size": [
+				0.24,
+				0.07,
+				0.17
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#a87060"
+		},
+		"porkchop": {
+			"cell": 163,
+			"shape": "tray",
+			"size": [
+				0.21,
+				0.05,
+				0.15
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#8a3030"
+		},
+		"sausage": {
+			"cell": 164,
+			"shape": "tray",
+			"size": [
+				0.24,
+				0.05,
+				0.12
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#6a2412"
+		},
+		"bacon": {
+			"cell": 165,
+			"shape": "box",
+			"size": [
+				0.2,
+				0.025,
+				0.12
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#6a0a0e"
+		},
+		"hotdogs": {
+			"cell": 166,
+			"shape": "box",
+			"size": [
+				0.17,
+				0.03,
+				0.09
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#a84a30"
+		},
+		"turkey": {
+			"cell": 167,
+			"shape": "round",
+			"size": [
+				0.34,
+				0.2,
+				0.26
+			],
+			"stuff": "meat",
+			"shiny": 0.7,
+			"liquid": "#a87060"
+		},
+		"salmon": {
+			"cell": 168,
+			"shape": "tray",
+			"size": [
+				0.24,
+				0.04,
+				0.12
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#a84a30"
+		},
+		"shrimp": {
+			"cell": 169,
+			"shape": "tray",
+			"size": [
+				0.21,
+				0.05,
+				0.15
+			],
+			"stuff": "meat",
+			"shiny": 0.75,
+			"liquid": "#a87060"
+		},
+		"salami": {
+			"cell": 170,
+			"shape": "long",
+			"size": [
+				0.07,
+				0.34,
+				0.07
+			],
+			"stuff": "meat",
+			"shiny": 0.35,
+			"liquid": "#6a0a0e"
+		},
+		"ham": {
+			"cell": 171,
+			"shape": "round",
+			"size": [
+				0.2,
+				0.2,
+				0.17
+			],
+			"stuff": "meat",
+			"shiny": 0.6,
+			"liquid": "#8a3030"
+		},
+		"apple_red": {
+			"cell": 172,
+			"shape": "round",
+			"size": [
+				0.08,
+				0.075,
+				0.08
+			],
+			"stuff": "produce",
+			"shiny": 0.65,
+			"liquid": "#e8483a"
+		},
+		"apple_green": {
+			"cell": 173,
+			"shape": "round",
+			"size": [
+				0.08,
+				0.075,
+				0.08
+			],
+			"stuff": "produce",
+			"shiny": 0.6,
+			"liquid": "#b8d850"
+		},
+		"orange": {
+			"cell": 174,
+			"shape": "round",
+			"size": [
+				0.085,
+				0.085,
+				0.085
+			],
+			"stuff": "produce",
+			"shiny": 0.4,
+			"liquid": "#f8a830"
+		},
+		"lemon": {
+			"cell": 175,
+			"shape": "round",
+			"size": [
+				0.065,
+				0.085,
+				0.065
+			],
+			"stuff": "produce",
+			"shiny": 0.45,
+			"liquid": "#f8e850"
+		},
+		"lime": {
+			"cell": 176,
+			"shape": "round",
+			"size": [
+				0.055,
+				0.06,
+				0.055
+			],
+			"stuff": "produce",
+			"shiny": 0.45,
+			"liquid": "#8cc830"
+		},
+		"tomato": {
+			"cell": 177,
+			"shape": "round",
+			"size": [
+				0.08,
+				0.07,
+				0.08
+			],
+			"stuff": "produce",
+			"shiny": 0.7,
+			"liquid": "#e84a20"
+		},
+		"potato": {
+			"cell": 178,
+			"shape": "round",
+			"size": [
+				0.1,
+				0.07,
+				0.07
+			],
+			"stuff": "produce",
+			"shiny": 0.1,
+			"liquid": "#c8a468"
+		},
+		"onion": {
+			"cell": 179,
+			"shape": "round",
+			"size": [
+				0.085,
+				0.08,
+				0.085
+			],
+			"stuff": "produce",
+			"shiny": 0.35,
+			"liquid": "#e8b060"
+		},
+		"pepper_red": {
+			"cell": 180,
+			"shape": "round",
+			"size": [
+				0.085,
+				0.1,
+				0.085
+			],
+			"stuff": "produce",
+			"shiny": 0.8,
+			"liquid": "#e83020"
+		},
+		"pepper_yellow": {
+			"cell": 181,
+			"shape": "round",
+			"size": [
+				0.085,
+				0.1,
+				0.085
+			],
+			"stuff": "produce",
+			"shiny": 0.8,
+			"liquid": "#f8d830"
+		},
+		"pepper_green": {
+			"cell": 182,
+			"shape": "round",
+			"size": [
+				0.085,
+				0.1,
+				0.085
+			],
+			"stuff": "produce",
+			"shiny": 0.8,
+			"liquid": "#58a830"
+		},
+		"avocado": {
+			"cell": 183,
+			"shape": "round",
+			"size": [
+				0.07,
+				0.1,
+				0.07
+			],
+			"stuff": "produce",
+			"shiny": 0.3,
+			"liquid": "#4a5a24"
+		},
+		"peach": {
+			"cell": 184,
+			"shape": "round",
+			"size": [
+				0.08,
+				0.08,
+				0.08
+			],
+			"stuff": "produce",
+			"shiny": 0.15,
+			"liquid": "#e0604a"
+		},
+		"pumpkin": {
+			"cell": 185,
+			"shape": "round",
+			"size": [
+				0.34,
+				0.27,
+				0.34
+			],
+			"stuff": "produce",
+			"shiny": 0.35,
+			"liquid": "#d05a08"
+		},
+		"melon": {
+			"cell": 186,
+			"shape": "round",
+			"size": [
+				0.26,
+				0.24,
+				0.36
+			],
+			"stuff": "produce",
+			"shiny": 0.5,
+			"liquid": "#1c4a18"
+		},
+		"cantaloupe": {
+			"cell": 187,
+			"shape": "round",
+			"size": [
+				0.17,
+				0.16,
+				0.17
+			],
+			"stuff": "produce",
+			"shiny": 0.15,
+			"liquid": "#a89050"
+		},
+		"lettuce": {
+			"cell": 188,
+			"shape": "head",
+			"size": [
+				0.19,
+				0.17,
+				0.19
+			],
+			"stuff": "produce",
+			"shiny": 0.35,
+			"liquid": "#7ab830"
+		},
+		"cabbage": {
+			"cell": 189,
+			"shape": "head",
+			"size": [
+				0.2,
+				0.19,
+				0.2
+			],
+			"stuff": "produce",
+			"shiny": 0.4,
+			"liquid": "#9cc868"
+		},
+		"broccoli": {
+			"cell": 190,
+			"shape": "head",
+			"size": [
+				0.15,
+				0.17,
+				0.15
+			],
+			"stuff": "produce",
+			"shiny": 0.1,
+			"liquid": "#3a7a2a"
+		},
+		"cucumber": {
+			"cell": 191,
+			"shape": "long",
+			"size": [
+				0.05,
+				0.22,
+				0.05
+			],
+			"stuff": "produce",
+			"shiny": 0.5,
+			"liquid": "#a8c870"
+		},
+		"carrot": {
+			"cell": 192,
+			"shape": "long",
+			"size": [
+				0.04,
+				0.2,
+				0.04
+			],
+			"stuff": "produce",
+			"shiny": 0.25,
+			"liquid": "#e8700e"
+		},
+		"corn": {
+			"cell": 193,
+			"shape": "long",
+			"size": [
+				0.06,
+				0.24,
+				0.06
+			],
+			"stuff": "produce",
+			"shiny": 0.3,
+			"liquid": "#e8d040"
+		},
+		"banana": {
+			"cell": 194,
+			"shape": "long",
+			"size": [
+				0.05,
+				0.2,
+				0.05
+			],
+			"stuff": "produce",
+			"shiny": 0.3,
+			"liquid": "#f0e0a0"
+		},
+		"strawberries": {
+			"cell": 195,
+			"shape": "tray",
+			"size": [
+				0.15,
+				0.08,
+				0.11
+			],
+			"stuff": "produce",
+			"shiny": 0.8,
+			"liquid": "#c81420"
+		},
+		"mushrooms": {
+			"cell": 196,
+			"shape": "tray",
+			"size": [
+				0.15,
+				0.07,
+				0.11
+			],
+			"stuff": "produce",
+			"shiny": 0.6,
+			"liquid": "#a89878"
+		},
+		"loaf_white": {
+			"cell": 197,
+			"shape": "bag",
+			"size": [
+				0.13,
+				0.12,
+				0.27
+			],
+			"stuff": "soft",
+			"shiny": 0.6,
+			"liquid": "#f0e0b8"
+		},
+		"loaf_wheat": {
+			"cell": 198,
+			"shape": "bag",
+			"size": [
+				0.13,
+				0.12,
+				0.27
+			],
+			"stuff": "soft",
+			"shiny": 0.6,
+			"liquid": "#a87040"
+		},
+		"buns": {
+			"cell": 199,
+			"shape": "bag",
+			"size": [
+				0.2,
+				0.1,
+				0.14
+			],
+			"stuff": "soft",
+			"shiny": 0.6,
+			"liquid": "#d8b070"
+		},
+		"bagels": {
+			"cell": 200,
+			"shape": "bag",
+			"size": [
+				0.15,
+				0.1,
+				0.13
+			],
+			"stuff": "soft",
+			"shiny": 0.6,
+			"liquid": "#c89a5a"
+		},
+		"donuts": {
+			"cell": 201,
+			"shape": "box",
+			"size": [
+				0.26,
+				0.09,
+				0.19
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#d8a060"
+		},
+		"cake": {
+			"cell": 202,
+			"shape": "box",
+			"size": [
+				0.26,
+				0.12,
+				0.26
+			],
+			"stuff": "card",
+			"shiny": 0.5,
+			"liquid": "#f8f0e8"
+		},
+		"muffins": {
+			"cell": 203,
+			"shape": "tray",
+			"size": [
+				0.2,
+				0.11,
+				0.14
+			],
+			"stuff": "soft",
+			"shiny": 0.7,
+			"liquid": "#b8824a"
+		},
+		"baguette": {
+			"cell": 204,
+			"shape": "long",
+			"size": [
+				0.075,
+				0.62,
+				0.075
+			],
+			"stuff": "soft",
+			"shiny": 0.2,
+			"liquid": "#e8c890"
+		},
+		"pie": {
+			"cell": 205,
+			"shape": "wheel",
+			"size": [
+				0.25,
+				0.05,
+				0.25
+			],
+			"stuff": "soft",
+			"shiny": 0.2,
+			"liquid": "#c8301a"
+		},
+		"shipper": {
+			"cell": 206,
+			"shape": "box",
+			"size": [
+				0.5,
+				0.36,
+				0.38
+			],
+			"stuff": "card",
+			"shiny": 0.1,
+			"liquid": "#b8925c"
+		},
+		"shipper_cold": {
+			"cell": 207,
+			"shape": "box",
+			"size": [
+				0.5,
+				0.3,
+				0.38
+			],
+			"stuff": "card",
+			"shiny": 0.1,
+			"liquid": "#b8925c"
+		},
+		"shipper_fragile": {
+			"cell": 208,
+			"shape": "box",
+			"size": [
+				0.42,
+				0.42,
+				0.42
+			],
+			"stuff": "card",
+			"shiny": 0.1,
+			"liquid": "#b8925c"
+		}
+	}
+}

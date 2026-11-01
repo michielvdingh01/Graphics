@@ -10,6 +10,8 @@ func _describe() -> void:
 	_smoke_grenade()
 	_cell()
 	_ammo_can()
+	_cart()
+	_flashlight()
 
 
 ## What mends the player: a canister a hand long with a window down its side
@@ -123,3 +125,68 @@ func _grenade() -> void:
 	for side: float in [-1.0, 1.0]:
 		_block("gun_steel", Vector3(side * 0.006, 0.057, 0.003), Vector3(0.0025, 0.008, 0.012), 0.001)
 	_bar("gun_bare", Vector3(-0.006, 0.058, 0.005), Vector3(0.006, 0.058, 0.005), 0.0016, 8)
+
+
+## A cart with a basket of wire, as long as a person is wide across the
+## shoulders twice over. It stands on the ground with its handle towards +Z.
+func _cart() -> void:
+	model("cart")
+	const LONG := 0.92
+	const WIDE := 0.54
+	const LOW := 0.46
+	const HIGH := 0.92
+	var steel := "bare_steel"
+	# The chassis: two rails from the castors up to the handle.
+	for x: float in [-1.0, 1.0]:
+		var side := x * WIDE * 0.42
+		_bar(steel, Vector3(side, 0.14, -LONG * 0.5), Vector3(side, 0.14, LONG * 0.42), 0.012, 6)
+		_bar(steel, Vector3(side, 0.14, LONG * 0.42), Vector3(side * 1.1, 1.0, LONG * 0.56), 0.012, 6)
+		_bar(steel, Vector3(side, 0.14, -LONG * 0.28), Vector3(side, LOW, -LONG * 0.28), 0.009, 6)
+		for z: float in [-LONG * 0.46, LONG * 0.38]:
+			_bar(steel, Vector3(side, 0.14, z), Vector3(side, 0.09, z), 0.01, 6)
+			_bar("rubber", Vector3(side - 0.015, 0.05, z), Vector3(side + 0.015, 0.05, z), 0.05, 8)
+	for z: float in [-LONG * 0.46, LONG * 0.38]:
+		_bar(steel, Vector3(-WIDE * 0.42, 0.14, z), Vector3(WIDE * 0.42, 0.14, z), 0.01, 6)
+	# A tray over the wheels, and the handle.
+	_bar("shop_red", Vector3(-WIDE * 0.47, 1.0, LONG * 0.56), Vector3(WIDE * 0.47, 1.0, LONG * 0.56), 0.02, 8)
+	for i in 8:
+		var z := -LONG * 0.4 + i * LONG * 0.11
+		_bar(steel, Vector3(-WIDE * 0.38, 0.2, z), Vector3(WIDE * 0.38, 0.2, z), 0.004, 4)
+	# The basket, narrower at the bottom and at the nose.
+	var corners := func(y: float, t: float) -> Array:
+		var taper := lerpf(0.82, 1.0, t)
+		var z0 := -LONG * 0.5 * lerpf(0.9, 1.0, t)
+		var z1 := LONG * 0.46
+		return [Vector3(-WIDE * 0.5 * taper * 0.8, y, z0), Vector3(WIDE * 0.5 * taper * 0.8, y, z0), Vector3(WIDE * 0.5 * taper, y, z1), Vector3(-WIDE * 0.5 * taper, y, z1)]
+	var rings := 7
+	for ring in rings:
+		var t := float(ring) / (rings - 1)
+		var y := lerpf(LOW, HIGH, t)
+		var c: Array = corners.call(y, t)
+		var thick := 0.008 if ring == rings - 1 else 0.0035
+		for i in 4:
+			_bar(steel, c[i], c[(i + 1) % 4], thick, 4)
+	var low: Array = corners.call(LOW, 0.0)
+	var top: Array = corners.call(HIGH, 1.0)
+	for i in 4:
+		var next := (i + 1) % 4
+		var bars := 13 if i % 2 == 1 else 9
+		for b in bars:
+			var u := float(b) / (bars - 1)
+			_bar(steel, (low[i] as Vector3).lerp(low[next], u), (top[i] as Vector3).lerp(top[next], u), 0.0035, 4)
+	# The floor of the basket.
+	for b in 9:
+		var u := float(b) / 8.0
+		_bar(steel, (low[0] as Vector3).lerp(low[3], u), (low[1] as Vector3).lerp(low[2], u), 0.0035, 4)
+		_bar(steel, (low[0] as Vector3).lerp(low[1], u), (low[3] as Vector3).lerp(low[2], u), 0.0035, 4)
+
+
+## A flashlight for a weapon: a black tube with a bezel, as long as a hand. It
+## lies along -Z, its lens that way.
+func _flashlight() -> void:
+	model("flashlight")
+	_bar("gun_polymer", Vector3(0, 0, 0.07), Vector3(0, 0, -0.05), 0.0125, 12)
+	_turned("gun_polymer", Vector3(0, 0, -0.05), Vector3.FORWARD, PackedVector2Array([Vector2(0.0125, 0.0), Vector2(0.018, 0.025), Vector2(0.019, 0.05), Vector2(0.0, 0.05)]), 12)
+	_bar("shop_cool", Vector3(0, 0, -0.098), Vector3(0, 0, -0.101), 0.017, 12)
+	_bar("gun_grip", Vector3(0, 0.0125, 0.03), Vector3(0, 0.017, 0.03), 0.006, 6)
+	_block("gun_polymer", Vector3(0, -0.018, 0.0), Vector3(0.022, 0.012, 0.07), 0.002)

@@ -50,6 +50,7 @@ const PRINT_ACROSS := 0.36
 ## How much of its own colour a print gives the sand it is pressed in.
 const PRINT_STAIN := 0.4
 const DECALS := "res://assets/decals/"
+const SPILL := "res://assets/goods/spill.png"
 
 ## Seconds the effects have been running. Bursts are timed against this.
 var time := 0.0
@@ -83,6 +84,7 @@ var _pool_texture: Texture2D
 ## What makes blood shine: no occlusion, hardly any roughness, no metal.
 var _wet: ImageTexture
 var _stains: Array[Decal] = []
+var _spill_texture: Texture2D
 var _holes: Array[Decal] = []
 ## The print of a boot in sand, and its dent.
 var _print_textures: Array[Texture2D] = []
@@ -1554,6 +1556,17 @@ func _stain(texture: Texture2D, frame: Transform3D, across: float) -> Decal:
 	while _stains.size() > MAX_STAINS:
 		_stains.pop_front().queue_free()
 	return decal
+
+
+## Lays a puddle of something that was spilt on the floor at `position`, as
+## large as `across` metres once it has run out, in its own colour.
+func spill(position: Vector3, colour: Color, across: float) -> void:
+	if _spill_texture == null:
+		_spill_texture = load(SPILL)
+	var decal := _stain(_spill_texture, Transform3D(Basis(), position), across * 0.4)
+	decal.modulate = colour
+	decal.size.y = 0.3
+	decal.create_tween().tween_property(decal, ^"size", Vector3(across, 0.3, across), 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
 ## Adds a mark that stays for as long as the level does.

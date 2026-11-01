@@ -1,4 +1,4 @@
-extends "res://tools/kit/alpine.gd"
+extends "res://tools/kit/shop.gd"
 ## The kit: everything that is built in code and can stand in any level. A
 ## level extends this file, or its plan does.
 ##
@@ -35,6 +35,9 @@ extends "res://tools/kit/alpine.gd"
 ##                            marterl(), hunting_stand(), slant_fence(),
 ##                            rail_fence(), hay_pole(), woodpile(),
 ##                            footbridge(), pole_line(), trough()
+##   tools/kit/shop.gd        what stands in a supermarket: gondola(),
+##                            cold_doors(), cold_case(), heap(), pallet_of(),
+##                            and stock() for everything on sale
 ##
 ## Something new goes into the drawer it belongs in, or into a new one before
 ## the rooms, which lay out a level with everything the others hold. The

@@ -61,6 +61,11 @@ func _process(_delta: float) -> void:
 	if _prompt.visible:
 		var data: VehicleData = near.vehicle.data
 		_prompt.text = "[E]  %s  %s" % ["Drive" if near.seat == 0 else "Get in", data.display_name.to_upper()]
+	elif not _vehicle and player.has_control():
+		var cart: Node3D = player.cart_in_reach()
+		if cart:
+			_prompt.visible = true
+			_prompt.text = "[E]  LET GO" if cart.pusher == player else "[E]  PUSH CART"
 	var riding := _vehicle != null
 	for label: Label in [_name, _gauges, _state, _keys]:
 		label.visible = riding

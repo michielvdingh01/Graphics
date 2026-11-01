@@ -91,6 +91,8 @@ var _weapon := 0
 var _doing := 0
 ## Seconds left that its weapon is up for a shot it fired.
 var _shooting := 0.0
+## The flashlight on its weapon, once it has had one.
+var _torch: SpotLight3D
 ## What was heard of it of late: [seconds, position, yaw, pitch, velocity].
 var _reports: Array[Array] = []
 var _label := Label3D.new()
@@ -351,6 +353,21 @@ func net_state(at: Vector3, yaw: float, pitch: float, speed: Vector3, doing: int
 
 ## It fired `weapon`, a place in the armory; `ends` is where each pellet
 ## ended up.
+## Its player has switched the flashlight on the weapon on or off.
+func torch(on: bool) -> void:
+	if _torch == null:
+		_torch = SpotLight3D.new()
+		_torch.light_color = WEAPONS.TORCH_COLOUR
+		_torch.light_energy = WEAPONS.TORCH_ENERGY
+		_torch.spot_range = WEAPONS.TORCH_REACH
+		_torch.spot_angle = WEAPONS.TORCH_ANGLE
+		_torch.spot_angle_attenuation = 1.6
+		_torch.light_bake_mode = Light3D.BAKE_DISABLED
+		head.add_child(_torch)
+		_torch.position = Vector3(0.18, -0.2, -0.4)
+	_torch.visible = on
+
+
 func fired(weapon: int, ends: PackedVector3Array) -> void:
 	if _rig == null or dead:
 		return

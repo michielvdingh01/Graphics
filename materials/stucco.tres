@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/white_stucco/white_stucco_diff.jpg" id="diff"]
+[ext_resource type="Texture2D" path="res://assets/textures/white_stucco/white_stucco_nor_gl.jpg" id="nor"]
+[ext_resource type="Texture2D" path="res://assets/textures/white_stucco/white_stucco_arm.jpg" id="arm"]
+
+[resource]
+albedo_color = Color(0.86, 0.8, 0.68, 1)
+albedo_texture = ExtResource("diff")
+orm_texture = ExtResource("arm")
+normal_enabled = true
+normal_texture = ExtResource("nor")
+ao_enabled = true
+uv1_scale = Vector3(0.4, 0.4, 0.4)

@@ -83,6 +83,7 @@ func _ready() -> void:
 	_adopt_tinder(level)
 	_adopt_burning()
 	_adopt_exits(level)
+	_adopt_mains(level)
 	_rehearse()
 
 
@@ -320,6 +321,14 @@ func _adopt_exits(level: Node3D) -> void:
 		var home := door.get_parent()
 		var contents := home.get_node_or_null("Contents") if home.is_in_group("level_zone") else null
 		(contents if contents else home).add_child(daylight)
+
+
+## The mains of a shop can be shot like anything here, and whoever comes in
+## later has to hear that they are gone: see scripts/mains.gd.
+func _adopt_mains(level: Node3D) -> void:
+	var mains := level.get_node_or_null(^"Mains")
+	if mains:
+		mains.reparent(self)
 
 
 ## Has everything that breaking and burning bring into view drawn once now,

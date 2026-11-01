@@ -960,7 +960,10 @@ func net_snapshot() -> Dictionary:
 		if state:
 			broken.append(i)
 			broken.append(state)
+	# What has gone from the shelves of a shop: see scripts/goods.gd.
+	var goods := get_tree().get_first_node_in_group(&"goods")
 	return {"fallen": fallen, "started": started, "blown": blown, "broken": broken, "checkpoint": _checkpoint, "kills": kills, "robots": _robot_states(),
+		"goods": goods.net_taken() if goods else PackedInt32Array(),
 		"match": Match.net_snapshot() if Match.active else {}}
 
 
@@ -978,6 +981,9 @@ func net_restore(state: Dictionary) -> void:
 	for i in range(0, broken.size(), 2):
 		if broken[i] < _breakables.size():
 			_breakables[broken[i]].net_restore(broken[i + 1])
+	var goods := get_tree().get_first_node_in_group(&"goods")
+	if goods:
+		goods.net_take(state.goods)
 	_checkpoint = state.checkpoint
 	if not Match.active:
 		kills = state.kills
