@@ -389,6 +389,18 @@ func around(side: int, from: float, to: float) -> PackedInt32Array:
 	return found
 
 
+## Of the spots of around(), those at least `by` metres nearer to the other end
+## to walk than the end of `side` is: the ground of a base on the way to the
+## other side, without what lies behind it, out on the edge of the arena. A
+## negative `by` lets that many metres behind it in.
+func forward(side: int, from: float, to: float, by: float) -> PackedInt32Array:
+	var found := PackedInt32Array()
+	for spot in around(side, from, to):
+		if walks[1 - side][spot] <= length() - by:
+			found.append(spot)
+	return found
+
+
 ## A spot to walk to for want of anything better.
 func anywhere() -> Vector3:
 	return spots[randi() % spots.size()]
