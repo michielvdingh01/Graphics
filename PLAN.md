@@ -5626,3 +5626,60 @@ Op 31 oktober 2026 op Michiels woord gemerged en gepubliceerd als `build-2026103
 **Getest op de app uit de zip, met een lege thuismap:** drie kopieën over het echte adres 103, `--matchtest` 140, en Dunes, Alps, Dunes at night, Party in Works, een wedstrijd in de Dunes en capture the flag in Powerhouse kwamen allemaal in beeld, in 8 tot 19 seconden. `build-202610312008` werkte zichzelf naar deze build bij (van een server hier, zonder venster): de handtekening klopt en de nieuwe app startte.
 
 **Niet gezien:** deze build op twee echte machines en de update met venster op de Air.
+
+## Capture the flag: terugkomen ver van de vlag, en eromheen verspreid
+
+Op 1 november 2026 twee punten van Michiel. In de duinen spawnen de vijanden te dicht bij hun eigen vlag: er blijven er steeds bij komen, zodat hij bijna niet te veroveren is. En de plekken rondom de vlag moeten beter verspreid. Zijn vraag waar hij het voorwerp kiest, had al een antwoord: scherm Multiplayer, Kind op Capture the flag, knop Prize.
+
+**De oorzaak** waren drie dingen samen.
+
+- De grond van een basis was in elke arena 6 tot 25 m lopen van de standaard (`BASE` in `scripts/modes/ctf.gd`). Met twee seconden wachten stond wie je neerschoot dus binnen een paar seconden weer naast je.
+- De regel tegen terugkomen waar net iemand terugkwam (`CROWDED`, 30 m) deed daardoor niets: 30 m is de hele basis, dus alle plekken telden even zwaar.
+- `pick()` zoekt, ook op een basis, de plek bij je teamgenoten en op 35 tot 60 m van de vijand. Staat er een aanvaller bij de vlag, dan is dat juist de kant van de vlag.
+
+**Wat er veranderd is** (`scripts/modes/ctf.gd`, `scripts/arena.gd`):
+
+- De grond van een basis is nu een aandeel van de loopafstand tussen de standaards: 20% tot 45%, met een bovengrens voor de Alpen. Op 45% ligt elke plek nog op je eigen helft.
+- Op die grond zijn alle plekken even goed. Er wordt geloot, en alleen plekken waar net iemand terugkwam tellen tegen. Waar het gevecht is en waar je vrienden zijn, telt hier niet meer. Team deathmatch en ieder voor zich kiezen zoals eerst.
+- Is niets op die grond veilig, dan de rest van de eigen helft, niet binnen 6 m van de standaard (`CLEAR`). Dat stond in het plan onder "Wedstrijden: teams, bots en een buit" en was nooit gebouwd. Zonder dit steeg de fabriek naar 22 noodspawns in 120 s.
+- De tweede ronde in `pick()`, de plekken het verst van de vijand, draait nu ook op een basis zonder teamgenoten. Hij sloeg die over omdat de eerste ronde daar al op afstand sorteerde; op een basis wordt nu geloot.
+- De regel "binnen 25 m lopen van je standaard" uit dat plan geldt niet meer.
+- Alleen de host kiest een plek, dus `Net.VERSION` blijft gelijk.
+
+| Arena | Lopen tussen de standaards | Was | Nu |
+|---|---|---|---|
+| Fabriek | 73 m | 6 tot 25 m | 15 tot 33 m |
+| Depot | 74 m | 6 tot 25 m | 15 tot 33 m |
+| Centrale | 177 m | 6 tot 25 m | 35 tot 80 m |
+| Duinen, ook 's nachts | 209 m | 6 tot 25 m | 42 tot 94 m |
+| Fabrieksterrein | 219 m | 6 tot 25 m | 44 tot 99 m |
+| Alpen | 1241 m | 6 tot 25 m | 45 tot 110 m |
+
+**Gemeten**, zonder GPU, alleen bots, met de oude code in een kloon ernaast (`tools/test_match.sh --match=ctf:<level>:<size> --only-bots --soak=<s>`, dat dit nu zelf afdrukt). Load 4 tot 5, de editor van Michiel open.
+
+| | Duinen oud | Duinen nieuw | Fabriek oud | Fabriek nieuw |
+|---|---|---|---|---|
+| Runs | 3 van 180 s | 5 van 180 s | 3 van 120 s | 3 van 120 s |
+| Afstand tot de eigen standaard, mediaan | 17 tot 21 m | 64 tot 69 m | 9 tot 12 m | 16 tot 20 m |
+| Kleinste afstand, hemelsbreed | 10 tot 12 m | 31 tot 40 m | 4 tot 8 m | 6 tot 10 m |
+| Afstand tot de vorige terugkomer, mediaan | 20 tot 31 m | 64 tot 115 m | 5 tot 8 m | 6 tot 13 m |
+| Gemiddeld van een kant binnen 30 m van de eigen standaard | 2,9 en 3,0 van de 6 (twee runs) | 2,1 tot 2,4 | 2,0 en 2,1 van de 3 (twee runs) | 1,7 |
+| Noodspawns per run | 3, 0, 0 | 0 in alle vijf | 3, 6, 2 | 1, 3, 1 |
+| Buit gepakt, alle runs samen | 0 | 8 | 3 | 24 |
+| Gescoord, alle runs samen | 0 | 0 | 0 | 4 |
+
+- In de duinen kwamen in de oude stand alle terugkomers binnen 30 m van hun standaard terug, in de nieuwe niemand. Wie er nog staat zijn vooral de twee wachters (`JOBS`): die horen daar.
+- Twaalf keer kiezen met een vijand op de standaard, 300 keer herhaald: de mediaan tot de vorige terugkomer was op zijn laagst 32,6 m, de kleinste afstand tot de standaard 30,6 m, en in 3600 keer kiezen geen noodspawn. Op die cijfers staan de drempels van de nieuwe controle (30 en 25 m); een controle op minstens vier richtingen heb ik weer weggehaald, want die viel in een derde van de gevallen om.
+- De richtingen zijn minder veranderd dan de afstanden: de drukste van acht richtingen rond de standaard kreeg in de duinen 21 tot 53% en krijgt nu 24 tot 45%. Blauw staat tegen de muur van het park, dus daar komt niemand vandaan. In de fabriek ligt de standaard aan het eind van de arena, en daarachter is geen grond.
+- Eerdere stand met de eerste versie, op twee andere arena's, voor de reserve en de tweede ronde erin zaten: fabrieksterrein 120 s, 76 doden, 0 noodspawns; depot 90 s, 45 doden, 7 noodspawns, 9 keer gepakt, 1 keer gescoord. Die twee zijn daarna niet opnieuw gedraaid.
+
+**Vastlopen in de duinen is toegenomen, en dat is niet opgelost.** Bots liepen per run 2, 7 en 11 keer vast en nu 7, 7, 13, 21, 25 en 66 keer. Dat zijn geen slechte spawnplekken: een bot op elk van de 95 plekken van de grond (38 van blauw, 57 van oranje) gezet, liep er overal van weg. Het is wat bij "Het potje bijgesteld" al staat: het navmesh van het land klopt niet overal met wat er staat, en wie meer over dat land loopt, stoot er vaker op. De plekken uit de log: (290, 130), een bot 21 keer achter elkaar, en de duinhellingen bij (126, 94) en (140, 101). Een bot die zo blijft hangen staat een halve minuut stil, ver van de vlag. Waar de 66 vandaan kwamen is niet gelogd. Een speler kan springen en heeft hier geen last van, maar dat heb ik niet geprobeerd.
+
+**Getest:** `tools/selftest.sh` (634), `tools/test_match.sh` (141) en `tools/nettest.sh --match` (103) slagen. Nieuw in de wedstrijdtest: in de duinen, met een vijand op de standaard, komt een kant verder dan 25 m daarvandaan terug en niet op de plek van de vorige.
+
+**Niet bekeken of beoordeeld:**
+
+- Niemand heeft dit gespeeld. Alle cijfers zijn van bots; hoe het voelt om als mens een vlag te veroveren, is niet gemeten.
+- Je komt nu verder van de jeeps terug. Het begin van de wedstrijd staat nog bij de voertuigen, maar wie terugkomt staat in de duinen meestal zo'n 65 m van de standaard, en de jeeps staan op 14 tot 17 m daarvan. Daar had Michiel op 31 oktober juist om gevraagd.
+- De twee seconden wachten (`respawn`) zijn gelijk gebleven. Is het nog te veel, dan is dat het volgende getal om aan te draaien.
+- De bots halen de buit in de duinen nog steeds zelden, met 8 keer pakken en geen enkele score in vijf runs. Dat zit in hoe ze halen, niet in waar de ander terugkomt.

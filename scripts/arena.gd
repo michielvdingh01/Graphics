@@ -263,10 +263,14 @@ func line_up(side: int, count: int) -> Array[Transform3D]:
 ## the nearest enemy. If no spot is safe, the one furthest from them all,
 ## which is counted in `emergencies`.
 ##
-## `among` narrows it down to those spots, as around() gives them: a base.
+## `among` narrows it down to those spots, as around() gives them: a base. All
+## of that ground is as good, wherever the fight or the friends are: the draw
+## goes round the base, and only ground where others came back counts against
+## a spot, so that nobody is waited for and no side comes back in one stream.
+## If none of it is safe, the spots of `rest` are looked at the same way.
 ## `watchers` are those of `foes` who are people: they see as far as
 ## WATCHED_FROM, bots only SEEN_FROM.
-func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := PackedInt32Array(), watchers := PackedVector3Array()) -> Transform3D:
+func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := PackedInt32Array(), watchers := PackedVector3Array(), rest := PackedInt32Array()) -> Transform3D:
 	var gaps := PackedFloat32Array()
 	var worth := PackedFloat32Array()
 	gaps.resize(spots.size())
@@ -277,7 +281,9 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := Packed
 			gap = minf(gap, spots[i].distance_to(foe))
 		gaps[i] = gap
 		worth[i] = gap
-		if not friends.is_empty():
+		if not among.is_empty():
+			worth[i] = randf() * CROWDING
+		elif not friends.is_empty():
 			var near := INF
 			for friend in friends:
 				near = minf(near, spots[i].distance_to(friend))
@@ -294,9 +300,14 @@ func pick(foes: PackedVector3Array, friends: PackedVector3Array, among := Packed
 	if good.is_empty():
 		# Where the fight is, everything may be in somebody's sight: then the
 		# spots furthest from the enemy, as when there are no friends.
-		order.sort_custom(func(a: int, b: int) -> bool: return gaps[a] - _crowd(a) > gaps[b] - _crowd(b))
-		if not friends.is_empty():
+		var furthest := func(a: int, b: int) -> bool: return gaps[a] - _crowd(a) > gaps[b] - _crowd(b)
+		order.sort_custom(furthest)
+		if not friends.is_empty() or not among.is_empty():
 			good = _safe(order.slice(0, LOOKS), gaps, foes, friends, watchers, 1)
+		if good.is_empty() and not rest.is_empty():
+			var others := Array(rest)
+			others.sort_custom(furthest)
+			good = _safe(others.slice(0, LOOKS), gaps, foes, friends, watchers, 1)
 	var best := -1
 	if not good.is_empty():
 		best = good.pick_random()
