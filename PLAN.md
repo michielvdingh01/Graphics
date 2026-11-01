@@ -5684,6 +5684,50 @@ Op 1 november 2026 twee punten van Michiel. In de duinen spawnen de vijanden te 
 - De twee seconden wachten (`respawn`) zijn gelijk gebleven. Is het nog te veel, dan is dat het volgende getal om aan te draaien.
 - De bots halen de buit in de duinen nog steeds zelden, met 8 keer pakken en geen enkele score in vijf runs. Dat zit in hoe ze halen, niet in waar de ander terugkomt.
 
+## Capture the flag: niet aan de buitenkant van de kaart
+
+Op 1 november 2026 speelde Michiel de vorige stap in de duinen: het spawnen buiten de vlag gaat wat beter, maar nu komt hij regelmatig ver aan de buitenkant van de kaart terug en moet hij een heel eind lopen voor hij er weer een beetje in is. Dat kwam door die vorige stap: de grond was een ring om de standaard heen, dus ook aan de kant weg van de andere basis.
+
+**Gemeten voor de wijziging**, in een wedstrijd van zes tegen zes: de gevechten lopen als een diagonaal van blauw (99, 29) naar oranje (197, 127), dat midden op de kaart staat. De helft van de grond lag verder van de andere standaard dan de eigen: 19 van de 38 plekken van blauw, 24 van de 57 van oranje, tot 300 m lopen tegen 209 m tussen de standaards. Die plekken lagen tot 85 m van elk gevecht, aan de oostrand (x = 290) en in de zuidoosthoek.
+
+**Wat er veranderd is** (`scripts/arena.gd`, `scripts/modes/ctf.gd`):
+
+- De grond van een basis is nu alleen dat deel van de ring dat minstens 10 m lopen dichter bij de andere standaard ligt dan de eigen standaard (`FORWARD`, `Arena.forward()`). Wie terugkomt, begint dus nooit verder van de vijand dan de eigen vlag. In de duinen blijven 17 en 32 plekken over, de verste 30 en 33 m van een gevecht uit dezelfde wedstrijd.
+- De reserve, als niets op die grond veilig is, mag tot 25 m achter de standaard (`BEHIND`). Met `FORWARD` ook op de reserve liep de fabriek op van 1 tot 3 naar 7 tot 14 noodspawns: daar zijn die plekjes achter de standaard juist wat buiten beeld ligt.
+- De soak drukt nu ook af hoe ver het van de terugkomers naar de andere standaard is. De nieuwe controle in de wedstrijdtest zegt dat de grond van oranje niet meer aan de oostkant van de kaart ligt.
+
+| Duinen, drie runs van 180 s naast elkaar | Ring | Vooruit |
+|---|---|---|
+| Langste weg naar de andere standaard (de eigen staat op 209 m) | 289 tot 300 m | 194 tot 197 m |
+| Afstand tot de eigen standaard, mediaan | 65 tot 70 m | 62 tot 72 m |
+| Kleinste afstand, hemelsbreed | 33 tot 41 m | 31 tot 39 m |
+| Afstand tot de vorige terugkomer, mediaan | 83 tot 102 m | 37 tot 47 m |
+| Gemiddeld van een kant binnen 30 m van de eigen standaard | 2,3 tot 2,5 | 1,6 tot 1,9 |
+| Doden | 64, 57, 67 | 85, 95, 94 |
+| Buit gepakt | 3, 1, 1 | 3, 8, 6 |
+| Noodspawns | 0 | 0 |
+| Bots vastgelopen | 9, 71, 4 | 16, 14, 10 |
+
+Die kolom Vooruit is van voor `BEHIND`. Met `BEHIND`, drie runs van 120 s:
+
+| | Noodspawns | Gepakt | Gescoord | Bij de eigen standaard |
+|---|---|---|---|---|
+| Duinen | 0, 0, 0 | 3, 5, 1 | 0 | 1,8 tot 2,0 |
+| Fabriek | 3, 6, 2 | 9, 12, 9 | 1, 1, 1 | 1,5 en 1,6 |
+| Depot | 3, 3, 3 | 14, 13, 21 | 2, 2, 1 | 1,3 en 1,4 |
+
+- Het fabrieksterrein en de centrale zijn met `FORWARD` één keer gedraaid, 90 s, voor `BEHIND`: geen noodspawn. In de Alpen is alleen de grond berekend (4 en 6 plekken, zoals daarvoor op 45 tot 110 m) en geen wedstrijd gedraaid.
+- De reserve is in de duinen een paar keer gebruikt: in twee van de drie runs kwam iemand van oranje op 19 m van de standaard en tot 231 m van de andere terug, 22 m achter de eigen. Dat is geen buitenkant, maar het is dichter bij de vlag dan de grond zelf.
+
+**Getest:** `tools/selftest.sh` (634), `tools/test_match.sh` (142) en `tools/nettest.sh --match` (103) slagen.
+
+**Niet bekeken of beoordeeld:**
+
+- Niemand heeft dit gespeeld. Of de 62 tot 72 m tot de eigen vlag op de nieuwe plekken goed voelen, is aan Michiel.
+- Rondom de vlag is het nu niet meer: het is een waaier aan de kant van de vijand. Blauw komt vooral in het noordwesten terug en oranje in het zuidwesten, en de afstand tot de vorige terugkomer is gehalveerd, al is die nog ruim boven de 20 tot 31 m van het begin. Verspreid en niet aan de rand gaan hier deels tegen elkaar in; dit is de keuze voor niet aan de rand.
+- Terugkomen ligt nu dichter bij het gevecht: 85 tot 95 doden tegen 57 tot 67. Dat is meer actie, maar of je te snel weer neergaat, zien bots niet.
+- Dat bots in de duinen vastlopen, is niet veranderd.
+
 ## De supermarkt
 
 Op 1 november 2026 gevraagd: een nieuwe map, een grote Amerikaanse supermarkt met een groot parkeerterrein eromheen. Op de branch `supermarkt`. Het level heet `supermarket`, staat na de Alpen in de levelkeuze (de uitgang van de Alpen leidt ernaartoe) en is een arena voor wedstrijden.
