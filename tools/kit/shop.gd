@@ -361,6 +361,11 @@ func heap(area: Rect2, y: float, id: String, high: float, back := Vector2.ZERO, 
 					rise = 1.0 - maxf(absf(u * 2.0 - 1.0), absf(v * 2.0 - 1.0)) * 0.7
 				if float(layer) / layers > rise + 0.02:
 					continue
+				# Nobody sees into a heap: of its lower layers only the edge is
+				# there, and what lies on top rests on air until it is shot.
+				var edge := i == 0 or j == 0 or i == cols or j == rows
+				if layer < rise * layers - 2.0 and not edge:
+					continue
 				var shift := across * 0.5 * (layer % 2)
 				var x := area.position.x + inset + i * across + shift + _clutter_rng.randf_range(-0.012, 0.012)
 				var z := area.position.y + inset + j * across + _clutter_rng.randf_range(-0.012, 0.012)

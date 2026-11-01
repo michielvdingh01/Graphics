@@ -774,6 +774,7 @@ func _controls() -> void:
 		["Grenade", "G", "G", "Y"],
 		["Smoke grenade", "Q", "Q", "D-pad left"],
 		["Melee", "V", "V", "Click right stick"],
+		["Flashlight, once you have one", "F", "F", "-"],
 		["Switch weapon", "1 to 5, or scroll", "1 to 5", "LB and RB"],
 		["Pause", "Esc", "Esc", "Start"],
 	]

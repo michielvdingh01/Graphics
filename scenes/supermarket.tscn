@@ -6,7 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/levels/supermarket_level.tscn" id="level"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
 [ext_resource type="Shader" uid="uid://bn5e128cvvf2o" path="res://shaders/post.gdshader" id="post"]
-[ext_resource type="Shader" path="res://shaders/alps_sky.gdshader" id="sky_shader"]
+[ext_resource type="Shader" path="res://shaders/evening_sky.gdshader" id="sky_shader"]
 [ext_resource type="Script" path="res://scripts/air.gd" id="air"]
 [ext_resource type="Script" path="res://scripts/eyes.gd" id="eyes"]
 
@@ -58,10 +58,10 @@ metadata/open_sky = true
 
 [sub_resource type="CameraAttributesPractical" id="eye"]
 auto_exposure_enabled = true
-auto_exposure_scale = 0.21
+auto_exposure_scale = 0.78
 auto_exposure_speed = 0.6
-auto_exposure_min_sensitivity = 120.0
-auto_exposure_max_sensitivity = 300.0
+auto_exposure_min_sensitivity = 700.0
+auto_exposure_max_sensitivity = 3000.0
 
 [sub_resource type="ShaderMaterial" id="post_mat"]
 shader = ExtResource("post")
@@ -86,7 +86,7 @@ light_bake_mode = 0
 shadow_enabled = true
 shadow_blur = 1.5
 directional_shadow_blend_splits = false
-directional_shadow_max_distance = 220.0
+directional_shadow_max_distance = 160.0
 
 [node name="Level" parent="." groups=["navigation_source"] instance=ExtResource("level")]
 

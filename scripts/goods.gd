@@ -32,7 +32,7 @@ const BREAKABLE := 32
 ## How large a block of the floor is that shares a mesh, in metres, and from
 ## how far off a block is drawn in the cheaper forms of its shapes.
 const BLOCK := 6.0
-const NEAR_UNTIL := 12.0
+const NEAR_UNTIL := 8.5
 const NEAR_MARGIN := 1.0
 ## Numbers per thing in the buffer of a MultiMesh: its transform, its colour
 ## and its custom data.

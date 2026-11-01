@@ -50,13 +50,13 @@ const HEAD: Array[Vector3] = [
 ## The same from further off: a few sides, no ends to speak of.
 const FAR_UPRIGHT: Array[Vector3] = [Vector3(0.0, 1.0, 0.0), Vector3(0.5, 0.92, 0.08), Vector3(0.5, 0.0, 1.0)]
 const FAR_BOTTLE: Array[Vector3] = [Vector3(0.16, 1.0, 0.02), Vector3(0.5, 0.62, 0.38), Vector3(0.5, 0.0, 1.0)]
-const FAR_ROUND: Array[Vector3] = [Vector3(0.0, 1.0, 0.0), Vector3(0.5, 0.55, 0.5), Vector3(0.0, 0.0, 1.0)]
+const FAR_ROUND: Array[Vector3] = [Vector3(0.0, 1.0, 0.0), Vector3(0.44, 0.76, 0.28), Vector3(0.44, 0.24, 0.72), Vector3(0.0, 0.0, 1.0)]
 ## What a far shape is made of, by shape. A shape that is not here has no
 ## cheaper form.
 const FAR := {
 	"can": [FAR_UPRIGHT, 6], "jar": [FAR_UPRIGHT, 6], "tub": [FAR_UPRIGHT, 6], "wheel": [FAR_UPRIGHT, 6],
 	"bottle": [FAR_BOTTLE, 6], "wine": [FAR_BOTTLE, 6], "jug": [FAR_UPRIGHT, 4],
-	"round": [FAR_ROUND, 5], "long": [FAR_ROUND, 4], "head": [FAR_ROUND, 5],
+	"round": [FAR_ROUND, 6], "long": [FAR_ROUND, 4], "head": [FAR_ROUND, 6],
 }
 
 static var _made := {}

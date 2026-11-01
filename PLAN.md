@@ -5683,3 +5683,84 @@ Op 1 november 2026 twee punten van Michiel. In de duinen spawnen de vijanden te 
 - Je komt nu verder van de jeeps terug. Het begin van de wedstrijd staat nog bij de voertuigen, maar wie terugkomt staat in de duinen meestal zo'n 65 m van de standaard, en de jeeps staan op 14 tot 17 m daarvan. Daar had Michiel op 31 oktober juist om gevraagd.
 - De twee seconden wachten (`respawn`) zijn gelijk gebleven. Is het nog te veel, dan is dat het volgende getal om aan te draaien.
 - De bots halen de buit in de duinen nog steeds zelden, met 8 keer pakken en geen enkele score in vijf runs. Dat zit in hoe ze halen, niet in waar de ander terugkomt.
+
+## De supermarkt
+
+Op 1 november 2026 gevraagd: een nieuwe map, een grote Amerikaanse supermarkt met een groot parkeerterrein eromheen. Op de branch `supermarkt`. Het level heet `supermarket`, staat na de Alpen in de levelkeuze (de uitgang van de Alpen leidt ernaartoe) en is een arena voor wedstrijden.
+
+**Wat er staat**
+
+- **De winkel.** 66 bij 88 m winkelvloer: groente, bakkerij en deli langs de zuidwand, slager en zuivel langs de achterwand, diepvries en koud bier langs de noordwand, drie vrieskisten, acht kassa's, een servicebalie en dertien gangpaden in twee helften met een dwarspad, elk met een eigen bord. Elk gangpad verkoopt in elke helft iets anders: frisdrank, water, sap, bier, wijn, chips, koek, ontbijt, blik, pasta, sauzen, bakken, papier, schoonmaak, verzorging, baby, dieren, gereedschap.
+- **Wat er verkocht wordt** (`tools/gen_goods.py`, `assets/goods/`). 209 producten met verzonnen merken, elk een vorm, een maat, een stof en een eigen etiket op één blad van 4096 px. De borden staan op een eigen blad. 88.654 stuks in de winkel en het magazijn.
+- **Alles kan stuk** (`scripts/goods.gd`). Geen nodes per product maar MultiMeshes per vorm en per blok van 6 m, dichtbij en ver een eigen vorm. Een schot pakt wat het raakt en stoot om wat ernaast staat; wat erop stond komt mee naar beneden. Wat valt, valt heel en blijft op de vloer liggen, glas breekt pas daar, flessen en melk laten een plas achter. Een blast gaat door tientallen tegelijk. Wat wordt geraakt volgt alleen uit waar het schot landt, dus elke machine ziet hetzelfde weg gaan; wie later binnenkomt krijgt de lijst.
+- **Het parkeerterrein** rondom, 250 bij 192 m: rijen vakken, lantaarnpalen, eilanden met een boom, zebrapaden, een bord langs de weg, en een bosrand als horizon. Achter de winkel een laadterrein met trailers en containers. Het magazijn loopt door tot aan drie laaddeuren.
+- **SUV's** (`tools/models/suv.gd`, `vehicles/suv_*.tres`). Acht stuks in vier kleuren, te besturen als elk ander voertuig. Wie ermee de winkel in rijdt, neemt mee wat hij langs de schappen schraapt.
+- **Winkelwagens** (`scripts/cart.gd`, `scripts/cart_rack.gd`). Twaalf verlaten op het parkeerterrein, E om te duwen en los te laten, vijf rekken. In een rek rolt hij door, schuift hij in de vorige en telt de HUD mee.
+- **De zon.** De lucht is `evening_road_01_puresky`, gekanteld tot de zon op 9,5 graden in het westen staat: door de pui vallen lange strepen de winkel in. In deze scan staat de zon achter dunne wolken, dus `shaders/evening_sky.gdshader` tekent de schijf erbij, anders reageert de belichting niet.
+- **De stroom** (`scripts/mains.gd`). De schakelkast staat in de technische ruimte achter het magazijn. Kapot: de lampen vallen in een golf uit, alles wat gloeit dooft, de koeling stopt, de deuren schuiven open en blijven open. Wat overblijft is het licht door de pui.
+- **De zaklamp** (`scripts/flashlight.gd`, `give_torch()` in `scripts/weapons.gd`). Vier plekken: het gangpad met gereedschap, de servicebalie, het magazijn en de technische ruimte. Eroverheen lopen zet hem op het wapen, ook op het volgende wapen; F zet hem aan en uit; wie sterft is hem kwijt. Anderen zien de bundel.
+- **De route.** Vijf gevechten met 26 vijanden, drie checkpoints, van de andere kant van het parkeerterrein naar het laadterrein.
+
+**Niets is gebakken.** De winkel heeft twee lichtstanden en alles beweegt, en een dubbele bake van zo'n ruimte kost veel en raakt het GPU-slot. Binnen is het licht een reflectieprobe die het hemellicht buitensluit, twaalf lampen zonder schaduw en twee lampen bij de pui. Daardoor geen zachte schaduwen onder de schappen: alleen SSAO.
+
+**Gemeten** op 1 november 2026, lader van 90 W op volle accu, load 2 tot 3, geen andere run op de GPU, één ronde per stand. 3456x2160, MetalFX, Ultra, `--scale=auto`, zonder vijanden; de benchmark tekent 11% meer pixels dan het scherm.
+
+| Standpunt | Fps | 1% low | Tekenopdrachten | Driehoeken |
+|---|---|---|---|---|
+| Gangpad | 56,9 | 52,5 | 1532 | 1,4 miljoen |
+| Kassa's | 69,3 | 65,4 | 1109 | 0,7 miljoen |
+| Groente | 56,4 | 51,7 | 1804 | 2,2 miljoen |
+| Achterin | 59,9 | 57,8 | 1454 | 1,3 miljoen |
+| Parkeerterrein, naar de winkel | 74,1 | 69,0 | 2218 | 2,6 miljoen |
+| Parkeerterrein, naar de zon | 104,9 | 92,8 | 634 | 0,5 miljoen |
+| Magazijn | 70,8 | 66,6 | 904 | 1,0 miljoen |
+| Diepvries | 61,5 | 59,3 | 1451 | 1,1 miljoen |
+| Gangpad, zonder stroom | 67 | 64 | | |
+
+De eerste ronde haalde 46 tot 70 fps, met de tests ernaast. Gewogen in het zwaarste beeld (20,5 ms): de spullen 4,8 ms, de lampen 4,5 ms, de probes 2 ms, de zonneschaduw 1,9 ms. Daarna: de helft minder lampen, de gondels als occluder, de inrichting uit de schaduwkaarten van de zon, de onderkant van een hoop weg. Dat waren 103.000 stuks en zijn er nu 88.654. Op drie standpunten blijft het net onder de 60 in de meting; of dat op het scherm zelf 60 is, is niet gemeten.
+
+De zon, gemiddelde grijswaarde van de onderste 40% van het beeld, op het parkeerterrein: 0,209 naar de zon, 0,296 ermee in de rug (de Alpen: 0,09 en 0,17). De belichting staat op `scale` 0,78, `min` 700 en `max` 3000.
+
+De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
+
+**Getest**
+
+- `tools/test_supermarket.sh` (nieuw, 49 controles): schoten zoals een wapen ze afvuurt, wat erop stond, een blast, de stroom, de deuren, de zaklamp, een kar duwen en terugzetten, een SUV in- en wegrijden, en het licht terug na herladen.
+- `tools/selftest.sh`, `tools/nettest.sh`, `tools/test_match.sh`, en twaalf bots een half minuut in `tdm:supermarket:6`: 4 doden, geen enkele vastgelopen.
+
+**Niet kunnen beoordelen**
+
+- **Gespeeld is het niet.** Of de gevechten kloppen, of de winkel te groot is voor een potje, en of de kassa's goede dekking zijn, weet ik niet.
+- **De geluiden heeft niemand gehoord.** Gekozen op titel en op waar het piekt in de opname.
+- **Over het netwerk** is het niet op twee machines gezien. Een geduwde kar loopt langs de weg van een voertuig; die weg is alleen getest met één machine.
+- **Bots en vijanden** zien in het donker even goed als in het licht, en hun schoten breken niets op de schappen: alleen spelers doen dat.
+- **Wat op de vloer ligt is niet in de weg** en beweegt niet, ook niet als je erdoorheen loopt. De stoepranden van de eilanden zijn alleen beeld, geen botsing: de speler kan niet opstappen.
+- De showroom heeft de nieuwe stukken niet: hij is niet herbouwd.
+
+**Mijn keuzes, niet die van Michiel:** geen lightmap; level en arena allebei; de maten en de indeling; de naam Mega Value en alle merken; de vijanden; waar de kast en de zaklampen liggen; dat de deuren openblijven zonder stroom; dat een zaklamp bij overlijden weg is; de 260 schade van de kast; de teller in plaats van een beloning voor karren.
+
+**Onderweg gevonden**
+
+- **`blend_distance` geldt ook voor de boven- en onderkant van een probe.** Met 3 m op een doos van 7 m hoog liet de probe bij vloer en plafond het hemellicht door, en werd het zonder stroom nauwelijks donkerder. De doos reikt nu 8 m boven en onder het gebouw.
+- **Een kitfunctie botst met een level.** `sign_board` bestond al in `tools/levels/dunes/depot.gd` en `_paint` in de levelbouwer. Een naam nakijken gaat met `--check-only` over elk levelbestand.
+- **`tools/build_check.py` duurt langer dan 280 seconden** nu de Alpen erbij zijn. Afgebroken laat het levels half herbouwd achter: geef het geen tijdslimiet, en zet daarna terug met `git restore`.
+- **Een reflectieprobe die zonlicht vangt kleurt de hele vloer oranje.** Daarom `intensity` 0,4.
+
+**Werkwijze**
+
+| Stap | Hoe |
+|---|---|
+| Het level bouwen | `tools/build_level.sh supermarket` (15 s); er valt niets te bakken |
+| Producten en borden opnieuw tekenen | `tools/gen_goods.py`, met `--all` alles |
+| Een SUV, kar of zaklamp bouwen | `tools/build_model.sh suv`, `tools/build_model.sh props` |
+| Alleen dit level testen | `tools/selftest.sh --level=supermarket`, `tools/test_supermarket.sh` |
+| Een stuk schap opblazen voor een beeld | `--eval` met `_blown()` op het lichaam Goods; `--shoot` raakt de schappen niet, die schiet alleen op de wereld |
+| De stroom uit voor een beeld | `--eval='game.find_children("Mains","StaticBody3D",true,false)[0]._blow(true)'` |
+| Het blad | `benchmark/sheets/supermarkt.jpg` |
+
+| Geluid | Commando |
+|---|---|
+| Glas, plastic, blik, karton, zak, vrucht | `tools/hear.py goods_glass`, `goods_plastic`, `goods_can`, `goods_card`, `goods_bag`, `goods_splat` |
+| Kar | `tools/hear.py cart_roll`, `tools/hear.py cart_nest` |
+| Stroom | `tools/hear.py power_blow`, `tools/hear.py power_down` |
+| De winkel | `tools/hear.py ambience shop` |

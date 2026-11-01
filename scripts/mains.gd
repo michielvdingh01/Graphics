@@ -16,8 +16,8 @@ extends StaticBody3D
 @export var health := 260.0
 ## What is left of the ambient light of the shop and of the stockroom, in the
 ## order of their `slice`, and of what they reflect.
-const DARK_AMBIENT: Array[float] = [0.08, 0.04]
-const DARK_REFLECTION := 0.2
+const DARK_AMBIENT: Array[float] = [0.2, 0.09]
+const DARK_REFLECTION := 0.12
 ## Blue-grey: what comes in from the sky.
 const DARK_COLOUR := Color(0.62, 0.68, 0.82)
 ## What glows, and how much of it is left: the exit signs keep their battery.

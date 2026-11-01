@@ -3,8 +3,8 @@ extends "res://tools/levels/supermarket/plan.gd"
 
 const SMALL := DETAIL | NO_COLLIDE
 ## How far apart the lamps of the shop are, on x and z, and how high they hang.
-const LAMP_X := 18.0
-const LAMP_Z := 19.0
+const LAMP_ROWS: Array[float] = [13.0, 39.5, 62.5]
+const LAMP_Z := 25.0
 const LAMP_Y := 4.9
 const STRIP := Vector3(0.24, 0.08, 2.4)
 ## How far apart the rows of light fittings are, and the fittings in a row.
@@ -126,24 +126,22 @@ func _light_fittings() -> void:
 ## the few nearest where people meet: the rest of the light is even, as it is
 ## in a shop.
 func _shop_lamps() -> void:
-	var x := FRONT + 8.0
-	while x < BACK:
+	for x: float in LAMP_ROWS:
 		var z := NORTH_WALL + 7.0
 		while z < SOUTH_WALL:
 			var lamp := OmniLight3D.new()
 			lamp.name = "Mains%d" % _lights.get_child_count()
 			lamp.position = Vector3(x, LAMP_Y - 0.3, z)
 			lamp.light_color = Color(1.0, 0.97, 0.92)
-			lamp.light_energy = 2.0
-			lamp.omni_range = 21.0
-			lamp.omni_attenuation = 0.9
+			lamp.light_energy = 2.6
+			lamp.omni_range = 25.0
+			lamp.omni_attenuation = 0.95
 			lamp.light_bake_mode = Light3D.BAKE_DISABLED
 			lamp.light_specular = 0.6
 			lamp.shadow_enabled = false
 			lamp.add_to_group(&"mains", true)
 			_add(lamp, _lights)
 			z += LAMP_Z
-		x += LAMP_X
 
 
 ## A reflection probe holds the ambient light of the shop: the sky has no
@@ -168,7 +166,8 @@ func _shop_probe(probe_name: String, center: Vector3, size: Vector3, slice: int)
 	node.enable_shadows = false
 	node.ambient_mode = ReflectionProbe.AMBIENT_COLOR
 	node.ambient_color = Color(0.88, 0.89, 0.86)
-	node.ambient_color_energy = 0.34
+	node.ambient_color_energy = 0.8
+	node.intensity = 0.4
 	node.blend_distance = 0.3
 	node.max_distance = 120.0
 	node.set_meta(&"slice", slice)
@@ -180,14 +179,14 @@ func _shop_probe(probe_name: String, center: Vector3, size: Vector3, slice: int)
 ## store: no shadows, a long reach, falling off fast. It burns with or without
 ## power, and is what is left to see by when the power goes.
 func _daylight() -> void:
-	var spots: Array[Vector3] = [Vector3(2.0, 2.4, -25.0), Vector3(2.0, 2.8, -7.0), Vector3(2.0, 2.8, 7.0), Vector3(2.0, 2.4, 25.0)]
+	var spots: Array[Vector3] = [Vector3(2.0, 2.6, -17.0), Vector3(2.0, 2.6, 17.0)]
 	for i in spots.size():
 		var light := OmniLight3D.new()
 		light.name = "Daylight%d" % i
 		light.position = spots[i]
 		light.light_color = Color(0.92, 0.82, 0.74)
-		light.light_energy = 0.8
-		light.omni_range = 52.0
+		light.light_energy = 1.3
+		light.omni_range = 48.0
 		light.omni_attenuation = 1.7
 		light.light_specular = 0.25
 		light.light_bake_mode = Light3D.BAKE_DISABLED

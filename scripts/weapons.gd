@@ -192,7 +192,7 @@ const STEADY_SHARE := 0.35
 ## The flashlight of give_torch(): what it is, where it sits from the muzzle,
 ## and how it shines.
 const TORCH := preload("res://scenes/models/flashlight.scn")
-const TORCH_UNDER := Vector3(0.0, -0.035, 0.14)
+const TORCH_UNDER := Vector3(0.022, -0.05, 0.2)
 const TORCH_SIZE := 1.4
 const TORCH_COLOUR := Color(1.0, 0.95, 0.84)
 const TORCH_ENERGY := 9.0
