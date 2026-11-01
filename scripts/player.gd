@@ -15,6 +15,7 @@ signal revived
 
 const SPRING := preload("res://scripts/spring.gd")
 const VEHICLE := preload("res://scripts/vehicle.gd")
+const CART := preload("res://scripts/cart.gd")
 
 const WALK_SPEED := 5.0
 const SPRINT_SPEED := 7.2
@@ -280,6 +281,7 @@ func take_damage(amount: float, _position := Vector3.ZERO, direction := Vector3.
 func revive(pose: Transform3D) -> void:
 	if riding:
 		riding.request_leave(self)
+	weapons.lose_torch()
 	dead = false
 	health = MAX_HEALTH
 	_since_damage = 0.0
@@ -310,8 +312,28 @@ func _unhandled_input(event: InputEvent) -> void:
 			var near := VEHICLE.within_reach(self)
 			if near:
 				near.vehicle.request_seat(self, near.seat)
+			else:
+				var cart := cart_in_reach()
+				if cart:
+					cart.use_by(self)
 	elif event.is_action_pressed("vehicle_seat") and has_control() and riding:
 		riding.request_seat(self, riding.next_seat(seat))
+
+
+## The shopping cart `use` takes or lets go of, if any: see scripts/cart.gd.
+func cart_in_reach() -> Node3D:
+	var best: Node3D = null
+	var nearest: float = CART.REACH
+	for cart: Node3D in get_tree().get_nodes_in_group(&"cart"):
+		if cart.home:
+			continue
+		if cart.pusher == self:
+			return cart
+		var distance := cart.global_position.distance_to(global_position)
+		if distance < nearest:
+			nearest = distance
+			best = cart
+	return best
 
 
 ## What `body` would get into if it pressed the key now: see

@@ -189,6 +189,17 @@ const FLINCH_DAMPING := 0.6
 const STEADY_SHARE := 0.35
 
 
+## The flashlight of give_torch(): what it is, where it sits from the muzzle,
+## and how it shines.
+const TORCH := preload("res://scenes/models/flashlight.scn")
+const TORCH_UNDER := Vector3(0.0, -0.035, 0.14)
+const TORCH_SIZE := 1.4
+const TORCH_COLOUR := Color(1.0, 0.95, 0.84)
+const TORCH_ENERGY := 9.0
+const TORCH_REACH := 32.0
+const TORCH_ANGLE := 30.0
+
+
 ## The parts of one viewmodel that move, and where they rest.
 class Viewmodel:
 	var root: Node3D
@@ -333,6 +344,11 @@ var _hot := 0.0
 var _overheated := 0.0
 var _spent_for := 0.0
 ## The motor that spins the barrels and the roar of their fire, as loops.
+## Whether a flashlight is mounted, and whether it burns.
+var has_torch := false
+var torch_on := false
+var _torch: Node3D
+var _torch_beam: SpotLight3D
 var _motor := AudioStreamPlayer.new()
 var _roar := AudioStreamPlayer.new()
 var _throw_left := 0.0
@@ -609,6 +625,65 @@ func current_spread_deg() -> float:
 	return spread
 
 
+## Mounts a flashlight on the weapon in hand, and on the next one: it was
+## found in a shop, see scripts/flashlight.gd. On at once.
+func give_torch() -> void:
+	has_torch = true
+	if _torch == null:
+		_torch = Node3D.new()
+		_torch.name = "Torch"
+		var model: Node3D = TORCH.instantiate()
+		model.scale = Vector3.ONE * TORCH_SIZE
+		_torch.add_child(model)
+		for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mesh.set_layer_mask_value(1, false)
+			mesh.set_layer_mask_value(VIEW_LAYER, true)
+		_torch_beam = SpotLight3D.new()
+		_torch_beam.light_color = TORCH_COLOUR
+		_torch_beam.light_energy = TORCH_ENERGY
+		_torch_beam.spot_range = TORCH_REACH
+		_torch_beam.spot_angle = TORCH_ANGLE
+		_torch_beam.spot_angle_attenuation = 2.2
+		_torch_beam.spot_attenuation = 0.9
+		_torch_beam.shadow_enabled = true
+		_torch_beam.shadow_blur = 1.2
+		_torch_beam.light_bake_mode = Light3D.BAKE_DISABLED
+		_torch_beam.position = Vector3(0, 0, -0.11)
+		_torch.add_child(_torch_beam)
+	_set_torch(true)
+
+
+## Whoever dies leaves it behind.
+func lose_torch() -> void:
+	has_torch = false
+	_set_torch(false)
+	if _torch and _torch.get_parent():
+		_torch.get_parent().remove_child(_torch)
+
+
+func _set_torch(on: bool) -> void:
+	torch_on = on
+	if _torch_beam:
+		_torch_beam.visible = on
+	Net.player_did(&"torch", [on])
+
+
+## Keeps the flashlight on the weapon that is in hand.
+func _hold_torch() -> void:
+	if not has_torch or _torch == null:
+		return
+	var model := _models[_index]
+	if _torch.get_parent() != model.root:
+		if _torch.get_parent():
+			_torch.get_parent().remove_child(_torch)
+		model.root.add_child(_torch)
+		_torch.position = model.muzzle.position + TORCH_UNDER
+	if Input.is_action_just_pressed("torch") and player.has_control():
+		_set_torch(not torch_on)
+		Sfx.play(&"pickup_ammo", -18.0)
+
+
 ## Puts one weapon in view, `aim` of the way to the sights, `reload` of the
 ## way through reloading and `blow` of the way through hitting with it. For a screenshot: nothing else poses the weapon
 ## while the player stands still. A weapon with barrels that spin is not
@@ -746,6 +821,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_hold_torch()
 	var control: bool = player.has_control()
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_fire_buffer -= delta

@@ -38,7 +38,7 @@ const PORT := 24565
 const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
-const VERSION := 23
+const VERSION := 24
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -60,7 +60,7 @@ const ASKS: Array[StringName] = [&"take_damage", &"explode", &"harm", &"seat_ask
 ## vehicle_did().
 const VEHICLE_DEEDS: Array[StringName] = [&"_fired_here"]
 ## What a machine may report its player did, see player_did().
-const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched", &"struck", &"knocked"]
+const DEEDS: Array[StringName] = [&"fired", &"threw", &"hurt", &"launched", &"struck", &"knocked", &"torch"]
 const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
 
 ## Bits of what a player is doing, as they go over the wire. SPINNING is the

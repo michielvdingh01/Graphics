@@ -82,7 +82,7 @@ func _describe() -> void:
 	])
 	# Past the camp, along the canal that drains the Moos towards Ehrwald.
 	var way_out := ground(1545, 905)
-	route_exit("Follow the canal to Ehrwald", AABB(way_out - Vector3(12, 2, 12), Vector3(24, 6, 24)))
+	route_exit("Follow the canal to Ehrwald", AABB(way_out - Vector3(12, 2, 12), Vector3(24, 6, 24)), "supermarket")
 
 
 ## Fight `index` of FIGHTS, held by `enemies`: the box it is fought in reaches

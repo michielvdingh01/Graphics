@@ -26863,7 +26863,7 @@ collision_mask = 2
 monitorable = false
 metadata/id = ""
 metadata/title = "Follow the canal to Ehrwald"
-metadata/next = ""
+metadata/next = "supermarket"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Route/Exit" unique_id=1862951729]
 shape = SubResource("BoxShape3D_semyv")
