@@ -44,12 +44,6 @@ const RAIN := 36
 ## shower is heard.
 const RUSTLE_DB := -16.0
 const RUSTLE_EVERY := 6
-## He laughs, deep, now and then, to whoever is within LAUGHS metres of him:
-## every so many seconds, somewhere between the two numbers, and no louder
-## than a footstep of the player (scripts/player.gd plays those at -10 dB).
-const LAUGHS := 12.0
-const LAUGH_EVERY := Vector2(6.0, 13.0)
-const LAUGH_DB := -12.0
 
 ## Metres a second he walks, and where to; INF to stand.
 var pace := 1.3
@@ -68,7 +62,6 @@ var _walked := 0.0
 var _was := Vector3.INF
 var _note_look: StandardMaterial3D
 var _note_mesh: QuadMesh
-var _laugh := 3.0
 
 
 func _ready() -> void:
@@ -210,12 +203,6 @@ func _process(delta: float) -> void:
 			var pocket := global_position + Vector3.UP * 1.05 * SIZE + global_basis.x * (0.28 * SIZE * (1.0 if randf() < 0.5 else -1.0))
 			_drop(pocket, -global_basis.z * 0.2)
 			Sfx.play_at(&"money_drop", pocket, RUSTLE_DB)
-		_laugh -= delta
-		if _laugh <= 0.0:
-			_laugh = randf_range(LAUGH_EVERY.x, LAUGH_EVERY.y)
-			var camera := get_viewport().get_camera_3d()
-			if camera and camera.global_position.distance_to(global_position) < LAUGHS:
-				Sfx.play_on(&"icp_laugh", self, Vector3.UP * 2.2, LAUGH_DB)
 	for i in range(_bills.size() - 1, -1, -1):
 		var line: Array = _bills[i]
 		var note: MeshInstance3D = line[0]

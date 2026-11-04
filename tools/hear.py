@@ -46,7 +46,7 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py voice zombie            somebody of that voice seeing the player, being hit
                                           three times and going down: human, zombie, clown, robot
     tools/hear.py dance                   the music of the TikTok Dance of the Unmuted match, going
-                                          round twice (sixteen seconds); `dance b` variant b
+                                          round twice (sixteen seconds)
     tools/hear.py music level1and2        the piece at the level of a game, a fight starting
                                           after 4 s and over after 12: its second layer comes
                                           and goes. --layer=<file> tries another file as that layer

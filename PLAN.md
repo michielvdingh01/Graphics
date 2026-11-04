@@ -3282,7 +3282,7 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 
 - Hoeveel mensen er op de borrel spelen, op welke machines (Mac of Windows), en of dat samen over het netwerk is of om de beurt.
 - Wanneer de borrel is.
-- De lach komt uit de Evil Laughs (CC0) die er al waren. Een van Freesound vraag ik alleen nog als die niet bevalt.
+- De ICP lacht niet: zo besloten na het luisteren.
 
 ### Stap 1: de Branding Gun (4 november 2026)
 
@@ -3455,20 +3455,16 @@ Alles staat in `assets/manifest.json` en wordt gemaakt door `tools/build_sounds.
 - **De slop-gun** (`slop_gun_shot`, `_b`): lager nog, met een lange natte plons eronder.
 - **Plakken** (`sticker_stick`, `_b`): een zachte klap met het kletsen van papier erop. **Slop plakken** (`slop_stick`, `_b`): een zware natte klets; b is kale ruis, zoals de treffer op een mens die je eerder koos.
 - **Het geld** (`money_drop`): een zacht geritsel van papier bij elk biljet uit zijn zak, op -16 dB. Bij de regen van biljetten hoor je er zes.
-- **De lach van de ICP** (`icp_laugh`, `_b`): de Evil Laughs van Eldritch Grim (CC0). Ze stonden al in het project, voor de clowns, dus er hoefde niets gedownload te worden. Hier zijn ze een kwint langzamer, b nog lager: een grote diepe man. Hij lacht om de 6 tot 13 seconden als je binnen 12 m bent, op -12 dB: net zachter dan je eigen voetstappen (-10 dB).
+- **De lach van de ICP** is er niet. Een vertraagde Evil Laugh (CC0) is gemaakt en geprobeerd, maar Michiel liet hem na het luisteren weghalen (4 november).
 - **Scoren** (`icp_won`): de klik en de bel van een kassa, ka-ching, in plaats van het geluid van een checkpoint.
-- **De dansmuziek** (`dance_beat`, `_b`), eigen gemaakt, en zonder naad rond te laten gaan:
-  - a: acht seconden four-on-the-floor op 120, een bas die A, F, C, G loopt, en een getokkeld riffje (Karplus-Strong).
-  - b: 140 in halve maat, met een lange lage dreun.
-  - Hij speelt waar iemand danst, op -6 dB, zachter vanaf 4 m en niet meer te horen na 45 m. Zo hoor je waar er gedanst wordt.
-- `tools/hear.py dance [b]` laat de dansmuziek twee keer rondgaan. `tools/build_sounds.py` slaat geluiden over die een ander script maakt (`generator`).
+- **De dansmuziek** (`dance_beat`), eigen gemaakt en zonder naad rond te laten gaan: acht seconden four-on-the-floor op 120, een bas die A, F, C, G loopt, en een getokkeld riffje (Karplus-Strong). Michiel koos hem op het oor boven een beat op 140 in halve maat. Hij speelt waar iemand danst, op -6 dB, zachter vanaf 4 m en niet meer te horen na 45 m. Zo hoor je waar er gedanst wordt.
+- `tools/hear.py dance` laat de dansmuziek twee keer rondgaan. `tools/build_sounds.py` slaat geluiden over die een ander script maakt (`generator`).
 
 **Getest**
 
 - `tools/test_sound.sh` (39 controles), `tools/test_unmuted.sh` (58), de selftest en de wedstrijdtest slagen.
-- Elk nieuw geluid gaat door `tools/hear.py`. Van de beats keek ik naar het verloop van de luidheid, omdat ik niet kan luisteren: a stoot elke halve seconde (120 per minuut), b heeft elke 1,7 s een dreun (een maat op 140).
+- Elk nieuw geluid gaat door `tools/hear.py`. Van de beat keek ik naar het verloop van de luidheid, omdat ik niet kan luisteren: een stoot elke halve seconde, 120 per minuut.
 
 **Wat ik niet kon beoordelen**
 
-- **Hoe alles klinkt.** Ik kan niet luisteren; welke variant het wordt, is aan jou. Een lach van Freesound kan ook nog, als deze te "evil" is voor een klant met een grijns. Die vraag ik dan eerst, met de opname erbij.
-- **De dansmuziek** is eenvoudig: een kick, een clap, een hi-hat, een bas en een riffje. Of het TikTok genoeg klinkt, weet ik niet.
+- **Hoe de rest klinkt.** De varianten van de guns en het plakken zijn nog niet gekozen; het spel gebruikt telkens a.

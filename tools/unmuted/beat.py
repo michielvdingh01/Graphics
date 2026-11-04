@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Makes the music that plays where somebody dances the TikTok Dance of the
 Unmuted match: a short loop of our own, written straight to
-assets/audio/dance_beat/dance_beat_1.wav and dance_beat_b/dance_beat_b_1.wav,
-which scripts/dancer.gd plays round and round from where the dancer stands.
+assets/audio/dance_beat/dance_beat_1.wav, which scripts/dancer.gd plays round
+and round from where the dancer stands.
 
   python3 tools/unmuted/beat.py
 
-a: four on the floor at 120 beats a minute, four bars (eight seconds): a
-kick on every beat, a clap on two and four, a hi-hat between, a bass that
-walks A, F, C, G and a plucked hook over it.
-b: the same four bars at 140 in half time: a kick and a long low boom on one,
-a snare on three, hi-hats in triplets and the hook an octave down.
+Four on the floor at 120 beats a minute, four bars (eight seconds): a kick
+on every beat, a clap on two and four, a hi-hat between, a bass that walks
+A, F, C, G and a plucked hook over it. Chosen by ear over a beat at 140 in
+half time with a long low boom.
 
 Everything that rings on past the end of the loop comes round at its start,
 so that it goes round without a seam. Mono, 44.1 kHz, 16 bit.
@@ -65,15 +64,6 @@ def kick(length=0.35, top=150.0, bottom=45.0) -> list:
         freq = bottom + (top - bottom) * math.exp(-t * 30.0)
         phase += 2 * math.pi * freq / RATE
         out.append(math.sin(phase) * math.exp(-t * 7.0) + (0.4 * math.exp(-t * 300.0) if i < 200 else 0.0))
-    return out
-
-
-def boom(length=1.4, freq=45.0) -> list:
-    out, phase = [], 0.0
-    for i in range(int(length * RATE)):
-        t = i / RATE
-        phase += 2 * math.pi * (freq + 60.0 * math.exp(-t * 25.0)) / RATE
-        out.append(math.tanh(2.0 * math.sin(phase)) * math.exp(-t * 2.2))
     return out
 
 
@@ -151,28 +141,8 @@ def variant_a() -> Loop:
     return loop
 
 
-def variant_b() -> Loop:
-    bpm = 140.0
-    beat = 60.0 / bpm
-    loop = Loop(beat * 16)
-    hook = ["A3", "C4", "E4", "G4", "E4", "C4", "D4", "C4"]
-    k, b808 = kick(0.3, 170.0, 55.0), boom()
-    for bar in range(4):
-        start = bar * 4 * beat
-        loop.add(start, k, 0.8)
-        loop.add(start, b808, 0.9)
-        loop.add(start + 2.5 * beat, k, 0.6)
-        loop.add(start + 2 * beat, noise_hit(0.22, 16.0, 0.6, bar), 0.6)
-        for step in range(12):
-            loop.add(start + step * beat / 3, noise_hit(0.04, 90.0, 1.0, 100 + bar * 12 + step), 0.14 if step % 3 else 0.22)
-        for i, name in enumerate(hook):
-            loop.add(start + i * beat / 2, pluck(note(name), beat * 0.9, 50 + bar * 10 + i), 0.36)
-    return loop
-
-
 def main() -> None:
     variant_a().write(OUT / "dance_beat" / "dance_beat_1.wav")
-    variant_b().write(OUT / "dance_beat_b" / "dance_beat_b_1.wav")
 
 
 if __name__ == "__main__":
