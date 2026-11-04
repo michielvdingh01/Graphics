@@ -66,6 +66,7 @@ const MODES := {
 	"tdm": preload("res://scripts/modes/tdm.gd"),
 	"ffa": preload("res://scripts/modes/ffa.gd"),
 	"ctf": preload("res://scripts/modes/ctf.gd"),
+	"icp": preload("res://scripts/modes/icp.gd"),
 }
 const THEMES := preload("res://scripts/enemy_themes.gd")
 const FILE := "res://assets/match.json"
@@ -239,7 +240,10 @@ func _ready() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(FILE)) if FileAccess.file_exists(FILE) else null
 	if parsed is Dictionary and parsed.get("modes") is Dictionary:
 		for kind: String in parsed.modes:
-			if MODES.has(kind):
+			# A kind that is for one build alone (`build`) is only in that one:
+			# see Armory.unmuted_build().
+			var build := str(parsed.modes[kind].get("build", "")) if parsed.modes[kind] is Dictionary else ""
+			if MODES.has(kind) and (build.is_empty() or ARMORY.unmuted_build()):
 				kinds[kind] = parsed.modes[kind]
 	# Whatever of the rules of the game a match does not have a say on is as
 	# the middle difficulty has it.
@@ -355,7 +359,8 @@ func _take_up(what: Dictionary) -> void:
 		"size": size,
 		"only_bots": bool(what.get("only_bots", false)),
 		"prize": str(what.get("prize", "flag")),
-		"pack": str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
+		# A kind that says what everybody carries has its way.
+		"pack": str(mode.numbers.pack) if mode.numbers.has("pack") else str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
 		"open": bool(what.get("open", false)),
 		"bots": bool(what.get("bots", true)),
 		"apart": bool(what.get("apart", true)),
@@ -498,9 +503,17 @@ func _share(kind: String) -> int:
 	return 1 if not MODES.has(kind) or (MODES[kind].new() as RefCounted).teams() else 2
 
 
-## What `side` is called: "Wolves".
+## The pack whoever is on `side` carries: what the kind of match says for
+## that side (mode.pack()), or else the pack of the match.
+func pack_for(side: int) -> String:
+	var said: String = mode.pack(side) if mode else ""
+	return said if not said.is_empty() and ARMORY.names().has(said) else pack_in_play
+
+
+## What `side` is called: "Wolves", or what the kind that is played calls it.
 func side_name(side: int) -> String:
-	return str(_side_names[side])
+	var names: Array = mode.numbers.get("sides", _side_names) if mode else _side_names
+	return str(names[side])
 
 
 ## The side `who` is on or asked to be on.
@@ -925,7 +938,7 @@ func _name_of(person: int) -> String:
 ## The line of the roster for a bot in `place`: a bot has the number of its
 ## place, below nought.
 func _bot_line(place: int, side: int, title: String) -> Array:
-	var arms := ARMORY.bots(setup.pack, arena.length() > FAR)
+	var arms := ARMORY.bots(pack_for(side) if mode.teams() else setup.pack, arena.length() > FAR)
 	@warning_ignore("integer_division")
 	return [-(place + 1), title, side, arms[(place / (2 if mode.teams() else 1)) % arms.size()]]
 
@@ -1195,12 +1208,24 @@ func _take_side(who: Entrant) -> void:
 		_game.player.team = who.team
 		_game.player.collision_layer = (_game.player.collision_layer & ~every_side) | _layers(who)
 		_game.player.collision_mask = (_game.player.collision_mask & ~every_side) | _foes(who)
+		# A kind of match in which the sides carry different packs arms the
+		# player with that of their side.
+		if mode.teams() and not mode.pack(who.team).is_empty():
+			var pack := pack_for(who.team)
+			var arms := ARMORY.weapons(pack)
+			var hands: Node = _game.player.weapons
+			if hands.loadout != arms:
+				hands.equip(arms, ARMORY.grenades(pack), ARMORY.grenade(pack), ARMORY.tacticals(pack), ARMORY.tactical(pack))
 		return
 	var own := me()
 	var look := {}
+	var dressed: Variant = mode.look(who)
+	if dressed is Dictionary:
+		# The kind of match says who everybody is.
+		look = dressed
 	# Whoever is against the player is who the enemies were chosen to be; with
 	# nobody playing, that is the second side. People are soldiers.
-	if who.bot and (mode.hostile(own, who) if own else who.team == 1 or not mode.teams()):
+	elif who.bot and (mode.hostile(own, who) if own else who.team == 1 or not mode.teams()):
 		if who.cast < 0:
 			who.cast = _cast
 			_cast += 1

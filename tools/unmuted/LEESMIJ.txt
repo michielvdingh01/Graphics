@@ -1,0 +1,39 @@
+WIN THE ICP - de borrel van Unmuted
+
+Wat is het
+  Unmuted tegen de Slop Soldiers, in de duinen. In het midden staat de ICP,
+  de klant, een grote man in pak met een zonnebril. Hij loopt naar waar het
+  meeste hem trekt: stickers en dansjes. Krijg hem drie keer naar Unmuted HQ
+  (het grachtenpand) en je wint. De Slop Soldiers willen hem naar Doomscroll
+  Hell. Na tien minuten wint wie voorstaat.
+
+Starten op een Mac
+  Pak WinTheICP-macos.zip uit en start Win the ICP. De Mac weigert dat de
+  eerste keer, omdat de maker niet bij Apple geregistreerd is: kies "Gereed",
+  ga naar Systeeminstellingen > Privacy en beveiliging, scrol naar beneden
+  en kies "Open toch". Dat hoeft maar een keer.
+
+Starten op Windows
+  Pak WinTheICP-windows.zip uit en start WinTheICP.exe. Windows kent de
+  maker niet en waarschuwt: kies "Meer informatie" en dan "Toch uitvoeren".
+
+Spelen
+  Kies "Play" voor een potje tegen bots.
+  Lopen met WASD, kijken met de muis, springen met spatie.
+  1  De Branding Gun: schiet Unmuted-stickers. Een sticker op de grond of
+     een muur trekt de ICP twintig seconden lang. Vier stickers op een
+     Slop Soldier en hij ligt. Een sticker op een sticker van de ander
+     plakt hem over.
+  2  De TikTok Dance: houd de muisknop ingedrukt om je ringlamp neer te zetten
+     en te dansen. Een dans trekt de ICP drie keer zo hard als een sticker,
+     maar je staat stil en wie je raakt, stopt je dans.
+  R  herladen.  Esc  pauze, en daar kies je ook je team.
+  Leg een spoor van stickers van de ICP naar het grachtenpand, en dans voor
+  hem uit. Plak over de slop-memes van de Slop Soldiers heen.
+
+Samen spelen
+  Iemand kiest "Play with colleagues", zet "Friends on your network" op
+  "Can join" en kiest "Start". De anderen kiezen "Join colleagues": zit je op
+  hetzelfde netwerk, dan staat het potje daar vanzelf in de lijst. Je neemt
+  de plek van een bot over, ook als het potje al loopt.
+  Vraagt de Mac of het spel je lokale netwerk mag gebruiken, sta dat dan toe.

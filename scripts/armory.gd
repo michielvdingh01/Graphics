@@ -13,6 +13,11 @@ extends RefCounted
 ## Everybody in a match carries the pack of the match; the route and the
 ## sandbox carry STANDARD. A pack that names a weapon
 ## that is not in ALL yet is not on offer.
+##
+## The weapons of the Unmuted match (UNMUTED) are not in ALL but come after it
+## in the build for Unmuted alone, loaded as the game runs: the build for
+## friends leaves out everything of Unmuted (export_presets.cfg), and a weapon
+## that ALL preloads would be in it. all() is ALL with them.
 
 const ALL: Array[WeaponData] = [
 	preload("res://weapons/rifle.tres"),
@@ -44,6 +49,7 @@ const ALL: Array[WeaponData] = [
 	preload("res://weapons/banana_gun.tres"),
 	preload("res://weapons/beer.tres"),
 ]
+const UNMUTED: Array[String] = ["res://weapons/branding_gun.tres", "res://weapons/slop_gun.tres", "res://weapons/tiktok_dance.tres"]
 const FILE := "res://assets/packs.json"
 const STANDARD := "standard"
 ## What a pack throws where it does not say, and where the scenes of what it
@@ -55,6 +61,7 @@ const THROWN := "res://scenes/%s.tscn"
 const MOST := 5
 
 static var _packs := {}
+static var _every: Array[WeaponData] = []
 
 
 ## Every weapon there is, in its place. A script that is read while this one
@@ -63,34 +70,47 @@ static var _packs := {}
 ## whatever is loading, and a weapon that is already on its way in comes out
 ## empty.
 static func all() -> Array[WeaponData]:
-	return ALL
+	if _every.is_empty():
+		_every = ALL.duplicate()
+		if unmuted_build():
+			for path in UNMUTED:
+				_every.append(load(path))
+	return _every
 
 
-## The place of `data` in ALL, -1 if it is none of them.
+## The place of `data` in all(), -1 if it is none of them.
 static func index(data: WeaponData) -> int:
-	return ALL.find(data)
+	return all().find(data)
 
 
-## The weapon at `place` in ALL, the first one if there is none there.
+## The weapon at `place` in all(), the first one if there is none there.
 static func at(place: int) -> WeaponData:
-	return ALL[place] if place >= 0 and place < ALL.size() else ALL[0]
+	var every := all()
+	return every[place] if place >= 0 and place < every.size() else every[0]
 
 
 ## The weapon with this name, null if there is none.
 static func named(weapon_name: String) -> WeaponData:
-	for data in ALL:
+	for data in all():
 		if data.resource_path.get_file().get_basename() == weapon_name:
 			return data
 	return null
 
 
-## The packs on offer, in the order of the file.
+## The packs on offer, in the order of the file. A pack that says "build":
+## "unmuted" is only on offer in the build for Unmuted, see unmuted_build().
 static func names() -> PackedStringArray:
 	var offered := PackedStringArray()
 	for pack: String in _all():
-		if not weapons(pack).is_empty():
+		if not weapons(pack).is_empty() and (str(spec(pack).get("build", "")) != "unmuted" or unmuted_build()):
 			offered.append(pack)
 	return offered
+
+
+## True in the build for Unmuted (the feature "unmuted" of its export preset),
+## or with --unmuted on the command line.
+static func unmuted_build() -> bool:
+	return OS.has_feature("unmuted") or "--unmuted" in OS.get_cmdline_user_args()
 
 
 ## What the file says of a pack, or of STANDARD if there is no such pack.

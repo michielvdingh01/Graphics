@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="220" viewBox="0 0 512 220">
+  <rect x="0" y="0" width="512" height="220" fill="#d3dfc3"/>
+  <rect x="10" y="10" width="492" height="200" fill="#c7d8b4" stroke="#1f4a2c" stroke-width="8"/>
+  <rect x="22" y="22" width="468" height="176" fill="none" stroke="#1f4a2c" stroke-width="2"/>
+  <circle cx="84" cy="110.0" r="62" fill="#b9d0a6" stroke="#1f4a2c" stroke-width="7"/>
+  <text x="84" y="140.0" text-anchor="middle" font-size="88" fill="#1f4a2c" font-family='Georgia, serif' font-weight='bold'>$</text>
+  <circle cx="428" cy="110.0" r="62" fill="#b9d0a6" stroke="#1f4a2c" stroke-width="7"/>
+  <text x="428" y="140.0" text-anchor="middle" font-size="88" fill="#1f4a2c" font-family='Georgia, serif' font-weight='bold'>$</text>
+  <text x="256.0" y="88.0" text-anchor="middle" font-size="26" fill="#1f4a2c" font-family='Georgia, serif' font-weight='bold'>IN ICP</text>
+  <text x="256.0" y="122.0" text-anchor="middle" font-size="26" fill="#1f4a2c" font-family='Georgia, serif' font-weight='bold'>WE TRUST</text>
+  <text x="256.0" y="172.0" text-anchor="middle" font-size="44" fill="#1f4a2c" font-family='Georgia, serif' font-weight='bold'>100</text>
+</svg>

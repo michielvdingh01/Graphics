@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="Graphics FPS"
+config/name.unmuted="Win the ICP"
 run/main_scene="res://scenes/factory.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
@@ -26,6 +27,7 @@ NetTest="*res://scripts/net_test.gd"
 SandboxTest="*res://scripts/sandbox_test.gd"
 MatchTest="*res://scripts/match_test.gd"
 ShopTest="*res://scripts/shop_test.gd"
+UnmutedTest="*res://scripts/unmuted_test.gd"
 Settings="*res://scripts/settings.gd"
 Save="*res://scripts/save.gd"
 Net="*res://scripts/net.gd"

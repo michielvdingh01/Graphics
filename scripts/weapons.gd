@@ -394,6 +394,9 @@ var _smoke_due := false
 ## What the camera sits on: its pitch is where the player looks, without the
 ## recoil and the shake that the camera adds to it.
 @onready var _head: Node3D = camera.get_parent()
+## The TikTok Dance, once there is a ring light in the loadout.
+var _dance: Node
+const DANCE := preload("res://scripts/dance.gd")
 
 
 func _ready() -> void:
@@ -866,6 +869,16 @@ func _process(delta: float) -> void:
 	_zoom = move_toward(_zoom, 1.0 if aiming and _stage == 2 else 0.0, delta / ZOOM_TIME)
 	_bloom = move_toward(_bloom, 0.0, data.bloom_recovery_deg * delta)
 
+	# The ring light of the TikTok Dance: fire held is dancing, see dance.gd.
+	if data.dances and _dance == null:
+		_dance = DANCE.new()
+		_dance.player = player
+		add_child(_dance)
+	if _dance:
+		_dance.hold(data.dances and control and not busy and Input.is_action_pressed("fire"))
+		if data.dances:
+			_fire_buffer = 0.0
+
 	if data.spin_up <= 0.0:
 		# The heat of a weapon that is put away goes out of it all the same.
 		_overheated = maxf(_overheated - delta, 0.0)
@@ -884,6 +897,8 @@ func _process(delta: float) -> void:
 			# Barrels that spin fire as they come up to speed, see _spin_barrels(),
 			# and a weapon of them that is empty is not swung.
 			_fire_buffer = 0.0
+		elif data.dances:
+			pass
 		elif trigger and not busy and _cooldown <= 0.0:
 			if _mags[_index] > 0:
 				_fire(data)

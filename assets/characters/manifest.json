@@ -547,6 +547,36 @@
 			"imported": "2026-10-10",
 			"tools": "Blender 5.2.2 LTS"
 		},
+		"icp_01": {
+			"source": "Microsoft Rocketbox, Business_Male_01",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Business_Male_01.fbx",
+			"options": "--texture-size=2048 --occlusion --look=icp",
+			"route": "rigged",
+			"look": "icp",
+			"triangles": 8016,
+			"source_triangles": 7435,
+			"height": 1.806,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 6.76,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 7.06,
+				"source_textures": [
+					"1024x1024",
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": true
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
 		"soldier_01": {
 			"source": "Microsoft Rocketbox, Military_Male_01",
 			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
@@ -990,6 +1020,240 @@
 				"cutout": false
 			},
 			"imported": "2026-10-21",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_01": {
+			"source": "Microsoft Rocketbox, Female_Adult_08",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Female_Adult_08.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 9046,
+			"source_triangles": 8276,
+			"height": 1.735,
+			"eye_height": 1.64,
+			"head_start": 1.53,
+			"megabytes": 6.29,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 6.89,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": true
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_02": {
+			"source": "Microsoft Rocketbox, Male_Adult_09",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Male_Adult_09.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 7700,
+			"source_triangles": 7426,
+			"height": 1.822,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 7.14,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 7.35,
+				"source_textures": [
+					"2048x1024",
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": true
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_03": {
+			"source": "Microsoft Rocketbox, Female_Party_02",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Female_Party_02.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 11514,
+			"source_triangles": 9874,
+			"height": 1.79,
+			"eye_height": 1.64,
+			"head_start": 1.53,
+			"megabytes": 7.14,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 6.77,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": true
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_04": {
+			"source": "Microsoft Rocketbox, Male_Adult_16",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Male_Adult_16.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 7064,
+			"source_triangles": 7064,
+			"height": 1.809,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 3.78,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 7.6,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": false
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_05": {
+			"source": "Microsoft Rocketbox, Female_Adult_17",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Female_Adult_17.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 9068,
+			"source_triangles": 8516,
+			"height": 1.751,
+			"eye_height": 1.64,
+			"head_start": 1.53,
+			"megabytes": 6.65,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 8.02,
+				"source_textures": [
+					"1024x1024",
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": true
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_06": {
+			"source": "Microsoft Rocketbox, Male_Adult_12",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Male_Adult_12.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 6722,
+			"source_triangles": 6722,
+			"height": 1.807,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 4.29,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 7.28,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": false
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_07": {
+			"source": "Microsoft Rocketbox, Female_Adult_03",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Female_Adult_03.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 10144,
+			"source_triangles": 9208,
+			"height": 1.739,
+			"eye_height": 1.64,
+			"head_start": 1.53,
+			"megabytes": 6.09,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 6.61,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": true
+			},
+			"imported": "2026-11-04",
+			"tools": "Blender 5.2.2 LTS"
+		},
+		"unmuted_08": {
+			"source": "Microsoft Rocketbox, Male_Adult_17",
+			"url": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"license": "MIT",
+			"author": "Microsoft",
+			"file": "Male_Adult_17.fbx",
+			"options": "--texture-size=2048 --occlusion --look=unmuted",
+			"route": "rigged",
+			"look": "unmuted",
+			"triangles": 7084,
+			"source_triangles": 7084,
+			"height": 1.812,
+			"eye_height": 1.71,
+			"head_start": 1.59,
+			"megabytes": 4.29,
+			"textures": {
+				"roughness": "derived from the specular map",
+				"normal": "source",
+				"color": "source",
+				"texels_per_cm": 7.24,
+				"source_textures": [
+					"2048x2048"
+				],
+				"size": 2048,
+				"cutout": false
+			},
+			"imported": "2026-11-04",
 			"tools": "Blender 5.2.2 LTS"
 		},
 		"zombie_01": {

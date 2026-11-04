@@ -121,6 +121,9 @@ func _describe() -> void:
 	_banana_round()
 	_beer()
 	_beer_bottle()
+	_sticker_gun("branding_gun", POLY, "paint_white", "unmuted_sticker", Vector2(0.15, 0.075))
+	_sticker_gun("slop_gun", "slop_polymer", "slop_trim", "slop_sticker", Vector2(0.08, 0.08))
+	_ring_light()
 	# The standard five once more, each with a silencer.
 	_silenced = true
 	_rifle()
@@ -1815,6 +1818,99 @@ func _bottle(foot: Vector3, up: Vector3) -> void:
 	_turned("beer_label", foot + up * 0.03, up, PackedVector2Array([Vector2(BEER_BELLY + 0.0004, 0.0), Vector2(BEER_BELLY + 0.0004, 0.085)]), 20)
 	_turned("enamel_red", foot + up * 0.058, up, PackedVector2Array([Vector2(BEER_BELLY + 0.0007, 0.0), Vector2(BEER_BELLY + 0.0007, 0.024)]), 20)
 	_turned("beer_cap", foot + up * 0.242, up, PackedVector2Array([Vector2(0.0, 0.009), Vector2(0.0135, 0.009), Vector2(0.0155, 0.0075), Vector2(0.016, 0.0), Vector2(0.0, 0.0)]), 14)
+
+
+# --- Sticker guns --------------------------------------------------------------
+
+
+## The guns of the Unmuted match that fire stickers (scripts/sticker.gd): a
+## chunky blaster that fires them off a roll on its back through a flat mouth,
+## with one of its stickers on either side and on the ends of the roll, which
+## is the magazine. The Branding Gun is black polymer and white with the
+## sticker of Unmuted; the slop gun of the Slop Soldiers toxic purple and lime
+## with Tung Tung Tung Sahur. `body` and `trim` are the two materials,
+## `sticker` that of the picture and `label` how big it is on the side.
+func _sticker_gun(name: String, body: String, trim: String, sticker: String, label: Vector2) -> void:
+	model(name)
+	# The body, a short tube for the left hand and the mouth.
+	_block(body, _at(0.03, 0.004), Vector3(0.054, 0.074, 0.31), 0.012)
+	_bar(body, _at(0.17), _at(0.27), 0.032, 22)
+	for ring: float in [0.19, 0.25]:
+		_bar(trim, _at(ring - 0.004), _at(ring + 0.004), 0.0335, 22)
+	_block(trim, _at(0.285, 0.0), Vector3(0.082, 0.03, 0.036), 0.006)
+	_block(body, _at(0.3, 0.0), Vector3(0.066, 0.008, 0.008), 0.002)
+	# A plain post to aim by, on the mouth.
+	_block(trim, _at(0.29, 0.02), Vector3(0.004, 0.012, 0.006), 0.001)
+	_block(body, _at(-0.12, 0.024), Vector3(0.03, 0.016, 0.02), 0.004)
+	# Its sticker on both sides, reading from the back on the left and from the
+	# back on the right too.
+	_label(sticker, _at(0.04, 0.004, -0.0275), Vector3.LEFT, Vector3.BACK, label.x, label.y)
+	_label(sticker, _at(0.04, 0.004, 0.0275), Vector3.RIGHT, Vector3.FORWARD, label.x, label.y)
+	_grip(GRIP)
+	_trigger_hand()
+
+	# The roll of stickers on its back: dark stickers wound on a core, their
+	# edges showing at either side, on a spindle across the body.
+	var roll := _at(-0.045, 0.078)
+	var on_roll := Vector2(0.06, 0.03) if label.x > label.y else Vector2(0.032, 0.032)
+	part("Mag", Transform3D(Basis(), roll))
+	_bar(POLY, roll + Vector3.LEFT * 0.017, roll + Vector3.RIGHT * 0.017, 0.04, 28)
+	for side: float in [-1.0, 1.0]:
+		_bar(trim, roll + Vector3.RIGHT * side * 0.017, roll + Vector3.RIGHT * side * 0.0185, 0.0395, 28)
+		_label(sticker, roll + Vector3.RIGHT * side * 0.0188, Vector3.RIGHT * side, Vector3.BACK * -side, on_roll.x, on_roll.y)
+	_bar(trim, roll + Vector3.LEFT * 0.021, roll + Vector3.RIGHT * 0.021, 0.012, 16)
+	part("Body")
+	_block(body, _at(-0.045, 0.045), Vector3(0.05, 0.012, 0.06), 0.003)
+	_support_hand(0.22, 0.032)
+	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), roll), Vector2(0.05, 0.05), -104.0,
+		_at(-0.12, 0.06, -0.09), 0.028, 0.0, _at(-0.15, -0.25, -0.3))
+	marker("Muzzle", Transform3D(Basis(), _at(0.31)))
+	marker("MagHold", Transform3D(Basis(), roll))
+
+
+## The TikTok Dance of the Unmuted match: a ring light on a short handle in
+## the right hand, its ring of light towards whoever holds it and a phone in
+## the middle. Firing sets it down and dances, see scripts/dance.gd; the one
+## that stands then is tools/models/unmuted.gd's.
+func _ring_light() -> void:
+	model("tiktok_dance")
+	var grip := Vector3(0, 0.96, -0.28)
+	var around := Transform3D(Basis(Vector3.RIGHT, grip, Vector3.RIGHT.cross(grip)), _at(-0.079, -0.1))
+	part("Mag", around)
+	_bar(POLY, around.origin - grip * 0.07, around.origin + grip * 0.12, 0.016, 16)
+	_bar(GRIP, around.origin - grip * 0.07, around.origin - grip * 0.075, 0.018, 16)
+	var top := around.origin + grip * 0.18
+	_ring("ring_glow", top, Vector3.BACK, 0.058, 0.008)
+	_ring(POLY, top + Vector3.FORWARD * 0.005, Vector3.BACK, 0.058, 0.01)
+	_bar(POLY, around.origin + grip * 0.12, top - grip * 0.058, 0.005, 8)
+	# The phone in the middle, held by a clamp, its screen to the camera.
+	_block(POLY, top, Vector3(0.026, 0.05, 0.006), 0.002)
+	_block("ring_glow", top + Vector3.BACK * 0.0032, Vector3(0.021, 0.043, 0.001), 0.0005)
+	var elbow := _at(-0.42, -0.27, 0.13)
+	var index := [_at(-0.04, -0.1, 0.03), _at(-0.015, -0.1, 0.012), _at(-0.012, -0.1, -0.012), _at(-0.03, -0.1, -0.03)]
+	part("ArmR", Transform3D(Basis(), _at(-0.165, -0.125, 0.05)))
+	if _gloved():
+		_glove(around, Vector2(0.018, 0.018), false, 28.0, _at(-0.2, -0.17, 0.02), 0.03, 0.0, elbow,
+			[_at(-0.115, -0.07, 0.0), _at(-0.1, -0.055, -0.03), _at(-0.07, -0.05, -0.036), _at(-0.04, -0.05, -0.03)], index)
+	else:
+		_hand(around, Vector2(0.018, 0.018), -25, -1, _at(-0.165, -0.125, 0.05), elbow,
+			[_at(-0.115, -0.07, 0.0), _at(-0.1, -0.055, -0.03), _at(-0.07, -0.05, -0.036), _at(-0.04, -0.05, -0.03)], index)
+	part("Body")
+	marker("Muzzle", Transform3D(Basis(), top))
+
+
+## A flat picture `width` by `height` at `center`, facing `normal`, its U
+## running along `along`: a label or a sticker on the side of something.
+func _label(mat: String, center: Vector3, normal: Vector3, along: Vector3, width: float, height: float) -> void:
+	var up := normal.cross(along).normalized()
+	if up.dot(Vector3.UP) < 0.0:
+		up = -up
+	var a := along * width * 0.5
+	var b := up * height * 0.5
+	var st := _tool(mat, 0, center)
+	var n := [normal, normal, normal]
+	_face(st, [center - a - b, center + a - b, center + a + b], n, [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0)])
+	_face(st, [center - a - b, center + a + b, center - a + b], n, [Vector2(0, 1), Vector2(1, 0), Vector2(0, 0)])
 
 
 # --- Shared pieces -------------------------------------------------------------

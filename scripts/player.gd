@@ -124,6 +124,9 @@ var force_control := false
 ## the first is the driver's.
 var riding: Node3D
 var seat := -1
+## True while the player dances the TikTok Dance (scripts/dance.gd): they
+## stand where they are.
+var dancing := false
 
 var _crouched := false
 var _sliding := false
@@ -441,7 +444,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	var control := has_control()
+	var control := has_control() and not dancing
 	var input := Vector2.ZERO
 	if control:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")

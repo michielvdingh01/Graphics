@@ -33,6 +33,7 @@ static var trouble := ""
 ## was that a moment ago, so that the focus goes back to where it was.
 static var picking := false
 static var _picked_one := false
+static var _unmuted_chosen := false
 
 
 static func build(menu: Node) -> void:
@@ -47,6 +48,11 @@ static func build(menu: Node) -> void:
 	var packs := ARMORY.names()
 	chosen.pack = Settings.pack if packs.has(Settings.pack) else ARMORY.STANDARD
 	var kinds: Array = Match.kinds.keys()
+	if ARMORY.unmuted_build() and not _unmuted_chosen:
+		# The build for Unmuted plays its own match, unless asked otherwise.
+		_unmuted_chosen = true
+		chosen.mode = "icp"
+		chosen.level = "dunes"
 	if not kinds.has(chosen.mode):
 		chosen.mode = kinds[0]
 	menu._heading("Multiplayer", 44)

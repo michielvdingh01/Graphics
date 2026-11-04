@@ -711,6 +711,9 @@ def main() -> None:
         raise SystemExit(f"not a sound in the manifest: {', '.join(sorted(unknown))}")
     built = False
     for sound in sounds:
+        # A sound that another script makes is not made here.
+        if sound.get("generator", "tools/build_sounds.py") != "tools/build_sounds.py":
+            continue
         if wanted:
             if "--all" not in wanted and sound["id"] not in wanted:
                 continue

@@ -36,6 +36,12 @@ extends Node
 ## kneels behind each a moment before it goes on, see _advance(). So a side
 ## that knows where somebody is comes at them spread out, not in a row.
 ##
+## Where the kind of match has a spot for it to fire at while it sees nobody
+## (mode.plaster(): a sticker to put somewhere in the Unmuted match), it turns
+## to that spot and fires at it, a shot every PLASTER seconds, as it walks.
+## And where the kind of match wants it to dance (mode.dances()), it stands
+## and dances the TikTok Dance while it sees nobody, see scripts/dancer.gd.
+##
 ## What it does not do yet: fall back, throw grenades or jump.
 
 const WEAPONS := preload("res://scripts/weapons.gd")
@@ -131,6 +137,11 @@ const COVER_LOOKS := 24
 ## that at such a distance, and with forty in a match it saves the processor
 ## half of what they cost it.
 const FAR_OFF := 40.0
+## Seconds between two shots at a spot the match points at, how far off that
+## spot may be, in metres, and how near its aim has to be, in degrees.
+const PLASTER := 0.9
+const PLASTERS := 25.0
+const PLASTER_AIM := 4.0
 
 ## The entrant it thinks for, see match.gd.
 var me: RefCounted
@@ -204,6 +215,10 @@ var _holding := 0.0
 ## step of the physics go by.
 var _far := false
 var _skipped := false
+## The clock at which it may next fire at a spot the match points at.
+var _plaster_at := 0.0
+## True while it dances.
+var _dancing := false
 
 
 func _ready() -> void:
@@ -245,6 +260,7 @@ func begin() -> void:
 	_rest_until = 0.0
 	_going = false
 	_lane = randf_range(-1.0, 1.0)
+	_dancing = false
 	_bounding = false
 	_holding = 0.0
 	_look = randf() * LOOK
@@ -282,6 +298,8 @@ func _doing() -> int:
 		doing |= Net.SPINNING
 	if _holding > 0.0 and _body.ducks():
 		doing |= Net.CROUCHED
+	if _dancing:
+		doing |= Net.DANCING
 	return doing
 
 
@@ -349,6 +367,7 @@ func _physics_process(delta: float) -> void:
 	if not _body.is_on_floor():
 		_body.velocity += _body.get_gravity() * delta
 	if me.out > 0.0 or Match.state != Match.State.PLAYING or not _agent.is_inside_tree():
+		_dancing = false
 		_body.velocity.x = move_toward(_body.velocity.x, 0.0, ACCEL * delta)
 		_body.velocity.z = move_toward(_body.velocity.z, 0.0, ACCEL * delta)
 		if me.out <= 0.0:
@@ -383,6 +402,7 @@ func _physics_process(delta: float) -> void:
 	var errand: Variant = _errand()
 	if errand != null and _clock >= _detour and not Match.mode.hurries(me):
 		wish = errand
+	_dancing = _target == null and Match.mode.dances(me)
 	# Whoever has something better to do than to fight runs on, unless the
 	# enemy is on top of them.
 	if _target and not (Match.mode.hurries(me) and eye.distance_to(_target.body.head.global_position) > CORNERED):
@@ -436,13 +456,18 @@ func _physics_process(delta: float) -> void:
 		_seen = 0.0
 		_spin_barrels(delta, false)
 		_fire(delta, eye, false)
-		desired = _roam(wish, delta)
+		desired = Vector3.ZERO if _dancing else _roam(wish, delta)
 		_sprinting = desired.length() > WALK and not _data.no_sprint
 		if desired.length_squared() > 0.01:
 			facing = desired
 			_aim = _aim.lerp(eye + desired.normalized() * 10.0, 1.0 - exp(-delta * 4.0))
+		var mark: Variant = Match.mode.plaster(me) if special() == null and not _dancing else null
+		if mark != null and eye.distance_to(mark) < PLASTERS:
+			_plaster(delta, eye, mark)
+			facing = (mark as Vector3) - eye
+			_sprinting = false
 		# A quiet moment is one to reload in.
-		if _reload <= 0.0 and _mag < _data.mag_size * 0.5:
+		elif _reload <= 0.0 and _mag < _data.mag_size * 0.5:
 			_start_reload()
 	desired = _carried(desired)
 	_notice_stuck(delta, desired)
@@ -456,6 +481,20 @@ func _physics_process(delta: float) -> void:
 	_body.velocity.x = move_toward(_body.velocity.x, desired.x, ACCEL * delta)
 	_body.velocity.z = move_toward(_body.velocity.z, desired.z, ACCEL * delta)
 	_slide(delta)
+
+
+## Turns its aim to `mark` and fires at it once that is on it, as often as
+## PLASTER lets it.
+func _plaster(delta: float, eye: Vector3, mark: Vector3) -> void:
+	_aim = _aim.lerp(mark, 1.0 - exp(-delta * 6.0))
+	if _clock < _plaster_at or _cooldown > 0.0 or _reload > 0.0:
+		return
+	if _mag <= 0:
+		_start_reload()
+		return
+	if (_aim - eye).normalized().dot((mark - eye).normalized()) > cos(deg_to_rad(PLASTER_AIM)):
+		_plaster_at = _clock + PLASTER
+		_shoot(eye, 1)
 
 
 ## Moves the body as far as its velocity takes it in `delta` seconds, which

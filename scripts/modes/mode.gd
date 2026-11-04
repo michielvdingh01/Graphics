@@ -78,6 +78,30 @@ func wish(_who: RefCounted) -> Variant:
 	return null
 
 
+## Where a bot `who` that sees nobody should fire at, if anywhere: a spot to
+## put a sticker on in the Unmuted match. Null for nowhere.
+func plaster(_who: RefCounted) -> Variant:
+	return null
+
+
+## The pack whoever is on `side` carries, if the kind says: "" for that of
+## the match (assets/packs.json).
+func pack(_side: int) -> String:
+	return ""
+
+
+## What `who` looks like, as puppet.enlist() takes it, if the kind says: null
+## leaves it to the theme of the enemies, {} has them be the soldiers.
+func look(_who: RefCounted) -> Variant:
+	return null
+
+
+## True if a bot `who` that sees nobody should stand and dance the TikTok
+## Dance where it is (scripts/dancer.gd).
+func dances(_who: RefCounted) -> bool:
+	return false
+
+
 ## True if `who` has something better to do than to fight whoever is in sight.
 func hurries(_who: RefCounted) -> bool:
 	return false

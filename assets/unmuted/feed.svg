@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="1024" viewBox="0 0 512 1024">
+<rect width="512" height="1024" rx="48" fill="#08080b"/>
+<rect x="196" y="22" width="120" height="18" rx="9" fill="#1b1b22"/>
+<defs><linearGradient id="g64" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb02e"/><stop offset="1" stop-color="#9b5cff"/></linearGradient></defs>
+<rect x="28" y="64" width="456" height="360" rx="22" fill="url(#g64)"/>
+<circle cx="256.0" cy="226" r="65" fill="white" fill-opacity="0.35"/>
+<path d="M442,274 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<path d="M442,320 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<path d="M442,366 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<rect x="44" y="360" width="263" height="16" rx="8" fill="white" fill-opacity="0.85"/>
+<rect x="44" y="386" width="126" height="12" rx="6" fill="white" fill-opacity="0.6"/>
+<defs><linearGradient id="g446" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff2ec4"/><stop offset="1" stop-color="#2eff9a"/></linearGradient></defs>
+<rect x="28" y="446" width="456" height="300" rx="22" fill="url(#g446)"/>
+<circle cx="256.0" cy="581" r="54" fill="white" fill-opacity="0.35"/>
+<path d="M442,596 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<path d="M442,642 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<path d="M442,688 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<rect x="44" y="682" width="192" height="16" rx="8" fill="white" fill-opacity="0.85"/>
+<rect x="44" y="708" width="166" height="12" rx="6" fill="white" fill-opacity="0.6"/>
+<defs><linearGradient id="g768" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3d6e"/><stop offset="1" stop-color="#2eff9a"/></linearGradient></defs>
+<rect x="28" y="768" width="456" height="420" rx="22" fill="url(#g768)"/>
+<circle cx="256.0" cy="957" r="76" fill="white" fill-opacity="0.35"/>
+<path d="M442,1038 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<path d="M442,1084 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<path d="M442,1130 c-12,-14 -34,-4 -22,14 l22,20 l22,-20 c12,-18 -10,-28 -22,-14z" fill="white" fill-opacity="0.9"/>
+<rect x="44" y="1124" width="207" height="16" rx="8" fill="white" fill-opacity="0.85"/>
+<rect x="44" y="1150" width="124" height="12" rx="6" fill="white" fill-opacity="0.6"/>
+<rect x="0" y="932" width="512" height="92" fill="#0e0e13"/>
+<circle cx="64" cy="978" r="17" fill="#55556a"/>
+<circle cx="160" cy="978" r="17" fill="#55556a"/>
+<circle cx="256" cy="978" r="17" fill="#ffffff"/>
+<circle cx="352" cy="978" r="17" fill="#55556a"/>
+<circle cx="448" cy="978" r="17" fill="#55556a"/>
+</svg>

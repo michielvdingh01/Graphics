@@ -943,12 +943,21 @@ func _supplies() -> void:
 	var misses := []
 	var file: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(ARMORY.FILE)).packs
 	for pack: String in file:
+		# A pack of a build of its own keeps its own rules, see
+		# tools/test_unmuted.sh.
+		if str(file[pack].get("build", "")) != "":
+			continue
 		var built: bool = (file[pack].weapons as Array).all(func(weapon_name: String) -> bool: return ARMORY.named(weapon_name) != null)
 		var sizes_fit: bool = ARMORY.weapons(pack).size() in range(2, ARMORY.MOST + 1) and not ARMORY.bots(pack).is_empty()
 		if offered.has(pack) != built or (built and not sizes_fit):
 			misses.append(pack)
 	print("    packs on offer: %s of %s" % [", ".join(offered), ", ".join(file.keys())])
 	_check("a pack is on offer once all its weapons are built, with two to five of them", offered.has(ARMORY.STANDARD) and misses.is_empty())
+	_check("and the game for friends knows nothing of Unmuted: no weapons, packs or match of it, and its own version on the wire",
+		# all() rather than the constants of the armory: an autoload that names
+		# those can find them empty, see the head of armory.gd.
+		ARMORY.named("branding_gun") == null and ARMORY.named("tiktok_dance") == null and not offered.has("unmuted") and not offered.has("slop")
+		and not Match.kinds.has("icp") and Net.wire_version() < 1000)
 	var pair: Array[WeaponData] = [standard[2], standard[1]]
 	weapons.equip(pair, Vector2i(3, 4))
 	await _wait(0.1)

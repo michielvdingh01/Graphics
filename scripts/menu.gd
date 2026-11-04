@@ -15,6 +15,11 @@ enum Screen { NONE, TITLE, LEVELS, PAUSE, CONTROLS, SETTINGS, END, TOGETHER, SAN
 
 ## What the screen of a match has on it: see scripts/match_menu.gd.
 const MATCH_MENU := preload("res://scripts/match_menu.gd")
+const ARMORY := preload("res://scripts/armory.gd")
+## The title screen of the build for Unmuted: its logo (tools/unmuted/stickers.py)
+## and where Play goes.
+const UNMUTED_LOGO := "res://assets/unmuted/logo.png"
+const UNMUTED_MATCH := {"mode": "icp", "level": "dunes"}
 
 ## The music of a level: these pieces one after the other, round and round,
 ## see Sfx.music().
@@ -189,23 +194,26 @@ func _show(screen: Screen) -> void:
 
 	match screen:
 		Screen.TITLE:
-			_heading(ProjectSettings.get_setting("application/config/name").to_upper(), 64)
-			if Updater.state == Updater.State.READY:
-				_button("Restart to update", Updater.restart)
-			var checkpoint := Save.checkpoint
-			if checkpoint:
-				var text := "Continue  ·  %s" % level_name(checkpoint.level)
-				if checkpoint.title:
-					text += ", %s" % (checkpoint.title as String).to_lower()
-				_button(text, _play.bind(checkpoint.level, false))
-			_button("New game", _choose_level.bind(false))
-			_button("Multiplayer", _show.bind(Screen.MATCH))
-			_button("Play together", _show.bind(Screen.TOGETHER))
-			if not Sandbox.experiments.is_empty():
-				_button("Sandbox", _show.bind(Screen.SANDBOX))
-			_button("Controls", _show.bind(Screen.CONTROLS))
-			_button("Settings", _show.bind(Screen.SETTINGS))
-			_button("Quit", get_tree().quit)
+			if ARMORY.unmuted_build():
+				_unmuted_title()
+			else:
+				_heading(ProjectSettings.get_setting("application/config/name").to_upper(), 64)
+				if Updater.state == Updater.State.READY:
+					_button("Restart to update", Updater.restart)
+				var checkpoint := Save.checkpoint
+				if checkpoint:
+					var text := "Continue  ·  %s" % level_name(checkpoint.level)
+					if checkpoint.title:
+						text += ", %s" % (checkpoint.title as String).to_lower()
+					_button(text, _play.bind(checkpoint.level, false))
+				_button("New game", _choose_level.bind(false))
+				_button("Multiplayer", _show.bind(Screen.MATCH))
+				_button("Play together", _show.bind(Screen.TOGETHER))
+				if not Sandbox.experiments.is_empty():
+					_button("Sandbox", _show.bind(Screen.SANDBOX))
+				_button("Controls", _show.bind(Screen.CONTROLS))
+				_button("Settings", _show.bind(Screen.SETTINGS))
+				_button("Quit", get_tree().quit)
 		Screen.LEVELS:
 			_heading("Host a game" if _hosting else "New game", 44)
 			for level in LEVELS:
@@ -214,7 +222,9 @@ func _show(screen: Screen) -> void:
 		Screen.TOGETHER:
 			_heading("Play together", 44)
 			_field("Your name", Net.player_name, func(text: String) -> void: Net.player_name = text)
-			_button("Host a game", _choose_level.bind(true))
+			# The build for Unmuted hosts its match from the screen of the match.
+			if not ARMORY.unmuted_build():
+				_button("Host a game", _choose_level.bind(true))
 			_games = VBoxContainer.new()
 			_games.add_theme_constant_override("separation", _column.get_theme_constant("separation"))
 			_into.add_child(_games)
@@ -292,6 +302,35 @@ func _show(screen: Screen) -> void:
 				_button("Play again", _play.bind(LEVELS[0].scene, true))
 			_button("Leave the game" if Net.active else "Quit to title", _quit_to_title)
 	_focus_first.call_deferred()
+
+
+## The title screen of the build for Unmuted (Armory.unmuted_build()): the
+## logo, Win the ICP, and the match of that name straight away against bots,
+## or with colleagues on the network; no route, no sandbox.
+func _unmuted_title() -> void:
+	if ResourceLoader.exists(UNMUTED_LOGO):
+		var logo := TextureRect.new()
+		logo.texture = load(UNMUTED_LOGO)
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+		logo.custom_minimum_size = Vector2(328, 65) * 1.1
+		logo.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		_into.add_child(logo)
+	_heading("WIN THE ICP", 64)
+	_note("Unmuted against the Slop Soldiers, in the dunes. Stickers and\ndances lure the ICP: get him to Unmuted HQ three times to win.")
+	_button("Play", _play_icp)
+	_button("Play with colleagues", _show.bind(Screen.MATCH))
+	_button("Join colleagues", _show.bind(Screen.TOGETHER))
+	_button("Controls", _show.bind(Screen.CONTROLS))
+	_button("Settings", _show.bind(Screen.SETTINGS))
+	_button("Quit", get_tree().quit)
+
+
+## A match of Win the ICP against bots, as many a side as the dunes have
+## when nothing else is asked for.
+func _play_icp() -> void:
+	_show(Screen.NONE)
+	Match.open(UNMUTED_MATCH.duplicate())
 
 
 func _play(scene: String, fresh: bool) -> void:

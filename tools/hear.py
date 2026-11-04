@@ -45,6 +45,8 @@ plays a footstep or an enemy's shot, unless --at says from how far.
     tools/hear.py whiz                    a robot's burst from 20 m, the rounds going by
     tools/hear.py voice zombie            somebody of that voice seeing the player, being hit
                                           three times and going down: human, zombie, clown, robot
+    tools/hear.py dance                   the music of the TikTok Dance of the Unmuted match, going
+                                          round twice (sixteen seconds)
     tools/hear.py music level1and2        the piece at the level of a game, a fight starting
                                           after 4 s and over after 12: its second layer comes
                                           and goes. --layer=<file> tries another file as that layer
@@ -571,6 +573,15 @@ def drive(kind: str, ride: str, variant: str) -> pathlib.Path:
     return out
 
 
+def dance(beat: str) -> list:
+    """The loop of the TikTok Dance going round twice, as scripts/dancer.gd
+    plays it, seamless."""
+    take = sorted((ROOT / "assets/audio" / beat).glob("*.wav"))[0]
+    with wave.open(str(take)) as opened:
+        length = opened.getnframes() / opened.getframerate()
+    return [{"t": START + i * length, "file": str(take), "bus": "World", "db": 0.0, "pitch": 1.0, "until": START + (i + 1) * length, "fade": 0.0} for i in range(2)]
+
+
 def main() -> None:
     args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     options = dict(arg[2:].partition("=")[::2] for arg in sys.argv[1:] if arg.startswith("--"))
@@ -633,6 +644,10 @@ def main() -> None:
         if "quiet" not in options:
             subprocess.run(["afplay", str(out)], check=True)
         return
+    elif args[0] == "dance":
+        variant = args[1] if len(args) > 1 and args[1] != "a" else ""
+        name, events = "dance" + (f"_{variant}" if variant else ""), dance("dance_beat" + (f"_{variant}" if variant else ""))
+        length = events[-1]["until"] + 1.0
     elif args[0] == "music" and len(args) > 1:
         name, events, length = f"music_{args[1]}", music(args[1], options.get("layer", "")), 20.0
     else:

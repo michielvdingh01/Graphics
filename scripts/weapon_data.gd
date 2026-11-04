@@ -151,3 +151,6 @@ extends Resource
 ## Goes by hand: at a shot what is in hand is gone, and the next comes up
 ## before the following one.
 @export var by_hand := false
+## No weapon but the TikTok Dance of the Unmuted match: holding fire sets the
+## ring light down and dances (scripts/dance.gd), and nothing is fired.
+@export var dances := false
