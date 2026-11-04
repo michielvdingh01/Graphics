@@ -18,6 +18,13 @@ carries, keeps the pattern and the folds of the cloth as light and dark,
 leaves skin, hair, eyes and the glass of goggles as they are, and takes the
 flag and the badges off the sleeves.
 
+Unmuted is what the people of the Unmuted build wear: a black T-shirt with
+the logo of Unmuted in white on the chest, and black trousers; bare legs get
+black tights. Sleeves that are long stay long, in black. Their faces, hair,
+hands and shoes are as they came. The ICP of that build is a man in a black
+suit with a grin from ear to ear and sunglasses, which are made here as
+the nose of a clown is: see icp() and shades().
+
 Worn is how a soldier looks after a while in the field: sand and mud on the
 boots and up the shins, patches on the knees and elbows, dust on whatever
 faces up, grime in the folds and the edges rubbed lighter. It is the same
@@ -45,6 +52,11 @@ UNIFORMS = {
     "woodland": {"cloth": ((0.20, 0.215, 0.13), (0.235, 0.185, 0.125)), "boots": (0.11, 0.085, 0.065)},
     "night": {"cloth": ((0.109, 0.105, 0.100), (0.174, 0.168, 0.160)), "boots": (0.062, 0.06, 0.058)},
 }
+# What Unmuted wears: the black of the shirt and of the trousers, the white
+# the logo is printed in, and the logo on the front and on the back: how wide
+# in metres, and how far under where the neck begins its top edge lies.
+UNMUTED = {"shirt": (0.032, 0.032, 0.034), "trousers": (0.028, 0.028, 0.031), "print": (0.86, 0.86, 0.84), "logo": "assets/unmuted/logo.png",
+           "front": {"wide": 0.2, "under_neck": 0.13}, "back": {"wide": 0.27, "under_neck": 0.1}}
 # A uniform worn in the field: how far up the leg the dirt reaches, as a share
 # of the height; the sand and the mud it is; how much of the colour it takes
 # at most; and how strongly folds are grimed and edges rubbed lighter.
@@ -614,6 +626,143 @@ def worn(canvas: Canvas) -> dict:
     }
 
 
+def _black(grey: np.ndarray, where: np.ndarray, black) -> np.ndarray:
+    """`black` for every texel, as much lighter or darker as the cloth was
+    there against what is typical of `where`, so that folds and seams still
+    show."""
+    typical = float(np.median(grey[where > 0.5])) if (where > 0.5).sum() > 100 else 0.3
+    folds = np.clip(grey / max(typical, 0.03), 0.4, 2.2)[:, None] ** 0.75
+    return np.asarray(black, dtype=np.float64) * folds
+
+
+def unmuted(canvas: Canvas) -> dict:
+    """Black trousers and a black T-shirt with the logo on the chest, see
+    UNMUTED: everything that hangs on the legs and is no shoe is trousers,
+    everything above that is shirt where it is not skin, and the head with
+    its hair is left alone."""
+    import pathlib
+    c, s = canvas, canvas.scale
+    found = parts(c)
+    grey = found["grey"]
+    head = np.clip(c.head * 2.0, 0.0, 1.0)
+    # The hem of a trouser leg hangs half on the foot, and the cuff of a pair
+    # of jeans may be wholly on it: what is denim blue is no shoe.
+    top_ = np.maximum(c.colour.max(axis=1), 0.08)
+    denim = (c.colour[:, 2] - np.maximum(c.colour[:, 0], c.colour[:, 1])) / top_ > 0.08
+    shoes = np.maximum(np.clip((c.feet - 0.6) * 4.0, 0.0, 1.0), found["boots"]) * ~denim
+    low = np.clip(c.legs * 1.6, 0.0, 1.0)
+    legs = low * (1.0 - shoes) * (1.0 - head)
+    shirt = (1.0 - low) * (1.0 - found["skin"]) * (1.0 - found["glass"]) * (1.0 - head) * (1.0 - shoes)
+    c.colour = blend(c.colour, _black(grey, legs, UNMUTED["trousers"]), legs)
+    c.colour = blend(c.colour, _black(grey, shirt, UNMUTED["shirt"]), shirt)
+    dyed = np.maximum(legs, shirt)
+    c.rough = c.rough * (1.0 - dyed) + 0.85 * dyed
+
+    # The logo, laid on from the front and from the back: in the middle, its
+    # top edge some way under where the neck begins.
+    image = bpy.data.images.load(str(pathlib.Path(__file__).resolve().parents[2] / UNMUTED["logo"]))
+    w, h = image.size
+    alpha = np.array(image.pixels[:]).reshape(h, w, 4)[:, :, 3]
+    neck = np.array(c.armature.data.bones["Neck"].head_local)
+    printed = np.zeros(len(c.at))
+    for way, toward in (("front", -1.0), ("back", 1.0)):
+        wide = UNMUTED[way]["wide"] * s
+        high = wide * h / w
+        top = neck[2] - UNMUTED[way]["under_neck"] * s
+        # Seen from the front the left of the picture is -X, from the back +X.
+        u = (c.at[:, 0] - neck[0]) * -toward / wide + 0.5
+        v = (top - c.at[:, 2]) / high
+        facing = (c.facing[:, 1] * toward > 0.35) & ((c.at[:, 1] - neck[1]) * toward > 0.0)
+        inside = (u >= 0.0) & (u < 1.0) & (v >= 0.0) & (v < 1.0) & facing
+        column = np.clip((u * (w - 1)).round().astype(int), 0, w - 1)
+        row = np.clip(((1.0 - v) * (h - 1)).round().astype(int), 0, h - 1)
+        printed[inside] = np.maximum(printed[inside], alpha[row[inside], column[inside]])
+    printed *= shirt
+    typical = float(np.median(grey[shirt > 0.5])) if (shirt > 0.5).sum() > 100 else 0.3
+    ink = np.asarray(UNMUTED["print"]) * np.clip(grey / max(typical, 0.03), 0.75, 1.15)[:, None]
+    c.colour = blend(c.colour, ink, printed)
+    c.rough = c.rough * (1.0 - printed) + 0.6 * printed
+    bpy.data.images.remove(image)
+    return {"shirt": round(float((shirt > 0.5).mean()), 3), "trousers": round(float((legs > 0.5).mean()), 3), "logo_texels": int((printed > 0.5).sum())}
+
+
+def icp(canvas: Canvas) -> dict:
+    """The ICP: a grin from ear to ear, teeth and all, painted on; the suit
+    stays as it came. His sunglasses come after, see shades()."""
+    c, s = canvas, canvas.scale
+    on_face = c.head * c.front * (np.abs(c.at[:, 1] - c.mouth[1]) < 0.05 * s)
+    dx = c.at[:, 0] - c.mouth[0]
+    dz = c.at[:, 2] - c.mouth[2]
+    # Wide, and curling up at the corners.
+    reach = 0.034 * s
+    curve = 0.5 * dx * dx / (0.03 * s)
+    across = np.clip((reach - np.abs(dx)) / (0.004 * s), 0.0, 1.0)
+    lips = np.clip((0.0085 * s - np.abs(dz - curve)) / (0.002 * s), 0.0, 1.0) * across
+    c.colour = blend(c.colour, c.tone * np.array([0.62, 0.36, 0.34]), lips * on_face * 0.85)
+    # The teeth: a band in the lips, open the widest in the middle.
+    opened = (0.0055 - 0.003 * (np.abs(dx) / reach) ** 2) * s
+    teeth = np.clip((opened - np.abs(dz - curve - 0.0005 * s)) / (0.0012 * s), 0.0, 1.0) * np.clip((reach * 0.9 - np.abs(dx)) / (0.003 * s), 0.0, 1.0)
+    gaps = 0.75 + 0.25 * (np.abs(np.sin(dx / (0.0045 * s) * np.pi)) > 0.18)
+    c.colour = blend(c.colour, np.array([0.88, 0.86, 0.8]) * gaps[:, None], teeth * on_face)
+    c.rough = c.rough * (1.0 - teeth * on_face) + 0.25 * teeth * on_face
+    # Laughing lines from beside the nose down past the corners.
+    for side in (1.0, -1.0):
+        centre = c.mouth + np.array([side * 0.006 * s, 0.0, 0.03 * s])
+        line = np.abs(np.linalg.norm((c.at - centre)[:, [0, 2]], axis=1) - 0.042 * s) < 0.0018 * s
+        line &= (np.sign(dx) == side) & (dz > -0.01 * s) & (dz < 0.022 * s)
+        c.colour = blend(c.colour, c.colour * 0.72, line * on_face * 0.7)
+    return {"grin": int((teeth * on_face > 0.5).sum())}
+
+
+def shades(canvas: Canvas) -> None:
+    """Black sunglasses on the eyes, hung on the head as the nose of a clown
+    is: two lenses, a bridge, and arms back past the ears. All of it takes
+    its colour from a patch of glossy black painted where a lens hides it."""
+    c, s = canvas, canvas.scale
+    from mathutils import Matrix, Vector
+    mesh = c.body.data
+    nearest = int(np.argmin(np.linalg.norm(c.at - c.eyes[0], axis=1)))
+    row, column = int(c.rows[nearest]), int(c.columns[nearest])
+    side = c.atlas.side
+    c.atlas.color[max(row - 2, 0):row + 3, max(column - 2, 0):column + 3, :3] = (0.015, 0.015, 0.018)
+    c.atlas.rough[max(row - 2, 0):row + 3, max(column - 2, 0):column + 3] = 0.08
+    slot = mesh.polygons[int(c.atlas.face[row, column])].material_index
+    group = c.body.vertex_groups["Head"].index
+    grown = bmesh.new()
+    grown.from_mesh(mesh)
+    weights = grown.verts.layers.deform.verify()
+    layout = grown.loops.layers.uv.verify()
+    grown.verts.ensure_lookup_table()
+    before = len(grown.verts)
+    # The front is -Y; the lenses sit a little in front of the eyes.
+    lens_y = min(eye[1] for eye in c.eyes) - 0.016 * s
+    for eye in c.eyes:
+        at = Vector((eye[0], lens_y, eye[2] + 0.002 * s))
+        bmesh.ops.create_icosphere(grown, subdivisions=2, radius=1.0, matrix=Matrix.Translation(at) @ Matrix.Diagonal(Vector((0.031 * s, 0.005 * s, 0.022 * s, 1.0))))
+        # An arm from the outer edge back past the ear.
+        outward = 1.0 if eye[0] > c.nose[0] else -1.0
+        start = Vector((eye[0] + outward * 0.029 * s, lens_y + 0.004 * s, eye[2] + 0.008 * s))
+        end = Vector((c.nose[0] + outward * 0.074 * s, lens_y + 0.11 * s, eye[2] + 0.004 * s))
+        along = end - start
+        turn = Vector((0.0, 1.0, 0.0)).rotation_difference(along.normalized()).to_matrix().to_4x4()
+        bmesh.ops.create_cube(grown, size=1.0, matrix=Matrix.Translation((start + end) * 0.5) @ turn @ Matrix.Diagonal(Vector((0.004 * s, along.length, 0.006 * s, 1.0))))
+    # The bridge over the nose.
+    bridge = Vector((c.nose[0], lens_y + 0.002 * s, c.eyes[0][2] + 0.008 * s))
+    gap = abs(c.eyes[0][0] - c.eyes[1][0]) - 0.05 * s
+    bmesh.ops.create_cube(grown, size=1.0, matrix=Matrix.Translation(bridge) @ Matrix.Diagonal(Vector((max(gap, 0.008 * s), 0.004 * s, 0.004 * s, 1.0))))
+    grown.verts.ensure_lookup_table()
+    made = [grown.verts[i] for i in range(before, len(grown.verts))]
+    for vertex in made:
+        vertex[weights][group] = 1.0
+        for face in vertex.link_faces:
+            face.material_index = slot
+            face.smooth = True
+            for loop in face.loops:
+                loop[layout].uv = ((column + 0.5) / side, (row + 0.5) / side)
+    grown.to_mesh(mesh)
+    grown.free()
+
+
 def apply(name: str, body: bpy.types.Object, armature: bpy.types.Object, atlas, seed: int) -> dict:
     canvas = Canvas(body, armature, atlas, seed)
     note = {"name": name, "seed": seed}
@@ -625,6 +774,13 @@ def apply(name: str, body: bpy.types.Object, armature: bpy.types.Object, atlas, 
         canvas.finish()
         ball(canvas)
         note["pattern"] = suit["pattern"]
+    elif name == "unmuted":
+        note.update(unmuted(canvas))
+        canvas.finish()
+    elif name == "icp":
+        note.update(icp(canvas))
+        canvas.finish()
+        shades(canvas)
     elif name == "worn":
         note.update(worn(canvas))
         canvas.finish()
@@ -632,5 +788,5 @@ def apply(name: str, body: bpy.types.Object, armature: bpy.types.Object, atlas, 
         note.update(uniform(canvas, UNIFORMS[name]))
         canvas.finish()
     else:
-        raise SystemExit("import_character: no look called %s; there is zombie, clown, worn and the uniforms %s" % (name, ", ".join(UNIFORMS)))
+        raise SystemExit("import_character: no look called %s; there is zombie, clown, worn, unmuted, icp and the uniforms %s" % (name, ", ".join(UNIFORMS)))
     return note

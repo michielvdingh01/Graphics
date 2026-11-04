@@ -153,6 +153,22 @@ func _icp() -> void:
 	print("  the bases %.0f m apart to walk, the ICP %.0f and %.0f m from them" % [arena.length(), walks[0], walks[1]])
 	_check("in the middle, as far to walk from either base", absf(walks[0] - walks[1]) < maxf(arena.length() * 0.15, 6.0))
 	_check("and the two bases stand at the ends", get_tree().current_scene.has_node(^"Base0") and get_tree().current_scene.has_node(^"Base1"))
+	var model: Node = icp.get_node_or_null(^"Model")
+	_check("he is the man in the suit, a size up", model != null and model.find_children("*", "Skeleton3D", true, false).size() == 1 and absf(model.get_child(0).scale.y - icp.SIZE) < 0.01
+		and ResourceLoader.exists(icp.LOOK) and icp.LOOK.contains("icp_01"))
+	var unmuted := 0
+	var soldiers := 0
+	for who: RefCounted in Match.entrants.values():
+		var look: Variant = mode.look(who)
+		if who.team == 0 and look is Dictionary and look.has("character") and (look.character as PackedScene).resource_path.contains("/unmuted_"):
+			unmuted += 1
+		elif who.team == 1 and look is Dictionary and look.is_empty():
+			soldiers += 1
+	_check("Unmuted are the people in black, the Slop Soldiers soldiers, whatever the enemies of the route are", unmuted == 3 and soldiers == 3)
+	var dressed: Array = Match.entrants.values().filter(func(who: RefCounted) -> bool: return who.team == 0)
+	_check("and so they look in the level", dressed.all(func(who: RefCounted) -> bool:
+		var rig: Node = who.body.get_node_or_null(^"Model")
+		return rig != null and rig.get_child_count() > 0 and str(rig.get_child(0).scene_file_path).contains("/unmuted_")))
 
 	# Without the bots, which stand still.
 	for who: RefCounted in Match.entrants.values():
@@ -170,6 +186,9 @@ func _icp() -> void:
 	await _until(func() -> bool: return STICKERS.lures().is_empty(), 20.0)
 	Engine.time_scale = 1.0
 	_check("he walks there, and once he is there it draws no more", STICKERS.lures().is_empty() and icp.global_position.distance_to(near) < 4.0 and STICKERS.stuck().size() == 1)
+	var money: Node = get_tree().current_scene.get_node_or_null(^"Money")
+	var notes := money.get_child_count() if money else 0
+	_check("and drops a banknote every few steps", icp.looks()[0].material_override.albedo_texture != null and notes >= floori(start.distance_to(icp.global_position) / icp.BILL_EVERY) - 1 and notes >= 1)
 	await _wait(1.2)
 	_check("then he stands again", mode.heading == -1)
 
@@ -198,6 +217,7 @@ func _icp() -> void:
 	await _wait(0.3)
 	_check("at the base of Unmuted he is won over: a point for Unmuted", Match.tally[0] == 1 and Match.tally[1] == 0)
 	_check("he is gone a moment, and so is every sticker", not icp.visible and STICKERS.stuck().is_empty())
+	_check("in a shower of banknotes", money != null and money.get_child_count() >= icp.RAIN)
 	await _wait(float(Match.mode.numbers.back) + 0.5)
 	_check("then he is back in the middle", icp.visible and icp.global_position.distance_to(mode.middle) < 1.5)
 

@@ -30,6 +30,16 @@ const WAY := preload("res://scripts/way.gd")
 const BODY := preload("res://scripts/icp_body.gd")
 const CTF := preload("res://scripts/modes/ctf.gd")
 const JOBS: Array[int] = [LURE, TRAIL, HUNT, LURE, TRAIL, HUNT]
+## The people of Unmuted, in black with the logo (tools/unmuted/build_people.sh);
+## the Slop Soldiers are the soldiers, women among them, whatever the enemies
+## of the route are.
+const PEOPLE := "res://assets/characters/unmuted_%02d/unmuted_%02d.glb"
+const PEOPLE_COUNT := 8
+## The sleeve of the arms in front of the camera (tools/models/hands.py), one
+## material for every weapon: black for whoever plays for Unmuted, and back
+## as it was once the match is over.
+const SLEEVE := "res://materials/sleeve.tres"
+const BLACK_SLEEVE := Color(0.035, 0.035, 0.038)
 ## Seconds between two times he makes up his mind.
 const THINKS := 0.5
 ## How far from him those who lure stand, and how far ahead of him on the way
@@ -68,6 +78,8 @@ var _lure_for := 0.0
 ## The way from him to the base of either side, over the navmesh, as it was
 ## when he last made up his mind.
 var _ways: Array[PackedVector3Array] = [PackedVector3Array(), PackedVector3Array()]
+## The colour of the sleeve before this match made it black.
+var _sleeve: Variant = null
 
 
 func begin() -> void:
@@ -105,6 +117,29 @@ func set_out(plan: Array) -> void:
 	host.level().add_child(icp)
 	icp.global_position = middle
 	icp.rotation.y = _facing(middle, bases[0])
+	# Drawn once now, rather than when the first banknote falls.
+	Fx.rehearse(icp.looks())
+	_dress_sleeve()
+	if not host.changed.is_connected(_dress_sleeve):
+		host.changed.connect(_dress_sleeve)
+
+
+## The sleeve in front of the camera black while this machine's player plays
+## for Unmuted, and as it was otherwise.
+func _dress_sleeve() -> void:
+	var sleeve := load(SLEEVE) as ShaderMaterial
+	if sleeve == null:
+		return
+	if _sleeve == null:
+		_sleeve = sleeve.get_shader_parameter(&"color")
+	var own: RefCounted = host.me() if host.active else null
+	sleeve.set_shader_parameter(&"color", BLACK_SLEEVE if own and own.team == 0 and host.mode == self else _sleeve)
+	if (not host.active or host.mode != self) and host.changed.is_connected(_dress_sleeve):
+		host.changed.disconnect(_dress_sleeve)
+
+
+func sides_changed() -> void:
+	_dress_sleeve()
 
 
 ## The base of `side` as a grey block for now, behind its door with its front
@@ -267,6 +302,14 @@ func _show_back(at: Vector3) -> void:
 	if is_instance_valid(icp):
 		icp.appear(at)
 	host.say("The ICP is back in the middle", &"pickup_ammo")
+
+
+func look(who: RefCounted) -> Variant:
+	if who.team != 0:
+		return {}
+	var number: int = absi(who.id) % PEOPLE_COUNT + 1
+	var path := PEOPLE % [number, number]
+	return {"character": load(path)} if ResourceLoader.exists(path) else {}
 
 
 ## Nobody scores by a kill.

@@ -84,6 +84,12 @@ func plaster(_who: RefCounted) -> Variant:
 	return null
 
 
+## What `who` looks like, as puppet.enlist() takes it, if the kind says: null
+## leaves it to the theme of the enemies, {} has them be the soldiers.
+func look(_who: RefCounted) -> Variant:
+	return null
+
+
 ## True if `who` has something better to do than to fight whoever is in sight.
 func hurries(_who: RefCounted) -> bool:
 	return false

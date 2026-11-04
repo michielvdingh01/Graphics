@@ -1204,9 +1204,13 @@ func _take_side(who: Entrant) -> void:
 		return
 	var own := me()
 	var look := {}
+	var dressed: Variant = mode.look(who)
+	if dressed is Dictionary:
+		# The kind of match says who everybody is.
+		look = dressed
 	# Whoever is against the player is who the enemies were chosen to be; with
 	# nobody playing, that is the second side. People are soldiers.
-	if who.bot and (mode.hostile(own, who) if own else who.team == 1 or not mode.teams()):
+	elif who.bot and (mode.hostile(own, who) if own else who.team == 1 or not mode.teams()):
 		if who.cast < 0:
 			who.cast = _cast
 			_cast += 1

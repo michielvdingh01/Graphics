@@ -3204,7 +3204,7 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 
 ## Unmuted: de ICP binnenhalen (plan)
 
-Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 en 2 zijn af, zie hieronder.
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 3 zijn af, zie hieronder.
 
 **Zijn antwoorden op de eerste vragen**
 
@@ -3336,3 +3336,27 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 - **Of Unmuted een voordeel heeft.** De ene wedstrijd van 10 minuten eindigde 2–0. Bij gelijk trekken kiest hij de kant waarheen hij al liep, en anders Unmuted. Om te zeggen of de duinen een kant bevoordelen, zijn meer wedstrijden nodig.
 - **Hoe vaak de bots vastlopen.** 125 keer in 10 minuten heb ik niet vergeleken met team deathmatch in de duinen.
 - **Over het netwerk.** De host stuurt de plek van de ICP tien keer per seconde rond, en de stand gaat mee met wie later binnenkomt. Op twee machines is het nooit geprobeerd.
+
+### Stap 3: de mensen (4 november 2026)
+
+**Wat er is**
+
+- **Acht mensen van Unmuted** (`assets/characters/unmuted_01` tot `_08`), uit Rocketbox (MIT), gebouwd met `tools/unmuted/build_people.sh`: Female_Adult_08, Male_Adult_09, Female_Party_02, Male_Adult_16, Female_Adult_17, Male_Adult_12, Female_Adult_03 en Male_Adult_17. Vier vrouwen en vier mannen, licht tot donker, met hun eigen gezicht, haar en schoenen. 2K-texturen met occlusie, zoals de soldaten.
+- **De look `unmuted`** (`tools/characters/looks.py`) verft wat op de benen hangt zwart (een broek; over blote benen een legging) en alles daarboven zwart behalve de huid (het shirt). Het logo (`assets/unmuted/logo.png`) staat in wit op de borst, 20 cm breed, en op de rug, 27 cm breed. Plooien en naden blijven zichtbaar. Wie lange mouwen had (Male_Adult_12, Male_Adult_17) houdt die, in het zwart: Rocketbox heeft geen donkere mannen in een T-shirt.
+- **De ICP** (`assets/characters/icp_01`) is Business_Male_01 in de look `icp`: zijn zwarte pak en rode stropdas zoals ze waren, een geschilderde grijns met tanden en lachrimpels, en een zwarte zonnebril die als vorm aan zijn hoofd hangt (twee glazen, een brug en twee pootjes). In het spel is hij 1,3 keer zo groot (2,35 m).
+- **Wie wie is in de wedstrijd.** Een spelsoort kan nu zeggen hoe iedereen eruitziet (`look()` in `scripts/modes/mode.gd`). Bij Win the ICP is Unmuted altijd de mensen in het zwart. De Slop Soldiers zijn altijd de soldaten (in woestijnkleur, met de twee vrouwen ertussen), ook als bij de instellingen de robots of zombies de vijand zijn.
+- **De mouw in beeld** is zwart zolang je voor Unmuted speelt. Het is één materiaal voor alle wapens (`materials/sleeve.tres`), dat na de wedstrijd zijn kleur terugkrijgt.
+- **Het geldspoor** (`scripts/icp_body.gd`): elke 3,6 m (vier stappen van hem) valt er een biljet uit een jaszak. Het dwarrelt zwaaiend en tuimelend naar beneden, blijft 15 s liggen en krimpt dan weg; er zijn er hooguit 60. Als een kant hem binnenhaalt, verdwijnt hij in een regen van 36 biljetten. Het biljet is een eigen ontwerp, geen echte dollar: groen, twee keer zo groot als een echte, met een $ aan elke kant, IN ICP WE TRUST en 100 (`assets/unmuted/bill.svg`, getekend door `tools/unmuted/stickers.py`). Elke machine laat ze zelf vallen; het is alleen om te zien.
+
+**Getest**
+
+- `tools/test_unmuted.sh`, nu 43 controles. Nieuw: de ICP is de man in pak, 1,3 keer zo groot. Unmuted zijn de mensen in het zwart en de Slop Soldiers soldaten, en zo staan ze ook in het level. Hij laat onderweg biljetten vallen (met plaatje), en verdwijnt in een regen ervan.
+- Een contactblad per figuur in `assets/characters/sheets/`, en beelden uit de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: de ICP van voren, twee van elke kant naast elkaar, en een biljet dat valt.
+- De selftest, de wedstrijdtest en de personagetest slagen.
+
+**Wat ik niet kon beoordelen**
+
+- **Of de grijns en de zonnebril overkomen** zoals jij ze bedoelde. Ze zijn van dichtbij te zien; in het spel loop je meestal op een paar meter.
+- **De legging** van unmuted_03: haar rok werd zwart en haar blote benen een zwarte legging. Een broek kan alleen met een ander model.
+- **De biljetten** zijn op 20 m nauwelijks te zien. Een spoor dat je van ver ziet, zou meer of grotere biljetten vragen.
+- **Of je jezelf herkent**: in de eerste persoon zie je alleen de zwarte mouw en de handschoen. De handschoen is nog die van het leger.
