@@ -3204,7 +3204,7 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 
 ## Unmuted: de ICP binnenhalen (plan)
 
-Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 7 zijn af, zie hieronder.
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; alle acht stappen zijn af, zie hieronder.
 
 **Zijn antwoorden op de eerste vragen**
 
@@ -3468,3 +3468,31 @@ Alles staat in `assets/manifest.json` en wordt gemaakt door `tools/build_sounds.
 **Wat ik niet kon beoordelen**
 
 - **Hoe de rest klinkt.** De varianten van de guns en het plakken zijn nog niet gekozen; het spel gebruikt telkens a.
+
+### Stap 8: de build (4 november 2026)
+
+**Wat er is**
+
+- **`tools/export.sh unmuted`** maakt `build/WinTheICP-macos.zip` en `build/WinTheICP-windows.zip`, elk met `tools/unmuted/LEESMIJ.txt`. Daarin staat in het Nederlands hoe je start op Mac en Windows, de toetsen, het doel en hoe je samen speelt. Zonder `unmuted` maakt het script de build voor vrienden, zoals voorheen.
+- **Twee presets** in `export_presets.cfg`, "Unmuted (macOS)" en "Unmuted (Windows)", met de feature `unmuted` en een eigen bundle-id (`io.github.michielvdingh01.wintheicp`). Met die feature (`Armory.unmuted_build()`):
+  - heet het spel "Win the ICP" (`config/name.unmuted` in `project.godot`), met een eigen map voor instellingen en opslag;
+  - opent het titelscherm met het logo van Unmuted, WIN THE ICP en een regel uitleg. De knoppen zijn Play (meteen een potje in de duinen tegen bots), Play with colleagues (het wedstrijdmenu, al op Win the ICP in de duinen), Join colleagues, Controls, Settings en Quit; de route en de sandbox zijn er niet;
+  - speelt het over het netwerk met een eigen versie (`Net.wire_version()`: `VERSION` + 1000), zodat de builds voor Unmuted en voor vrienden elkaar niet vinden;
+  - heeft het geen buildnummer, en werkt het zichzelf dus nooit bij met een release voor vrienden (`scripts/updater.gd`).
+- **Het merk blijft uit de build voor vrienden.** De presets "macOS" en "Windows" laten alles van Unmuted weg: `assets/unmuted/`, de figuren `unmuted_*` en `icp_*`, de drie wapens met hun modellen, de gebouwen, de ringlamp, de materialen en de geluiden. Daarvoor staan de wapens van Unmuted niet meer in `Armory.ALL`. Ze komen alleen in de Unmuted-build achteraan (`Armory.all()`, met `load()`), zodat de plaatsen van alle andere wapens gelijk blijven. De namen in `match.json`, `packs.json` en het manifest van de figuren gaan wel mee, als tekst; in het spel is daar zonder de feature niets van te zien.
+
+**Getest**
+
+- `tools/test_unmuted.sh`, nu 62 controles. Nieuw: de wapens staan achter de andere, de eigen netwerkversie, het titelscherm met zijn knoppen, en dat de presets voor vrienden Unmuted weglaten en die van Unmuted de feature hebben.
+- De selftest weet nu dat de build voor vrienden niets van Unmuted kent: geen wapens, packs of spelsoort ervan, en de gewone netwerkversie. Ook de wedstrijdtest en de netwerktest slagen.
+- **De export.** `tools/export.sh unmuted` deed er 5 minuten over, met `build/src` gekloond uit de worktree `vriendenbuild`; anders importeert de eerste Mac-export urenlang alle texturen opnieuw. Er komen twee zips van 1,6 GB uit. Op de Mac heet de app "Win the ICP.app". De Windows-export meldt drie levels die niet in deze worktree staan (`alps_yard`, `canals`, `quay`); Win the ICP heeft die niet nodig.
+- **In de geëxporteerde Mac-app**, zonder venster, slagen alle 62 controles van de Unmuted-test, behalve die op de presets, die een export niet heeft.
+  - De eerste keer brak de export op een controle in de selftest die `Armory.ALL` gebruikte vanuit een autoload. Dat is dezelfde val als eerder met de raketwerper (een constante van de armory vanuit een autoload), en hij nam via `net.gd` het hele spel mee, ook in de build voor vrienden. Gevonden en opgelost voor de commit; de tests gebruiken nu `Armory.all()`.
+- **De build voor vrienden**: in een pack van de preset "Windows" (2,2 GB) staat geen enkel bestand van Unmuted, geen model, plaatje, geluid of wapen. Alleen namen als tekst in scripts en JSON gaan mee.
+- **Het titelscherm** van de Unmuted-build, als beeld op 1920×1080.
+
+**Wat ik niet kon beoordelen**
+
+- **De Windows-build** heeft nooit gedraaid; daar is hier geen Windows voor. Hij komt uit dezelfde presets als die voor vrienden, en die is ook nooit op Windows gestart.
+- **Samen spelen op de borrel**, op meerdere machines over het netwerk, is nooit echt geprobeerd. De netwerktest draait twee spellen op één Mac.
+- **Hoe groot het mag zijn.** 1,6 GB per zip, want alle levels gaan mee, zodat het wedstrijdmenu blijft werken. Alleen de duinen meenemen zou het kleiner maken, maar dan moet het menu de andere arena's verbergen.

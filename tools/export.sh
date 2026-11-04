@@ -17,34 +17,54 @@
 #
 # The first export in a checkout imports every texture again whatever was
 # copied, which takes minutes and all the cores there are.
+#
+# tools/export.sh unmuted builds the game for Unmuted instead, both of it:
+# build/WinTheICP-macos.zip and build/WinTheICP-windows.zip, with
+# tools/unmuted/LEESMIJ.txt. Its presets have the feature "unmuted", which
+# makes it start in Win the ICP (see Armory.unmuted_build()), and the presets
+# for friends leave everything of Unmuted out. It has no number, so it never
+# updates itself from the releases for friends (scripts/updater.gd).
 GODOT="${GODOT:-/Applications/Godot.app/Contents/MacOS/Godot}"
 cd "$(dirname "$0")/.." || exit 1
 platforms="${1:-windows macos}"
+NAME=GraphicsFPS
+WIN_PRESET="Windows"
+MAC_PRESET="macOS"
+README=tools/LEESMIJ.txt
+NUMBERED=yes
+if [ "$platforms" = unmuted ]; then
+	platforms="windows macos"
+	NAME=WinTheICP
+	WIN_PRESET="Unmuted (Windows)"
+	MAC_PRESET="Unmuted (macOS)"
+	README=tools/unmuted/LEESMIJ.txt
+	NUMBERED=no
+fi
 case " $platforms " in
 *" windows "*) ;;
 *" macos "*) ;;
 *)
-	echo "Usage: tools/export.sh [windows|macos]"
+	echo "Usage: tools/export.sh [windows|macos|unmuted]"
 	exit 1
 	;;
 esac
 built=""
 
 case " $platforms " in *" windows "*)
-rm -rf build/windows build/GraphicsFPS-windows.zip
+rm -rf build/windows "build/$NAME-windows.zip"
 mkdir -p build/windows
-"$GODOT" --headless --path . --export-release "Windows" build/windows/GraphicsFPS.exe >build/export_windows.log 2>&1
-if [ ! -f build/windows/GraphicsFPS.pck ]; then
+"$GODOT" --headless --path . --export-release "$WIN_PRESET" "$PWD/build/windows/$NAME.exe" >build/export_windows.log 2>&1
+if [ ! -f "build/windows/$NAME.pck" ]; then
 	echo "The Windows export failed, see build/export_windows.log"
 	exit 1
 fi
-cp tools/LEESMIJ.txt build/windows/
-(cd build/windows && zip -q ../GraphicsFPS-windows.zip GraphicsFPS.exe GraphicsFPS.pck LEESMIJ.txt) || exit 1
-built="$built build/GraphicsFPS-windows.zip"
+cp "$README" build/windows/LEESMIJ.txt
+(cd build/windows && zip -q "../$NAME-windows.zip" "$NAME.exe" "$NAME.pck" LEESMIJ.txt) || exit 1
+built="$built build/$NAME-windows.zip"
 ;; esac
 
 case " $platforms " in *" macos "*)
-rm -rf build/macos build/GraphicsFPS-macos.zip
+rm -rf build/macos "build/$NAME-macos.zip"
 mkdir -p build/macos
 if [ ! -d build/src ]; then
 	# A clone where the disk can make one: done at once, and it takes no room
@@ -66,16 +86,20 @@ textures/vram_compression/import_etc2_astc=true|' build/src/project.godot
 else
 	printf '\n[rendering]\n\ntextures/vram_compression/import_etc2_astc=true\n' >>build/src/project.godot
 fi
-# The number this build goes by, see scripts/updater.gd.
-printf '{"build": %s}\n' "$(date +%Y%m%d%H%M)" >build/src/build.json
-"$GODOT" --headless --path build/src --export-release "macOS" "$PWD/build/macos/GraphicsFPS.zip" >build/export_macos.log 2>&1
-if [ ! -f build/macos/GraphicsFPS.zip ]; then
+# The number this build goes by, see scripts/updater.gd; the build for
+# Unmuted has none, and so does not update itself.
+rm -f build/src/build.json
+if [ "$NUMBERED" = yes ]; then
+	printf '{"build": %s}\n' "$(date +%Y%m%d%H%M)" >build/src/build.json
+fi
+"$GODOT" --headless --path build/src --export-release "$MAC_PRESET" "$PWD/build/macos/$NAME.zip" >build/export_macos.log 2>&1
+if [ ! -f "build/macos/$NAME.zip" ]; then
 	echo "The macOS export failed, see build/export_macos.log"
 	exit 1
 fi
-cp tools/LEESMIJ.txt build/macos/
-(cd build/macos && zip -q GraphicsFPS.zip LEESMIJ.txt && mv GraphicsFPS.zip ../GraphicsFPS-macos.zip) || exit 1
-built="$built build/GraphicsFPS-macos.zip"
+cp "$README" build/macos/LEESMIJ.txt
+(cd build/macos && zip -q "$NAME.zip" LEESMIJ.txt && mv "$NAME.zip" "../$NAME-macos.zip") || exit 1
+built="$built build/$NAME-macos.zip"
 ;; esac
 
 ls -lh $built

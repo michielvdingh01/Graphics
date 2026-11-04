@@ -39,6 +39,9 @@ const MAX_PLAYERS := 12
 ## Two machines play together only if they agree on this. Raise it with
 ## anything that changes what goes over the wire or how a level is built.
 const VERSION := 24
+## What the build for Unmuted adds to VERSION: it plays its own match, and a
+## game of the other build is none of its business, nor it of theirs.
+const UNMUTED_VERSION := 1000
 ## Seconds between two reports of where this machine's player is.
 const TICK := 1.0 / 30.0
 ## Seconds to wait for a host to answer before giving up on it.
@@ -135,6 +138,13 @@ func _ready() -> void:
 
 
 ## True on the machine that runs the world: the host, or the only one there is.
+## The version this machine plays by, see VERSION and UNMUTED_VERSION: the
+## build for Unmuted (Armory.unmuted_build(), asked here without loading the
+## armory, which an autoload must not do as the game starts) plays by its own.
+func wire_version() -> int:
+	return VERSION + (UNMUTED_VERSION if OS.has_feature("unmuted") or "--unmuted" in OS.get_cmdline_user_args() else 0)
+
+
 func is_host() -> bool:
 	return multiplayer.is_server()
 
@@ -297,7 +307,7 @@ func depart(level: Node) -> void:
 
 
 func _on_connected() -> void:
-	_hello.rpc_id(1, VERSION, Updater.build, player_name)
+	_hello.rpc_id(1, wire_version(), Updater.build, player_name)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -305,7 +315,7 @@ func _hello(version: int, build: int, title: String) -> void:
 	var guest := multiplayer.get_remote_sender_id()
 	if not multiplayer.is_server():
 		return
-	if version != VERSION:
+	if version != wire_version():
 		_refuse.rpc_id(guest, "The host plays another version of the game")
 		return
 	# A game run from a checkout has no number and plays with anyone.
@@ -482,7 +492,7 @@ func _call_out() -> void:
 		what = str(session.level).get_file().get_basename().capitalize()
 		if Match.active:
 			what = "%s, %s" % [Match.title(), what]
-	var words := JSON.stringify({"sign": CALL_SIGN, "version": VERSION, "build": Updater.build, "name": player_name, "port": port, "what": what, "people": players.size()}).to_utf8_buffer()
+	var words := JSON.stringify({"sign": CALL_SIGN, "version": wire_version(), "build": Updater.build, "name": player_name, "port": port, "what": what, "people": players.size()}).to_utf8_buffer()
 	for where in _call_addresses():
 		_caller.set_dest_address(where, call_port)
 		_caller.put_packet(words)
@@ -515,7 +525,7 @@ func _listen_in(delta: float) -> void:
 		if call is Dictionary and call.get("sign") == CALL_SIGN and where:
 			var at_port := int(call.get("port", PORT))
 			var address_of := where if at_port == PORT else "%s:%d" % [where, at_port]
-			var fits: bool = int(call.get("version", 0)) == VERSION and (not int(call.get("build", 0)) or not Updater.build or int(call.build) == Updater.build)
+			var fits: bool = int(call.get("version", 0)) == wire_version() and (not int(call.get("build", 0)) or not Updater.build or int(call.build) == Updater.build)
 			var game_there := {"name": str(call.get("name", "Player")).left(24), "what": str(call.get("what", "")).left(60), "people": int(call.get("people", 1)), "fits": fits}
 			_heard[address_of] = 0.0
 			if found.get(address_of) != game_there:

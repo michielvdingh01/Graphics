@@ -53,6 +53,7 @@ func _run() -> void:
 	var player: CharacterBody3D = tree.current_scene.player
 	player.force_control = true
 	player.health = 1e7
+	await _build()
 	await _stickers(player)
 	await _icp()
 	print("%d checks, %d failed" % [_checks, _failures])
@@ -359,6 +360,44 @@ func _told(prefix: String, otherwise: String) -> String:
 		if arg.begins_with(prefix):
 			return arg.trim_prefix(prefix)
 	return otherwise
+
+
+## The build for Unmuted: its weapons after the others, its own version on
+## the wire, its own title screen, and presets that keep it apart from the
+## build for friends.
+func _build() -> void:
+	# all() rather than the constants of the armory, which an autoload can
+	# find empty: see the head of armory.gd.
+	var every := ARMORY.all()
+	_check("its weapons come after all the others, in their places", every.slice(-3).map(func(data: WeaponData) -> String: return data.resource_path)
+		== ["res://weapons/branding_gun.tres", "res://weapons/slop_gun.tres", "res://weapons/tiktok_dance.tres"])
+	_check("it plays by a version of its own over the network", Net.wire_version() >= 1000)
+	Menu._show(Menu.Screen.TITLE)
+	var offered := []
+	for child: Node in Menu._column.get_children():
+		if child is Button and not child.is_queued_for_deletion():
+			offered.append((child as Button).text)
+	Menu._show(Menu.Screen.NONE)
+	_check("the title screen is Win the ICP: Play, with colleagues, joining them, and no route", offered.has("Play") and offered.has("Play with colleagues") and offered.has("Join colleagues")
+		and not offered.has("New game") and not offered.has("Sandbox"))
+	# Not in an exported game, which has no presets.
+	if not FileAccess.file_exists("res://export_presets.cfg"):
+		return
+	var presets := ConfigFile.new()
+	presets.load("res://export_presets.cfg")
+	var kept_apart := true
+	var ours := 0
+	for section in presets.get_sections():
+		if section.ends_with(".options"):
+			continue
+		var features := str(presets.get_value(section, "custom_features", ""))
+		var excluded := str(presets.get_value(section, "exclude_filter", ""))
+		if features.contains("unmuted"):
+			ours += 1
+			kept_apart = kept_apart and not excluded.contains("assets/unmuted")
+		else:
+			kept_apart = kept_apart and excluded.contains("assets/unmuted/*") and excluded.contains("weapons/branding_gun.tres") and excluded.contains("assets/characters/unmuted_*")
+	_check("its two presets have the feature unmuted, and those for friends leave it out", ours == 2 and kept_apart)
 
 
 ## A spot to stand on between `least` and `most` metres from `at`, INF if
