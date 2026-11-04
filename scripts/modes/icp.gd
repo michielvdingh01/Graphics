@@ -54,10 +54,10 @@ const TRAIL_STICKS := 3.0
 const STICKS_FROM := 14.0
 ## How far a hunter looks about it for a sticker of the other side to cover.
 const COVERS := 22.0
-## The bases while they are grey blocks: how big, and how far behind the door
-## they stand, in metres. Step 4 of PLAN.md has the buildings.
-const BLOCK := Vector3(10.0, 9.0, 8.0)
-const BLOCK_TINT: Array[Color] = [Color(0.72, 0.72, 0.74), Color(0.08, 0.08, 0.09)]
+## The two bases (tools/models/unmuted.gd), how far behind the door of the
+## base their front stands, in metres, and what they are called.
+const BUILDINGS: Array[String] = ["res://scenes/models/unmuted_hq.scn", "res://scenes/models/doomscroll_hell.scn"]
+const BACK := 4.0
 const BLOCK_NAMES: Array[String] = ["UNMUTED HQ", "DOOMSCROLL HELL"]
 
 var icp: CharacterBody3D
@@ -142,42 +142,45 @@ func sides_changed() -> void:
 	_dress_sleeve()
 
 
-## The base of `side` as a grey block for now, behind its door with its front
-## to the middle, and its name on the front.
+## The base of `side`: the canal house of Unmuted or Doomscroll Hell
+## (tools/models/unmuted.gd), BACK metres behind its door with its front to
+## the middle, standing as low as the ground under its front goes, and in the
+## way where the model says ("collide"). It is set out after the navmesh is
+## baked, so the bots do not know of it; it stands behind the door, where
+## they seldom go.
 func _block(side: int) -> void:
 	var out := middle - bases[side]
 	out.y = 0.0
 	out = out.normalized() if out.length_squared() > 0.01 else Vector3.FORWARD
+	var model: Node3D = (load(BUILDINGS[side]) as PackedScene).instantiate()
 	var body := StaticBody3D.new()
 	body.name = "Base%d" % side
 	body.collision_layer = 1
 	body.collision_mask = 0
-	var shape := CollisionShape3D.new()
-	shape.shape = BoxShape3D.new()
-	(shape.shape as BoxShape3D).size = BLOCK
-	body.add_child(shape)
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = BoxMesh.new()
-	(mesh.mesh as BoxMesh).size = BLOCK
-	var look := StandardMaterial3D.new()
-	look.albedo_color = BLOCK_TINT[side]
-	look.roughness = 0.8
-	mesh.material_override = look
-	body.add_child(mesh)
-	var sign := Label3D.new()
-	sign.text = BLOCK_NAMES[side]
-	sign.font_size = 160
-	sign.pixel_size = 0.006
-	sign.outline_size = 0
-	sign.modulate = Color(1.0, 0.2, 0.15) if side == 1 else Color(0.05, 0.05, 0.05)
-	# On the front, its +Z, which a Label3D faces of itself.
-	sign.position = Vector3(0.0, BLOCK.y * 0.25, BLOCK.z * 0.5 + 0.05)
-	body.add_child(sign)
+	body.set_meta(&"surface", "brick" if side == 0 else "metal")
+	for line: Array in model.get_meta("collide", []):
+		var shape := CollisionShape3D.new()
+		shape.shape = BoxShape3D.new()
+		(shape.shape as BoxShape3D).size = line[1]
+		shape.position = line[0]
+		body.add_child(shape)
+	body.add_child(model)
+	var turn := _facing(bases[side], bases[side] - out)
+	var at := bases[side] - out * BACK
+	# As low as the ground goes under the front, from one corner to the other.
+	var across := out.cross(Vector3.UP)
+	var space: PhysicsDirectSpaceState3D = host.level().get_world_3d().direct_space_state
+	var lowest := INF
+	for x: float in [-5.0, 0.0, 5.0]:
+		var over := at + across * x + Vector3.UP * 30.0
+		var hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(over, over + Vector3.DOWN * 60.0, 1))
+		if hit:
+			lowest = minf(lowest, (hit.position as Vector3).y)
+	if lowest < INF:
+		at.y = lowest
 	host.level().add_child(body)
-	# Sunk a little, for a floor that is not flat.
-	body.global_position = bases[side] - out * (BLOCK.z * 0.5 + 2.0) + Vector3.UP * (BLOCK.y * 0.5 - 0.6)
-	# Its back, -Z, away from the middle.
-	body.rotation.y = _facing(bases[side], bases[side] - out)
+	body.global_position = at
+	body.rotation.y = turn
 
 
 ## The turn about the vertical that has -Z of something at `from` look at `to`.

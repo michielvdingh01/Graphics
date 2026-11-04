@@ -3204,7 +3204,7 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 
 ## Unmuted: de ICP binnenhalen (plan)
 
-Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 3 zijn af, zie hieronder.
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 4 zijn af, zie hieronder.
 
 **Zijn antwoorden op de eerste vragen**
 
@@ -3360,3 +3360,35 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 - **De legging** van unmuted_03: haar rok werd zwart en haar blote benen een zwarte legging. Een broek kan alleen met een ander model.
 - **De biljetten** zijn op 20 m nauwelijks te zien. Een spoor dat je van ver ziet, zou meer of grotere biljetten vragen.
 - **Of je jezelf herkent**: in de eerste persoon zie je alleen de zwarte mouw en de handschoen. De handschoen is nog die van het leger.
+
+### Stap 4: de gebouwen (4 november 2026)
+
+**Wat er is**
+
+- **Twee modellen in code** (`tools/models/unmuted.gd`, bouwen met `tools/build_model.sh unmuted`), die de spelsoort neerzet. Elk staat 4 m achter de standaard van capture the flag, met de voorkant naar het midden, zo laag als de grond onder de voorkant gaat, en 2,5 m in de grond voor duinen die niet vlak zijn. Er is geen level herbouwd en niets gebakken. De botsvormen staan als dozen op het model (`collide`), waar de spelsoort een lichaam van maakt. Ze krijgen zon en schaduw zoals een voertuig, zonder lightmap.
+- **Unmuted HQ** is een grachtenpand van 8 m breed en 18 m hoog:
+  - vier verdiepingen baksteen met witte schuiframen, witte banden tussen de verdiepingen en een kroonlijst;
+  - een stoep van vier treden met leuninkjes naar een donkergroene deur onder een bovenlicht;
+  - een halsgevel met witte krullen op de schouders en een fronton erop, en een hijsbalk;
+  - daarachter een donker zadeldak;
+  - in de gevel de sticker van Unmuted, 3,2 m breed.
+- **Doomscroll Hell** is een zwart blok van 14 bij 11,5 m, glimmend en een beetje metaalachtig:
+  - DOOMSCROLL en HELL in Impact, rood neon;
+  - een rood gloeiende deur in een zwarte omlijsting;
+  - vier telefoons met een kleurige feed (posts, hartjes, regels tekst);
+  - rode neonlijnen langs de randen.
+  - De letters en de feed tekent `tools/unmuted/signs.py`.
+- **Wat ik leerde:** een `StandardMaterial3D` telt een gloed-plaatje standaard op bij de gloedkleur. Wit plus rood gaf roze letters, hoe zacht ook. Met `emission_operator = 1` (vermenigvuldigen) is het rood.
+
+**Getest**
+
+- `tools/test_unmuted.sh`, nu 45 controles. Nieuw: beide gebouwen staan er, staan in de weg, kijken naar het midden en staan achter hun deur.
+- Beelden in de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: elk gebouw van dichtbij en van 55 m verder.
+- De selftest en de wedstrijdtest slagen.
+
+**Wat ik niet kon beoordelen**
+
+- **Of het grachtenpand Amsterdams genoeg is.** Het is een gewone halsgevel met de maten van de Keizersgracht, maar zonder ornament in steen. Het staat in het motorpark achter de muur van het kamp; vanuit het midden zie je de gevel erboven uitsteken.
+- **Het camouflagenet.** Bij Doomscroll Hell staat een camouflagenet van het level voor de rechterhelft van de gevel. Het weghalen zou de duinen veranderen, en dat doe ik niet.
+- **De bots en de gebouwen.** De bots weten niet dat de gebouwen er staan, want die komen pas na het navmesh. Ze staan achter de deur, waar zelden iemand komt. Tegen een gebouw aan lopen kan dus, maar ik heb het niet zien gebeuren.
+- **Wat ze kosten.** Samen zijn het zo'n 1900 driehoeken en een paar materialen. Gemeten heb ik het niet.

@@ -153,6 +153,13 @@ func _icp() -> void:
 	print("  the bases %.0f m apart to walk, the ICP %.0f and %.0f m from them" % [arena.length(), walks[0], walks[1]])
 	_check("in the middle, as far to walk from either base", absf(walks[0] - walks[1]) < maxf(arena.length() * 0.15, 6.0))
 	_check("and the two bases stand at the ends", get_tree().current_scene.has_node(^"Base0") and get_tree().current_scene.has_node(^"Base1"))
+	var buildings: Array = [get_tree().current_scene.get_node_or_null(^"Base0"), get_tree().current_scene.get_node_or_null(^"Base1")]
+	_check("the canal house of Unmuted and Doomscroll Hell, each in the way", buildings.all(func(base: Node) -> bool: return base != null and base.find_children("*", "CollisionShape3D", false, false).size() >= 1)
+		and str(buildings[0].get_child(-1).scene_file_path).ends_with("unmuted_hq.scn") and str(buildings[1].get_child(-1).scene_file_path).ends_with("doomscroll_hell.scn"))
+	_check("with their fronts to the middle, behind their doors", buildings.all(func(base: Node3D) -> bool:
+		var to_middle: Vector3 = mode.middle - base.global_position
+		var door: Vector3 = mode.bases[buildings.find(base)]
+		return base.global_basis.z.dot(to_middle.normalized()) > 0.5 and Vector2(door.x - base.global_position.x, door.z - base.global_position.z).length() < 6.0))
 	var model: Node = icp.get_node_or_null(^"Model")
 	_check("he is the man in the suit, a size up", model != null and model.find_children("*", "Skeleton3D", true, false).size() == 1 and absf(model.get_child(0).scale.y - icp.SIZE) < 0.01
 		and ResourceLoader.exists(icp.LOOK) and icp.LOOK.contains("icp_01"))
