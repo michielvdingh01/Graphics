@@ -39,6 +39,8 @@ extends Node
 ## Where the kind of match has a spot for it to fire at while it sees nobody
 ## (mode.plaster(): a sticker to put somewhere in the Unmuted match), it turns
 ## to that spot and fires at it, a shot every PLASTER seconds, as it walks.
+## And where the kind of match wants it to dance (mode.dances()), it stands
+## and dances the TikTok Dance while it sees nobody, see scripts/dancer.gd.
 ##
 ## What it does not do yet: fall back, throw grenades or jump.
 
@@ -215,6 +217,8 @@ var _far := false
 var _skipped := false
 ## The clock at which it may next fire at a spot the match points at.
 var _plaster_at := 0.0
+## True while it dances.
+var _dancing := false
 
 
 func _ready() -> void:
@@ -256,6 +260,7 @@ func begin() -> void:
 	_rest_until = 0.0
 	_going = false
 	_lane = randf_range(-1.0, 1.0)
+	_dancing = false
 	_bounding = false
 	_holding = 0.0
 	_look = randf() * LOOK
@@ -293,6 +298,8 @@ func _doing() -> int:
 		doing |= Net.SPINNING
 	if _holding > 0.0 and _body.ducks():
 		doing |= Net.CROUCHED
+	if _dancing:
+		doing |= Net.DANCING
 	return doing
 
 
@@ -360,6 +367,7 @@ func _physics_process(delta: float) -> void:
 	if not _body.is_on_floor():
 		_body.velocity += _body.get_gravity() * delta
 	if me.out > 0.0 or Match.state != Match.State.PLAYING or not _agent.is_inside_tree():
+		_dancing = false
 		_body.velocity.x = move_toward(_body.velocity.x, 0.0, ACCEL * delta)
 		_body.velocity.z = move_toward(_body.velocity.z, 0.0, ACCEL * delta)
 		if me.out <= 0.0:
@@ -394,6 +402,7 @@ func _physics_process(delta: float) -> void:
 	var errand: Variant = _errand()
 	if errand != null and _clock >= _detour and not Match.mode.hurries(me):
 		wish = errand
+	_dancing = _target == null and Match.mode.dances(me)
 	# Whoever has something better to do than to fight runs on, unless the
 	# enemy is on top of them.
 	if _target and not (Match.mode.hurries(me) and eye.distance_to(_target.body.head.global_position) > CORNERED):
@@ -447,12 +456,12 @@ func _physics_process(delta: float) -> void:
 		_seen = 0.0
 		_spin_barrels(delta, false)
 		_fire(delta, eye, false)
-		desired = _roam(wish, delta)
+		desired = Vector3.ZERO if _dancing else _roam(wish, delta)
 		_sprinting = desired.length() > WALK and not _data.no_sprint
 		if desired.length_squared() > 0.01:
 			facing = desired
 			_aim = _aim.lerp(eye + desired.normalized() * 10.0, 1.0 - exp(-delta * 4.0))
-		var mark: Variant = Match.mode.plaster(me) if special() == null else null
+		var mark: Variant = Match.mode.plaster(me) if special() == null and not _dancing else null
 		if mark != null and eye.distance_to(mark) < PLASTERS:
 			_plaster(delta, eye, mark)
 			facing = (mark as Vector3) - eye

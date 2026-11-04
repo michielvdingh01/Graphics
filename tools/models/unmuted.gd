@@ -39,6 +39,23 @@ var _boxes: Array = []
 func _describe() -> void:
 	_canal_house()
 	_doomscroll_hell()
+	_ring_light_stand()
+
+
+## The ring light of the TikTok Dance as it stands, set down by whoever
+## dances (scripts/dancer.gd): a ring of light 46 cm across with a phone in
+## its middle, on a pole on three legs, its light along +Z, 1.6 m up.
+func _ring_light_stand() -> void:
+	model("ring_light")
+	var top := Vector3(0, 1.6, 0)
+	for i in 3:
+		var turn := TAU * float(i) / 3.0 + 0.4
+		beam(BLACK, Vector3(0, 0.75, 0), Vector3(cos(turn) * 0.42, 0.0, sin(turn) * 0.42), 0.025, NO_COLLIDE)
+	_bar(BLACK, Vector3(0, 0.7, 0), top - Vector3(0, 0.23, 0), 0.016, 10)
+	_ring("ring_glow", top, Vector3.BACK, 0.23, 0.025)
+	_ring(BLACK, top + Vector3.FORWARD * 0.015, Vector3.BACK, 0.23, 0.03)
+	_part_box(BLACK, top, Vector3(0.08, 0.16, 0.012))
+	_part_box("ring_glow", top + Vector3.BACK * 0.007, Vector3(0.07, 0.145, 0.002))
 
 
 func _canal_house() -> void:

@@ -96,6 +96,12 @@ func look(_who: RefCounted) -> Variant:
 	return null
 
 
+## True if a bot `who` that sees nobody should stand and dance the TikTok
+## Dance where it is (scripts/dancer.gd).
+func dances(_who: RefCounted) -> bool:
+	return false
+
+
 ## True if `who` has something better to do than to fight whoever is in sight.
 func hurries(_who: RefCounted) -> bool:
 	return false

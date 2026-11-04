@@ -18,6 +18,7 @@ const ROBOT := preload("res://scripts/enemy_rig.gd")
 const WEAPONS := preload("res://scripts/weapons.gd")
 const ARMORY := preload("res://scripts/armory.gd")
 const GRENADE := preload("res://scenes/grenade.tscn")
+const DANCER := preload("res://scripts/dancer.gd")
 ## Who it can be: soldier_01 and up, one for every player by its id.
 const CHARACTER := "res://assets/characters/soldier_%02d/soldier_%02d.glb"
 const CHARACTERS := 8
@@ -89,6 +90,8 @@ var deflected := false
 var _rig: Node3D
 var _weapon := 0
 var _doing := 0
+## Its figure dancing the TikTok Dance, while it does: see _dance().
+var _dancer: Node3D
 ## Seconds left that its weapon is up for a shot it fired.
 var _shooting := 0.0
 ## The flashlight on its weapon, once it has had one.
@@ -241,7 +244,7 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	# At the wheel the vehicle shows the driver; a passenger is seen.
 	if _rig:
-		_rig.visible = riding == null or seat != 0
+		_rig.visible = (riding == null or seat != 0) and not _doing & Net.DANCING
 	if ARMORY.at(_weapon).spin_up > 0.0 or _spin > 0.0 or _roaring:
 		_spin_barrels(ARMORY.at(_weapon), delta)
 	if _rig == null or dead:
@@ -619,7 +622,34 @@ func rise(pose: Transform3D) -> void:
 func act(doing: int) -> void:
 	if (doing ^ _doing) & Net.CROUCHED:
 		_duck(doing & Net.CROUCHED != 0)
+	if (doing ^ _doing) & Net.DANCING:
+		_dance(doing & Net.DANCING != 0)
 	_doing = doing
+
+
+## Dances the TikTok Dance (scripts/dancer.gd) as its own character, with its
+## ring light set down, or stops; its figure as it was meanwhile is not seen.
+func _dance(on: bool) -> void:
+	if is_instance_valid(_dancer):
+		_dancer.queue_free()
+	_dancer = null
+	if _rig:
+		_rig.visible = not on
+	if not on:
+		return
+	var character: Variant = _look.get("character")
+	if character == null:
+		var number := absi(id) % CHARACTERS + 1
+		if ResourceLoader.exists(CHARACTER % [number, number]):
+			character = load(CHARACTER % [number, number])
+	if character == null:
+		return
+	var dancer: Node3D = DANCER.new()
+	if dancer.setup(character, team):
+		_dancer = dancer
+		add_child(dancer)
+	else:
+		dancer.free()
 
 
 ## True if it can go down on one knee: a soldier bot can, a robot cannot.

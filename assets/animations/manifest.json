@@ -51,6 +51,7 @@
 		"idle": {"source": "ual1", "clip": "Idle", "kind": "loop"},
 		"drive": {"source": "ual1", "clip": "Driving", "kind": "loop"},
 		"sit": {"source": "ual1", "clip": "Sitting_Idle", "kind": "loop"},
+		"dance": {"source": "ual1", "clip": "Dance", "kind": "loop"},
 		"walk": {"source": "ual1", "clip": "Walk", "kind": "gait"},
 		"crouch_walk": {"source": "ual1", "clip": "Crouch_Fwd", "kind": "gait"},
 		"trot": {"source": "ual1", "clip": "Walk", "with": "Jog_Fwd", "share": 0.35, "carried": 0.7, "cycle": 0.95, "kind": "gait"},

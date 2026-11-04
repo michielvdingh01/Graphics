@@ -26,6 +26,6 @@
 		"ffa": {"title": "Free for all", "limit": 25, "minutes": 10, "respawn": 2.0, "least": 2, "most": 12, "size": 8},
 		"ctf": {"title": "Capture the flag", "limit": 3, "minutes": 12, "respawn": 2.0, "least": 2, "most": 6, "size": 6, "returns": 20.0},
 		"icp": {"title": "Win the ICP", "build": "unmuted", "sides": ["Unmuted", "Slop Soldiers"], "pack": "unmuted", "packs": ["unmuted", "slop"], "limit": 3, "minutes": 10, "respawn": 2.0, "least": 1, "most": 6, "size": 6,
-			"pace": 1.3, "sees": 40.0, "passes": 2.0, "gives_up": 15.0, "scores": 8.0, "back": 5.0}
+			"pace": 1.3, "sees": 40.0, "passes": 2.0, "dance": 3.0, "gives_up": 15.0, "scores": 8.0, "back": 5.0}
 	}
 }

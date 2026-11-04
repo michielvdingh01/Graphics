@@ -3204,7 +3204,7 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 
 ## Unmuted: de ICP binnenhalen (plan)
 
-Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 5 zijn af, zie hieronder.
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 6 zijn af, zie hieronder.
 
 **Zijn antwoorden op de eerste vragen**
 
@@ -3417,3 +3417,27 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 - **Of de memes herkenbaar zijn** voor wie ze kent. Het zijn eenvoudige cartoons, geen namaak van de plaatjes van internet.
 - **Op afstand** zijn de memes kleurige vlekken, beter te zien dan de zwarte sticker van Unmuted. Daardoor kan een spoor van slop beter opvallen dan een van Unmuted.
 - **Hoe de slop-gun er in je eigen handen uitziet.** Ik zag hem alleen bij de bots. De kant wisselen gaat pas in na je volgende dood, en dat haalde de probe niet.
+
+### Stap 6: de dans (4 november 2026)
+
+**Wat er is**
+
+- **De TikTok Dance** (`weapons/tiktok_dance.tres`) is het tweede wapen van Unmuted, op 2. Het is een ringlamp op een handvat, met een telefoon in het midden en het licht naar jou toe (`_ring_light()` in `tools/models/weapons.gd`). Een wapen kan nu dansen in plaats van schieten (`WeaponData.dances`).
+- **Vuur vasthouden is dansen** (`scripts/dance.gd`). De lamp gaat op zijn statief op de grond, 1,7 m voor je, met het licht op jou. De camera gaat naar achter en boven je, iets opzij, zodat je jezelf ziet dansen; voor een muur stopt hij. Je figuur (dezelfde als de anderen van je zien) doet de dans uit Quaternius' Universal Animation Library (CC0), nu als beweging `dance` in `assets/animations/moves.res`. Je staat stil. Loslaten brengt je terug in je eigen ogen met de lamp in je hand. Een treffer doet dat ook, en dan moet je eerst loslaten voor je opnieuw kunt dansen.
+- **Een dans trekt de ICP drie keer zo hard** als een sticker die net geplakt is, zolang hij duurt (`dance` in `assets/match.json`). Hij loopt naar de danser toe. Wie hem verder wil hebben, moet dus een stuk verder gaan dansen.
+- **Op andere machines** gaat het via een nieuw bit `DANCING` in wat een speler doet (`scripts/net.gd`). Een puppet laat dan zijn eigen figuur dansen met de lamp ervoor (`scripts/dancer.gd`). Wie danst staat in `Dancer.dancing`, en de spelsoort telt die mee (`pulls()`).
+- **Bots van Unmuted dansen.** Een lokker die op zijn plek voor de ICP staat, danst daar zolang de ICP nog meer dan 3,5 m weg is, niemand in zicht is en niemand hem de laatste 3 seconden raakte (`dances()` in de spelsoort). Komt de ICP, dan loopt hij verder en danst opnieuw. De Slop Soldiers dansen niet; hun pack heeft geen ringlamp.
+
+**Getest**
+
+- `tools/test_unmuted.sh`, nu 58 controles. Nieuw: het pack van Unmuted heeft de ringlamp. Met vuur vast dans je: de camera achter en boven je, je figuur, de lamp. Je staat stil, en de ICP trekt het drie keer zo hard. Een treffer stopt het, met vuur nog vast begint het niet opnieuw, opnieuw indrukken wel, en loslaten brengt je terug. Ook dansen de bots van Unmuted onderweg.
+- `tools/nettest.sh`, de selftest en de wedstrijdtest slagen.
+- `tools/test_unmuted.sh --soak=10`, zes bots per kant, 10 minuten: 1–0 voor Unmuted, dat aan het eind op 34 m van een tweede punt stond. De dansende lokkers geven Unmuted iets voor, maar niet veel. De Slop Soldiers kunnen niet dansen, zoals gevraagd.
+- Beelden in de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: de lamp in de hand, je eigen dans van achteren (de probe zette je op een tank), en een bot die danst voor de ICP, twee keer met een halve seconde ertussen.
+
+**Wat ik niet kon beoordelen**
+
+- **Of de dans leuk genoeg is.** Het is één dans, die van Quaternius. Voor afwisseling zijn meer dansen nodig, en die zijn er niet zonder download of zelf animeren.
+- **Hoe het voelt om te dansen**: of de camera goed staat en of het lang genoeg duurt voordat je geraakt wordt.
+- **Muziek bij het dansen** komt in stap 7.
+- **Over het netwerk** gaat de dans mee met wat een speler doet, maar op twee machines heb ik het niet gezien. De netwerktest (één machine die host en één die meedoet) slaagt.

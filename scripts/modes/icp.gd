@@ -26,6 +26,7 @@ extends "res://scripts/modes/mode.gd"
 enum { LURE, TRAIL, HUNT }
 
 const STICKERS := preload("res://scripts/stickers.gd")
+const DANCER := preload("res://scripts/dancer.gd")
 const WAY := preload("res://scripts/way.gd")
 const BODY := preload("res://scripts/icp_body.gd")
 const CTF := preload("res://scripts/modes/ctf.gd")
@@ -50,6 +51,8 @@ const LURE_AHEAD := 3.5
 ## and how far from where they stand they stick.
 const TRAIL_AHEAD := 16.0
 const TRAIL_STICKS := 3.0
+## Seconds a bot has to have gone unhurt before it dances.
+const CALM := 3.0
 ## How near a bot has to be for what it sticks, in metres.
 const STICKS_FROM := 14.0
 ## How far a hunter looks about it for a sticker of the other side to cover.
@@ -233,9 +236,13 @@ func tick(delta: float) -> void:
 
 
 ## What draws him, every sticker and every dance that does: [where, the side,
-## how much], as Stickers.lures() has it.
+## how much], as Stickers.lures() has it. A dance draws `dance` times as hard
+## as a sticker that has just landed, for as long as it lasts.
 func pulls() -> Array:
-	return STICKERS.lures()
+	var found := STICKERS.lures()
+	for line: Array in DANCER.dances():
+		found.append([line[0], line[1], float(numbers.get("dance", 3.0))])
+	return found
 
 
 ## Makes up his mind where to go, see the top of this file.
@@ -328,6 +335,17 @@ func count(_killer: RefCounted, _fallen: RefCounted, _tally: Array[int]) -> void
 
 func come_back(who: RefCounted, foes: PackedVector3Array, friends: PackedVector3Array, watchers: PackedVector3Array) -> Transform3D:
 	return host.arena.pick(foes, friends, _spots[who.team], watchers, _halves[who.team])
+
+
+## A bot of Unmuted that lures him dances where it is to stand, ahead of him
+## on his way, as long as he is not yet with it and nobody has hit it for a
+## while. The Slop Soldiers do not dance.
+func dances(who: RefCounted) -> bool:
+	if who.team != 0 or not who.bot or _job(who) != LURE or not _here() or not is_instance_valid(who.body) or who.unhurt < CALM:
+		return false
+	var spot: Vector3 = wish(who)
+	var at: Vector3 = who.body.global_position
+	return Vector2(spot.x - at.x, spot.z - at.z).length() < 2.5 and at.distance_to(icp.global_position) > 3.5
 
 
 ## Those who lure him or lay his trail turn only on an enemy that is near.

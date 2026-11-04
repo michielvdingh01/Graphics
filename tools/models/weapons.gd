@@ -123,6 +123,7 @@ func _describe() -> void:
 	_beer_bottle()
 	_sticker_gun("branding_gun", POLY, "paint_white", "unmuted_sticker", Vector2(0.15, 0.075))
 	_sticker_gun("slop_gun", "slop_polymer", "slop_trim", "slop_sticker", Vector2(0.08, 0.08))
+	_ring_light()
 	# The standard five once more, each with a silencer.
 	_silenced = true
 	_rifle()
@@ -1865,6 +1866,37 @@ func _sticker_gun(name: String, body: String, trim: String, sticker: String, lab
 		_at(-0.12, 0.06, -0.09), 0.028, 0.0, _at(-0.15, -0.25, -0.3))
 	marker("Muzzle", Transform3D(Basis(), _at(0.31)))
 	marker("MagHold", Transform3D(Basis(), roll))
+
+
+## The TikTok Dance of the Unmuted match: a ring light on a short handle in
+## the right hand, its ring of light towards whoever holds it and a phone in
+## the middle. Firing sets it down and dances, see scripts/dance.gd; the one
+## that stands then is tools/models/unmuted.gd's.
+func _ring_light() -> void:
+	model("tiktok_dance")
+	var grip := Vector3(0, 0.96, -0.28)
+	var around := Transform3D(Basis(Vector3.RIGHT, grip, Vector3.RIGHT.cross(grip)), _at(-0.079, -0.1))
+	part("Mag", around)
+	_bar(POLY, around.origin - grip * 0.07, around.origin + grip * 0.12, 0.016, 16)
+	_bar(GRIP, around.origin - grip * 0.07, around.origin - grip * 0.075, 0.018, 16)
+	var top := around.origin + grip * 0.18
+	_ring("ring_glow", top, Vector3.BACK, 0.058, 0.008)
+	_ring(POLY, top + Vector3.FORWARD * 0.005, Vector3.BACK, 0.058, 0.01)
+	_bar(POLY, around.origin + grip * 0.12, top - grip * 0.058, 0.005, 8)
+	# The phone in the middle, held by a clamp, its screen to the camera.
+	_block(POLY, top, Vector3(0.026, 0.05, 0.006), 0.002)
+	_block("ring_glow", top + Vector3.BACK * 0.0032, Vector3(0.021, 0.043, 0.001), 0.0005)
+	var elbow := _at(-0.42, -0.27, 0.13)
+	var index := [_at(-0.04, -0.1, 0.03), _at(-0.015, -0.1, 0.012), _at(-0.012, -0.1, -0.012), _at(-0.03, -0.1, -0.03)]
+	part("ArmR", Transform3D(Basis(), _at(-0.165, -0.125, 0.05)))
+	if _gloved():
+		_glove(around, Vector2(0.018, 0.018), false, 28.0, _at(-0.2, -0.17, 0.02), 0.03, 0.0, elbow,
+			[_at(-0.115, -0.07, 0.0), _at(-0.1, -0.055, -0.03), _at(-0.07, -0.05, -0.036), _at(-0.04, -0.05, -0.03)], index)
+	else:
+		_hand(around, Vector2(0.018, 0.018), -25, -1, _at(-0.165, -0.125, 0.05), elbow,
+			[_at(-0.115, -0.07, 0.0), _at(-0.1, -0.055, -0.03), _at(-0.07, -0.05, -0.036), _at(-0.04, -0.05, -0.03)], index)
+	part("Body")
+	marker("Muzzle", Transform3D(Basis(), top))
 
 
 ## A flat picture `width` by `height` at `center`, facing `normal`, its U

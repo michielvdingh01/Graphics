@@ -78,8 +78,8 @@
 		"unmuted": {
 			"title": "Unmuted",
 			"build": "unmuted",
-			"about": "The Branding Gun: stickers that stick, and four of them put a Slop Soldier down.",
-			"weapons": ["branding_gun"],
+			"about": "The Branding Gun: stickers that stick, and four of them put a Slop Soldier down. And the TikTok Dance: a ring light, and dancing for as long as you hold fire.",
+			"weapons": ["branding_gun", "tiktok_dance"],
 			"bots": ["branding_gun"],
 			"sidearm": "branding_gun",
 			"specials": [],

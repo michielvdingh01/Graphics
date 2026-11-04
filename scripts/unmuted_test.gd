@@ -19,6 +19,7 @@ const STICKERS := preload("res://scripts/stickers.gd")
 const STICKER := preload("res://scenes/sticker.tscn")
 const LEVEL := "res://scenes/factory.tscn"
 const ARMORY := preload("res://scripts/armory.gd")
+const DANCER := preload("res://scripts/dancer.gd")
 
 ## True for a run of this test.
 var active := false
@@ -62,7 +63,7 @@ func _run() -> void:
 func _stickers(player: CharacterBody3D) -> void:
 	var gun := ARMORY.named("branding_gun")
 	_check("the Branding Gun is in the armory", gun != null and gun.projectile == STICKER)
-	_check("the pack Unmuted carries it", ARMORY.weapons("unmuted") == [gun])
+	_check("the pack Unmuted carries it, and the ring light of the TikTok Dance", ARMORY.weapons("unmuted") == [gun, ARMORY.named("tiktok_dance")] and ARMORY.named("tiktok_dance").dances)
 	_check("four stickers put somebody of 100 down", gun.damage * 4.0 >= 100.0 and gun.damage * 3.0 < 100.0)
 	STICKERS.clear()
 	# A wall in front of the player, found the way a shot finds it.
@@ -260,14 +261,17 @@ func _icp() -> void:
 			who.body.propagate_call(&"set_physics_process", [false])
 	var began := Match.tally.duplicate()
 	played = 0.0
+	var danced := false
 	while played < 240.0 and Match.state == Match.State.PLAYING and Match.tally == began:
 		await _wait(1.0)
 		played += 4.0
+		danced = danced or DANCER.dances().any(func(line: Array) -> bool: return line[1] == 0)
 		if int(played) % 16 == 0:
 			print("    %3.0f s: the ICP %.0f / %.0f m from the bases, heading %d, %d stuck" % [played, icp.global_position.distance_to(mode.bases[0]), icp.global_position.distance_to(mode.bases[1]), mode.heading, Match.stuck])
 	Engine.time_scale = 1.0
 	print("  Unmuted played alone %.0f s: the score %s" % [played, str(Match.tally)])
 	_check("Unmuted alone draws him to its base", Match.tally[0] == began[0] + 1)
+	_check("and the bots of Unmuted dance on the way", danced)
 	Match.close()
 
 	# Whoever plays for the Slop Soldiers has the slop gun in their hands.
@@ -277,6 +281,52 @@ func _icp() -> void:
 	var player: CharacterBody3D = get_tree().current_scene.player
 	_check("whoever plays for the Slop Soldiers carries the slop gun", Match.me() != null and Match.me().team == 1
 		and player.weapons.loadout == [ARMORY.named("slop_gun")])
+	Match.picked.erase(Net.id())
+	Match.close()
+	await _dance()
+
+
+## The TikTok Dance of the player, for Unmuted.
+func _dance() -> void:
+	Match.picked[Net.id()] = 0
+	Match.open({"mode": "icp", "level": "factory", "size": 2})
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)
+	var player: CharacterBody3D = get_tree().current_scene.player
+	player.force_control = true
+	player.invulnerable = false
+	player.health = 1e6
+	var hands: Node3D = player.weapons
+	_check("whoever plays for Unmuted carries the Branding Gun and the ring light", hands.loadout == [ARMORY.named("branding_gun"), ARMORY.named("tiktok_dance")])
+	for who: RefCounted in Match.entrants.values():
+		if who.bot and is_instance_valid(who.body):
+			who.body.propagate_call(&"set_physics_process", [false])
+	hands._switch_to(1)
+	await _wait(0.8)
+	var stood := player.global_position
+	Input.action_press("fire")
+	Input.action_press("move_forward")
+	await _wait(1.0)
+	var mine: Array = DANCER.dances().filter(func(line: Array) -> bool: return line[1] == 0)
+	_check("holding fire with the ring light dances: the view from behind and above (in front of a wall that is in the way), the figure, the light", player.dancing and not player.camera.current
+		and get_viewport().get_camera_3d().global_position.y > player.global_position.y + 1.2 and get_viewport().get_camera_3d().global_position.distance_to(player.global_position) > 1.5 and mine.size() == 1
+		and player.find_children("*", "", true, false).any(func(node: Node) -> bool: return node.scene_file_path.ends_with("ring_light.scn")))
+	_check("standing still", Vector2(player.global_position.x - stood.x, player.global_position.z - stood.z).length() < 0.2)
+	var dance_pull: Array = Match.mode.pulls().filter(func(line: Array) -> bool: return line[2] == float(Match.mode.numbers.dance))
+	_check("and the ICP is drawn to it three times as hard as to a sticker", dance_pull.size() == 1 and int(dance_pull[0][1]) == 0)
+	player.take_damage(10.0, player.global_position, Vector3.FORWARD)
+	await _wait(0.3)
+	_check("a hit ends it: back in one's own eyes", not player.dancing and player.camera.current and DANCER.dances().is_empty())
+	await _wait(0.5)
+	_check("and with fire still held it does not start again", not player.dancing)
+	Input.action_release("fire")
+	await _wait(0.2)
+	Input.action_press("fire")
+	await _wait(0.5)
+	_check("but it does once fire is pressed anew", player.dancing)
+	Input.action_release("fire")
+	Input.action_release("move_forward")
+	await _wait(0.3)
+	_check("and letting go ends it", not player.dancing and player.camera.current and player.weapons.visible)
 	Match.picked.erase(Net.id())
 	Match.close()
 

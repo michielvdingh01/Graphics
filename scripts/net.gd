@@ -65,8 +65,9 @@ const NOBODY := {"level": "", "at": "", "kills": 0, "theme": "", "match": {}}
 
 ## Bits of what a player is doing, as they go over the wire. SPINNING is the
 ## barrels of a weapon that spin, and above HEAT is how hot it is, from 0 to
-## HOTTEST: see heat_bits(). AIMING is along the sights, and lies above that.
-enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4, SPINNING = 8, AIMING = 256 }
+## HOTTEST: see heat_bits(). AIMING is along the sights, and lies above that;
+## DANCING the TikTok Dance of the Unmuted match (scripts/dancer.gd).
+enum { CROUCHED = 1, SPRINTING = 2, DEAD = 4, SPINNING = 8, AIMING = 256, DANCING = 512 }
 const HEAT := 4
 const HOTTEST := 15
 
@@ -620,6 +621,8 @@ func _physics_process(delta: float) -> void:
 		doing |= AIMING
 	if player.dead:
 		doing |= DEAD
+	if player.get(&"dancing"):
+		doing |= DANCING
 	_state.rpc(player.global_position, player.rotation.y, player.head.rotation.x, player.velocity, doing, player.weapons.ARMORY.index(player.weapons.current()))
 
 
