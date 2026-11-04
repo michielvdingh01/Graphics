@@ -250,13 +250,18 @@ func _icp() -> void:
 	Engine.time_scale = 4.0
 	var sides := {}
 	var played := 0.0
-	var danced := false
+	# Whether a bot of Unmuted danced, looked at every step of the physics: a
+	# dance can be over within a second.
+	var danced := [false]
+	var watch := func() -> void:
+		if DANCER.dances().any(func(line: Array) -> bool: return line[1] == 0):
+			danced[0] = true
+	get_tree().physics_frame.connect(watch)
 	while played < 40.0:
 		await _wait(1.0)
 		played += 4.0
 		for line: Array in STICKERS.stuck():
 			sides[line[1]] = true
-		danced = danced or DANCER.dances().any(func(line: Array) -> bool: return line[1] == 0)
 	_check("the bots of both sides stick", sides.has(0) and sides.has(1))
 	# And a side that plays alone wins him over: the Slop Soldiers stand still.
 	for who: RefCounted in Match.entrants.values():
@@ -267,13 +272,13 @@ func _icp() -> void:
 	while played < 240.0 and Match.state == Match.State.PLAYING and Match.tally == began:
 		await _wait(1.0)
 		played += 4.0
-		danced = danced or DANCER.dances().any(func(line: Array) -> bool: return line[1] == 0)
 		if int(played) % 16 == 0:
 			print("    %3.0f s: the ICP %.0f / %.0f m from the bases, heading %d, %d stuck" % [played, icp.global_position.distance_to(mode.bases[0]), icp.global_position.distance_to(mode.bases[1]), mode.heading, Match.stuck])
 	Engine.time_scale = 1.0
 	print("  Unmuted played alone %.0f s: the score %s" % [played, str(Match.tally)])
 	_check("Unmuted alone draws him to its base", Match.tally[0] == began[0] + 1)
-	_check("and the bots of Unmuted dance on the way", danced)
+	get_tree().physics_frame.disconnect(watch)
+	_check("and the bots of Unmuted dance on the way", danced[0])
 	Match.close()
 
 	# Whoever plays for the Slop Soldiers has the slop gun in their hands.
