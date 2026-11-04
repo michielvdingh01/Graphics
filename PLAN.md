@@ -3409,6 +3409,7 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 
 - `tools/test_unmuted.sh`, nu 49 controles. Nieuw: de slop-gun en zijn pack, de schade, dat hij een van de drie memes plakt op anderhalve maat, dat in de wedstrijd elke kant zijn eigen gun draagt, en dat wie voor de Slop Soldiers speelt de slop-gun in handen heeft.
 - Beelden in de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: de memes op het zand van dichtbij, en Slop Soldiers met de paarse gun.
+- `tools/test_unmuted.sh --soak=10`, zes bots per kant, 10 minuten: 1–0 voor de Slop Soldiers (na stap 2 was het 2–0 voor Unmuted). Geen van beide kanten lijkt in het voordeel; het blijft een touwtrekken.
 - De selftest en de wedstrijdtest slagen.
 
 **Wat ik niet kon beoordelen**
