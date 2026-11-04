@@ -66,6 +66,7 @@ const MODES := {
 	"tdm": preload("res://scripts/modes/tdm.gd"),
 	"ffa": preload("res://scripts/modes/ffa.gd"),
 	"ctf": preload("res://scripts/modes/ctf.gd"),
+	"icp": preload("res://scripts/modes/icp.gd"),
 }
 const THEMES := preload("res://scripts/enemy_themes.gd")
 const FILE := "res://assets/match.json"
@@ -239,7 +240,10 @@ func _ready() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(FILE)) if FileAccess.file_exists(FILE) else null
 	if parsed is Dictionary and parsed.get("modes") is Dictionary:
 		for kind: String in parsed.modes:
-			if MODES.has(kind):
+			# A kind that is for one build alone (`build`) is only in that one:
+			# see Armory.unmuted_build().
+			var build := str(parsed.modes[kind].get("build", "")) if parsed.modes[kind] is Dictionary else ""
+			if MODES.has(kind) and (build.is_empty() or ARMORY.unmuted_build()):
 				kinds[kind] = parsed.modes[kind]
 	# Whatever of the rules of the game a match does not have a say on is as
 	# the middle difficulty has it.
@@ -355,7 +359,8 @@ func _take_up(what: Dictionary) -> void:
 		"size": size,
 		"only_bots": bool(what.get("only_bots", false)),
 		"prize": str(what.get("prize", "flag")),
-		"pack": str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
+		# A kind that says what everybody carries has its way.
+		"pack": str(mode.numbers.pack) if mode.numbers.has("pack") else str(what.get("pack", ARMORY.STANDARD)) if ARMORY.names().has(str(what.get("pack", ""))) else ARMORY.STANDARD,
 		"open": bool(what.get("open", false)),
 		"bots": bool(what.get("bots", true)),
 		"apart": bool(what.get("apart", true)),
@@ -498,9 +503,10 @@ func _share(kind: String) -> int:
 	return 1 if not MODES.has(kind) or (MODES[kind].new() as RefCounted).teams() else 2
 
 
-## What `side` is called: "Wolves".
+## What `side` is called: "Wolves", or what the kind that is played calls it.
 func side_name(side: int) -> String:
-	return str(_side_names[side])
+	var names: Array = mode.numbers.get("sides", _side_names) if mode else _side_names
+	return str(names[side])
 
 
 ## The side `who` is on or asked to be on.

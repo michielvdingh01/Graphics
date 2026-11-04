@@ -28,6 +28,10 @@ const FADE := 20.0
 ## One line per sticker: [decal, side, the time it landed, its position].
 static var _all: Array = []
 static var _textures := {}
+## The clock the stickers keep, in seconds of play: the match that cares how
+## long one has drawn moves it on (advance()), so that it goes as fast as the
+## game does, also in a test that runs the game faster than the clock.
+static var _clock := 0.0
 
 
 ## The picture `picture` as a texture, loaded once.
@@ -37,9 +41,14 @@ static func texture(picture: String) -> Texture2D:
 	return _textures[picture]
 
 
-## Seconds since the game started, the clock the stickers keep.
+## The clock the stickers keep.
 static func now() -> float:
-	return Time.get_ticks_msec() * 0.001
+	return _clock
+
+
+## Moves that clock on by `seconds` of play.
+static func advance(seconds: float) -> void:
+	_clock += seconds
 
 
 ## Lays a sticker `picture` on what was hit at `at`, which faces `normal`,

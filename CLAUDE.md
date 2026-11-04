@@ -51,7 +51,7 @@ git ls-files -z | while IFS= read -r -d '' f; do if [ -f "$M/$f" ] && cmp -s "$M
 | De hele selftest (5 minuten) | `tools/selftest.sh` |
 | Alleen gevechten, routes, beeld of wat stuk kan, of één level | `tools/selftest.sh --fights`, `--routes`, `--view`, `--breaks`, `--level=<level>` |
 | Samen spelen, een wedstrijd met drie machines, personages, de sandbox, de supermarkt | `tools/nettest.sh`, `tools/nettest.sh --match`, `tools/test_humanoid.sh`, `tools/test_sandbox.sh`, `tools/test_supermarket.sh` |
-| De Unmuted-wedstrijd: stickers, de ICP | `tools/test_unmuted.sh` |
+| De Unmuted-wedstrijd: stickers, de ICP; of een hele wedstrijd van bots in de duinen | `tools/test_unmuted.sh`, `tools/test_unmuted.sh --soak=10` |
 | Een wedstrijd van alleen bots, of twaalf een minuut lang | `tools/test_match.sh`, `tools/test_match.sh --match=tdm:works:6 --only-bots --soak=60` |
 | Vaste standpunten meten, of alleen de beelden | `tools/benchmark.sh [--scene=res://scenes/<level>.tscn]`, `tools/shots.sh` |
 | Een level zone voor zone, met keurmerk en contactblad | `tools/zone_sheet.py <level>` |

@@ -3204,7 +3204,7 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 
 ## Unmuted: de ICP binnenhalen (plan)
 
-Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. **Dit is een plan: er is nog niets van gebouwd.** Geschreven op de branch `unmuted`.
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 en 2 zijn af, zie hieronder.
 
 **Zijn antwoorden op de eerste vragen**
 
@@ -3309,3 +3309,30 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 - **Geluid**: de gun klinkt nog als de bananengun, en een sticker plakt met het geluid van een banaan. Eigen geluiden komen in stap 7.
 - **Op afstand**: een decal van 55 cm is op 40 m een paar pixels breed. Of een spoor van stickers dan nog te zien is, blijkt in stap 2.
 - **Wat 300 decals kosten** op het volle scherm heb ik niet gemeten.
+
+### Stap 2: de spelsoort (4 november 2026)
+
+**Wat er is**
+
+- **De spelsoort `icp`** (`scripts/modes/icp.gd`, de getallen in `assets/match.json`): "Win the ICP", tot 3 punten of 10 minuten, de kanten heten Unmuted en Slop Soldiers, en iedereen draagt het pack `unmuted`. Ze staat alleen in de Unmuted-build: een spelsoort met `"build": "unmuted"` laadt `Match` alleen met `Armory.unmuted_build()`. Een kill telt niet voor de stand. Wie doodgaat, komt terug op de grond van de eigen basis, zoals bij capture the flag.
+- **De ICP** (`scripts/icp_body.gd`) begint op de plek die even ver lopen is van beide bases. Hij loopt met 1,3 m/s over het navmesh en is niet te raken. "ICP" staat in goud boven zijn hoofd, door muren heen. **Hij is nog een soldaat, 1,3 keer zo groot**: de man in pak komt in stap 3 (het plan zei voor nu al een man in pak uit Rocketbox; die download en ombouw horen bij stap 3).
+- **Waar hij heen loopt.** Elke halve seconde telt hij per kant de stickers binnen 40 m op, elk met wat hij nog trekt en half zo zwaar op 40 m als vlakbij. De kant die het meest trekt wint. Hij loopt naar de sticker van die kant die het hardst trekt. Wat binnen 2 m van hem ligt, of waar hij zo dichtbij kwam als de grond toelaat, heeft hij gezien en trekt niet meer. Een sticker die hij in 15 s niet bereikt, laat hij schieten. Trekt niets meer, dan blijft hij staan.
+- **Scoren.** Komt hij binnen 8 m van de deur van een basis, dan scoort die kant. Alle stickers zijn dan weg en hij is 5 s later terug in het midden.
+- **De klok van de stickers** loopt nu met het spel mee (`Stickers.advance()`, vanuit de spelsoort) in plaats van met de echte tijd. Zo trekken ze in een versnelde test even lang als in het echt.
+- **De bases** zijn voorlopig grijze blokken van 10 bij 9 bij 8 m, 2 m achter de standaard van capture the flag, met de voorkant naar het midden: "UNMUTED HQ" licht met zwarte letters, "DOOMSCROLL HELL" zwart met rode. Ze worden neergezet nadat het navmesh gebakken is, dus de bots weten niet dat ze er staan. Ze staan achter de deur, zodat er zelden iemand tegenaan loopt. In stap 4 komen de echte gebouwen.
+- **Onder de stand** staat naar wie hij trekt ("drawn to your stickers", "standing: nothing draws him") en hoe ver hij van beide bases is.
+- **De bots** (`plaster()` in `scripts/modes/mode.gd`, `_plaster()` in `scripts/bot.gd`) verdelen per kant het werk, op volgorde van binnenkomst. **Lokkers** lopen 5 m voor hem uit op zijn pad naar hun basis en plakken 3,5 m voor hem. **Spoorleggers** staan 16 m verder op dat pad en plakken op 13 m. **Jagers** gaan naar de sticker van de ander die het hardst trekt en plakken eroverheen. Lokkers en spoorleggers vechten alleen met wie dichtbij komt. Het pad is dat over het navmesh, niet de rechte lijn: in de fabriek liep die lijn door muren en scoorde niemand.
+
+**Getest**
+
+- `tools/test_unmuted.sh`, nu 38 controles zonder GPU. In de fabriek: de spelsoort is er, met zijn kanten en zijn pack, en de ICP staat in het midden (36 en 36 m lopen van de bases). Zonder stickers blijft hij staan. Een sticker trekt hem; daar aangekomen trekt die niet meer en blijft hij staan. Van twee kanten wint de kant met meer stickers, en hij wisselt als de ander meer plakt. Bij de basis van Unmuted krijgt Unmuted een punt, verdwijnen hij en de stickers, en staat hij weer in het midden. Dan spelen de bots: beide kanten plakken, en Unmuted alleen haalt hem binnen 24 tot 60 s binnen.
+- `tools/test_unmuted.sh --soak=10`: zes bots per kant in de duinen, een hele wedstrijd van 10 minuten, vier keer versneld. Uitslag 2–0 voor Unmuted, ongeveer elke drie minuten een punt; Slop kwam aan het eind tot 33 m van zijn basis. De bots liepen 125 keer vast in 10 minuten.
+- Beelden uit het spel in de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: de ICP van dichtbij en van 25 m, beide bases van 38 m, en de ICP na een minuut spelen tussen de stickers.
+- De selftest en de wedstrijdtest slagen.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het speelt met mensen.** Gelijke bots-teams houden elkaar lang in evenwicht. Mensen die samen een spoor leggen, verplaatsen hem veel sneller. Of 1,3 m/s, 40 m zicht en 8 m van de deur goed voelen, moet blijken als je het speelt.
+- **Of Unmuted een voordeel heeft.** De ene wedstrijd van 10 minuten eindigde 2–0. Bij gelijk trekken kiest hij de kant waarheen hij al liep, en anders Unmuted. Om te zeggen of de duinen een kant bevoordelen, zijn meer wedstrijden nodig.
+- **Hoe vaak de bots vastlopen.** 125 keer in 10 minuten heb ik niet vergeleken met team deathmatch in de duinen.
+- **Over het netwerk.** De host stuurt de plek van de ICP tien keer per seconde rond, en de stand gaat mee met wie later binnenkomt. Op twee machines is het nooit geprobeerd.

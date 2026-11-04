@@ -78,6 +78,12 @@ func wish(_who: RefCounted) -> Variant:
 	return null
 
 
+## Where a bot `who` that sees nobody should fire at, if anywhere: a spot to
+## put a sticker on in the Unmuted match. Null for nowhere.
+func plaster(_who: RefCounted) -> Variant:
+	return null
+
+
 ## True if `who` has something better to do than to fight whoever is in sight.
 func hurries(_who: RefCounted) -> bool:
 	return false

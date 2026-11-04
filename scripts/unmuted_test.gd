@@ -7,6 +7,13 @@ extends Node
 ## ages and nothing once it is PULL seconds old or the ICP has seen it; one
 ## that meets the ICP is gone; one that meets somebody hurts them by the
 ## damage of the Branding Gun and stays on them.
+##
+## The ICP match (scripts/modes/icp.gd), in the factory: there are two bases
+## and the ICP stands in the middle; nothing draws him while there are no
+## stickers; he goes to those of the side whose stickers draw him most, and
+## a sticker he has come to draws no more; once he is at a base that side
+## scores, every sticker is gone and he is back in the middle a moment later.
+## Then the bots play: both sides stick, and one side alone wins him over.
 
 const STICKERS := preload("res://scripts/stickers.gd")
 const STICKER := preload("res://scenes/sticker.tscn")
@@ -29,18 +36,24 @@ func _ready() -> void:
 
 func _run() -> void:
 	var tree := get_tree()
-	tree.create_timer(150.0, true, true).timeout.connect(
+	tree.create_timer(300.0, true, true, true).timeout.connect(
 		func() -> void:
 			print("UNMUTED TEST FAILED (timed out)")
 			tree.quit(1)
 	)
 	await _wait(0.3)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--soak="):
+			await _soak(arg.get_slice("=", 1).to_float())
+			tree.quit(0)
+			return
 	tree.change_scene_to_file(LEVEL)
 	await _wait(1.0)
 	var player: CharacterBody3D = tree.current_scene.player
 	player.force_control = true
 	player.health = 1e7
 	await _stickers(player)
+	await _icp()
 	print("%d checks, %d failed" % [_checks, _failures])
 	print("UNMUTED TEST PASSED" if _failures == 0 else "UNMUTED TEST FAILED")
 	tree.quit(0 if _failures == 0 else 1)
@@ -123,6 +136,140 @@ func _stickers(player: CharacterBody3D) -> void:
 	_check("and stays on them", dummy.find_children("*", "MeshInstance3D", false, false).size() == 1)
 	_check("without sticking on the level", STICKERS.stuck().is_empty())
 	dummy.queue_free()
+
+
+func _icp() -> void:
+	_check("the ICP match is there in this build, with its own sides and pack", Match.kinds.has("icp") and Match.kinds.icp.limit == 3 and Match.kinds.icp.minutes == 10)
+	_check("it opens", Match.open({"mode": "icp", "level": "factory", "size": 3, "only_bots": true}) and Match.setup.pack == "unmuted")
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)
+	_check("and is played", Match.state == Match.State.PLAYING and Match.side_name(0) == "Unmuted" and Match.side_name(1) == "Slop Soldiers")
+	if Match.state != Match.State.PLAYING:
+		return
+	var mode: RefCounted = Match.mode
+	var icp: CharacterBody3D = mode.icp
+	var arena: RefCounted = Match.arena
+	_check("the ICP is in the level, with ICP over his head", is_instance_valid(icp) and icp.is_in_group(&"icp") and icp.visible and (icp.get_node(^"Mark") as Label3D).text == "ICP")
+	var walks := [arena.walk(mode.bases[0], icp.global_position), arena.walk(mode.bases[1], icp.global_position)]
+	print("  the bases %.0f m apart to walk, the ICP %.0f and %.0f m from them" % [arena.length(), walks[0], walks[1]])
+	_check("in the middle, as far to walk from either base", absf(walks[0] - walks[1]) < maxf(arena.length() * 0.15, 6.0))
+	_check("and the two bases stand at the ends", get_tree().current_scene.has_node(^"Base0") and get_tree().current_scene.has_node(^"Base1"))
+
+	# Without the bots, which stand still.
+	for who: RefCounted in Match.entrants.values():
+		if is_instance_valid(who.body):
+			who.body.propagate_call(&"set_physics_process", [false])
+	STICKERS.clear()
+	await _wait(1.2)
+	_check("nothing draws him while there are no stickers: he stands", mode.heading == -1 and icp.goal == Vector3.INF)
+	var start := icp.global_position
+	var near := _spot_from(start, 8.0, 14.0)
+	STICKERS.place(get_tree(), "unmuted", near, Vector3.UP, Vector3.FORWARD, 0.55, 1)
+	await _wait(1.2)
+	_check("a sticker of the Slop Soldiers near him draws him to it", mode.heading == 1 and icp.goal.distance_to(near) < 0.1)
+	Engine.time_scale = 4.0
+	await _until(func() -> bool: return STICKERS.lures().is_empty(), 20.0)
+	Engine.time_scale = 1.0
+	_check("he walks there, and once he is there it draws no more", STICKERS.lures().is_empty() and icp.global_position.distance_to(near) < 4.0 and STICKERS.stuck().size() == 1)
+	await _wait(1.2)
+	_check("then he stands again", mode.heading == -1)
+
+	var at := icp.global_position
+	var two := [_spot_from(at, 10.0, 20.0), _spot_from(at, 10.0, 20.0)]
+	STICKERS.place(get_tree(), "unmuted", two[0], Vector3.UP, Vector3.FORWARD, 0.55, 0)
+	for i in 3:
+		STICKERS.place(get_tree(), "unmuted", two[1] + Vector3(i * 0.5, 0.0, 0.0), Vector3.UP, Vector3.FORWARD, 0.55, 1)
+	await _wait(1.2)
+	_check("of two sides he goes to that of more stickers", mode.heading == 1)
+	for i in 5:
+		STICKERS.place(get_tree(), "unmuted", two[0] + Vector3(0.0, 0.0, i * 0.5), Vector3.UP, Vector3.FORWARD, 0.55, 0)
+	await _wait(1.2)
+	_check("and changes his mind when the other side sticks more", mode.heading == 0)
+	var far := _spot_from(at, 60.0, 400.0)
+	STICKERS.clear()
+	if far != Vector3.INF:
+		STICKERS.place(get_tree(), "unmuted", far, Vector3.UP, Vector3.FORWARD, 0.55, 0)
+	await _wait(1.2)
+	_check("a sticker further off than he sees draws nothing", far == Vector3.INF or mode.heading == -1)
+	STICKERS.clear()
+
+	# Won over.
+	STICKERS.place(get_tree(), "unmuted", at + Vector3.RIGHT, Vector3.UP, Vector3.FORWARD, 0.55, 1)
+	icp.global_position = mode.bases[0] + Vector3(1.0, 0.3, 0.0)
+	await _wait(0.3)
+	_check("at the base of Unmuted he is won over: a point for Unmuted", Match.tally[0] == 1 and Match.tally[1] == 0)
+	_check("he is gone a moment, and so is every sticker", not icp.visible and STICKERS.stuck().is_empty())
+	await _wait(float(Match.mode.numbers.back) + 0.5)
+	_check("then he is back in the middle", icp.visible and icp.global_position.distance_to(mode.middle) < 1.5)
+
+	# The bots play: both sides stick.
+	for who: RefCounted in Match.entrants.values():
+		if is_instance_valid(who.body):
+			who.body.propagate_call(&"set_physics_process", [true])
+	Engine.time_scale = 4.0
+	var sides := {}
+	var played := 0.0
+	while played < 40.0:
+		await _wait(1.0)
+		played += 4.0
+		for line: Array in STICKERS.stuck():
+			sides[line[1]] = true
+	_check("the bots of both sides stick", sides.has(0) and sides.has(1))
+	# And a side that plays alone wins him over: the Slop Soldiers stand still.
+	for who: RefCounted in Match.entrants.values():
+		if who.team == 1 and is_instance_valid(who.body):
+			who.body.propagate_call(&"set_physics_process", [false])
+	var began := Match.tally.duplicate()
+	played = 0.0
+	while played < 240.0 and Match.state == Match.State.PLAYING and Match.tally == began:
+		await _wait(1.0)
+		played += 4.0
+		if int(played) % 16 == 0:
+			print("    %3.0f s: the ICP %.0f / %.0f m from the bases, heading %d, %d stuck" % [played, icp.global_position.distance_to(mode.bases[0]), icp.global_position.distance_to(mode.bases[1]), mode.heading, Match.stuck])
+	Engine.time_scale = 1.0
+	print("  Unmuted played alone %.0f s: the score %s" % [played, str(Match.tally)])
+	_check("Unmuted alone draws him to its base", Match.tally[0] == began[0] + 1)
+	Match.close()
+
+
+## A whole match of bots in the dunes, at most `minutes` long and four times
+## as fast as the clock, with how it stands every half minute: to weigh the
+## numbers by. Run with: tools/test_unmuted.sh --soak=10
+func _soak(minutes: float) -> void:
+	Match.open({"mode": "icp", "level": "dunes", "size": int(_told("--size=", "6")), "only_bots": true})
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 120.0)
+	var mode: RefCounted = Match.mode
+	Engine.time_scale = 4.0
+	var played := 0.0
+	while played < minutes * 60.0 and Match.state == Match.State.PLAYING:
+		await _wait(1.0)
+		played += 4.0
+		if int(played) % 32 == 0:
+			var counts := [0, 0]
+			for lure: Array in STICKERS.lures():
+				counts[lure[1]] += 1
+			var icp: Node3D = mode.icp
+			print("  %3.0f s: %s, the ICP %.0f / %.0f m from the bases, heading %d, drawn by %d / %d, %d stuck" % [played, str(Match.tally), icp.global_position.distance_to(mode.bases[0]), icp.global_position.distance_to(mode.bases[1]), mode.heading, counts[0], counts[1], Match.stuck])
+	Engine.time_scale = 1.0
+	print("SOAK %.0f s: the score %s, %s" % [played, str(Match.tally), "over" if Match.state == Match.State.OVER else "still on"])
+
+
+func _told(prefix: String, otherwise: String) -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
+	return otherwise
+
+
+## A spot to stand on between `least` and `most` metres from `at`, INF if
+## there is none.
+func _spot_from(at: Vector3, least: float, most: float) -> Vector3:
+	var spots: Array = Array(Match.arena.spots)
+	spots.shuffle()
+	for spot: Vector3 in spots:
+		var gap := spot.distance_to(at)
+		if gap > least and gap < most and Match.arena.walk(at, spot) < most * 1.6:
+			return spot
+	return Vector3.INF
 
 
 ## A sticker of `gun` fired from `from` at `at`, by nobody.
