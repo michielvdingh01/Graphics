@@ -295,7 +295,7 @@ func _show_heading(side: int) -> void:
 ## `side` has won him over, on every machine.
 func _show_won(side: int) -> void:
 	host.tally[side] += 1
-	host.say("%s won the ICP over" % host.side_name(side), &"checkpoint")
+	host.say("%s won the ICP over" % host.side_name(side), &"icp_won")
 	STICKERS.clear()
 	heading = -1
 	_lure = Vector3.INF

@@ -249,11 +249,13 @@ func _icp() -> void:
 	Engine.time_scale = 4.0
 	var sides := {}
 	var played := 0.0
+	var danced := false
 	while played < 40.0:
 		await _wait(1.0)
 		played += 4.0
 		for line: Array in STICKERS.stuck():
 			sides[line[1]] = true
+		danced = danced or DANCER.dances().any(func(line: Array) -> bool: return line[1] == 0)
 	_check("the bots of both sides stick", sides.has(0) and sides.has(1))
 	# And a side that plays alone wins him over: the Slop Soldiers stand still.
 	for who: RefCounted in Match.entrants.values():
@@ -261,7 +263,6 @@ func _icp() -> void:
 			who.body.propagate_call(&"set_physics_process", [false])
 	var began := Match.tally.duplicate()
 	played = 0.0
-	var danced := false
 	while played < 240.0 and Match.state == Match.State.PLAYING and Match.tally == began:
 		await _wait(1.0)
 		played += 4.0

@@ -12,6 +12,13 @@ const MOVES: AnimationLibrary = preload("res://assets/animations/moves.res")
 const LIGHT := "res://scenes/models/ring_light.scn"
 ## How far in front of the dancer the ring light stands, in metres.
 const LIGHT_AHEAD := 1.7
+## The music of the dance (tools/unmuted/beat.py), going round where the
+## dancer stands: how loud, and from how far it begins to be quieter and
+## where it is heard no more, in metres.
+const BEAT := &"dance_beat"
+const BEAT_DB := -6.0
+const BEAT_NEAR := 4.0
+const BEAT_FAR := 45.0
 
 ## Who dances where, by the dancer: [where, the side].
 static var dancing := {}
@@ -51,6 +58,18 @@ func setup(character: PackedScene, for_side: int) -> bool:
 	_light = (load(LIGHT) as PackedScene).instantiate()
 	_light.position = Vector3(0, 0, -LIGHT_AHEAD)
 	add_child(_light)
+	var beat := Sfx.loop_of(BEAT)
+	if beat:
+		var music := AudioStreamPlayer3D.new()
+		music.name = "Beat"
+		music.stream = beat
+		music.bus = Sfx.WORLD
+		music.volume_db = BEAT_DB
+		music.unit_size = BEAT_NEAR
+		music.max_distance = BEAT_FAR
+		music.position = Vector3.UP * 1.2
+		music.autoplay = true
+		add_child(music)
 	return true
 
 

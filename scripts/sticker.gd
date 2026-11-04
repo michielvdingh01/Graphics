@@ -7,11 +7,11 @@ extends Node3D
 ## scripts/puppet.gd fire it, as they fire a banana or a rocket.
 
 ## What a gun fires, by the name of its file in weapons/: the pictures it
-## picks from at random (see scripts/stickers.gd) and how wide they are, in
-## metres.
+## picks from at random (see scripts/stickers.gd), how wide they are, in
+## metres, and the sound of one sticking.
 const GUNS := {
-	"branding_gun": {"pictures": ["unmuted"], "width": 0.55},
-	"slop_gun": {"pictures": ["ballerina", "tung", "bombardiro"], "width": 0.825},
+	"branding_gun": {"pictures": ["unmuted"], "width": 0.55, "sticks": &"sticker_stick"},
+	"slop_gun": {"pictures": ["ballerina", "tung", "bombardiro"], "width": 0.825, "sticks": &"slop_stick"},
 }
 const OTHER := "branding_gun"
 ## Seconds in the air before it falls away unseen.
@@ -46,6 +46,7 @@ var passes := RID()
 var _age := 0.0
 var _picture := ""
 var _width := 0.4
+var _sticks := &"sticker_stick"
 var _card: MeshInstance3D
 
 
@@ -53,6 +54,7 @@ func _ready() -> void:
 	var gun: Dictionary = GUNS.get(_gun_name(), GUNS[OTHER])
 	_picture = str((gun.pictures as Array).pick_random())
 	_width = float(gun.width)
+	_sticks = gun.sticks
 	_card = card(_picture, _width)
 	add_child(_card)
 	_face()
@@ -150,7 +152,7 @@ func _land(hit: Dictionary) -> void:
 		Fx.strike(at, hit.normal, way, "soft", true)
 		queue_free()
 		return
-	Sfx.play_at(&"banana_stick", at)
+	Sfx.play_at(_sticks, at)
 	if not struck.has_method("take_damage"):
 		load("res://scripts/stickers.gd").place(get_tree(), _picture, at, hit.normal, way, _width, _side())
 		queue_free()
