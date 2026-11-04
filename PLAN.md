@@ -3204,7 +3204,7 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 
 ## Unmuted: de ICP binnenhalen (plan)
 
-Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 4 zijn af, zie hieronder.
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. Geschreven en gebouwd op de branch `unmuted`; stap 1 tot en met 5 zijn af, zie hieronder.
 
 **Zijn antwoorden op de eerste vragen**
 
@@ -3392,3 +3392,27 @@ Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
 - **Het camouflagenet.** Bij Doomscroll Hell staat een camouflagenet van het level voor de rechterhelft van de gevel. Het weghalen zou de duinen veranderen, en dat doe ik niet.
 - **De bots en de gebouwen.** De bots weten niet dat de gebouwen er staan, want die komen pas na het navmesh. Ze staan achter de deur, waar zelden iemand komt. Tegen een gebouw aan lopen kan dus, maar ik heb het niet zien gebeuren.
 - **Wat ze kosten.** Samen zijn het zo'n 1900 driehoeken en een paar materialen. Gemeten heb ik het niet.
+
+### Stap 5: slop (4 november 2026)
+
+**Wat er is**
+
+- **Drie memes**, eigen tekeningen in SVG (`tools/unmuted/memes.py`, gerenderd door `tools/unmuted/stickers.py` naar `assets/unmuted/stickers/`), als stickers met een witte snijrand en een dunne grijze lijn eromheen:
+  - **Ballerina Cappuccina**: een ballerina met een cappuccinokop als hoofd, met latte-art, stoom en een gezichtje, op haar tenen en met haar armen in een kring.
+  - **Tung Tung Tung Sahur**: een houten blok met jaarringen, grote ogen, dunne zwarte armen en benen, en een honkbalknuppel over zijn schouder.
+  - **Bombardiro Crocodillo**: een krokodil die een bommenwerper is, met naar achteren gezwaaide vleugels, motoren met propellers, een Italiaans rondel, bommen en staartvinnen.
+- **De slop-gun** (`weapons/slop_gun.tres`) is de Branding Gun in giftig paars met limoengroen, met Tung Tung Tung Sahur op de zijkant en op de rol. Hij schiet bij elk schot een van de drie memes, anderhalf keer zo groot als de sticker van Unmuted (82,5 cm). Hij doet even veel schade: vier treffers. Beide guns komen uit één bouwfunctie (`_sticker_gun()` in `tools/models/weapons.gd`).
+- **Een pack per kant.** Een spelsoort kan nu per kant een pack noemen (`pack()` in `scripts/modes/mode.gd`, `Match.pack_for()`). Bij Win the ICP draagt Unmuted het pack `unmuted` en dragen de Slop Soldiers het pack `slop`, bots en spelers allebei. Wie bij de Slop Soldiers komt, krijgt de slop-gun in handen. Het pack `slop` staat net als `unmuted` alleen in de Unmuted-build.
+- **Unmuted gaat dood aan slop** zoals een soldaat aan een sticker: dezelfde schade, en de meme blijft zes seconden op je zitten.
+
+**Getest**
+
+- `tools/test_unmuted.sh`, nu 49 controles. Nieuw: de slop-gun en zijn pack, de schade, dat hij een van de drie memes plakt op anderhalve maat, dat in de wedstrijd elke kant zijn eigen gun draagt, en dat wie voor de Slop Soldiers speelt de slop-gun in handen heeft.
+- Beelden in de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: de memes op het zand van dichtbij, en Slop Soldiers met de paarse gun.
+- De selftest en de wedstrijdtest slagen.
+
+**Wat ik niet kon beoordelen**
+
+- **Of de memes herkenbaar zijn** voor wie ze kent. Het zijn eenvoudige cartoons, geen namaak van de plaatjes van internet.
+- **Op afstand** zijn de memes kleurige vlekken, beter te zien dan de zwarte sticker van Unmuted. Daardoor kan een spoor van slop beter opvallen dan een van Unmuted.
+- **Hoe de slop-gun er in je eigen handen uitziet.** Ik zag hem alleen bij de bots. De kant wisselen gaat pas in na je volgende dood, en dat haalde de probe niet.

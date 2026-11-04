@@ -11,6 +11,7 @@ extends Node3D
 ## metres.
 const GUNS := {
 	"branding_gun": {"pictures": ["unmuted"], "width": 0.55},
+	"slop_gun": {"pictures": ["ballerina", "tung", "bombardiro"], "width": 0.825},
 }
 const OTHER := "branding_gun"
 ## Seconds in the air before it falls away unseen.

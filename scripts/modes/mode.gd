@@ -84,6 +84,12 @@ func plaster(_who: RefCounted) -> Variant:
 	return null
 
 
+## The pack whoever is on `side` carries, if the kind says: "" for that of
+## the match (assets/packs.json).
+func pack(_side: int) -> String:
+	return ""
+
+
 ## What `who` looks like, as puppet.enlist() takes it, if the kind says: null
 ## leaves it to the theme of the enemies, {} has them be the soldiers.
 func look(_who: RefCounted) -> Variant:

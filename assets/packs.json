@@ -85,6 +85,17 @@
 			"specials": [],
 			"grenades": 0,
 			"tacticals": 0
+		},
+		"slop": {
+			"title": "Slop",
+			"build": "unmuted",
+			"about": "The slop gun of the Slop Soldiers: the same gun, with slop memes half as big again.",
+			"weapons": ["slop_gun"],
+			"bots": ["slop_gun"],
+			"sidearm": "slop_gun",
+			"specials": [],
+			"grenades": 0,
+			"tacticals": 0
 		}
 	}
 }

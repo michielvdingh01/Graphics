@@ -307,6 +307,12 @@ func _show_back(at: Vector3) -> void:
 	host.say("The ICP is back in the middle", &"pickup_ammo")
 
 
+## Unmuted carry the Branding Gun, the Slop Soldiers the slop gun.
+func pack(side: int) -> String:
+	var packs: Array = numbers.get("packs", [])
+	return str(packs[side]) if side >= 0 and side < packs.size() else ""
+
+
 func look(who: RefCounted) -> Variant:
 	if who.team != 0:
 		return {}

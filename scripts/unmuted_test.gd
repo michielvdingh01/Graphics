@@ -86,6 +86,17 @@ func _stickers(player: CharacterBody3D) -> void:
 	var decals := get_tree().current_scene.find_children("*", "Decal", false, false).size()
 	_check("as a decal", decals >= 1)
 
+	# The slop gun: a meme, half as big again.
+	var slop := ARMORY.named("slop_gun")
+	_check("the slop gun is in the armory, in the pack Slop, as strong as the Branding Gun", slop != null and slop.projectile == STICKER and ARMORY.weapons("slop") == [slop] and slop.damage == gun.damage)
+	STICKERS.clear()
+	_fire(eye, at, slop)
+	await _until(func() -> bool: return STICKERS.stuck().size() == 1, 3.0)
+	var slopped: Array = get_tree().current_scene.find_children("*", "Decal", false, false).filter(func(decal: Decal) -> bool: return not decal.is_queued_for_deletion())
+	var picture: String = (slopped[-1] as Decal).texture_albedo.resource_path.get_file().get_basename() if not slopped.is_empty() else ""
+	_check("it sticks one of the three memes, half as big again as the sticker of Unmuted", ["ballerina", "tung", "bombardiro"].has(picture)
+		and absf((slopped[-1] as Decal).size.x - 0.55 * 1.5) < 0.001)
+
 	# Covering: by the other side, and not by one's own.
 	STICKERS.clear()
 	var normal: Vector3 = wall.normal
@@ -160,6 +171,8 @@ func _icp() -> void:
 		var to_middle: Vector3 = mode.middle - base.global_position
 		var door: Vector3 = mode.bases[buildings.find(base)]
 		return base.global_basis.z.dot(to_middle.normalized()) > 0.5 and Vector2(door.x - base.global_position.x, door.z - base.global_position.z).length() < 6.0))
+	var guns := Match.entrants.values().map(func(who: RefCounted) -> String: return "%d %s" % [who.team, ARMORY.at(who.weapon).resource_path.get_file().get_basename()])
+	_check("Unmuted carry the Branding Gun, the Slop Soldiers the slop gun", guns.all(func(line: String) -> bool: return line == "0 branding_gun" or line == "1 slop_gun") and guns.has("1 slop_gun") and guns.has("0 branding_gun"))
 	var model: Node = icp.get_node_or_null(^"Model")
 	_check("he is the man in the suit, a size up", model != null and model.find_children("*", "Skeleton3D", true, false).size() == 1 and absf(model.get_child(0).scale.y - icp.SIZE) < 0.01
 		and ResourceLoader.exists(icp.LOOK) and icp.LOOK.contains("icp_01"))
@@ -255,6 +268,16 @@ func _icp() -> void:
 	Engine.time_scale = 1.0
 	print("  Unmuted played alone %.0f s: the score %s" % [played, str(Match.tally)])
 	_check("Unmuted alone draws him to its base", Match.tally[0] == began[0] + 1)
+	Match.close()
+
+	# Whoever plays for the Slop Soldiers has the slop gun in their hands.
+	Match.picked[Net.id()] = 1
+	Match.open({"mode": "icp", "level": "factory", "size": 2})
+	await _until(func() -> bool: return Match.state == Match.State.PLAYING, 30.0)
+	var player: CharacterBody3D = get_tree().current_scene.player
+	_check("whoever plays for the Slop Soldiers carries the slop gun", Match.me() != null and Match.me().team == 1
+		and player.weapons.loadout == [ARMORY.named("slop_gun")])
+	Match.picked.erase(Net.id())
 	Match.close()
 
 

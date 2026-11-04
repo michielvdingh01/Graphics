@@ -4,6 +4,8 @@ rsvg-convert: assets/unmuted/stickers/<name>.svg and <name>.png.
 
   python3 tools/unmuted/stickers.py
 
+ballerina, tung and bombardiro: the slop memes, see tools/unmuted/memes.py.
+
 unmuted: the logo of Unmuted (assets/unmuted/logo.svg, white) on a black pill,
 cut out with a white edge as a sticker is. The PNG is 1024 by 512 with
 transparency round the edge; scripts/sticker.gd lays it on as a decal.
@@ -19,6 +21,10 @@ assets/unmuted/bill.png. The ICP drops them as he walks (scripts/icp_body.gd).
 import pathlib
 import re
 import subprocess
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import memes  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "assets/unmuted/stickers"
@@ -46,7 +52,9 @@ def unmuted() -> str:
 """
 
 
-STICKERS = {"unmuted": unmuted}
+# The slop memes of the Slop Soldiers are drawn in tools/unmuted/memes.py,
+# each on 1024 by 1024.
+STICKERS = {"unmuted": unmuted, **memes.MEMES}
 
 
 def bill() -> str:

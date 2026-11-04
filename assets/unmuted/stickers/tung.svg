@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="cut" x="-10%" y="-10%" width="120%" height="120%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="30" result="far"/>
+      <feFlood flood-color="#b9b9b4"/>
+      <feComposite in2="far" operator="in" result="rim"/>
+      <feMorphology in="SourceAlpha" operator="dilate" radius="26" result="near"/>
+      <feFlood flood-color="#ffffff"/>
+      <feComposite in2="near" operator="in" result="edge"/>
+      <feMerge><feMergeNode in="rim"/><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#cut)">
+
+    <!-- The bat over its right shoulder, behind the log. -->
+    <path d="M720,690 L860,150" stroke="#2a1c14" stroke-width="10" stroke-linecap="round"/>
+    <path d="M708,688 L732,690 L888,160 C895,130 840,120 832,150 Z" fill="#e8c78f" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M714,700 L740,705" stroke="#2a1c14" stroke-width="22" stroke-linecap="round"/>
+    <!-- Legs and feet. -->
+    <path d="M440,800 L420,930 M584,800 L604,930" stroke="#2a1c14" stroke-width="22" stroke-linecap="round"/>
+    <ellipse cx="402" cy="940" rx="52" ry="24" fill="#2a1c14"/>
+    <ellipse cx="622" cy="940" rx="52" ry="24" fill="#2a1c14"/>
+    <!-- The log: a rounded body, grain down it, rings on top. -->
+    <path d="M330,240 L330,780 C330,830 694,830 694,780 L694,240 Z" fill="#b5773f" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M380,320 C372,450 392,600 378,770 M450,300 C460,420 440,560 456,800 M590,310 C580,460 600,600 584,800 M646,300 C656,430 640,610 650,770" fill="none" stroke="#8a5428" stroke-width="9" stroke-linecap="round"/>
+    <ellipse cx="512" cy="240" rx="182" ry="58" fill="#e2b27a" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <ellipse cx="512" cy="240" rx="120" ry="36" fill="none" stroke="#8a5428" stroke-width="6"/>
+    <ellipse cx="512" cy="240" rx="64" ry="18" fill="none" stroke="#8a5428" stroke-width="6"/>
+    <ellipse cx="512" cy="240" rx="14" ry="5" fill="#8a5428"/>
+    <!-- Arms: the left hangs, the right goes up to the bat. -->
+    <path d="M336,520 C270,580 260,640 280,700" fill="none" stroke="#2a1c14" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="282" cy="708" r="22" fill="#2a1c14"/>
+    <path d="M688,520 C760,560 760,640 726,690" fill="none" stroke="#2a1c14" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="724" cy="694" r="24" fill="#2a1c14"/>
+    <!-- The face: big round eyes looking aside, brows up, a grin. -->
+    <circle cx="440" cy="430" r="62" fill="white" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="590" cy="430" r="62" fill="white" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="462" cy="438" r="27" fill="#2a1c14"/>
+    <circle cx="612" cy="438" r="27" fill="#2a1c14"/>
+    <circle cx="472" cy="428" r="8" fill="white"/>
+    <circle cx="622" cy="428" r="8" fill="white"/>
+    <path d="M378,352 C400,328 470,330 490,350 M540,350 C560,330 630,328 652,352" fill="none" stroke="#2a1c14" stroke-width="16" stroke-linecap="round"/>
+    <path d="M430,580 C470,630 560,630 600,580 C560,600 470,600 430,580 Z" fill="#5a2418" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+
+  </g>
+</svg>

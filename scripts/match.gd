@@ -503,6 +503,13 @@ func _share(kind: String) -> int:
 	return 1 if not MODES.has(kind) or (MODES[kind].new() as RefCounted).teams() else 2
 
 
+## The pack whoever is on `side` carries: what the kind of match says for
+## that side (mode.pack()), or else the pack of the match.
+func pack_for(side: int) -> String:
+	var said: String = mode.pack(side) if mode else ""
+	return said if not said.is_empty() and ARMORY.names().has(said) else pack_in_play
+
+
 ## What `side` is called: "Wolves", or what the kind that is played calls it.
 func side_name(side: int) -> String:
 	var names: Array = mode.numbers.get("sides", _side_names) if mode else _side_names
@@ -931,7 +938,7 @@ func _name_of(person: int) -> String:
 ## The line of the roster for a bot in `place`: a bot has the number of its
 ## place, below nought.
 func _bot_line(place: int, side: int, title: String) -> Array:
-	var arms := ARMORY.bots(setup.pack, arena.length() > FAR)
+	var arms := ARMORY.bots(pack_for(side) if mode.teams() else setup.pack, arena.length() > FAR)
 	@warning_ignore("integer_division")
 	return [-(place + 1), title, side, arms[(place / (2 if mode.teams() else 1)) % arms.size()]]
 
@@ -1201,6 +1208,14 @@ func _take_side(who: Entrant) -> void:
 		_game.player.team = who.team
 		_game.player.collision_layer = (_game.player.collision_layer & ~every_side) | _layers(who)
 		_game.player.collision_mask = (_game.player.collision_mask & ~every_side) | _foes(who)
+		# A kind of match in which the sides carry different packs arms the
+		# player with that of their side.
+		if mode.teams() and not mode.pack(who.team).is_empty():
+			var pack := pack_for(who.team)
+			var arms := ARMORY.weapons(pack)
+			var hands: Node = _game.player.weapons
+			if hands.loadout != arms:
+				hands.equip(arms, ARMORY.grenades(pack), ARMORY.grenade(pack), ARMORY.tacticals(pack), ARMORY.tactical(pack))
 		return
 	var own := me()
 	var look := {}

@@ -121,7 +121,8 @@ func _describe() -> void:
 	_banana_round()
 	_beer()
 	_beer_bottle()
-	_branding_gun()
+	_sticker_gun("branding_gun", POLY, "paint_white", "unmuted_sticker", Vector2(0.15, 0.075))
+	_sticker_gun("slop_gun", "slop_polymer", "slop_trim", "slop_sticker", Vector2(0.08, 0.08))
 	# The standard five once more, each with a silencer.
 	_silenced = true
 	_rifle()
@@ -1818,42 +1819,47 @@ func _bottle(foot: Vector3, up: Vector3) -> void:
 	_turned("beer_cap", foot + up * 0.242, up, PackedVector2Array([Vector2(0.0, 0.009), Vector2(0.0135, 0.009), Vector2(0.0155, 0.0075), Vector2(0.016, 0.0), Vector2(0.0, 0.0)]), 14)
 
 
-# --- Branding gun --------------------------------------------------------------
+# --- Sticker guns --------------------------------------------------------------
 
 
-## The Branding Gun of the Unmuted match: a chunky blaster of black polymer
-## that fires stickers off a roll on its back, through a flat white mouth, with
-## the sticker of Unmuted on either side of it. The roll is the magazine.
-func _branding_gun() -> void:
-	model("branding_gun")
+## The guns of the Unmuted match that fire stickers (scripts/sticker.gd): a
+## chunky blaster that fires them off a roll on its back through a flat mouth,
+## with one of its stickers on either side and on the ends of the roll, which
+## is the magazine. The Branding Gun is black polymer and white with the
+## sticker of Unmuted; the slop gun of the Slop Soldiers toxic purple and lime
+## with Tung Tung Tung Sahur. `body` and `trim` are the two materials,
+## `sticker` that of the picture and `label` how big it is on the side.
+func _sticker_gun(name: String, body: String, trim: String, sticker: String, label: Vector2) -> void:
+	model(name)
 	# The body, a short tube for the left hand and the mouth.
-	_block(POLY, _at(0.03, 0.004), Vector3(0.054, 0.074, 0.31), 0.012)
-	_bar(POLY, _at(0.17), _at(0.27), 0.032, 22)
+	_block(body, _at(0.03, 0.004), Vector3(0.054, 0.074, 0.31), 0.012)
+	_bar(body, _at(0.17), _at(0.27), 0.032, 22)
 	for ring: float in [0.19, 0.25]:
-		_bar("paint_white", _at(ring - 0.004), _at(ring + 0.004), 0.0335, 22)
-	_block("paint_white", _at(0.285, 0.0), Vector3(0.082, 0.03, 0.036), 0.006)
-	_block(POLY, _at(0.3, 0.0), Vector3(0.066, 0.008, 0.008), 0.002)
+		_bar(trim, _at(ring - 0.004), _at(ring + 0.004), 0.0335, 22)
+	_block(trim, _at(0.285, 0.0), Vector3(0.082, 0.03, 0.036), 0.006)
+	_block(body, _at(0.3, 0.0), Vector3(0.066, 0.008, 0.008), 0.002)
 	# A plain post to aim by, on the mouth.
-	_block("paint_white", _at(0.29, 0.02), Vector3(0.004, 0.012, 0.006), 0.001)
-	_block(POLY, _at(-0.12, 0.024), Vector3(0.03, 0.016, 0.02), 0.004)
-	# The sticker of Unmuted on both sides, reading from the back on the left
-	# and from the back on the right too.
-	_label("unmuted_sticker", _at(0.04, 0.004, -0.0275), Vector3.LEFT, Vector3.BACK, 0.15, 0.075)
-	_label("unmuted_sticker", _at(0.04, 0.004, 0.0275), Vector3.RIGHT, Vector3.FORWARD, 0.15, 0.075)
+	_block(trim, _at(0.29, 0.02), Vector3(0.004, 0.012, 0.006), 0.001)
+	_block(body, _at(-0.12, 0.024), Vector3(0.03, 0.016, 0.02), 0.004)
+	# Its sticker on both sides, reading from the back on the left and from the
+	# back on the right too.
+	_label(sticker, _at(0.04, 0.004, -0.0275), Vector3.LEFT, Vector3.BACK, label.x, label.y)
+	_label(sticker, _at(0.04, 0.004, 0.0275), Vector3.RIGHT, Vector3.FORWARD, label.x, label.y)
 	_grip(GRIP)
 	_trigger_hand()
 
-	# The roll of stickers on its back: black stickers wound on a white core,
-	# their white edges showing at either side, on a spindle across the body.
+	# The roll of stickers on its back: dark stickers wound on a core, their
+	# edges showing at either side, on a spindle across the body.
 	var roll := _at(-0.045, 0.078)
+	var on_roll := Vector2(0.06, 0.03) if label.x > label.y else Vector2(0.032, 0.032)
 	part("Mag", Transform3D(Basis(), roll))
 	_bar(POLY, roll + Vector3.LEFT * 0.017, roll + Vector3.RIGHT * 0.017, 0.04, 28)
 	for side: float in [-1.0, 1.0]:
-		_bar("paint_white", roll + Vector3.RIGHT * side * 0.017, roll + Vector3.RIGHT * side * 0.0185, 0.0395, 28)
-		_label("unmuted_sticker", roll + Vector3.RIGHT * side * 0.0188, Vector3.RIGHT * side, Vector3.BACK * -side, 0.06, 0.03)
-	_bar("paint_white", roll + Vector3.LEFT * 0.021, roll + Vector3.RIGHT * 0.021, 0.012, 16)
+		_bar(trim, roll + Vector3.RIGHT * side * 0.017, roll + Vector3.RIGHT * side * 0.0185, 0.0395, 28)
+		_label(sticker, roll + Vector3.RIGHT * side * 0.0188, Vector3.RIGHT * side, Vector3.BACK * -side, on_roll.x, on_roll.y)
+	_bar(trim, roll + Vector3.LEFT * 0.021, roll + Vector3.RIGHT * 0.021, 0.012, 16)
 	part("Body")
-	_block(POLY, _at(-0.045, 0.045), Vector3(0.05, 0.012, 0.06), 0.003)
+	_block(body, _at(-0.045, 0.045), Vector3(0.05, 0.012, 0.06), 0.003)
 	_support_hand(0.22, 0.032)
 	_holds_also("mag", Transform3D(Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP), roll), Vector2(0.05, 0.05), -104.0,
 		_at(-0.12, 0.06, -0.09), 0.028, 0.0, _at(-0.15, -0.25, -0.3))

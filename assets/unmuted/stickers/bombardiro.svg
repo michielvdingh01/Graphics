@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="cut" x="-10%" y="-10%" width="120%" height="120%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="30" result="far"/>
+      <feFlood flood-color="#b9b9b4"/>
+      <feComposite in2="far" operator="in" result="rim"/>
+      <feMorphology in="SourceAlpha" operator="dilate" radius="26" result="near"/>
+      <feFlood flood-color="#ffffff"/>
+      <feComposite in2="near" operator="in" result="edge"/>
+      <feMerge><feMergeNode in="rim"/><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#cut)">
+
+    <g transform="translate(0,40)">
+    <!-- The far wing, swept back, behind the body. -->
+    <path d="M520,380 L640,380 L560,170 L478,170 Z" fill="#5c6849" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M500,250 L600,250 C616,250 616,282 600,282 L500,282 Z" fill="#3f4636" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <ellipse cx="612" cy="266" rx="10" ry="56" fill="#ffffff" fill-opacity="0.5" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- The tail: the crocodile's own, with fins on it. -->
+    <path d="M300,470 C220,470 150,420 90,330 C150,360 210,390 290,400 Z" fill="#5f9a43" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M150,360 L110,250 L190,250 L220,380 Z" fill="#6f7d5a" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M150,400 L80,430 L120,470 L240,440 Z" fill="#6f7d5a" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- The body, with a pale belly, scales down its back and a cockpit. -->
+    <path d="M240,440 C260,360 420,340 600,350 C700,356 760,380 790,420 L800,470 C760,520 640,540 470,540 C330,540 250,510 240,440 Z" fill="#5f9a43" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M280,480 C380,530 640,530 780,470 C760,520 640,540 470,540 C340,540 270,515 280,480 Z" fill="#c9d98a"/>
+    <path d="M330,372 l18,-22 l18,22 M390,362 l18,-24 l18,24 M450,356 l18,-24 l18,24 M510,354 l18,-24 l18,24" fill="#4c8034" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M560,360 C580,320 650,318 676,362 Z" fill="#a9d6f0" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- The head: a long snout with teeth, a nostril, an eye on top. -->
+    <path d="M760,400 C840,380 930,395 975,420 C985,440 970,452 950,452 L800,460 Z" fill="#5f9a43" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M790,470 C860,470 930,466 960,458 C960,478 930,492 860,494 C820,494 796,488 790,470 Z" fill="#5f9a43" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M806,458 l10,16 l10,-16 l10,16 l10,-16 l10,16 l10,-16 l10,16 l10,-16 l10,16 l10,-16 l10,16 l10,-16" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+    <circle cx="950" cy="412" r="7" fill="#2a1c14"/>
+    <ellipse cx="790" cy="380" rx="36" ry="30" fill="#5f9a43" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="795" cy="378" r="20" fill="#f4d23c" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <ellipse cx="798" cy="378" rx="5" ry="14" fill="#2a1c14"/>
+    <!-- Bombs under the body, and feet tucked up as wheels are. -->
+    <path d="M330,520 l-20,40 l30,-6 l6,20 l20,-36 Z M720,500 l-14,40 l26,-4 l8,18 l14,-38 Z" fill="#5f9a43" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M300,560 C270,560 270,616 300,616 L380,616 L408,588 L380,560 Z" fill="#3f4636" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M272,574 L246,556 L246,622 L272,604" fill="#3f4636" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M660,556 C630,556 630,612 660,612 L740,612 L768,584 L740,556 Z" fill="#3f4636" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M632,570 L606,552 L606,618 L632,600" fill="#3f4636" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- The near wing, swept back, an engine on it with its propeller, the roundel. -->
+    <path d="M440,490 L640,490 L520,800 L370,800 Z" fill="#6f7d5a" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M470,610 L620,610 C646,610 646,666 620,666 L470,666 Z" fill="#3f4636" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M636,620 L664,638 L636,656 Z" fill="#c9c9c0" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <ellipse cx="668" cy="638" rx="14" ry="104" fill="#ffffff" fill-opacity="0.55" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="455" cy="752" r="32" fill="#1f8a3a" stroke="#2a1c14" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="455" cy="752" r="21" fill="white"/>
+    <circle cx="455" cy="752" r="10" fill="#d43a2c"/>
+    </g>
+
+  </g>
+</svg>

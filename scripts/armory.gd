@@ -44,6 +44,7 @@ const ALL: Array[WeaponData] = [
 	preload("res://weapons/banana_gun.tres"),
 	preload("res://weapons/beer.tres"),
 	preload("res://weapons/branding_gun.tres"),
+	preload("res://weapons/slop_gun.tres"),
 ]
 const FILE := "res://assets/packs.json"
 const STANDARD := "standard"
