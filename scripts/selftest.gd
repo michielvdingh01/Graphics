@@ -943,6 +943,10 @@ func _supplies() -> void:
 	var misses := []
 	var file: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(ARMORY.FILE)).packs
 	for pack: String in file:
+		# A pack of a build of its own keeps its own rules, see
+		# tools/test_unmuted.sh.
+		if str(file[pack].get("build", "")) != "":
+			continue
 		var built: bool = (file[pack].weapons as Array).all(func(weapon_name: String) -> bool: return ARMORY.named(weapon_name) != null)
 		var sizes_fit: bool = ARMORY.weapons(pack).size() in range(2, ARMORY.MOST + 1) and not ARMORY.bots(pack).is_empty()
 		if offered.has(pack) != built or (built and not sizes_fit):

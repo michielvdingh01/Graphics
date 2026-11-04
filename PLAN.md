@@ -3201,3 +3201,111 @@ De stroom, gemiddelde grijswaarde over een gangpad: 0,42 met en 0,075 zonder.
 | Kar | `tools/hear.py cart_roll`, `tools/hear.py cart_nest` |
 | Stroom | `tools/hear.py power_blow`, `tools/hear.py power_down` |
 | De winkel | `tools/hear.py ambience shop` |
+
+## Unmuted: de ICP binnenhalen (plan)
+
+Op 4 november 2026 gevraagd: een eigen spelsoort voor de teamborrel van Unmuted, een B2B-marketingbureau in Amsterdam. Twee teams strijden om een klant, de ICP, die in het midden van de duinen begint en loopt naar waar de meeste stickers en dansjes zijn. Wie hem in de eigen basis krijgt, scoort. **Dit is een plan: er is nog niets van gebouwd.** Geschreven op de branch `unmuted`.
+
+**Zijn antwoorden op de eerste vragen**
+
+- Drie punten wint, of na 10 minuten wie voorstaat.
+- Een sticker trekt 20 seconden. Een sticker van de tegenpartij kun je overplakken. Een sticker op de ICP zelf verdwijnt meteen: hij is niet te raken en gaat niet dood.
+- Een dans trekt sterker dan een sticker. De Slop Soldiers dansen niet; zij schieten alleen slop.
+- Spelers van Unmuted gaan dood aan slop zoals soldaten aan stickers.
+- De map is de duinen. De bases staan waar bij capture the flag de standaards staan (`assets/arenas.json`, `ends`: 139 m hemelsbreed uit elkaar).
+- Het hoofdkantoor van Unmuted is een klassiek Amsterdams grachtenpand. Het logo staat in `assets/unmuted/logo.svg` (wit op transparant, uit zijn bijlage).
+- De memes mogen eigen tekeningen zijn, niet van internet. Het is voor een teamborrel op kantoor.
+- Rocketbox mag gedownload worden. Geen voorkeur voor het dansje. Het team heet **Slop Soldiers**.
+- Een **aparte build voor Unmuted**: het merk komt niet in de build voor vrienden.
+- Geluid: een vette sticker-gun, muziek bij het dansen, en een diepe mannelijke lach van de ICP als je dichtbij bent, niet te luid.
+
+**Het ontwerp**
+
+- **Een spelsoort `icp`** (`scripts/modes/icp.gd`), een bestand naast `ctf.gd`, met de haken die capture the flag al gebruikt: wat er bij het begin in het level komt, wat er elke stap gebeurt, waar je terugkomt, waar een bot heen moet en wat er onder de stand staat. Wat er in de wereld gebeurt, beslist de host, en wat te zien is gaat via `Match.show_mode()`, zoals bij de buit.
+- **De ICP** is een figuur die door de host over het navmesh wordt bestuurd, geen deelnemer: niet te raken, niet in de stand. Hij loopt 1,3 m/s (een speler wandelt 1,4 en sprint 8). Boven hem staat "ICP" door muren heen, zoals YOURS en THEIRS bij de buit, en onder de stand staat hoe ver hij van elke basis is.
+- **Waar hij heen loopt.** Elke sticker en elke dans is een lokker van een kant, met een kracht die in 20 seconden naar nul gaat; een dans telt drie keer zo zwaar als een sticker zolang hij duurt. Het "alziend oog": hij ziet elke lokker binnen 40 m, ook door muren, en minder naarmate hij verder weg is. Elke halve seconde telt hij per kant op wat hem trekt. De sterkste kant wint en hij loopt naar het zwaartepunt van haar lokkers. Wat hij gezien heeft (binnen 2 m langs gelopen), trekt niet meer. Zo volgt hij een spoor van stickers naar een basis, en blijft hij staan als niets hem meer trekt. De getallen staan in `assets/match.json` en zijn eerste gokken.
+- **Overplakken.** Een sticker die binnen 25 cm van een sticker van de ander landt, neemt diens plaats in: de oude is weg en de nieuwe trekt voor de eigen kant.
+- **Scoren.** Komt de ICP binnen 8 m van de deur van een basis, dan scoort die kant, verdwijnt hij in een regen van biljetten, en staat hij vijf tellen later weer in het midden. Elke lokker gaat dan weg, zodat het opnieuw begint.
+- **Het geldspoor.** Elke vier stappen valt er een dollarbiljet uit zijn zak dat dwarrelend neerkomt, en vijftien seconden blijft liggen; nooit meer dan zestig tegelijk.
+
+**De wapens**
+
+- **De Branding Gun.** Een projectielwapen: je ziet de sticker vliegen, met een kleine boog, en hij plakt waar hij landt, op muur, grond, voertuig of soldaat, met de normaal van het vlak mee. Vier treffers doden een Slop Soldier (25 schade, zonder hoofdschotbonus: dit is geen sluipschutterspel). Op een figuur zit de sticker aan het bot dat hij raakte en loopt hij mee. Stickers in de wereld zijn decals; er staan er hooguit 300, de oudste gaat eerst. Na 20 seconden trekt hij niets meer, maar hij blijft als versiering zitten tot hij de oudste is. Een magazijn van 12, snel herladen.
+- **De slop-gun.** Dezelfde gun voor de Slop Soldiers, met grotere stickers (anderhalf keer zo groot), elk schot een willekeurige uit de drie memes.
+- **De TikTok Dance.** Het tweede wapen van Unmuted: een ringlamp in de hand. Schieten zet hem neer, de camera gaat naar derde persoon (achter en boven je, zodat je jezelf ziet dansen met de lamp op je gericht), en je danst zolang je de knop vasthoudt. Loslaten, of geraakt worden door slop, brengt je terug in je eigen ogen met de lamp weer in je hand. Wie danst staat stil en is een makkelijk doel; dat is de prijs voor de zware lokker.
+- **Wie wat draagt** is een pack in `assets/packs.json`: `unmuted` (Branding Gun, ringlamp) en `slop` (slop-gun). Geen granaten, geen wapens op standaards.
+
+**De twee teams**
+
+- **Unmuted**: acht mannen en vrouwen uit Rocketbox (`Adults`), met verschillende gezichten en huidskleuren, overgeschilderd met de route van de uniformen (`tools/characters/looks.py`) naar een zwarte broek en een zwart T-shirt met het logo van Unmuted in wit op de borst.
+- **Slop Soldiers**: de soldaten die er zijn. Twee van de acht zijn vrouwen (soldier_03 en soldier_06, Rocketbox `Military_Female_01` en `_02`; meer vrouwelijke militairen heeft Rocketbox niet). De bezetting zet ze er zeker tussen in plaats van ze aan het lot over te laten.
+- **De ICP**: een man in pak uit Rocketbox (`Business_Male_*`), 1,3 keer zo groot, met een zwart pak, een stropdas, een zonnebril (in Blender gemaakt) en een brede grijns, met de gezichtsbotten uit de `_facial`-FBX als dat werkt, en anders geschilderd. Hij loopt met de bestaande wandelloop, wat langzamer.
+- **Dansen**: het `Dance_Loop` uit Quaternius' Universal Animation Library (CC0) staat er al. Voor afwisseling maak ik er een of twee bij in Blender, of ik vraag je eerst om een download.
+- **Bots** verdelen het werk zoals bij capture the flag: **lokkers** gaan naar de ICP en plakken (of dansen) naast hem, **routeplakkers** leggen een spoor van de ICP naar de eigen basis, en **jagers** gaan op de lokkers van de ander af. Van zes zijn het er twee, twee en twee. Unmuted-bots dansen als ze binnen 10 m van de ICP staan en er geen vijand op ze schiet.
+
+**De bases**
+
+- In de duinen, op de plekken van de standaards: het hoofdkantoor van Unmuted, een grachtenpand van vier verdiepingen met een halsgevel, bakstenen, witte kozijnen en het logo op de gevel; en **Doomscroll Hell**, een zwart blok met die woorden groot en verlicht op de gevel. Beide staan als losse modellen in het spel en worden door de spelsoort neergezet: **er wordt geen level herbouwd en niets gebakken** (zie `CLAUDE.md`). Ze krijgen de zon en de schaduw zoals een voertuig.
+- Rond elke basis de grond om terug te komen, zoals bij capture the flag.
+
+**De aparte build**
+
+- Alles van Unmuted staat onder `assets/unmuted/` en `scripts/modes/icp.gd`. De gewone exportpresets laten `assets/unmuted/` weg; een eigen preset `Unmuted (macOS)` neemt het mee en zet een feature `unmuted`. Met die feature begint het spel in het menu van deze spelsoort, met de titel en het logo van Unmuted. `tools/export.sh unmuted` maakt de zip.
+- Samen spelen over het netwerk (`lanparty`) kan, maar is nooit op twee machines gespeeld. Voor de borrel moet dat een keer echt geprobeerd worden.
+
+**Geluid**
+
+- Gesynthetiseerd zoals de rest, elk in twee of drie varianten: de Branding Gun (een vette *thwap*), de inslag van een sticker (een plak), de slop-gun (natter en vetter), het geld dat valt (een zacht ritselen), en de signalen voor scoren.
+- De dansmuziek is een korte eigen beat, die zachter wordt op afstand, zodat je hoort waar iemand danst.
+- De lach van de ICP: diep en mannelijk, alleen binnen 12 m, niet luider dan voetstappen. Synthetisch klinkt een lach nep; een CC0-opname van Freesound is beter, en daar vraag ik eerst om.
+
+**De memes**
+
+- Drie eigen tekeningen, als stickers met een witte rand: **Ballerina Cappuccina** (een ballerina met een cappuccinokop als hoofd), **Tung Tung Tung Sahur** (een houten blok met ogen en een knuppel) en **Bombardiro Crocodillo** (een krokodil die een bommenwerper is). Getekend als SVG en gerenderd met `magick`, in `assets/unmuted/stickers/`. Een vierde kan altijd.
+
+**De stappen**
+
+Elke stap is een commit op `unmuted` met een eigen deel in deze sectie.
+
+| Stap | Wat | Wat je ervan bekijkt |
+|---|---|---|
+| 1. De Branding Gun | het wapen, de vliegende sticker, plakken op alles en op figuren, schade, overplakken, verdwijnen op de ICP, de grens van 300 | spelen: `--match=tdm:dunes:3 --pack=unmuted --unmuted` |
+| 2. De spelsoort | `icp.gd`: de ICP (nog een man in pak uit Rocketbox op ware grootte), lopen naar lokkers, scoren, de stand, "ICP" in beeld, de bots met hun drie taken, de bases als grijze blokken | spelen: `--match=icp:dunes:6` |
+| 3. De mensen | acht van Unmuted, de ICP met zonnebril en grijns, het geldspoor | één blad: de teams naast elkaar en de ICP van voren, opzij en lopend |
+| 4. De gebouwen | het grachtenpand en Doomscroll Hell | één blad: elk van dichtbij en van over de duinen |
+| 5. Slop | de drie memes en de slop-gun | één blad met de drie stickers, en spelen |
+| 6. De dans | de ringlamp, derde persoon, het dansje, dansende bots | spelen |
+| 7. Geluid | alles hierboven | `tools/hear.py <naam>` per geluid |
+| 8. De build | de preset, het menu van Unmuted, `tools/export.sh unmuted`, een wedstrijd van alleen bots in de test | de zip openen en spelen |
+
+**Wat nog open staat**
+
+- Hoeveel mensen er op de borrel spelen, op welke machines (Mac of Windows), en of dat samen over het netwerk is of om de beurt.
+- Wanneer de borrel is.
+- De lach van Freesound: vraag ik apart, met de opname erbij.
+
+### Stap 1: de Branding Gun (4 november 2026)
+
+**Wat er is**
+
+- **De gun** (`weapons/branding_gun.tres`, het model `_branding_gun()` in `tools/models/weapons.gd`): zwart polymeer, een witte platte mond, de sticker van Unmuted op beide zijkanten, en op zijn rug een rol zwarte stickers met witte randen als magazijn. 25 schade per sticker, zonder hoofdschotbonus: vier treffers voor iemand met 100 health. 330 schoten per minuut, 12 op een rol, oneindig veel rollen, 1,6 s herladen, 38 m/s met een kleine boog.
+- **De sticker in de lucht** (`scripts/sticker.gd`, `scenes/sticker.tscn`) vliegt plat en draaiend, valt met 4 m/s², en plakt waar hij landt. Het afvuren gaat via de bestaande weg van de bananengun en de raket, dus het werkt voor de speler, voor bots en als kopie op andere machines.
+- **Op het level** wordt een sticker een decal van 55 cm breed (`scripts/stickers.gd`). Op een muur staat hij rechtop, op een vloer met de bovenkant van de schutter af. Hij is te zien tot 70 m en vervaagt over de 20 m daarna. Er zijn er hooguit 300; de oudste maakt plaats.
+- **Lokken.** `Stickers.lures()` geeft per sticker zijn plek, zijn kant en hoeveel hij nog trekt: 1 bij het landen, 0 na 20 seconden. Daarna blijft hij als versiering. `Stickers.seen()` is voor de ICP van stap 2: wat hij gezien heeft trekt niet meer.
+- **Overplakken.** Een sticker die binnen 25 cm van het midden van een sticker van de ander landt, haalt die weg. Een eigen sticker ernaast laat beide staan.
+- **Op iemand** doet hij schade en blijft hij zes seconden zitten, kleiner, aan het lijf. **Op de ICP** (alles in de groep `icp`) verdwijnt hij meteen met een wolkje.
+- **Het pack `unmuted`** in `assets/packs.json`: alleen de Branding Gun, geen granaten en geen wapens op standaards. Het staat alleen in het menu met `--unmuted` op de opdrachtregel, of in de build voor Unmuted (de feature `unmuted`, stap 8): de gewone build kent het niet (`Armory.unmuted_build()`).
+- **De sticker zelf**: het logo uit zijn bijlage, wit op een zwarte pil met een witte snijrand (`tools/unmuted/stickers.py`, `assets/unmuted/stickers/unmuted.png`).
+
+**Getest**
+
+- `tools/test_unmuted.sh`, 20 controles zonder GPU: de gun en het pack, vier treffers, plakken op een muur als decal, overplakken door de ander en niet door de eigen kant, hoe het trekken afneemt en ophoudt, de grens van 300, verdwijnen op de ICP, schade en blijven zitten op iemand.
+- `tools/test_match.sh --unmuted --pack=unmuted --only-bots --arena=dunes --seconds=90`: twintig bots per kant met alleen de Branding Gun maakten 104 kills in 90 s wedstrijd.
+- Twee beelden uit het spel in de duinen, 1920×1080, op het lichtnet, zonder andere Godot ernaast: stickers op kisten, rechtop en over de hoeken heen, en op een bot.
+
+**Wat ik niet kon beoordelen**
+
+- **Hoe het schiet.** Niemand heeft hem in handen gehad. De vuursnelheid, de boog en de grootte zijn mijn keuzes.
+- **Geluid**: de gun klinkt nog als de bananengun, en een sticker plakt met het geluid van een banaan. Eigen geluiden komen in stap 7.
+- **Op afstand**: een decal van 55 cm is op 40 m een paar pixels breed. Of een spoor van stickers dan nog te zien is, blijkt in stap 2.
+- **Wat 300 decals kosten** op het volle scherm heb ik niet gemeten.

@@ -43,6 +43,7 @@ const ALL: Array[WeaponData] = [
 	preload("res://weapons/hand_cannon.tres"),
 	preload("res://weapons/banana_gun.tres"),
 	preload("res://weapons/beer.tres"),
+	preload("res://weapons/branding_gun.tres"),
 ]
 const FILE := "res://assets/packs.json"
 const STANDARD := "standard"
@@ -84,13 +85,20 @@ static func named(weapon_name: String) -> WeaponData:
 	return null
 
 
-## The packs on offer, in the order of the file.
+## The packs on offer, in the order of the file. A pack that says "build":
+## "unmuted" is only on offer in the build for Unmuted, see unmuted_build().
 static func names() -> PackedStringArray:
 	var offered := PackedStringArray()
 	for pack: String in _all():
-		if not weapons(pack).is_empty():
+		if not weapons(pack).is_empty() and (str(spec(pack).get("build", "")) != "unmuted" or unmuted_build()):
 			offered.append(pack)
 	return offered
+
+
+## True in the build for Unmuted (the feature "unmuted" of its export preset),
+## or with --unmuted on the command line.
+static func unmuted_build() -> bool:
+	return OS.has_feature("unmuted") or "--unmuted" in OS.get_cmdline_user_args()
 
 
 ## What the file says of a pack, or of STANDARD if there is no such pack.
